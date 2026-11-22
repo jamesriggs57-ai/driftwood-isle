@@ -1663,8 +1663,8 @@ const STYLE_NAMES={ walls:'walls', roofs:'roof', doors:'door', windows:'windows'
   wallColors:'wall paint', roofColors:'roof paint', trimColors:'trim paint', doorColors:'door paint', floorColors:'floor stain' };
 const STYLE_BASE={ walls:1500, roofs:1200, doors:600, windows:700, porches:1800, founds:500, chimneys:1400, stories:9000, floors:900, papers:700 };
 const isColorList = list => /Colors$/.test(list);
-const freeCount = list => isColorList(list) ? 4 : 2;
-function styleCost(list, i){ if (i<freeCount(list)) return 0; if (isColorList(list)) return 250 + (i-freeCount(list))*120; return Math.round(STYLE_BASE[list]*(1+(i-2)*0.75)/50)*50; }
+const freeCount = list => isColorList(list) ? 4 : list==='stories' ? 1 : 2;
+function styleCost(list, i){ if (i<freeCount(list)) return 0; if (list==='stories') return STYLE_BASE.stories; if (isColorList(list)) return 250 + (i-freeCount(list))*120; return Math.round(STYLE_BASE[list]*(1+(i-2)*0.75)/50)*50; }
 function styleOwned(list, v){ const opts=BUILD[list]; const i=opts.findIndex(o=>String(Array.isArray(o)?o[0]:o)===String(v)); return i<0 || i<freeCount(list) || !!(S.styles&&S.styles[list+':'+v]); }
 function unlockStyle(list, v){ (S.styles=S.styles||{})[list+':'+v]=true; save(); }
 const styleLabel = (list, v) => { const o=BUILD[list].find(o=>String(Array.isArray(o)?o[0]:o)===String(v)); return Array.isArray(o) ? `${o[1]} (${STYLE_NAMES[list]})` : `a new ${STYLE_NAMES[list]} color`; };

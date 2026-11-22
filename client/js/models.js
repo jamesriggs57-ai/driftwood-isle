@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { TAU, hash2, mulberry32 } from './util.js';
 import { ITEMS, PLANTS } from './content.js';
+import { canopyGeo, coniferGeo, trunkGeo, frondsGeo, foliageMat, barkMat, leafy, treeTint } from './trees.js';
 import { felt, knit, eyeMat, noseMat, glintMat, threadMat, fabricMat, fishSkin, fishLook, finMat, wingTex, wingLook, clearWingMat, shellMat, fuzzMat, woodMat, glassMat, brass, ceramic, waterMat2 } from './look.js';
 
 export const MODEL = { season:'autumn', month:11 };
@@ -58,45 +59,47 @@ export function buildTree(r, type, opt={}){
   const stage = opt.stage===undefined ? 3 : opt.stage, season=MODEL.season;
   if (stage===0) { buildSaplingInto(top, type); return g; }
   const S=[0,0.42,0.7,1][stage]; top.scale.setScalar(S);
-  const bark = type==='birch'?0xeee8e0:(type==='palm'?0xb08a5a:0x8a5e3a);
+  const tint=treeTint(r), size=0.9+r()*0.25;
+  const barkC = tone2(type==='birch'?0xf4f0e8:type==='palm'?0xb89468:0x8a6040, r);
   if (type==='palm'){
-    let x=0,y=0; const lean=0.18;
-    for(let i=0;i<7;i++){ const s=mk(G.cyl(0.17-i*0.01,0.2-i*0.01,0.58,9), M(i%2?0xb8925e:0x9a7448), x,y+0.29,0,top); s.rotation.z=-lean; x+=Math.sin(lean)*0.58; y+=0.56; }
-    for(let i=0;i<8;i++){ const a=i/8*TAU; const lf=mk(G.sph(1,10,4), M(i%2?0x4fae46:0x5fbe52), x+Math.cos(a)*1.0, y-0.05, Math.sin(a)*1.0, top); lf.scale.set(1.3,0.07,0.34); lf.rotation.set(0,-a,-0.4); }
-    if (stage===3 && opt.fruit) for(let i=0;i<3;i++){ const a=i/3*TAU+0.4; fruits.push(outline(mk(G.sph(0.24,12,10), M(0x7a4a28), x+Math.cos(a)*0.34, y-0.32, Math.sin(a)*0.34, top),1.08)); }
+    const h=3.9*size, lean=[0.6+r()*0.5, (r()-0.5)*0.6];
+    const tr=new THREE.Mesh(trunkGeo({ h, r0:0.2, r1:0.14, bend:lean, color:barkC }, r), barkMat(false)); tr.castShadow=tr.receiveShadow=true; top.add(tr);
+    for (let i=1;i<9;i++){ const t=i/9; const ring=mk(G.tor(0.18-t*0.05,0.025,5,12), M(0x8a6a44), lean[0]*t*t, t*h, lean[1]*t*t, top); ring.rotation.x=Math.PI/2; ring.castShadow=false; }
+    const tp=new THREE.Vector3(lean[0],h,lean[1]);
+    top.add(leafy(new THREE.Mesh(frondsGeo(tp, 9, 2.3*size, season==='winter'?[0x5a9a50,0x6aa858]:[0x4fae46,0x5fbe52,0x6ac25a], r, tint), foliageMat('frond')), foliageMat('frond')));
+    if (stage===3 && opt.fruit) for(let i=0;i<3;i++){ const a=i/3*TAU+0.4; fruits.push(outline(mk(G.sph(0.24,12,10), M(0x7a4a28), tp.x+Math.cos(a)*0.3, h-0.3, tp.z+Math.sin(a)*0.3, top),1.08)); }
     return g;
   }
   if (type==='pine' || type==='cedar'){
-    mk(G.cyl(0.18,0.26,1.2,9), M(0x7a5232), 0,0.6,0,top);
-    const col = type==='pine' ? [0x3f8f4e,0x4a9a58] : [0x2f7a50,0x3a8a5a]; const tiers = type==='pine'?3:5;
-    for(let i=0;i<tiers;i++){ const rr = type==='pine' ? 1.6-i*0.42 : 1.25-i*0.2; const h = type==='pine'?1.6:1.0; const y = type==='pine' ? 1.6+i*0.9 : 1.4+i*0.62;
-      mk(G.cone(rr,h,12), M(col[i%2]), 0, y, 0, top); if(season==='winter') mk(G.cone(rr*0.6,h*0.35,12), M(0xffffff), 0, y+h*0.32, 0, top); }
+    const pine=type==='pine', h=(pine?1.6:1.4)*size;
+    const tr=new THREE.Mesh(trunkGeo({ h:h+1.2, r0:0.24, r1:0.06, bend:[(r()-0.5)*0.25,(r()-0.5)*0.25], color:tone2(0x7a5232,r), flare:true }, r), barkMat(false)); tr.castShadow=tr.receiveShadow=true; top.add(tr);
+    const tiers=[]; const n=pine?4:6; for (let i=0;i<n;i++){ const t=i/(n-1); tiers.push(pine ? [h+0.2+i*0.85*size, (1.75-t*1.3)*size, 1.5*size] : [h+i*0.55*size, (1.3-t*0.95)*size, 0.95*size]); }
+    const pal = pine ? [0x2f7a44,0x3f8f4e,0x4a9a58] : [0x26684a,0x2f7a50,0x3a8a5a];
+    top.add(leafy(new THREE.Mesh(coniferGeo(tiers, pal, r, tint), foliageMat('needle')), foliageMat('needle')));
     return g;
   }
   // deciduous
-  const tall = type==='birch' ? 2.4 : 1.8;
-  mk(G.cyl(0.18,0.3,tall,10), M(bark), 0,tall/2,0,top);
-  mk(G.cone(0.42,0.4,10), M(bark), 0,0.2,0,top);
-  if (type==='birch') for(let i=0;i<6;i++){ const b=mk(G.box(0.12,0.04,0.02), M(0x3a3030), Math.cos(i*2.1)*0.2, 0.3+i*0.35, Math.sin(i*2.1)*0.2, top); b.rotation.y=-i*2.1+Math.PI/2; b.castShadow=false; }
-  for(const [ax,ay,az] of [[0.55,tall*0.8,0.1],[-0.5,tall*0.85,-0.2]]){ const b=mk(G.cyl(0.06,0.1,0.9,6), M(bark), ax*0.6,ay,az,top); b.rotation.z=-ax*1.3; }
-  const pal = (LEAVES[type]||LEAVES.oak)[season];
-  if (!pal){ // winter: bare branches with a dusting of snow
-    for(let i=0;i<6;i++){ const a=i/6*TAU+r(); const b=mk(G.cyl(0.03,0.07,1.3,5), M(bark), Math.cos(a)*0.4, tall+0.3, Math.sin(a)*0.4, top); b.rotation.set(Math.sin(a)*0.8,0,-Math.cos(a)*0.8); }
-    mk(G.sph(0.35,10,8), M(0xffffff), 0, tall+0.6, 0, top).scale.y=0.4;
-    if (opt.fruit && stage===3){ const fm=M(ITEMS[opt.fruit].model.c); for(let i=0;i<6;i++){ const a=i/6*TAU+r()*0.4; fruits.push(hangFruit(top, fm, Math.cos(a)*0.85, tall+0.55+(i%2)*0.35, Math.sin(a)*0.85, opt.fruit)); } }
+  const tall=(type==='birch'?2.4:1.8)*size, bend=[(r()-0.5)*0.5,(r()-0.5)*0.5];
+  const pal=(LEAVES[type]||LEAVES.oak)[season];
+  const nb = pal ? 3 : 7, branches=[];
+  for (let i=0;i<nb;i++) branches.push([tall*(pal?0.6+r()*0.35:0.45+i/nb*0.5), i/nb*TAU*(pal?1:2.3)+r()*0.8, pal?0.9+r()*0.3:0.9+r()*0.5, 0.5+r()*0.6]);
+  const tr=new THREE.Mesh(trunkGeo({ h:tall+(pal?0.4:0.9), r0:type==='birch'?0.2:0.3, r1:pal?0.12:0.035, rb:0.12, bend, color:barkC, branches, flare:true, twigs:!pal }, r), barkMat(type==='birch')); tr.castShadow=tr.receiveShadow=true; top.add(tr);
+  if (!pal){ // winter: bare branches; the snow pass dusts their tops
+    if (opt.fruit && stage===3){ const fm=M(ITEMS[opt.fruit].model.c); for(let i=0;i<6;i++){ const a=i/6*TAU+r()*0.4; fruits.push(hangFruit(top, fm, Math.cos(a)*0.85+bend[0], tall+0.55+(i%2)*0.35, Math.sin(a)*0.85+bend[1], opt.fruit)); } }
     return g;
   }
-  const crowns = type==='birch' ? [[0,tall+0.9,0,0.95],[0.4,tall+0.3,0.3,0.7],[-0.35,tall+0.4,-0.2,0.75],[0,tall+1.6,0,0.7]]
+  const base = type==='birch' ? [[0,tall+0.9,0,0.95],[0.45,tall+0.3,0.3,0.7],[-0.4,tall+0.4,-0.2,0.75],[0,tall+1.6,0,0.7]]
     : [[0,tall+0.85,0,1.35],[0.85,tall+0.5,0.3,0.95],[-0.8,tall+0.55,-0.2,1.0],[0.1,tall+1.6,-0.1,1.0],[-0.25,tall+0.6,0.8,0.9],[0.35,tall+0.45,-0.75,0.85]];
-  crowns.forEach(([x,y,z,s])=>{ const c=pal[Math.floor(r()*pal.length)]; const f=mk(G.ico(s,2), M(c), x,y,z,top); f.scale.y=0.86; });
+  const rot=r()*TAU, crowns=base.map(([x,y,z,s],i)=>{ const c=Math.cos(rot), sn=Math.sin(rot), k=i?0.85+r()*0.35:1; return [ (x*c-z*sn)*size+bend[0]+(r()-0.5)*0.2, y+(r()-0.5)*0.25, (x*sn+z*c)*size+bend[1]+(r()-0.5)*0.2, s*size*k ]; });
+  const kind = type==='birch' ? 'small' : (type==='blossom'&&season==='spring') ? 'blossom' : 'broad';
+  top.add(leafy(new THREE.Mesh(canopyGeo(crowns, pal, r, tint, { density:type==='birch'?40:32, card:type==='birch'?0.72:0.95 }), foliageMat(kind)), foliageMat(kind)));
   if (opt.fruit && stage===3){ const fm=M(ITEMS[opt.fruit].model.c);
-    // put each fruit just outside a crown's surface so it pokes out of the leaves
-    const outer=crowns.slice(1); for(let i=0;i<6;i++){ const [x,y,z,s]=outer[i%outer.length]; let dx=x+(r()-0.5)*0.6, dz=z+(r()-0.5)*0.6; if(Math.hypot(dx,dz)<0.3){ const a=i/6*TAU; dx=Math.cos(a); dz=Math.sin(a); }
-      const L=Math.hypot(dx,dz); const dy=-0.3-r()*0.3; const n=Math.hypot(dx/L,dy,dz/L); const ux=dx/L/n, uy=dy/n, uz=dz/L/n; const rr=s*1.02;
-      fruits.push(hangFruit(top, fm, x+ux*rr, y+uy*rr*0.86, z+uz*rr, opt.fruit)); } }
-  if (type==='blossom' && season==='spring') for(let i=0;i<14;i++){ const a=r()*TAU, e=r()*1.2; mk(G.sph(0.09,6,5), M(0xffffff), Math.cos(a)*1.2, tall+0.6+e, Math.sin(a)*1.2, top).castShadow=false; }
+    const outer=crowns.slice(1); for(let i=0;i<6;i++){ const [x,y,z,s]=outer[i%outer.length]; let dx=x-bend[0]+(r()-0.5)*0.6, dz=z-bend[1]+(r()-0.5)*0.6; if(Math.hypot(dx,dz)<0.3){ const a=i/6*TAU; dx=Math.cos(a); dz=Math.sin(a); }
+      const L=Math.hypot(dx,dz); const dy=-0.3-r()*0.3; const n=Math.hypot(dx/L,dy,dz/L); const ux=dx/L/n, uy=dy/n, uz=dz/L/n; const rr=s*1.08;
+      fruits.push(hangFruit(top, fm, x+ux*rr, y+uy*rr*0.9, z+uz*rr, opt.fruit)); } }
   return g;
 }
+const tone2=(hex,r)=>new THREE.Color(hex).offsetHSL((r()-0.5)*0.03,(r()-0.5)*0.1,(r()-0.5)*0.08).getHex();
 function hangFruit(parent, mat, x, y, z, id){
   const d=ITEMS[id].model, f=new THREE.Group(); f.position.set(x,y,z); parent.add(f);
   const b=outline(mk(G.sph(0.25,14,10), mat, 0,0,0,f), 1.1); if(d.pear) b.scale.set(0.9,1.2,0.9);
@@ -116,10 +119,10 @@ export function buildStump(){ const g=new THREE.Group(); mk(G.cyl(0.32,0.42,0.35
 export function buildShrub(sp, stage=3, color){
   const g=new THREE.Group(), P=PLANTS[sp]; const s=[0.35,0.55,0.8,1][stage];
   const body=new THREE.Group(); body.scale.setScalar(s); g.add(body);
-  const lc = sp==='boxwood'?0x3f8a44 : sp==='holly'?0x2f7a3a : 0x55a848;
+  const lc = sp==='boxwood'?0x4a9a4c : sp==='holly'?0x3a8a44 : 0x5aae4c;
   const blobs=[[0,0.5,0,0.55],[0.42,0.4,0.1,0.42],[-0.4,0.42,-0.05,0.45],[0.05,0.42,0.42,0.4],[0,0.45,-0.4,0.4]];
-  blobs.forEach(([x,y,z,r],i)=>{ mk(G.ico(r,2), M(i%2?lc:new THREE.Color(lc).offsetHSL(0,0,0.05).getHex()), x,y,z,body); });
-  if (MODEL.season==='winter' && sp!=='holly' && sp!=='camellia') mk(G.sph(0.4,10,6), M(0xffffff), 0,0.85,0,body).scale.y=0.35;
+  const sr=mulberry32(sp.length*131+stage), lc2=new THREE.Color(lc).offsetHSL(0.02,0,0.06).getHex();
+  body.add(leafy(new THREE.Mesh(canopyGeo(blobs, [lc,lc2], sr, treeTint(sr), { density:60, card:0.9 }), foliageMat('broad')), foliageMat('broad')));
   const blooming = stage>=2 && P.bloom && P.bloom.includes(MODEL.month) && P.colors.length;
   if (blooming){ const c=color||P.colors[0]; const rr=mulberry32(sp.length*31);
     for(let i=0;i<(P.berries?12:16);i++){ const a=rr()*TAU, e=rr()*1.1; const p=new THREE.Vector3(Math.cos(a)*Math.cos(e)*0.62, 0.45+Math.sin(e)*0.55, Math.sin(a)*Math.cos(e)*0.62);

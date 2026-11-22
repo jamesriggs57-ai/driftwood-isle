@@ -10,6 +10,7 @@ import { Snd } from './audio.js';
 import { LAYOUTS, DEFAULT_SHAPE, islandRadius, generateLayout, bluffD } from './layouts.js';
 import { buildBike, MODEL, M, mk, G, outline, windowMat, glowMats, glowMat, glowSprites, addGlow, textSprite, PALETTE, buildItemModel, thumb, toolThumb, FURN_BUILDERS,
   buildTree, buildStump, buildShrub, buildFlower, buildTool, buildAnimal, buildPlayer, buildHouse, buildStall, buildBoard, buildPlankDeck, buildRoom, buildBird, buildGull, buildDuck } from './models.js';
+import './furn.js';
 import { buildPlot, buildStand, buildStore, buildTownHall, buildMuseumTier, buildCrop, buildStairs } from './models3.js';
 import { hasUpstairs, winAt, winKey, buildCustomHouse, buildHomeInterior, buildShopBuilding, buildMuseum, buildKeeper, buildMossby, buildExhibit, buildTower, buildWizard, planGrid, planCells, planProblem, fixDoor, linkKey, linkOf, defaultExt, defaultRoom } from './models2.js';
 
@@ -720,7 +721,7 @@ class Furniture extends Ent {
     { label:'Rotate', fn:()=>{ this.rec.rot=((this.rec.rot||0)+Math.PI/4)%TAU; this.model.rotation.y=this.rec.rot; Snd.click(); save(); } },
     { label:'Pick up', fn:()=>{ if(!addItem(this.rec.id)){ toast('Your bag is full.'); return; } S.placed.splice(S.placed.indexOf(this.rec),1); this.remove(); Snd.pop(); save(); } },
     { label:'Leave it', alt:true, fn:()=>{} } ]); }
-  update(dt,t){ const f=this.model.userData.flame; if(f){ f.scale.set(1+Math.sin(t*13)*0.08, 1+Math.sin(t*17+1)*0.15, 1+Math.cos(t*11)*0.08); } }
+  update(dt,t){ runAnims(this.model, this.obj, t, dt); }
 }
 class Building extends Ent {
   constructor(kind,x,z,r,obj,labelText,onAct){ super(kind,x,z,r); this.solid=true; this.reach=r+1.4; this._l=labelText; this._a=onAct; this.attach(obj); }
@@ -747,7 +748,7 @@ class Resident extends Ent {
     this.obj.position.copy(this.pos); this.state='idle'; this.timer=1; }
   setLying(on){ if (this.lying===on) return; this.lying=on; if (on){ const b=this.room.bed; this.pos.set(b[0],0.55,b[1]+0.2); this.obj.position.copy(this.pos); this.obj.rotation.set(-Math.PI/2,0,0); } else { this.obj.rotation.set(0,this.obj.rotation.y,0); this.pos.y = this.loc==='in'?0:groundY(this.pos.x,this.pos.z); } }
   update(dt,t){
-    const u=this.obj.userData; this.zzz.visible=false;
+    const u=this.obj.userData; this.zzz.visible=false; if (!this.lying && this.obj.visible!==false && (World.inside ? this.loc==='in' : this.loc==='out')){ const mv=Math.hypot(this.pos.x-(this.lx??this.pos.x), this.pos.z-(this.lz??this.pos.z))>dt*0.3; this.lx=this.pos.x; this.lz=this.pos.z; jelly(this.obj, this.jel=this.jel||{}, dt, mv, t, 0.7); }
     if (this.talking){ this.face=Math.atan2(player.pos.x-this.pos.x, player.pos.z-this.pos.z); this.applyFace(dt); u.body.position.y=Math.abs(Math.sin(t*6))*0.02; return; }
     const home=this.wantsHome(), R=this.room;
     if (home && this.loc==='out'){ // head home
@@ -1009,7 +1010,11 @@ function randLand(r, minH, maxH, rad, tries=60, near){
 
 /* ---------- Rooms ---------- */
 const HOME_ROOM = { floor:0xc99a6a, wall:0xfff0d8, pattern:'stripe', accent:0x6a9ad8 };
-class Decor extends Ent { constructor(b,x,z,rot){ const it=ITEMS[b]||{r:DECOR_R[b]||0.6}; super('decor',x,z,it.r||0.6); this.solid=!it.flat; const g=new THREE.Group(); FURN_BUILDERS[b](g); g.rotation.y=rot||0; this.attach(g); pickList.splice(pickList.indexOf(this.obj),1); } }
+// Living details on furniture (see furn.js). Skipped when hidden or far from the camera.
+const _av=new THREE.Vector3();
+function runAnims(m, root, t, dt){ const f=m.userData.flame; if(f){ f.scale.set(1+Math.sin(t*13)*0.08, 1+Math.sin(t*17+1)*0.15, 1+Math.cos(t*11)*0.08); }
+  const A=m.userData.anims; if (!A) return; let o=root; while(o){ if(!o.visible) return; o=o.parent; } root.getWorldPosition(_av); if (_av.distanceToSquared(camera.position)>900) return; for (const fn of A) fn(t, Math.min(dt,0.1)); }
+class Decor extends Ent { constructor(b,x,z,rot){ const it=ITEMS[b]||{r:DECOR_R[b]||0.6}; super('decor',x,z,it.r||0.6); this.solid=!it.flat; const g=new THREE.Group(); FURN_BUILDERS[b](g); g.rotation.y=rot||0; this.attach(g); pickList.splice(pickList.indexOf(this.obj),1); } update(dt,t){ runAnims(this.obj, this.obj, t, dt); } }
 function makeRoom(id, idx, spec, W, D, exit){
   const [ox,oz]=roomOrigin(idx); const container=new THREE.Group(); container.visible=false; scene.add(container);
   const shell=buildRoom(spec,W,D); shell.position.set(ox,0,oz); container.add(shell);
@@ -1120,7 +1125,7 @@ class Keeper extends Ent {
   constructor(spec, x, z, onTalk){ super('keeper',x,z,0.45); this.spec=spec; this.onTalk=onTalk; this.solid=true; this.reach=2.6; this.attach((spec.build||buildKeeper)(spec)); this.hitSphere(0.9,1.0); this.face=0; }
   label(){ return 'Talk'; }
   act(){ Snd.pop(); this.onTalk(this); }
-  update(dt,t){ const u=this.obj.userData; u.body.position.y=Math.abs(Math.sin(t*2.2))*0.03; u.head.rotation.z=Math.sin(t*1.3)*0.06;
+  update(dt,t){ const u=this.obj.userData; jelly(this.obj, this.jel=this.jel||{}, dt, false, t); u.head.rotation.z=Math.sin(t*1.3)*0.06;
     const d=Math.hypot(player.pos.x-this.pos.x, player.pos.z-this.pos.z); const want = d<7 ? Math.atan2(player.pos.x-this.pos.x, player.pos.z-this.pos.z) : (this.rest||0);
     let df=want-this.obj.rotation.y; df=Math.atan2(Math.sin(df),Math.cos(df)); this.obj.rotation.y+=df*Math.min(1,dt*5); }
 }
@@ -3139,12 +3144,30 @@ function remotePos(id, st){ const r=remotes.get(id); if(!r) return; r.tgt.set(st
 function remoteLeave(id){ const r=remotes.get(id); if(!r) return; scene.remove(r.obj); remotes.delete(id); }
 function remoteEmote(id, e){ const txt=EMOTE_TEXT[e]; if(!txt) return; const pos = id==='me' ? player.pos : remotes.get(id)?.pos; if(!pos) return; const v=pos.clone(); v.y+=0.6; floatText(txt, v); if(id!=='me') Snd.pop(); }
 // Jelly feel: bodies squash and stretch on a little spring, and friends bump each other apart.
-function jelly(obj, st, dt, moving, t){
-  const u=obj.userData; if(!u.body) return;
-  st.v=(st.v||0) + (-(st.x||0)*120 - (st.v||0)*9)*dt; st.x=(st.x||0)+st.v*dt;
-  if (moving){ st.prevMoving=true; } else if (st.prevMoving){ st.prevMoving=false; st.v-=1.6; }   // little settle wobble when stopping
-  const walk = moving ? Math.sin(t*14)*0.05 : 0, k=clamp(st.x+walk,-0.35,0.35);
-  u.body.scale.set(1-k*0.5, 1+k, 1-k*0.5);
+/* Jelly feel (v1.1): every critter is a soft plush on springs.
+   - squash and stretch from a spring, kicked on every footstep and when stopping or starting
+   - a slow breath while standing still
+   - the head lags behind the body and nods back, ears and tails flop with the bounce
+   - a little forward lean when walking, a sideways lean when turning */
+function jelly(obj, st, dt, moving, t, speed=1){
+  const u=obj.userData; if(!u.body) return; if (st.seed===undefined) st.seed=Math.random()*10;
+  dt=Math.min(dt,0.05);
+  st.v=(st.v||0) + (-(st.x||0)*150 - (st.v||0)*7.5)*dt; st.x=(st.x||0)+st.v*dt;
+  if (moving!==!!st.prevMoving){ st.v += moving ? 1.4 : -2.2; st.prevMoving=moving; }       // start: stretch up; stop: squish down
+  if (moving){ const ph=(st.ph||0)+dt*(7+5*speed), step=Math.floor(ph/Math.PI); if (step!==st.step){ st.step=step; st.v-=1.1*Math.min(1,speed+0.3); } st.ph=ph; }
+  const breath = moving ? 0 : Math.sin(t*2.1+st.seed)*0.018;
+  const k=clamp(st.x+breath,-0.32,0.32); u.body.scale.set(1-k*0.55, 1+k, 1-k*0.55);
+  // lean
+  const yaw=obj.rotation.y, dy=Math.atan2(Math.sin(yaw-(st.yaw??yaw)),Math.cos(yaw-(st.yaw??yaw)))/Math.max(dt,1e-3); st.yaw=yaw;
+  st.lean=lerp(st.lean||0, moving?0.1*speed:0, Math.min(1,dt*6)); st.roll=lerp(st.roll||0, clamp(-dy*0.04,-0.18,0.18), Math.min(1,dt*5));
+  u.body.rotation.x=st.lean; u.body.rotation.z=st.roll + (moving?Math.sin(st.ph||0)*0.07*Math.min(1,speed+0.2):0);   // a little waddle
+  // head: a softer spring that trails the body
+  if (u.head){ st.hv=(st.hv||0) + (-(st.hx||0)*60 - (st.hv||0)*5 - st.v*2.2)*dt; st.hx=(st.hx||0)+st.hv*dt;
+    u.head.rotation.x = clamp(st.hx*0.5,-0.25,0.25) + (moving?0:Math.sin(t*0.7+st.seed)*0.03); u.head.position.y = 1.42 + clamp(st.hx*0.03,-0.03,0.03); }
+  // ears and tail flop with the bounce
+  const flop=clamp(st.v*0.09 + st.hx*0.25,-0.5,0.5);
+  if (u.ears) u.ears.forEach((e,i)=>{ e.rotation.z = e.userData.base + flop*(i%2?-1:1)*0.6 + Math.sin(t*1.7+st.seed+i)*0.04; e.rotation.x = -flop*0.5; });
+  if (u.tail){ u.tail.rotation.y = Math.sin(t*(moving?9:2.5)+st.seed)*(moving?0.35:0.15); u.tail.rotation.x = u.tail.userData.base - flop*0.6; }
 }
 const playerJelly={}, knock=new THREE.Vector2();
 function bumpFriends(dt){
@@ -3161,7 +3184,7 @@ function bumpFriends(dt){
 }
 function updateRemotes(dt,t){
   if (started && !buildMode) bumpFriends(dt);
-  jelly(player.obj, playerJelly, dt, player.speedFrac>0.05, t);
+  jelly(player.obj, playerJelly, dt, player.speedFrac>0.05, t, player.speedFrac*(riding?1.6:1));
   for (const r of remotes.values()){ r.jel=r.jel||{}; jelly(r.obj, r.jel, dt, !!r.w, t);
     r.pos.lerp(r.tgt, Math.min(1, dt*8)); r.obj.position.copy(r.pos);
     let d=r.f-r.obj.rotation.y; d=Math.atan2(Math.sin(d),Math.cos(d)); r.obj.rotation.y+=d*Math.min(1,dt*10);
@@ -3176,4 +3199,4 @@ function setInventory(inv, seen, equip){ S.inv=inv; if(seen) S.seen=Object.assig
 if (VISIT) setTimeout(()=>toast(`Visiting ${BOOT.host.name}'s island${BOOT.host.island?' ('+BOOT.host.island+')':''} as a ${BOOT.role}.`), 1500);
 
 addEventListener('visibilitychange', ()=>{ if(document.hidden) save(); else if(Snd.ctx) Snd.ctx.resume(); });
-window.__game = { v1:{ townNewDay, applyTown, talkHall, openHallPanel, buildPlaza, refreshStoreItems, buildStoreAll, buildShop, buildMuseumAll, spawnExhibits, exhibitSlots, mentorMoment, teachWoodworking, openCraft, doCook, nearStation, toggleSled, setSled, get sledding(){ return sledding; }, sledV, eatFood, Plant, fullBagCatch, KB, landSeaTap, terraLand, LAMPS:()=>LAMPS, hasUpstairs, ShopItem, Stairs, get exhibits(){ return exhibits; }, KEEPOUT, dayKeyOf, World, startPlacing, checkPlace, get placing(){ return placing; } }, get S(){ return S; }, dbg:{ showChoices:(t,c)=>showChoices(t,c), dialog:(...a)=>dialog(...a), setRiding:(v)=>setRiding(v), enterRoom:(id)=>enterRoom(id), openBuild:()=>openBuild(), rooms:()=>Object.keys(ROOMS), get yaw(){ return camYaw; }, set yaw(v){ camYaw=v; }, get riding(){ return riding; }, get snow(){ return SNOW_U.value; }, setWeather:(w)=>{ weatherOverride=w; World.weather=w; snowT=0; }, get dlg(){ return !!dlgState; } }, net:{ visibleRemotes:()=>[...remotes.values()].filter(r=>r.obj.visible).map(r=>[r.name,+r.pos.x.toFixed(1),+r.pos.z.toFixed(1)]), remoteUpsert, remotePos, remoteLeave, remoteEmote, playerState, setInventory, toast:(m)=>toast(m), updateHUD:()=>updateHUD(), get started(){ return started; } }, ITEMS, itemThumb:(id)=>thumb(id), layoutInfo:()=>({ id:LAYOUT_ID, PLACES, PATHS, LOT, rects:RECTS.map(r=>r.slice(0,4)), lot:lotRect() }), terrainH:(x,z)=>rawHeight(x,z), terrainSlope:(x,z)=>hillSlope(x,z), interact, spawnBug:(id,x,z)=>new Bug(id,x,z), tapOdds:()=>Object.fromEntries(Object.keys(TAP_BASE).map(k=>[k, +tapChance({rarity:k}).toFixed(2)])), placingObj:()=>placing&&placing.m, toScreen:v=>{ const p=v.clone().project(camera); return [(p.x*0.5+0.5)*innerWidth, (-p.y*0.5+0.5)*innerHeight]; }, rebuildHome:()=>{ buildPlayerHouse(); rebuildHomeRoom(); }, openBuild, closeBuild, get buildMode(){ return buildMode; }, talkShop, openDonate, talkCurator, spawnMossby, onFelled, findPath, startPlacing, LOT, RECTS, shopEnts, museumEnt, houseEnt:()=>houseEnt, Time, player, ents, ITEMS, residents, World, ROOMS, goTo, handleTap, doAction, updateSky, rollDay, spawnDaily, castAt, Fishing, fishes, bugs, openBag, openBook, openShop, openBoard, openMenu, openCraft, doCraft, WOODWORK, enterRoom, exitRoom, equip, startLayout, endLayout, trees, applyControls, magic:{ startMagic, endMagic, landTap, magicPlace, castMagic, get mode(){ return magicMode; }, raiseTower, talkWizard, drinkPotion, potionOn, luckW, rollFavors, Q, favorChoices, findTowerSpot, get tower(){ return towerEnt; }, PLACES, TERRA, FALLS } };
+window.__game = { v1:{ scene, camera, OUT, townNewDay, applyTown, talkHall, openHallPanel, buildPlaza, refreshStoreItems, buildStoreAll, buildShop, buildMuseumAll, spawnExhibits, exhibitSlots, mentorMoment, teachWoodworking, openCraft, doCook, nearStation, toggleSled, setSled, get sledding(){ return sledding; }, sledV, eatFood, Plant, fullBagCatch, KB, landSeaTap, terraLand, LAMPS:()=>LAMPS, hasUpstairs, ShopItem, Stairs, get exhibits(){ return exhibits; }, KEEPOUT, dayKeyOf, World, startPlacing, checkPlace, get placing(){ return placing; } }, get S(){ return S; }, dbg:{ showChoices:(t,c)=>showChoices(t,c), dialog:(...a)=>dialog(...a), setRiding:(v)=>setRiding(v), enterRoom:(id)=>enterRoom(id), openBuild:()=>openBuild(), rooms:()=>Object.keys(ROOMS), get yaw(){ return camYaw; }, set yaw(v){ camYaw=v; }, get riding(){ return riding; }, get snow(){ return SNOW_U.value; }, setWeather:(w)=>{ weatherOverride=w; World.weather=w; snowT=0; }, get dlg(){ return !!dlgState; } }, net:{ visibleRemotes:()=>[...remotes.values()].filter(r=>r.obj.visible).map(r=>[r.name,+r.pos.x.toFixed(1),+r.pos.z.toFixed(1)]), remoteUpsert, remotePos, remoteLeave, remoteEmote, playerState, setInventory, toast:(m)=>toast(m), updateHUD:()=>updateHUD(), get started(){ return started; } }, ITEMS, itemThumb:(id)=>thumb(id), layoutInfo:()=>({ id:LAYOUT_ID, PLACES, PATHS, LOT, rects:RECTS.map(r=>r.slice(0,4)), lot:lotRect() }), terrainH:(x,z)=>rawHeight(x,z), terrainSlope:(x,z)=>hillSlope(x,z), interact, spawnBug:(id,x,z)=>new Bug(id,x,z), tapOdds:()=>Object.fromEntries(Object.keys(TAP_BASE).map(k=>[k, +tapChance({rarity:k}).toFixed(2)])), placingObj:()=>placing&&placing.m, toScreen:v=>{ const p=v.clone().project(camera); return [(p.x*0.5+0.5)*innerWidth, (-p.y*0.5+0.5)*innerHeight]; }, rebuildHome:()=>{ buildPlayerHouse(); rebuildHomeRoom(); }, openBuild, closeBuild, get buildMode(){ return buildMode; }, talkShop, openDonate, talkCurator, spawnMossby, onFelled, findPath, startPlacing, LOT, RECTS, shopEnts, museumEnt, houseEnt:()=>houseEnt, Time, player, ents, ITEMS, residents, World, ROOMS, goTo, handleTap, doAction, updateSky, rollDay, spawnDaily, castAt, Fishing, fishes, bugs, openBag, openBook, openShop, openBoard, openMenu, openCraft, doCraft, WOODWORK, enterRoom, exitRoom, equip, startLayout, endLayout, trees, applyControls, magic:{ startMagic, endMagic, landTap, magicPlace, castMagic, get mode(){ return magicMode; }, raiseTower, talkWizard, drinkPotion, potionOn, luckW, rollFavors, Q, favorChoices, findTowerSpot, get tower(){ return towerEnt; }, PLACES, TERRA, FALLS } };

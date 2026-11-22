@@ -360,11 +360,11 @@ function _buildKeeper(spec){
   const a=buildAnimal(spec); const u=a.userData;
   if (spec.species==='tortoise'){ const sh=outline(mk(G.sph(0.5,16,12,0,TAU,0,Math.PI/2), M(0x6a7a4a), 0,0.75,-0.32,u.body)); sh.rotation.x=-Math.PI/2+0.2; sh.scale.set(1,1,0.8);
     for(let i=0;i<5;i++){ const a2=i/5*TAU; mk(G.cyl(0.12,0.12,0.03,6),M(0x8a9a5a),Math.cos(a2)*0.22,0.75+Math.sin(a2)*0.22,-0.72,u.body).rotation.x=Math.PI/2; }
-    for (const s of [-1,1]){ const gl=mk(G.tor(0.1,0.02,6,16),M(0x3a2a20),s*0.19,0.07,0.47,u.head); } mk(G.box(0.12,0.02,0.02),M(0x3a2a20),0,0.08,0.48,u.head); }
+  }
   if (spec.species==='fox'){ const t=outline(mk(G.sph(0.22,12,10),M(spec.fur),0,0.6,-0.55,u.body)); t.scale.set(0.8,0.8,2); t.rotation.x=0.6; mk(G.sph(0.14,10,8),M(0xffffff),0,0.85,-0.85,u.body); }
   if (spec.species==='otter'){ const t=mk(G.cap(0.08,0.6,4,8),M(spec.fur),0,0.4,-0.5,u.body); t.rotation.x=-1.2; for(const s of [-1,1]) for(let k=0;k<2;k++){ const w=mk(G.cyl(0.004,0.004,0.3,3),M(0xffffff),s*0.28,-0.12+k*0.05,0.42,u.head); w.rotation.z=Math.PI/2+s*0.1*(k?1:-1); } }
   if (spec.stripe){ const st=mk(G.box(0.16,0.05,0.9),M(0xffffff),0,0.47,-0.05,u.head); st.rotation.x=-0.3; for(const s of [-1,1]){ const e=mk(G.box(0.12,0.04,0.5),M(0x3a3a40),s*0.2,0.22,0.3,u.head); e.rotation.set(-0.3,0,s*0.25); } }
-  if (spec.id==='pemberton'||spec.id==='sprig'||spec.id==='marlo'){ const ap=mk(G.box(0.62,0.62,0.06),M(spec.id==='marlo'?0xffffff:0xf2ead8),0,0.72,0.4,u.body); ap.rotation.x=0.08; }
+  if (spec.id==='marlo'){ const ap=mk(G.box(0.62,0.62,0.06),M(spec.id==='marlo'?0xffffff:0xf2ead8),0,0.72,0.4,u.body); ap.rotation.x=0.08; }
   return a;
 }
 

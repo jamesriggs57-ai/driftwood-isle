@@ -8,8 +8,8 @@ import { ITEMS, NATIVE_FRUITS, PLANTS, TOOLS, WOODWORK, BACKPACKS, BASE_SLOTS, H
   FOREIGN_FRUIT_PRICE, FRUIT_REGROW_DAYS, POTIONS, WIZARD, MAGIC, STORY, FAVOR_ASKS, CROPS, RECIPES, ARRIVE, MENTOR } from './content.js';
 import { Snd } from './audio.js';
 import { LAYOUTS, DEFAULT_SHAPE, islandRadius, generateLayout, bluffD } from './layouts.js';
-import { buildBike, MODEL, M, mk, G, outline, windowMat, glowMats, glowMat, glowSprites, addGlow, textSprite, PALETTE, buildItemModel, thumb, toolThumb, FURN_BUILDERS,
-  buildTree, buildStump, buildShrub, buildFlower, buildTool, buildAnimal, buildPlayer, buildHouse, buildStall, buildBoard, buildPlankDeck, buildRoom, buildBird, buildGull, buildDuck } from './models.js';
+import { buildBike, MODEL, M, mk, G, outline, windowMat, glowMats, glowMat, glowSprites, addGlow, textSprite, PALETTE, buildItemModel, thumb, toolThumb, FURN_BUILDERS, MF,
+  buildTree, buildStump, buildShrub, buildFlower, buildTool, buildAnimal, buildPlayer, buildHouse, buildStall, buildBoard, buildPlankDeck, buildRoom, buildBird, buildGull, buildDuck, buildWeedClump } from './models.js';
 import './furn.js';
 import { buildPlot, buildStand, buildStore, buildTownHall, buildMuseumTier, buildCrop, buildStairs } from './models3.js';
 import { hasUpstairs, winAt, winKey, buildCustomHouse, buildHomeInterior, buildShopBuilding, buildMuseum, buildKeeper, buildMossby, buildExhibit, buildTower, buildWizard, planGrid, planCells, planProblem, fixDoor, linkKey, linkOf, defaultExt, defaultRoom } from './models2.js';
@@ -615,7 +615,7 @@ class Ent {
   attach(obj){ this.obj=obj; obj.position.copy(this.pos); obj.traverse(c=>{ c.userData.ent=this; }); this.parentGroup().add(obj); ents.push(this); pickList.push(obj); return this; }
   swap(obj){ const i=pickList.indexOf(this.obj); const p=this.obj.parent; if(p) p.remove(this.obj); this.obj=obj; obj.position.copy(this.pos); obj.traverse(c=>{ c.userData.ent=this; }); (p||this.parentGroup()).add(obj); if(i>=0) pickList[i]=obj; else pickList.push(obj); }
   hitSphere(r, y){ const h=new THREE.Mesh(G.sph(r,6,4), new THREE.MeshBasicMaterial({ visible:false })); h.position.y=y; h.userData.ent=this; this.obj.add(h); }
-  remove(){ if(this.obj.parent) this.obj.parent.remove(this.obj); const i=ents.indexOf(this); if(i>=0) ents.splice(i,1); const j=pickList.indexOf(this.obj); if(j>=0) pickList.splice(j,1); this.removed=true; }
+  remove(keepMesh){ if(this.obj.parent && !keepMesh) this.obj.parent.remove(this.obj); this.obj.traverse(c=>{ if (c.userData.ent===this) delete c.userData.ent; }); const i=ents.indexOf(this); if(i>=0) ents.splice(i,1); const j=pickList.indexOf(this.obj); if(j>=0) pickList.splice(j,1); this.removed=true; }
   label(){ return null; } act(){} update(){}
 }
 const today = () => S.day ? S.day.key : Time.dayKey();
@@ -656,7 +656,7 @@ class Tree extends Ent {
     const lab=this.label();
     if ((lab==='Chop'||lab==='Dig up'||lab==='Water') && noEdit()) return;
     if (lab==='Chop') return this.chop();
-    if (lab==='Dig up'){ if(!useTool('shovel')) return; Snd.dig(); S.plants.splice(S.plants.indexOf(this.rec),1); this.remove(); const id = this.type==='fruittree' ? this.fruit : this.type+'_sapling'; dropNear(ITEMS[id]?id:'oak_sapling', this.pos, 0.3, true); S.stats.dug++; save(); return; }
+    if (lab==='Dig up'){ if(!useTool('shovel')) return; Snd.dig(); FX.hole(this.pos.clone(), 0.4, 1.4); S.plants.splice(S.plants.indexOf(this.rec),1); this.remove(); const id = this.type==='fruittree' ? this.fruit : this.type+'_sapling'; dropNear(ITEMS[id]?id:'oak_sapling', this.pos, 0.3, true); S.stats.dug++; save(); return; }
     if (lab==='Water'){ waterPlant(this.rec, this.pos); return; }
     if (lab==='Look'){ toast(`A young ${(PLANTS[this.type]||{name:'tree'}).name.toLowerCase()}. It grows a little every day, faster if watered.`); return; }
     this.shake=1; Snd.rustle(); const tp=this.pos.clone(); tp.y+=2.8; puff(tp, World.season==='winter'?0xffffff:0x6cc050, 6, 0.8, 1, 1.2, 1);
@@ -673,7 +673,7 @@ class Tree extends Ent {
     else if (TOOLS.axe.tiers[tier].nofell) toast('This flimsy axe can\'t cut a tree down. A sturdy axe can.');
     else { Snd.timber(); dropNear('wood', this.pos, 1.6);
       if (this.rec){ S.plants.splice(S.plants.indexOf(this.rec),1); } else S.cut[this.key]='gone';
-      const st={ key:this.key, x:this.pos.x, z:this.pos.z }; S.stumps.push(st); new Stump(st); this.remove(); onFelled(this.pos.clone()); puff(this.pos.clone().add(new THREE.Vector3(0,2,0)), 0x6cc050, 14, 1.4, 2, 1.4, 1.2); }
+      const st={ key:this.key, x:this.pos.x, z:this.pos.z }; S.stumps.push(st); new Stump(st); FX.fell(this.obj, this.pos.clone(), this.type); this.remove(true); onFelled(this.pos.clone()); }
     save();
   }
   update(dt,t){ const top=this.obj.userData.top; if(!top) return; top.rotation.z=Math.sin(t*0.9+this.pos.x)*0.012+Math.sin(t*38)*0.07*this.shake; top.rotation.x=Math.cos(t*0.7+this.pos.z)*0.01; if(this.shake>0) this.shake=Math.max(0,this.shake-dt*1.6); }
@@ -681,7 +681,8 @@ class Tree extends Ent {
 class Stump extends Ent {
   constructor(rec){ super('stump',rec.x,rec.z,0.45); this.rec=rec; this.solid=true; this.reach=1.4; this.attach(buildStump()); }
   label(){ return S.equip==='shovel' ? 'Dig up' : 'Look'; }
-  act(){ if (this.label()==='Look'){ toast('A tree stump. Dig it up with a shovel.'); return; } if(!useTool('shovel')) return; Snd.dig(); puff(this.pos.clone().add(new THREE.Vector3(0,0.3,0)),0xb08a5a,8,0.6,2.5,1,0.6); S.stumps.splice(S.stumps.indexOf(this.rec),1); this.remove(); dropNear('wood', this.pos, 1); S.stats.dug++; save(); }
+  act(){ if (this.label()==='Look'){ toast('A tree stump. Dig it up with a shovel, then turn it into stump furniture at a workbench.'); return; } if(!useTool('shovel')) return; Snd.dig(); S.stumps.splice(S.stumps.indexOf(this.rec),1);
+    const pos=this.pos.clone(); FX.stumpOut(this.obj, pos); this.remove(true); setTimeout(()=>dropNear('stump', pos, 1.1), 900); S.stats.dug++; save(); }
 }
 if (!S.stumps) S.stumps=[];
 
@@ -706,7 +707,7 @@ class Rock extends Ent {
 class DigSpot extends Ent {
   constructor(i,x,z){ super('dig',x,z,0.4); this.i=i; this.reach=1.3; const g=new THREE.Group(); for(const a of [0.6,-0.6]){ const m=mk(G.box(0.7,0.03,0.12), M(0x6a4a30), 0,0.03,0,g); m.rotation.y=a; m.castShadow=false; } this.attach(g); this.hitSphere(0.5,0.2); }
   label(){ return 'Dig'; }
-  act(){ if(!needTool('shovel') || !useTool('shovel')) return; Snd.dig(); puff(this.pos.clone().add(new THREE.Vector3(0,0.2,0)), 0xb08a5a, 8, 0.6, 2.5, 1, 0.6); S.day.digs[this.i].dug=true; S.stats.dug++;
+  act(){ if(!needTool('shovel') || !useTool('shovel')) return; Snd.dig(); puff(this.pos.clone().add(new THREE.Vector3(0,0.2,0)), 0xb08a5a, 8, 0.6, 2.5, 1, 0.6); S.day.digs[this.i].dug=true; S.stats.dug++; FX.hole(this.pos.clone(), 0.5, 1.6);
     const f=weightedPick(Math.random, Object.values(ITEMS).filter(i=>i.kind==='fossil' && allowedFind(i)), i=>luckW(i,'dig')); this.remove(); setTimeout(()=>dropNear(f.id, this.pos, 0.3, true), 200);
     if (Math.random()<(potionOn('dig')?0.25:0.12)){ setTimeout(()=>{ const got=grantRandomStyle(); if(got){ Snd.jingle(); toast(`You dug up a swatch book! You can now use ${got} in the house builder.`); } }, 900); }
     if (toolTier('shovel')>=2 && Math.random()<0.3){ addClams(300); toast(`Your ${TOOLS.shovel.tiers[toolTier('shovel')].name.toLowerCase()} turned up 300 clams too!`); Snd.coin(); } save(); }
@@ -718,9 +719,9 @@ class GroundItem extends Ent {
   update(dt,t){ this.obj.children[0].rotation.y=this.spin+Math.sin(t*1.5+this.spin)*0.2; if(this.bounce>0){ this.bounce=Math.max(0,this.bounce-dt*2.2); this.obj.position.y=this.pos.y+Math.abs(Math.sin(this.bounce*Math.PI*2))*this.bounce*1.4; } }
 }
 class Weed extends Ent {
-  constructor(i,x,z){ super('weed',x,z,0.35); this.i=i; this.reach=1.2; this.attach(buildItemModel('weed')); this.hitSphere(0.45,0.25); }
+  constructor(i,x,z){ super('weed',x,z,0.5); this.i=i; this.reach=1.4; const g=buildWeedClump(hashStr(today()+':'+i)%9973+1, 1.45); g.rotation.y=i*1.7; this.attach(g); this.hitSphere(0.6,0.35); }
   label(){ return 'Pull'; }
-  act(){ const r=addItem('weed'); if(!r){ toast('Your bag is full.'); return; } Snd.rustle(); puff(this.pos.clone().add(new THREE.Vector3(0,0.3,0)),0x5a9a3a,5,0.4,2,0.7,0.5); S.day.weeds[this.i].pulled=true; this.remove(); save(); itemToast('weed', r==='new','Pulled'); }
+  act(){ const r=addItem('weed'); if(!r){ toast('Your bag is full.'); return; } Snd.rustle(); puff(this.pos.clone().add(new THREE.Vector3(0,0.3,0)),0x6a8a2a,8,0.5,2,0.8,0.5); puff(this.pos.clone().add(new THREE.Vector3(0,0.1,0)),0x6a5038,5,0.4,1.5,0.7,0.5); S.day.weeds[this.i].pulled=true; FX.yank(this.obj); this.remove(true); save(); itemToast('weed', r==='new','Pulled'); }
 }
 
 /* ---------- Planted flowers and shrubs ---------- */
@@ -748,7 +749,7 @@ class Plant extends Ent {
     if (lab==='Water') return waterPlant(this.rec, this.pos);
     if (lab==='Harvest') return this.harvest();
     if (lab==='Pick'){ const r=addItem(this.rec.sp); if(!r){ toast('Your bag is full.'); return; } this.rec.stage=2; Snd.pop(); this.rebuild(); itemToast(this.rec.sp, r==='new', 'Picked'); save(); return; }
-    if (lab==='Dig up'){ if(!useTool('shovel')) return; Snd.dig(); S.plants.splice(S.plants.indexOf(this.rec),1); this.remove(); dropNear(P.ptype==='crop'?P.crop+'_seeds':P.ptype==='flower'?this.rec.sp+'_seeds':this.rec.sp+'_start', this.pos, 0.3, true); S.stats.dug++; save(); return; }
+    if (lab==='Dig up'){ if(!useTool('shovel')) return; Snd.dig(); FX.hole(this.pos.clone(), 0.32, 1.2); S.plants.splice(S.plants.indexOf(this.rec),1); this.remove(); dropNear(P.ptype==='crop'?P.crop+'_seeds':P.ptype==='flower'?this.rec.sp+'_seeds':this.rec.sp+'_start', this.pos, 0.3, true); S.stats.dug++; save(); return; }
     const st=(P.ptype==='crop'?['just planted','sprouting','growing','ready to harvest']:['just planted','sprouting','growing','fully grown'])[this.rec.stage];
     toast(`${P.name}: ${st}.${this.rec.stage<3?' Water it to help it grow.':''}`);
   }
@@ -847,10 +848,13 @@ class Bug extends Ent {
   constructor(id, x, z, extra={}){ super('bug',x,z,0.3); this.id=id; this.it=ITEMS[id]; this.where=this.it.where; this.reach=1.5;
     const m=buildItemModel(id); m.scale.setScalar(this.where==='air'?1.1:0.9); const g=new THREE.Group(); g.add(m); this.m=m; this.attach(g); this.hitSphere(0.8,0.5);
     this.home=new THREE.Vector3(x,0,z); this.ph=Math.random()*10; this.alt= this.where==='air' ? 0.8+Math.random()*1.4 : (this.where==='trunk'?1.1+Math.random()*0.6:0.05); this.flee=0; this.hop=0; this.trunk=extra.trunk||null;
-    if (this.trunk){ const a=Math.random()*TAU; this.pos.set(this.trunk.x+Math.cos(a)*0.32, groundY(this.trunk.x,this.trunk.z)+this.alt, this.trunk.z+Math.sin(a)*0.32); this.m.rotation.set(-Math.PI/2,0,0); this.obj.rotation.y=Math.atan2(Math.cos(a),Math.sin(a)); this.obj.position.copy(this.pos); }
+    // trunk bugs sit on the side of the tree that faces the camera, so you can see them before you walk up
+    if (this.trunk){ this.toff=(Math.random()-0.5)*1.1; this.ta=this.camSide()+this.toff; this.m.rotation.set(-Math.PI/2,0,0); this.placeOnTrunk(); }
     this.glow=addGlow(g, 0.35, 1.0, this.it.model.glow?0xe8ff9a:0xfff0c0); this.glow.userData.night=true;
     bugs.push(this); }
   get rarity(){ return rarityLabel(this.it.rarity); }
+  camSide(){ return Math.atan2(camera.position.z-this.trunk.z, camera.position.x-this.trunk.x); }
+  placeOnTrunk(){ const a=this.ta, R=0.34; this.pos.set(this.trunk.x+Math.cos(a)*R, groundY(this.trunk.x,this.trunk.z)+this.alt, this.trunk.z+Math.sin(a)*R); this.obj.rotation.y=Math.atan2(Math.cos(a),Math.sin(a)); this.obj.position.copy(this.pos); }
   label(){ return CatchMeter.bug===this ? 'Swing!' : 'Catch'; }
   // mode 'tap' = you tapped the bug and walked up automatically: a simple roll, about 70%.
   // mode 'manual' = you walked up yourself and pressed Catch: a timing swing. Nail it and almost nothing escapes.
@@ -875,7 +879,9 @@ class Bug extends Ent {
     if (this.flee){ this.flee+=dt; const sp=W==='air'||W==='flower'||W==='trunk'?5:3.5; this.pos.x+=Math.cos(this.fleeDir)*sp*dt; this.pos.z+=Math.sin(this.fleeDir)*sp*dt; if(W!=='ground'&&W!=='beach'&&W!=='pond') this.pos.y+=dt*2.5; this.obj.position.copy(this.pos); this.obj.rotation.y=Math.atan2(Math.cos(this.fleeDir),Math.sin(this.fleeDir)); this.flap(t,2); if(this.flee>2.2) this.despawn(); return; }
     if (W==='air'){ const w=this.ph*0.6; const x=this.home.x+Math.sin(w)*2.2+Math.sin(w*2.3)*0.8, z=this.home.z+Math.cos(w*0.8)*2.2; const ang=Math.atan2(x-this.pos.x, z-this.pos.z); this.pos.set(x, groundY(x,z)+this.alt+Math.sin(this.ph*3)*0.25, z); this.obj.rotation.y=ang; this.flap(t,1); }
     else if (W==='flower'){ if (Math.sin(this.ph*0.7)>0.93){ this.pos.y=groundY(this.pos.x,this.pos.z)+0.4+Math.sin(this.ph*8)*0.15; this.flap(t,1); } else { this.pos.y=groundY(this.pos.x,this.pos.z)+0.3; this.flap(t,0.15); } }
-    else if (W==='trunk'){ this.flap(t,0.1); }
+    else if (W==='trunk'){ this.flap(t,0.1);
+      // if the view turned and the bug ended up behind the trunk, it crawls back round to the front
+      let d=this.camSide()+this.toff-this.ta; d=Math.atan2(Math.sin(d),Math.cos(d)); if (Math.abs(d)>0.5){ this.ta+=Math.sign(d)*Math.min(Math.abs(d), dt*1.4); this.alt+=Math.sin(t*9)*dt*0.05; this.placeOnTrunk(); } }
     else if (W==='ground' || W==='beach'){ this.hop-=dt; if(this.hop<=0){ this.hop=1.5+Math.random()*3; const a=Math.random()*TAU; this.tx=this.pos.x+Math.cos(a)*1.2; this.tz=this.pos.z+Math.sin(a)*1.2; if(!walkable(this.tx,this.tz)){ this.tx=this.pos.x; this.tz=this.pos.z; } }
       if (this.tx!==undefined){ const dx=this.tx-this.pos.x, dz=this.tz-this.pos.z, L=Math.hypot(dx,dz); if(L>0.05){ const s=Math.min(L, dt*(W==='beach'?1.2:2.5)); this.pos.x+=dx/L*s; this.pos.z+=dz/L*s; this.obj.rotation.y=Math.atan2(dx,dz)+(W==='beach'?Math.PI/2:0); } }
       this.pos.y=groundY(this.pos.x,this.pos.z)+(W==='ground'&&this.hop>1.2?Math.sin((this.hop-1.2)*10)*0.2:0)+0.02; }
@@ -954,7 +960,7 @@ function castAt(pt){
 }
 function reel(){
   const f=Fishing.fish;
-  if (Fishing.state==='bite' && f){ useTool('rod'); const meta=rollStats(f.id), id=f.id; Snd.splash(); sparkle(bobber.position.clone());
+  if (Fishing.state==='bite' && f){ useTool('rod'); const meta=rollStats(f.id), id=f.id; Snd.splash(); FX.fishCatch(id, bobber.position.clone()); setTimeout(()=>sparkle(player.pos.clone().add(new THREE.Vector3(0,2.3,0))), 600);
     const kept=r=>{ setTimeout(()=>Snd.fanfare(),150); S.caught++; S.stats.fish++; const best=recordCatch(id, meta); catchToast(id, meta, r==='new', best); save(); };
     const r=addItem(id, meta); if(!r) setTimeout(()=>fullBagCatch(id, meta, kept), 250); else kept(r);
     f.m.parent && f.m.parent.remove(f.m); fishes.splice(fishes.indexOf(f),1);
@@ -1013,6 +1019,58 @@ function updateAmbient(dt,t){
     }
   }
 }
+
+/* ---------- Little action animations ----------
+   A tree tips over and lands, holes open up when you dig or plant, stumps wiggle loose, weeds get yanked,
+   and a caught fish leaps out of the water into your hands. Each effect owns its meshes and cleans up after itself. */
+const fxList=[];
+const holeMat=new THREE.MeshStandardMaterial({ color:0x3a2818, roughness:1, transparent:true, depthWrite:false });
+const holeGeo=new THREE.CircleGeometry(1,20).rotateX(-Math.PI/2);
+const easeOut=k=>1-Math.pow(1-k,3);
+const FX = {
+  add(fn){ fxList.push(fn); },
+  // a hole in the ground with a little dirt pile beside it
+  hole(pos, r=0.45, life=1.6){ const g=new THREE.Group(); g.position.set(pos.x, groundY(pos.x,pos.z)+0.025, pos.z);
+    const hm=holeMat.clone(); const h=mk(holeGeo, hm, 0,0,0,g); h.castShadow=false; h.receiveShadow=false; h.scale.set(r,1,r*0.85);
+    const pile=mk(G.sph(r*0.7,8,5), MF(0x6a5038), r*1.2,0,-r*0.2,g); pile.scale.set(1,0.01,0.8); pile.castShadow=false; OUT.add(g);
+    puff(g.position.clone().add(new THREE.Vector3(0,0.15,0)), 0x8a6a48, 7, 0.45, 2.2, 0.9, 0.55);
+    let t=0; FX.add(dt=>{ t+=dt; const k=Math.min(1,t/0.18); h.scale.set(r*easeOut(k),1,r*0.85*easeOut(k)); pile.scale.y=0.45*easeOut(k);
+      const f=Math.max(0,(t-(life-0.5))/0.5); hm.opacity=1-f; pile.scale.y*=1-f; if (t>=life){ OUT.remove(g); hm.dispose(); return false; } return true; }); },
+  // the tree tips away from you, picks up speed, thumps down with a bounce, then sinks away
+  fell(obj, pos, type){ const pv=new THREE.Group(); pv.position.copy(obj.position); OUT.add(pv); obj.parent && obj.parent.remove(obj); obj.position.set(0,0,0); pv.add(obj);
+    let dx=pos.x-player.pos.x, dz=pos.z-player.pos.z; const L=Math.hypot(dx,dz)||1; dx/=L; dz/=L; const axis=new THREE.Vector3(dz,0,-dx);
+    let th=0.02, w=0, t=0, landed=0, bounced=false; const max=Math.PI/2-0.12, top=obj.userData.top;
+    FX.add(dt=>{ t+=dt;
+      if (!landed){ w+=(3.2*Math.sin(th)+0.5)*dt; th+=w*dt; if (top) top.rotation.z=Math.sin(t*30)*0.04*(1-th/max);
+        if (th>=max){ th=max; if (!bounced){ bounced=true; w=-w*0.22; Snd.thunk(); const p=pos.clone(); p.x+=dx*3; p.z+=dz*3; p.y=groundY(p.x,p.z)+0.4;
+            puff(p, World.season==='winter'?0xffffff:(type==='palm'?0x7ab84a:0x6cc050), 16, 1.6, 2.2, 1.4, 1.1); puff(p, 0xc8b08a, 8, 1.2, 1.2, 1, 0.8); }
+          else { landed=t; } } }
+      pv.quaternion.setFromAxisAngle(axis, th);
+      if (landed){ const k=(t-landed-0.35)/0.5; if (k>0){ pv.scale.setScalar(Math.max(0.001,1-easeOut(Math.min(1,k)))); pv.position.y=groundY(pos.x,pos.z)-k*0.4; }
+        if (k>=1){ OUT.remove(pv); return false; } }
+      return t<8; }); },
+  // the stump wobbles, works loose and pops out of the ground
+  stumpOut(obj, pos){ FX.hole(pos, 0.55, 2.4); let t=0; const y0=obj.position.y;
+    FX.add(dt=>{ t+=dt;
+      if (t<0.45){ obj.rotation.z=Math.sin(t*40)*0.12*(t/0.45); obj.rotation.x=Math.cos(t*34)*0.08*(t/0.45); }
+      else { const k=Math.min(1,(t-0.45)/0.4); obj.position.y=y0+Math.sin(k*Math.PI)*0.7; obj.rotation.z=k*0.9; obj.scale.setScalar(Math.max(0.001,1-k*k));
+        if (!obj.userData.popped){ obj.userData.popped=1; Snd.pop(); puff(pos.clone().add(new THREE.Vector3(0,0.3,0)),0x8a6a48,10,0.7,2.8,1,0.7); } }
+      if (t>0.85){ obj.parent && obj.parent.remove(obj); return false; } return true; }); },
+  // a pulled weed comes up with a tug and vanishes
+  yank(obj){ let t=0; const y0=obj.position.y; FX.add(dt=>{ t+=dt; const k=Math.min(1,t/0.35); obj.position.y=y0+easeOut(k)*0.7; obj.rotation.y+=dt*9; obj.scale.setScalar(Math.max(0.001,1-k*k)); if (k>=1){ obj.parent && obj.parent.remove(obj); return false; } return true; }); },
+  // something you planted pokes up out of a fresh hole
+  sprout(ent){ const o=ent.obj; FX.hole(ent.pos, 0.32, 1.1); o.scale.setScalar(0.001); let t=0;
+    FX.add(dt=>{ t+=dt; if (ent.removed) return false; const k=Math.max(0,(t-0.3)/0.35); const s=k>=1?1:Math.max(0.001,easeOut(k)*(1+Math.sin(k*Math.PI)*0.25)); o.scale.setScalar(s); return k<1; }); },
+  // a caught fish jumps out of the water, arcs over to you, and you hold it up
+  fishCatch(id, from){ const m=buildItemModel(id), it=ITEMS[id]; const s=1.1*(SIZE_SCALE[it.size]||0.85)+0.5; m.scale.setScalar(s); const g=new THREE.Group(); g.add(m); scene.add(g);
+    m.traverse(c=>{ if (c.isMesh) c.castShadow=false; }); const a=from.clone(); a.y=0; ripple(a.x,a.z,1.4); puff(a.clone().add(new THREE.Vector3(0,0.2,0)),0xdff4ff,10,0.6,3,0.9,0.7);
+    let t=0; FX.add(dt=>{ t+=dt; const head=player.pos.clone().add(new THREE.Vector3(0,2.25,0));
+      if (t<0.6){ const k=t/0.6; g.position.lerpVectors(a, head, k); g.position.y+=Math.sin(k*Math.PI)*2.2; m.rotation.z=k*TAU*1.25; m.rotation.y=Math.atan2(head.x-a.x, head.z-a.z)-Math.PI/2; }
+      else { g.position.copy(head); m.rotation.z=Math.sin(t*16)*0.35*Math.max(0,1.6-t); m.rotation.y=Math.atan2(camera.position.x-head.x, camera.position.z-head.z); m.rotation.x=-0.35; player.act=Math.max(player.act,0.2);
+        if (t>1.55){ const k=Math.min(1,(t-1.55)/0.25); g.scale.setScalar(Math.max(0.001,1-k)); if (k>=1){ scene.remove(g); return false; } } }
+      return true; }); },
+};
+function updateFX(dt){ for (let i=fxList.length-1;i>=0;i--){ let keep=false; try{ keep=fxList[i](dt); }catch(e){ console.warn(e); } if (!keep) fxList.splice(i,1); } }
 
 /* ---------- Particles ---------- */
 const parts=[]; const partGeo=G.ico(0.1,0);
@@ -1208,6 +1266,8 @@ function buildStoreAll(){
   const R=makeRoom('store', 10, { floor:0xc8a070, wall:0xfff4dc, pattern:'stripe', accent:0x6a8a4a, items }, W, D, [storeEnt.doorPt[0], storeEnt.doorPt[1]+0.2]);
   pemberton=new Keeper(KEEPERS.pemberton, R.ox, R.oz-D/2+0.8, ()=>talkShop('general'));
   refreshStoreItems();
+  // the Home Goods rack (added once the rest of the game has loaded, since it reads the house style lists)
+  setTimeout(()=>{ if (ROOMS.store!==R) return; if (homeRack && !homeRack.removed) homeRack.remove(); homeRack=new HomeRack(R.ox+W/2-2.0, R.oz+D/2-2.1); }, 0);
 }
 // today's furniture on display stands, seeds laid out on a low table by the door
 function refreshStoreItems(){
@@ -1995,7 +2055,14 @@ function closePanel(){ const f=panelClose; panelClose=null; scrim.classList.remo
 $('#pClose').onclick=()=>closePanel();
 scrim.addEventListener('pointerdown', e=>{ if(e.target===scrim) closePanel(); });
 function toast(msg, img, cls, sub){ const t=document.createElement('div'); t.className='toast'+(cls?' '+cls:''); if(img){ const i=new Image(); i.src=img; t.appendChild(i); } const d=document.createElement('div'); d.textContent=msg; if(sub){ const s=document.createElement('div'); s.className='sub'; s.innerHTML=sub; d.appendChild(s); } t.appendChild(d); $('#toasts').appendChild(t); setTimeout(()=>{ t.style.transition='opacity .4s'; t.style.opacity=0; setTimeout(()=>t.remove(),400); }, sub?3800:2600); while($('#toasts').children.length>3) $('#toasts').firstChild.remove(); }
-function itemToast(id, isNew, verb){ const n=ITEMS[id].name; toast((isNew?'New! ':'')+`${verb}: ${n}`, thumb(id), isNew?'new':''); if(isNew) Snd.fanfare(); }
+function itemToast(id, isNew, verb){ const n=ITEMS[id].name; if (!isNew && PICK_VERBS.has(verb)){ pickNote(id, verb); return; } toast((isNew?'New! ':'')+`${verb}: ${n}`, thumb(id), isNew?'new':''); if(isNew) Snd.fanfare(); }
+/* Everyday pickups show as a small note under the clock. The same thing picked up again bumps the count instead of stacking notes. */
+const PICK_VERBS=new Set(['Picked up','Pulled','Picked','Bought']); const picksEl=$('#picks'), pickMap=new Map();
+function pickNote(id, verb){ const key=verb+':'+id; let p=pickMap.get(key);
+  if (p && p.el.isConnected){ p.n++; p.el.querySelector('span').innerHTML=`${ITEMS[id].name} <b>x${p.n}</b>`; clearTimeout(p.to); p.el.classList.remove('out'); }
+  else { const el=document.createElement('div'); el.className='pick'; el.innerHTML=`<img src="${thumb(id)}"><span>${ITEMS[id].name}</span>`; picksEl.appendChild(el); p={ el, n:1 }; pickMap.set(key,p);
+    while (picksEl.children.length>4){ const f=picksEl.firstChild; f.remove(); for (const [k,v] of pickMap) if (v.el===f) pickMap.delete(k); } }
+  p.to=setTimeout(()=>{ p.el.classList.add('out'); setTimeout(()=>{ p.el.remove(); if (pickMap.get(key)===p) pickMap.delete(key); }, 380); }, 1800); }
 const rarityTag = it => { const r=rarityLabel(it.rarity); return `<span class="rar" style="background:${RARITY_COLORS[r]}">${r}</span>`; };
 function catchToast(id, m, isNew, best){ const it=ITEMS[id]; toast(`${isNew?'New! ':''}You caught ${article(it.name)} ${it.name}!`, thumb(id), isNew||best?'new':'', `${statText(id,m)} ${rarityTag(it)}${best?' <b>New record!</b>':''}`); if(isNew) Snd.fanfare(); }
 const WICONS = {
@@ -2048,7 +2115,7 @@ function openBag(mode='view', onPick, onCancel){
    craft any amount in one tap (no one-at-a-time animations), craft from anywhere (the workbench is optional),
    every plan is visible with its unlock shown (no random recipe drops or duplicates),
    materials show have/need, and you can never lose materials to a full bag. */
-const MAT_NAMES = { wood:'Wood', softwood:'Branch', stone:'Stone', clay:'Clay', iron:'Iron' };
+const MAT_NAMES = { wood:'Wood', softwood:'Branch', stone:'Stone', clay:'Clay', iron:'Iron', stump:'Stump', weed:'Weeds' };
 function craftNudge(id){
   if (S.craft || S.craftHint || (id!=='wood' && id!=='softwood')) return;
   S.craftHint=true; save();
@@ -2259,9 +2326,9 @@ function doInvest(id){ if (noEdit()) return false;
   const k=KEEPERS[SHOPS[id].keeper]; closePanel(); dialog(k.name, k.voice, [k.invest[st.tier-1]]); toast(`${SHOPS[id].tiers[st.tier]}!`, null, 'new', SHOPS[id].perks[st.tier]);
   return true;
 }
-function openShop(which){
-  let tab='buy', sel=-1; const sid=shopKey(which);
-  const tabs = which==='rare' ? [['buy','Rare finds'],['sell','Sell']] : which==='stall' ? [['buy','Furniture'],['garden','Garden'],['tools','Tools'],['packs','Bags & bike'],['sell','Sell'],['invest','Invest']] : [['buy','Shop'],['sell','Sell'],['invest','Invest']];
+function openShop(which, startTab){
+  let tab=startTab||'buy', sel=-1; const sid=shopKey(which);
+  const tabs = which==='rare' ? [['buy','Rare finds'],['sell','Sell']] : which==='stall' ? [['buy','Furniture'],['home','Home goods'],['garden','Garden'],['tools','Tools'],['packs','Bags & bike'],['sell','Sell'],['invest','Invest']] : [['buy','Shop'],['sell','Sell'],['invest','Invest']];
   const buyRow=(id,i,sold,price,orig)=>{ const it=ITEMS[id]; return `<div class="row"><img src="${thumb(id)}"><div class="grow"><div class="nm">${it.name}</div><div class="sub">${fmt(price)} clams${orig&&orig!==price?` <s>${fmt(orig)}</s>`:''}${it.kind==='seed'?' · plant on grass':''}${it.kind==='sapling'?' · needs a shovel to plant':''}</div></div><button class="btn" data-b="${i}" ${sold||S.clams<price?'disabled':''}>${sold?'Sold':'Buy'}</button></div>`; };
   let list=[];
   const render=()=>{
@@ -2298,8 +2365,18 @@ function openShop(which){
       } else setFoot('<div class="muted" style="padding:4px 2px">Tap an item to sell it.</div>');
       // quick sell-everything-they-want button for specialists
       if (which!=='stall' && which!=='rare'){ const total=S.inv.reduce((a,x)=>{ const p=sellPrice(x,which); return a+(p===null?0:p*x.n); },0); if(total>0) h+=`<button class="btn" id="sAllShop" style="margin-top:10px">Sell all ${buysText(SHOPS[sid])} for ${fmt(total)}</button>`; } }
+    if (tab==='home'){ const st=homeStock();
+      h+=`<div class="muted" style="margin-bottom:8px">A few new house styles, paints and materials come in each day. Try one on your house before you buy it. Once it's yours, switching to it is free.</div>`;
+      if (!st.length) h+='<div class="notice">You own every style Pemberton can get. Impressive!</div>';
+      st.forEach((it,i)=>{ const own=homeOwned(it), p=homePrice(it); h+=`<div class="row">${homeSwatch(it)}<div class="grow"><div class="nm">${homeName(it.list,it.v)}</div><div class="sub">${fmt(p)} clams · ${homeWhere(it)}</div></div><div style="display:flex;flex-direction:column;gap:4px"><button class="btn alt sm" data-ht="${i}">Try it on</button><button class="btn sm" data-hb="${i}" ${own||S.clams<p?'disabled':''}>${own?'Owned':'Buy'}</button></div></div>`; });
+      h+=`<div class="muted" style="margin-top:6px">Swatch books also turn up while digging, and neighbors who like you sometimes share them.</div>`; }
     if (tab==='invest') h+=investBox(sid);
     pBody.innerHTML=h;
+    pBody.querySelectorAll('[data-hb]').forEach(b=>b.onclick=()=>{ if (buyHome(homeStock()[+b.dataset.hb])) render(); });
+    pBody.querySelectorAll('[data-ht]').forEach(b=>b.onclick=()=>{ const it=homeStock()[+b.dataset.ht];
+      if (VISIT){ toast('You can try styles on your own house when you\'re home.'); return; }
+      if (!S.home.built){ toast('Build your house first (Island Board), then you can try new styles on it.'); Snd.fail(); return; }
+      panelClose=null; closePanel(); openBuild({ tryItem:it }); });
     pBody.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>{ tab=b.dataset.t; sel=-1; Snd.click(); render(); pBody.scrollTop=0; });
     pBody.querySelectorAll('.slot[data-i]').forEach(el=>el.onclick=()=>{ sel=+el.dataset.i; Snd.click(); render(); });
     const sAll=pBody.querySelector('#sAllShop'); if(sAll) sAll.onclick=()=>{ let tot=0; for(let i=S.inv.length-1;i>=0;i--){ const x=S.inv[i], p=sellPrice(x,which); if(p===null) continue; if(GUEST && S.clams+tot+p*x.n>GUEST_CAP.clams) continue; tot+=p*x.n; S.inv.splice(i,1); } addClams(tot); addTrade(which,tot); Snd.coin(); save(); sel=-1; render(); };
@@ -2434,11 +2511,14 @@ const lotMarker = (()=>{ const q=lotRect(), pts=[]; const P=(x,z)=>pts.push(new 
   for(let i=0;i<=N;i++) P(q[0]+(q[2]-q[0])*i/N, q[1]); for(let i=0;i<=N;i++) P(q[2], q[1]+(q[3]-2.2-q[1])*i/N); for(let i=N;i>=0;i--) P(q[0]+(q[2]-q[0])*i/N, q[3]-2.2); for(let i=N;i>=0;i--) P(q[0], q[1]+(q[3]-2.2-q[1])*i/N);
   const l=new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineDashedMaterial({ color:0xffffff, dashSize:0.4, gapSize:0.25, transparent:true, opacity:0.9 })); l.computeLineDistances(); l.visible=false; OUT.add(l); return l; })();
 
-function openBuild(){ if (VISIT){ toast('You can only build on your own island for now.'); Snd.fail(); return; }
+function openBuild(opts){ if (VISIT){ toast('You can only build on your own island for now.'); Snd.fail(); return; }
   if (buildMode || dlgState) return; if (placing) endPlacing(); stopMove(); endCatchMeter(); if (Fishing.state!=='idle') reel();
   const draft=JSON.parse(JSON.stringify(S.home)); const first=!draft.built; draft.built=true; fixDoor(draft.plan);
   buildMode={ draft, first, tab:'layout', floor:'down', sel:draft.plan.rooms[0]?draft.plan.rooms[0].id:null, mode:'rooms', yaw:0.55, prevInside:World.inside, prevDist:camDist, view:null, camT:new THREE.Vector3(), dist:25 }; $('#hud').classList.add('building'); buildEl.classList.add('show'); Snd.click();
-  previewBuild(); setBuildView('out'); renderBuild();
+  const tr=opts&&opts.tryItem;
+  if (tr){ if (tr.list==='mixer'){ buildMode.tab='ext'; setTimeout(()=>toast('Tap any rainbow swatch to mix a color and see it on your house.'),300); }
+    else { const key=HOME_KEY[tr.list]; if (INSIDE_LISTS.has(tr.list)){ for (const r of [...draft.plan.rooms, ...(hasUpstairs(draft.plan)?draft.plan.up.rooms:[])]) r[key]=tr.v; buildMode.tab='int'; } else { draft.ext[key]=tr.v; buildMode.tab='ext'; } } }
+  previewBuild(); setBuildView(buildMode.tab==='int'?'in':'out'); renderBuild();
   if (first) setTimeout(()=>toast('This is your lot. Drag on an empty square of the plan to add a room.', null, 'new', 'Tap a room to select it, then drag it to move or drag its edge to resize.'), 300);
 }
 function setBuildView(v){
@@ -2453,6 +2533,7 @@ function closeBuild(commit){
   const B=buildMode; if (!B) return;
   if (commit){
     const d=B.draft, prob=planProblem(d.plan); if (prob){ toast(prob); Snd.fail(); return; }
+    const un=draftUnowned(d); if (un.length){ toast(`You're only trying on ${un.map(u=>u.list==='mixer'?'a mixed color':homeName(u.list,u.v)).join(', ')}.`, null, '', 'Buy it, or put it back, to finish.'); Snd.fail(); renderBuild(); bBody.scrollTop=0; return; }
     const cells=planCells(d.plan), cost=houseCost(cells, S.home.paid); if (GUEST && cells>GUEST_CAP.cells){ toast(`Guest houses can be up to ${GUEST_CAP.cells} floor squares. Make an account to build bigger.`); Snd.fail(); return; } if (cost>S.clams){ toast(`That much new floor costs ${fmt(cost)} clams. You have ${fmt(S.clams)}.`); Snd.fail(); return; }
     // anything standing where the new walls go?
     const hr=RECTS.filter(q=>q[4]==='home'); const inHouse=(x,z,r=0.15)=>hr.some(q=>x>q[0]-r&&x<q[2]+r&&z>q[1]-r&&z<q[3]+r);
@@ -2492,8 +2573,10 @@ function renderBuild(keepScroll){
   $('#bMsg').innerHTML = prob ? `<b style="color:#c0503a">${prob}</b>` : B.tab==='layout' ? ({ rooms: B.floor==='up' ? 'Draw upstairs rooms over the rooms below. Tap a room to move or resize it.' : 'Drag an empty square to add a room. Tap a room, then drag it to move or drag an edge to resize.',
       doors: B.floor==='up' ? 'Tap a wall between upstairs rooms: doorway, open, or solid.' : 'Tap a wall between rooms: doorway, open, or solid. Tap a front-facing wall to move the front door.',
       windows: 'Tap an outside wall to add or remove a window. Windows show inside and out.', stairs:'Tap a square that has a room upstairs and downstairs to put the stairs there.' })[B.mode] : B.tab==='ext' ? 'Drag the picture above to look around your house.' : 'Pick a room on the plan, then its floor and wallpaper.';
-  $('#bDone').disabled = !!prob || cost>S.clams; $('#bDone').textContent = B.first ? 'Build it' : 'Done';
+  const trying=draftUnowned(B.draft).length>0; if (trying && !prob) $('#bMsg').innerHTML='<b style="color:#3a7ab0">Trying on a new style. Buy it or put it back to finish.</b>';
+  $('#bDone').disabled = !!prob || cost>S.clams || trying; $('#bDone').textContent = B.first ? 'Build it' : 'Done';
   if (B.tab==='layout') renderLayoutTab(); else if (B.tab==='ext') renderExtTab(); else renderIntTab();
+  renderTryBar();
   if (keepScroll) bBody.scrollTop=st;
 }
 // ---- the blueprint ----
@@ -2621,34 +2704,94 @@ function grantRandomStyle(){
 function ownCurrentStyles(){ const h=S.home; if(!h) return; S.styles=S.styles||{}; const own=(key,val)=>{ const l=STYLE_LIST[key]; if(l && val!==undefined && val!==null) S.styles[l+':'+val]=true; };
   if (h.ext) for (const k in h.ext) own(k, h.ext[k]); if (h.plan && h.plan.rooms) for (const r of h.plan.rooms) for (const k of ['floor','floorC','paper','paperC']) own(k, r[k]); }
 if (!S.stylesGrandfathered){ ownCurrentStyles(); S.stylesGrandfathered=1; }
-const lockTag = (list, i) => `<span class="lk">${fmt(styleCost(list,i))}</span>`;
-const chipRow = (obj, key, opts, type='s') => { const list=type==='b'?null:STYLE_LIST[key]; return `<div class="chips">${opts.map(([v,n],i)=>{ const locked=list && !styleOwned(list,v); return `<button class="chip${obj[key]===v?' on':''}${locked?' locked':''}" data-k="${key}" data-v="${v}" data-ty="${type}" ${locked?`data-lock="${list}" data-i="${i}"`:''}>${n}${locked?lockTag(list,i):''}</button>`; }).join('')}</div>`; };
-/* The paint mixer: unlock it once and any color works for walls, roof, trim, doors, shutters, floors and wallpaper */
+/* ---------- Home goods ----------
+   New styles, paints and materials aren't for sale all the time. Pemberton's Home Goods rack gets a few in each day
+   (more once the store is bigger), and now and then the paint mixer. Anything on the rack can be tried on your house
+   in the builder before you buy it. Locked styles in the builder can still be previewed; they just can't be kept
+   until they're yours (bought from the rack, dug up as a swatch book, or given by a neighbor). */
+const HOME_KEY={ walls:'wall', roofs:'roof', doors:'door', windows:'win', porches:'porch', founds:'found', chimneys:'chimney', stories:'stories', floors:'floor', papers:'paper', wallColors:'wallC', roofColors:'roofC', trimColors:'trimC', doorColors:'doorC', floorColors:'floorC' };
+const INSIDE_LISTS=new Set(['floors','papers','floorColors']);
+const styleIndex = (list, v) => BUILD[list].findIndex(o=>String(Array.isArray(o)?o[0]:o)===String(v));
 const MIXER_COST=15000, hasMixer=()=>!!(S.styles&&S.styles.mixer);
+const homeOwned = it => it.list==='mixer' ? hasMixer() : styleOwned(it.list, it.v);
+const homePrice = it => it.list==='mixer' ? MIXER_COST : styleCost(it.list, styleIndex(it.list, it.v));
+function homeName(list, v){ if (list==='mixer') return 'Paint mixer'; const o=BUILD[list].find(o=>String(Array.isArray(o)?o[0]:o)===String(v)), nm=STYLE_NAMES[list];
+  if (!Array.isArray(o)) return nm[0].toUpperCase()+nm.slice(1); return list==='stories' ? o[1] : `${o[1]} ${nm}`; }
+const homeWhere = it => it.list==='mixer' ? 'mix any color for any paint, inside or out' : INSIDE_LISTS.has(it.list) ? 'for the rooms inside' : 'for the outside of your house';
+function homeSwatch(it){ if (it.list==='mixer') return `<div class="hgsw" style="background:conic-gradient(#e2604d,#f3c35a,#7cc35a,#7fd3e8,#8a6ad8,#e2604d)"></div>`;
+  if (isColorList(it.list)) return `<div class="hgsw" style="background:${hexs(it.v)}"></div>`;
+  const o=BUILD[it.list].find(o=>String(o[0])===String(it.v)); return `<div class="hgsw">${o?o[1]:''}</div>`; }
+// Today's rack, rolled once a day and kept in the day's save so buying one doesn't reshuffle the rest
+function homeStock(){
+  if (!S.day) return []; if (S.day.home) return S.day.home;
+  const r=mulberry32(hashStr(S.day.key+':home:'+S.seed)), BL=GUEST?GUEST_BUILD:BUILD, pool=[];
+  for (const list of Object.keys(STYLE_NAMES)) (BL[list]||[]).forEach(o=>{ const v=Array.isArray(o)?o[0]:o; if (!styleOwned(list,v)) pool.push({ list, v, w:(isColorList(list)?1.3:1)/(1+0.35*Math.max(0,styleIndex(list,v)-freeCount(list))) }); });
+  const n=3+(shopTier('general')>=2?1:0)+(shopTier('general')>=3?1:0), out=[];
+  while (out.length<n && pool.length){ const tot=pool.reduce((a,p)=>a+p.w,0); let x=r()*tot, k=0; for (;k<pool.length-1;k++){ x-=pool[k].w; if (x<=0) break; } const p=pool.splice(k,1)[0]; out.push({ list:p.list, v:p.v }); }
+  if (!GUEST && !hasMixer() && r()<0.15) out.push({ list:'mixer', v:null });
+  S.day.home=out; save(); return out; }
+function buyHome(it){ if (homeOwned(it)){ toast('You already have that one.'); return false; } const price=homePrice(it);
+  if (S.clams<price){ toast(`That's ${fmt(price)} clams. You have ${fmt(S.clams)}.`); Snd.fail(); return false; }
+  S.clams-=price; addTrade('stall', price); if (it.list==='mixer') (S.styles=S.styles||{}).mixer=true; else unlockStyle(it.list, it.v); it.sold=true; save(); updateHUD(); Snd.coin();
+  toast(`${homeName(it.list,it.v)} is yours!`, null, 'new', it.list==='mixer'?'Tap the rainbow swatch in the builder to mix a color.':'Switching to it in the builder is always free now.'); refreshHomeRack(); return true; }
+// Styles the builder draft uses that you don't own yet (previews)
+function draftUnowned(d){ const out=[], saved=new Set(), seen=new Set();
+  const savedOf=(k,v)=>saved.add(k+':'+v); const de=defaultExt(), dr=defaultRoom('x',0,0,1,1); for (const k in de) savedOf(k,de[k]); for (const k of ['floor','floorC','paper','paperC']) savedOf(k,dr[k]);
+  if (S.home.ext) for (const k in S.home.ext) savedOf(k,S.home.ext[k]); for (const r of [...(S.home.plan.rooms||[]), ...((S.home.plan.up&&S.home.plan.up.rooms)||[])]) for (const k of ['floor','floorC','paper','paperC']) savedOf(k,r[k]);
+  const chk=(key,val)=>{ const list=STYLE_LIST[key]; if (!list || val===undefined || val===null || saved.has(key+':'+val)) return; const i=styleIndex(list,val);
+    const u = i<0 ? (isColorList(list) && !hasMixer() ? { list:'mixer', v:null } : null) : (!styleOwned(list,val) ? { list, v:val } : null);
+    if (u && !seen.has(u.list+':'+u.v)){ seen.add(u.list+':'+u.v); out.push(u); } };
+  for (const k in d.ext) chk(k, d.ext[k]); for (const r of [...d.plan.rooms, ...(hasUpstairs(d.plan)?d.plan.up.rooms:[])]) for (const k of ['floor','floorC','paper','paperC']) chk(k, r[k]);
+  return out; }
+// Put previewed styles back to what the house had (or the first free option)
+function putBack(d){ const un=draftUnowned(d), bad=(key,val)=>{ const list=STYLE_LIST[key]; return list && un.some(u=>u.list==='mixer' ? (isColorList(list) && styleIndex(list,val)<0) : (u.list===list && String(u.v)===String(val))); };
+  const first=list=>{ const o=BUILD[list][0]; return Array.isArray(o)?o[0]:o; };
+  for (const k in d.ext) if (bad(k,d.ext[k])) d.ext[k] = S.home.ext && S.home.ext[k]!==undefined && !bad(k,S.home.ext[k]) ? S.home.ext[k] : first(STYLE_LIST[k]);
+  const old=[...(S.home.plan.rooms||[]), ...((S.home.plan.up&&S.home.plan.up.rooms)||[])];
+  for (const r of [...d.plan.rooms, ...(hasUpstairs(d.plan)?d.plan.up.rooms:[])]){ const o=old.find(x=>x.id===r.id); for (const k of ['floor','floorC','paper','paperC']) if (bad(k,r[k])) r[k] = o && !bad(k,o[k]) ? o[k] : first(STYLE_LIST[k]); } }
+function renderTryBar(){ const B=buildMode; if (!B) return; const un=draftUnowned(B.draft); let bar=$('#tryBar'); if (bar) bar.remove(); if (!un.length) return;
+  const st=homeStock(), onRack=u=>st.find(s=>!homeOwned(s) && s.list===u.list && String(s.v)===String(u.v));
+  bar=document.createElement('div'); bar.id='tryBar';
+  const rack=un.filter(onRack), off=un.filter(u=>!onRack(u));
+  bar.innerHTML=`<b>Trying on: ${un.map(u=>u.list==='mixer'?'a mixed paint color':homeName(u.list,u.v)).join(', ')}</b><br><span class="muted">${off.length?`${off.map(u=>homeName(u.list,u.v)).join(', ')} ${off.length>1?'aren\'t':'isn\'t'} for sale today. Pemberton's Home Goods rack gets new styles every day, and swatch books turn up while digging.`:'On Pemberton\'s Home Goods rack today.'} Buy it or put it back to finish.</span>
+    <div class="brow" style="margin:6px 0 0">${rack.map(u=>{ const it=onRack(u), p=homePrice(it); return `<button class="btn sm" data-tb="${st.indexOf(it)}" ${S.clams<p?'disabled':''}>Buy ${homeName(u.list,u.v)} (${fmt(p)})</button>`; }).join('')}<button class="btn alt sm" id="tbBack">Put it back</button></div>`;
+  bBody.prepend(bar);
+  bar.querySelectorAll('[data-tb]').forEach(b=>b.onclick=()=>{ if (buyHome(st[+b.dataset.tb])) renderBuild(true); });
+  $('#tbBack').onclick=()=>{ putBack(B.draft); Snd.click(); previewBuild(); renderBuild(true); }; }
+const lockTag = (list, v) => { const it=homeStock().find(s=>s.list===list && String(s.v)===String(v) && !homeOwned(s)); return `<span class="lk">${it?'on the rack':'try it'}</span>`; };
+const chipRow = (obj, key, opts, type='s') => { const list=type==='b'?null:STYLE_LIST[key]; return `<div class="chips">${opts.map(([v,n],i)=>{ const locked=list && !styleOwned(list,v); return `<button class="chip${obj[key]===v?' on':''}${locked?' locked':''}" data-k="${key}" data-v="${v}" data-ty="${type}" ${locked?`data-lock="${list}" data-i="${i}"`:''}>${n}${locked?lockTag(list,v):''}</button>`; }).join('')}</div>`; };
+/* The paint mixer: once you own it, any color works for walls, roof, trim, doors, shutters, floors and wallpaper. Before that you can still mix one to try it. */
 const swatchRow = (obj, key, cols) => { const list=STYLE_LIST[key], custom=!cols.includes(obj[key]);
-  return `<div class="sws">${cols.map((c,i)=>{ const locked=list && !styleOwned(list,c); return `<div class="sw${obj[key]===c?' on':''}${locked?' locked':''}" style="background:${hexs(c)}" data-k="${key}" data-v="${c}" data-ty="n" ${locked?`data-lock="${list}" data-i="${i}" title="${fmt(styleCost(list,i))} clams"`:''}></div>`; }).join('')}<label class="sw mix${custom?' on':''}${hasMixer()?'':' locked'}" title="${hasMixer()?'Mix any color':'Paint mixer: '+fmt(MIXER_COST)+' clams'}" style="${custom?`background:${hexs(obj[key])}`:''}"><input type="color" data-mix="${key}" value="${hexs(obj[key])}"></label></div>`; };
+  return `<div class="sws">${cols.map((c,i)=>{ const locked=list && !styleOwned(list,c); return `<div class="sw${obj[key]===c?' on':''}${locked?' locked':''}" style="background:${hexs(c)}" data-k="${key}" data-v="${c}" data-ty="n" ${locked?`data-lock="${list}" data-i="${i}" title="Not yours yet: tap to try it"`:''}></div>`; }).join('')}<label class="sw mix${custom?' on':''}${hasMixer()?'':' locked'}" title="${hasMixer()?'Mix any color':'Paint mixer: tap to try it'}" style="${custom?`background:${hexs(obj[key])}`:''}"><input type="color" data-mix="${key}" value="${hexs(obj[key])}"></label></div>`; };
 const toggle = (obj, key, on, off) => chipRow(obj, key, [[true,on],[false,off]], 'b');
 function bindStyle(obj, after){
   bBody.querySelectorAll('[data-mix]').forEach(inp=>{ const key=inp.dataset.mix;
-    inp.onclick=e=>{ if (hasMixer()) return; e.preventDefault(); offerMixer(()=>{ renderBuild(true); setTimeout(()=>{ const n=bBody.querySelector(`[data-mix="${key}"]`); if (n) n.click(); },50); }); };
-    inp.oninput=()=>{ if (!hasMixer()) return; obj[key]=parseInt(inp.value.slice(1),16); inp.parentNode.style.background=inp.value; previewBuild(buildMode.tab==='int'?'room':'house'); };
-    inp.onchange=()=>{ if (hasMixer()) after(); }; });
+    inp.oninput=()=>{ obj[key]=parseInt(inp.value.slice(1),16); inp.parentNode.style.background=inp.value; previewBuild(buildMode.tab==='int'?'room':'house'); };
+    inp.onchange=()=>after(); });
   bBody.querySelectorAll('[data-k]').forEach(el=>el.onclick=()=>{ const t=el.dataset.ty, v=el.dataset.v;
-  if (el.dataset.lock){ offerUnlock(el.dataset.lock, v, +el.dataset.i, ()=>{ obj[el.dataset.k] = t==='n'?+v : t==='b'?v==='true' : v; after(); }); return; }
-  obj[el.dataset.k] = t==='n'?+v : t==='b'?v==='true' : v; Snd.click(); after(); }); }
-function offerMixer(apply){
-  let bar=$('#unlockBar'); if (!bar){ bar=document.createElement('div'); bar.id='unlockBar'; bBody.prepend(bar); }
-  bar.innerHTML=`<div><b>Unlock the paint mixer?</b><br><span class="muted">${fmt(MIXER_COST)} clams, once. Then you can mix any color you like for walls, roof, trim, doors, shutters, floors and wallpaper.</span></div><div style="margin-top:6px"><button class="btn" id="ulYes" ${S.clams<MIXER_COST?'disabled':''}>${S.clams<MIXER_COST?'Not enough clams':'Unlock'}</button> <button class="btn alt" id="ulNo">Not now</button></div>`;
-  bar.scrollIntoView({ block:'nearest' }); $('#ulNo').onclick=()=>bar.remove();
-  $('#ulYes').onclick=()=>{ if (S.clams<MIXER_COST) return; S.clams-=MIXER_COST; (S.styles=S.styles||{}).mixer=true; save(); Snd.coin(); updateHUD(); toast('Paint mixer unlocked! Tap the rainbow swatch to mix a color.'); apply(); }; }
-function offerUnlock(list, v, i, apply){
-  const cost=styleCost(list,i), name=styleLabel(list,v); let bar=$('#unlockBar');
-  if (!bar){ bar=document.createElement('div'); bar.id='unlockBar'; bBody.prepend(bar); }
-  bar.innerHTML=`<div><b>Unlock ${name}?</b><br><span class="muted">${fmt(cost)} clams, then it's yours to use any time for free. You can also find swatches while digging, and neighbors who like you sometimes share them.</span></div><div style="margin-top:6px"><button class="btn" id="ulYes" ${S.clams<cost?'disabled':''}>${S.clams<cost?'Not enough clams':'Unlock'}</button> <button class="btn alt" id="ulNo">Not now</button></div>`;
-  bar.scrollIntoView({ block:'nearest' });
-  $('#ulNo').onclick=()=>{ bar.remove(); };
-  $('#ulYes').onclick=()=>{ if(S.clams<cost) return; S.clams-=cost; unlockStyle(list,v); Snd.coin(); updateHUD(); toast(`Unlocked ${name}!`); apply(); };
+    obj[el.dataset.k] = t==='n'?+v : t==='b'?v==='true' : v; Snd.click(); after(); }); }
+// A Home Goods rack in Pemberton's store: today's swatches on a board, paint cans on the shelf
+let homeRack=null;
+function homeRackModel(){ const g=new THREE.Group(), W=M(0x8b5e3a), st=homeStock();
+  for (const x of [-0.62,0.62]) mk(G.box(0.08,1.75,0.08), W, x,0.875,0,g);
+  mk(G.box(1.3,1.0,0.05), M(0xf4e6c8), 0,1.2,-0.02,g); mk(G.box(1.42,0.08,0.1), W, 0,1.74,0,g); mk(G.box(1.36,0.05,0.34), W, 0,0.42,0.1,g);
+  const cv=document.createElement('canvas'); cv.width=256; cv.height=64; const x=cv.getContext('2d'); x.fillStyle='#6a8a4a'; x.fillRect(0,0,256,64); x.fillStyle='#fff8ea'; x.font='700 34px Fredoka, sans-serif'; x.textAlign='center'; x.textBaseline='middle'; x.fillText('Home Goods',128,34);
+  const tx=new THREE.CanvasTexture(cv); tx.colorSpace=THREE.SRGBColorSpace; mk(G.box(1.1,0.28,0.04), new THREE.MeshStandardMaterial({ map:tx, roughness:0.8 }), 0,1.95,0,g);
+  const TILE={ walls:0xd8b890, roofs:0xb85a4a, doors:0x8a5a3a, windows:0xbfe0f0, porches:0xc8a070, founds:0x9a9a98, chimneys:0xa05a40, stories:0xe8d8b8, floors:0xc89a6a, papers:0xe8d0d8 };
+  st.forEach((it,i)=>{ if (i>=6) return; const c=i%3, rr=Math.floor(i/3), px=-0.4+c*0.4, py=1.42-rr*0.42, sold=homeOwned(it);
+    if (it.list==='mixer'){ ['#e2604d','#f3c35a','#7cc35a','#7fd3e8'].forEach((h,k)=>{ if (!sold) mk(G.cyl(0.07,0.07,0.14,12), M(new THREE.Color(h).getHex()), -0.5+k*0.18+0.1,0.52,0.12,g); }); return; }
+    const col=isColorList(it.list)?it.v:TILE[it.list]||0xd8c8a8;
+    if (!sold){ mk(G.box(0.3,0.3,0.03), M(col), px,py,0.02,g); if (isColorList(it.list)) mk(G.cyl(0.075,0.075,0.15,12), M(col), px,0.52,0.12,g); }
+    mk(G.cyl(0.012,0.012,0.06,5), M(0xb0a090), px,py+0.17,0.03,g).rotation.x=Math.PI/2; });
+  return g; }
+class HomeRack extends Ent {
+  constructor(x,z){ super('rack',x,z,0.7); this.solid=true; this.reach=1.9; this.key=null; this.attach(new THREE.Group()); this.hitSphere(0.9,1.1); this.refresh(); }
+  refresh(){ this.key=S.day&&S.day.key; const g=homeRackModel(); while (this.obj.children.length>1) this.obj.remove(this.obj.children[1]); g.children.slice().forEach(c=>this.obj.add(c)); this.obj.traverse(c=>{ c.userData.ent=this; }); }
+  label(){ return 'Home goods'; }
+  act(){ const k=KEEPERS.pemberton; dialog(k.name, k.voice, [homeStock().some(s=>!homeOwned(s)) ? 'Fresh in for the home today. Take one home and try it on before you buy, no charge for looking.' : 'All sold out of home goods today. More comes in tomorrow!'], ()=>openShop('stall','home')); }
+  update(){ if (S.day && this.key!==S.day.key) this.refresh(); }
 }
+function refreshHomeRack(){ if (homeRack && !homeRack.removed) homeRack.refresh(); }
 // Guests get a smaller set of house styles
 const GUEST_BUILD = Object.assign({}, BUILD, { walls:BUILD.walls.slice(0,3), roofs:BUILD.roofs.slice(0,2), doors:BUILD.doors.slice(0,2), windows:BUILD.windows.slice(0,2), porches:BUILD.porches.slice(0,2), chimneys:BUILD.chimneys.slice(0,1), stories:BUILD.stories.slice(0,1) });
 function renderExtTab(){
@@ -2763,6 +2906,33 @@ function openMenu(){
 }
 $('#bBag').onclick=()=>openBag(); $('#bBook').onclick=()=>openBook(); $('#bMenu').onclick=()=>openMenu(); $('#bCraft').onclick=()=>openCraft(); updateCraftBtn();
 
+/* Phones: the top bar keeps only what you reach for all the time (Bike, Build near home, Bag) and a More button.
+   Book, Craft, Sled, Friends and Menu move into the More list. Buttons keep their own handlers wherever they sit. */
+const MAIN_BTNS=['bBike','bBuild','bBag','bMore'];
+const barEl=$('#bar'), morePop=$('#morePop'), moreBtn=$('#bMore');
+const isCompact = () => isTouchDevice || innerWidth<760;
+function layoutBar(){ const compact=isCompact(); document.body.classList.toggle('compact', compact);
+  barObs.disconnect();
+  const order=['bBike','bSled','bBook','bCraft','bBuild','bBag','bNet','bMenu','bMore'], moreOrder=['bBook','bCraft','bNet','bSled','bMenu'];
+  const all=[...barEl.querySelectorAll('.rbtn'), ...morePop.querySelectorAll('.rbtn')];
+  const inBar=all.filter(b=>!compact || MAIN_BTNS.includes(b.id)).sort((a,b)=>order.indexOf(a.id)-order.indexOf(b.id));
+  const inMore=all.filter(b=>!inBar.includes(b)).sort((a,b)=>moreOrder.indexOf(a.id)-moreOrder.indexOf(b.id));
+  // only touch the DOM when something is out of place (moving nodes would wake the observers again)
+  const same=(el,list)=>{ const cur=[...el.querySelectorAll(':scope > .rbtn')]; return cur.length===list.length && cur.every((b,i)=>b===list[i]); };
+  if (!same(barEl,inBar)) for (const b of inBar) barEl.appendChild(b);
+  if (!same(morePop,inMore)) for (const b of inMore) morePop.appendChild(b);
+  barObs.observe(barEl, { childList:true });
+  if (!compact) closeMore(); moreDot(); }
+function moreDot(){ const any=[...morePop.querySelectorAll('.rbtn')].some(b=>b.querySelector('.dot') || b.classList.contains('on')); let d=moreBtn.querySelector(':scope > .dot'); if (any && !d){ d=document.createElement('i'); d.className='dot'; moreBtn.appendChild(d); } else if (!any && d) d.remove(); }
+function closeMore(){ morePop.classList.remove('show'); moreBtn.classList.remove('on'); }
+moreBtn.onclick=e=>{ e.stopPropagation(); const on=!morePop.classList.contains('show'); morePop.classList.toggle('show', on); moreBtn.classList.toggle('on', on); Snd.click(); };
+morePop.addEventListener('click', ()=>setTimeout(closeMore, 0));
+addEventListener('pointerdown', e=>{ if (morePop.classList.contains('show') && !morePop.contains(e.target) && e.target!==moreBtn && !moreBtn.contains(e.target)) closeMore(); }, true);
+// new buttons (Bike, Sled, Friends) get added to the bar later; sort them into place
+const barObs=new MutationObserver(()=>layoutBar());
+new MutationObserver(()=>moreDot()).observe(morePop, { childList:true, subtree:true, attributes:true, attributeFilter:['class'] });
+layoutBar();
+
 /* Tool selector */
 const toolBtn=$('#toolBtn'), toolPop=$('#toolPop');
 const HAND_SVG='<svg viewBox="0 0 32 32"><path d="M10 17V8a2 2 0 0 1 4 0v7V6a2 2 0 0 1 4 0v9V8a2 2 0 0 1 4 0v10c0 6-3 10-8 10s-7-3-9-7l-2-4a2 2 0 0 1 3-2l2 3z" fill="#f3c9a5" stroke="#8b6b50" stroke-width="1.8" stroke-linejoin="round"/></svg>';
@@ -2828,9 +2998,9 @@ $('#pOk').onclick=()=>{ if(!checkPlace()) return; const p=placing.m.position, id
       startPlacing(id,'furn'); if (placing){ placing.rot=rot; placing.m.rotation.y=rot; placing.m.position.set(nx, World.inside?0:groundY(nx,nz), nz); checkPlace(); $('#pNo').textContent='Done'; } return; } }
   else { const P=PLANTS[it.plant], soft=P.ptype==='flower'||P.ptype==='crop'; if (!soft && !needTool('shovel')) return; if (!soft) useTool('shovel');
     const rec={ id:'p'+Date.now().toString(36)+Math.floor(Math.random()*1e4), sp:it.plant, x:p.x, z:p.z, stage:0, rot:placing.rot, color:(P.colors&&P.colors.length)?P.colors[Math.floor(Math.random()*P.colors.length)]:undefined, lastGrow:today() };
-    if (it.kind==='fruit') rec.fruit=id; removeItem(id,1); S.plants.push(rec); if (P.ptype==='tree') onReplant(p.clone()); plantEnts.push(P.ptype==='tree' ? new Tree(rec.id,rec.x,rec.z,rec.sp,rec.fruit||(rec.sp==='palm'?'coconut':null),rec) : new Plant(rec)); Snd.dig(); toast(`Planted! ${P.ptype==='tree'?'Trees take a few days to grow.':P.ptype==='crop'?`Ready in about ${P.days} days. Water it every day to speed it up.`:'Water it to help it grow.'}`);
+    if (it.kind==='fruit') rec.fruit=id; removeItem(id,1); S.plants.push(rec); if (P.ptype==='tree') onReplant(p.clone()); const pe=P.ptype==='tree' ? new Tree(rec.id,rec.x,rec.z,rec.sp,rec.fruit||(rec.sp==='palm'?'coconut':null),rec) : new Plant(rec); plantEnts.push(pe); FX.sprout(pe); Snd.dig(); toast(`Planted! ${P.ptype==='tree'?'Trees take a few days to grow.':P.ptype==='crop'?`Ready in about ${P.days} days. Water it every day to speed it up.`:'Water it to help it grow.'}`);
     if (P.ptype==='crop' && countItem(id)>0 && !World.inside){ const last=p.clone(), keepId=id, rot=placing.rot; setTimeout(()=>{ if (placing || countItem(keepId)<1) return; startPlacing(keepId,'plant'); if (placing){ placing.m.position.set(last.x+0.9*Math.cos(rot), groundY(last.x+0.9,last.z), last.z-0.9*Math.sin(rot)); checkPlace(); } }, 50); } }
-  puff(p.clone().add(new THREE.Vector3(0,0.3,0)),0xffffff,8,0.6,1.5,1,0.6); Snd.pop(); save(); endPlacing(); };
+  if (placing.mode==='furn' || placing.moving) puff(p.clone().add(new THREE.Vector3(0,0.3,0)),0xffffff,8,0.6,1.5,1,0.6); Snd.pop(); save(); endPlacing(); };
 
 /* ---------- Input ---------- */
 const keys={};
@@ -2963,6 +3133,22 @@ function endLayout(){ layoutMode=false; $('#hud').classList.remove('layout'); $(
 $('#lDone').onclick=()=>{ endLayout(); Snd.click(); };
 $('#lReset').onclick=()=>{ const c=CT(); c.jx=c.jy=c.ax=c.ay=null; save(); applyControls(); Snd.click(); };
 addEventListener('resize', ()=>applyControls());
+/* Phones: no page zoom, no text selection, no long-press menus. The game handles pinch itself on the island. */
+for (const ev of ['gesturestart','gesturechange','gestureend']) document.addEventListener(ev, e=>e.preventDefault(), { passive:false });
+document.addEventListener('touchmove', e=>{ if (e.touches.length>1 || (e.scale && e.scale!==1)) e.preventDefault(); }, { passive:false });
+document.addEventListener('selectstart', e=>{ if (!e.target.closest || !e.target.closest('input,textarea')) e.preventDefault(); });
+document.addEventListener('contextmenu', e=>{ if (!e.target.closest || !e.target.closest('input,textarea')) e.preventDefault(); });
+document.addEventListener('dblclick', e=>e.preventDefault(), { passive:false });
+let lastTouchEnd=0;
+document.addEventListener('touchend', e=>{ const n=Date.now(), quick=n-lastTouchEnd<320; lastTouchEnd=n;
+  // a quick second tap on the open game (not a button or field) would zoom the page on iOS
+  if (quick && e.target && e.target.closest && !e.target.closest('button,input,select,textarea,label,a,.slot,.chip,.sw,.tab,.row,#dlgBox,.layoutCard,.tp,#bp')) e.preventDefault(); }, { passive:false });
+/* Turning the phone: the browser reports the new size a beat late on some phones, so lay everything out again a few times */
+function relayout(){ try{ window.scrollTo(0,0); document.documentElement.scrollTop=0; }catch(e){} resize(); applyControls(); layoutBar(); if (toolPop.classList.contains('show')) positionToolPop(); if (buildMode && buildMode.tab!=='ext') renderBuild(true); }
+function relayoutSoon(){ for (const ms of [60,250,600,1200]) setTimeout(relayout, ms); }
+addEventListener('orientationchange', relayoutSoon);
+if (window.visualViewport) visualViewport.addEventListener('resize', relayoutSoon);
+if (screen.orientation && screen.orientation.addEventListener) screen.orientation.addEventListener('change', relayoutSoon);
 
 // Canvas pointer: tap, hold-to-walk, pinch-zoom, wheel-zoom
 const ptrs=new Map(); let camDist=isMobile?21:22, pinch0=0, dist0=0;
@@ -3087,7 +3273,7 @@ function frame(){
     for(const c of clouds){ c.position.x+=c.userData.v*dt; if(c.position.x>150) c.position.x=-150; }
     const lnOn=activeEvents().some(e=>e.id==='lantern-night');
     for(const l of lanterns){ l.visible=lnOn; if(lnOn){ const u=l.userData; u.y+=dt*u.s; if(u.y>18){ u.y=0; u.a=Math.random()*TAU; } l.position.set(Math.cos(u.a+t*0.01)*u.d, 1+u.y, Math.sin(u.a+t*0.01)*u.d); l.children[1].material.opacity=Math.min(1,u.y/2)*(1-u.y/18)*0.9; } } }
-  updatePrecip(dt,t); updateParticles(dt); updateCamera(dt);
+  updatePrecip(dt,t); updateParticles(dt); updateFX(dt); updateCamera(dt);
   renderer.render(scene,camera); requestAnimationFrame(frame);
 }
 updateSky(); updateHUD(); camTarget.copy(player.pos); updateCamera(1); updateHeld(); updateToolBtn(); applyControls();
@@ -3245,4 +3431,4 @@ function setInventory(inv, seen, equip){ S.inv=inv; if(seen) S.seen=Object.assig
 if (VISIT) setTimeout(()=>toast(`Visiting ${BOOT.host.name}'s island${BOOT.host.island?' ('+BOOT.host.island+')':''} as a ${BOOT.role}.`), 1500);
 
 addEventListener('visibilitychange', ()=>{ if(document.hidden) save(); else if(Snd.ctx) Snd.ctx.resume(); });
-window.__game = { v1:{ scene, camera, OUT, updateSky, updateHUD, snowPass, SNOW_U, townNewDay, applyTown, talkHall, openHallPanel, buildPlaza, refreshStoreItems, buildStoreAll, buildShop, buildMuseumAll, spawnExhibits, exhibitSlots, mentorMoment, teachWoodworking, openCraft, doCook, nearStation, toggleSled, setSled, get sledding(){ return sledding; }, sledV, eatFood, Plant, fullBagCatch, KB, landSeaTap, terraLand, LAMPS:()=>LAMPS, hasUpstairs, ShopItem, Stairs, get exhibits(){ return exhibits; }, KEEPOUT, dayKeyOf, World, startPlacing, checkPlace, get placing(){ return placing; } }, get S(){ return S; }, dbg:{ showChoices:(t,c)=>showChoices(t,c), dialog:(...a)=>dialog(...a), setRiding:(v)=>setRiding(v), enterRoom:(id)=>enterRoom(id), openBuild:()=>openBuild(), rooms:()=>Object.keys(ROOMS), get yaw(){ return camYaw; }, set yaw(v){ camYaw=v; }, get riding(){ return riding; }, get snow(){ return SNOW_U.value; }, setWeather:(w)=>{ weatherOverride=w; World.weather=w; snowT=0; }, get dlg(){ return !!dlgState; } }, net:{ visibleRemotes:()=>[...remotes.values()].filter(r=>r.obj.visible).map(r=>[r.name,+r.pos.x.toFixed(1),+r.pos.z.toFixed(1)]), remoteUpsert, remotePos, remoteLeave, remoteEmote, playerState, setInventory, toast:(m)=>toast(m), updateHUD:()=>updateHUD(), get started(){ return started; } }, ITEMS, itemThumb:(id)=>thumb(id), layoutInfo:()=>({ id:LAYOUT_ID, PLACES, PATHS, LOT, rects:RECTS.map(r=>r.slice(0,4)), lot:lotRect() }), terrainH:(x,z)=>rawHeight(x,z), terrainSlope:(x,z)=>hillSlope(x,z), interact, spawnBug:(id,x,z)=>new Bug(id,x,z), tapOdds:()=>Object.fromEntries(Object.keys(TAP_BASE).map(k=>[k, +tapChance({rarity:k}).toFixed(2)])), placingObj:()=>placing&&placing.m, toScreen:v=>{ const p=v.clone().project(camera); return [(p.x*0.5+0.5)*innerWidth, (-p.y*0.5+0.5)*innerHeight]; }, rebuildHome:()=>{ buildPlayerHouse(); rebuildHomeRoom(); }, openBuild, closeBuild, get buildMode(){ return buildMode; }, talkShop, openDonate, talkCurator, spawnMossby, onFelled, findPath, startPlacing, LOT, RECTS, shopEnts, museumEnt, houseEnt:()=>houseEnt, Time, player, ents, ITEMS, residents, World, ROOMS, goTo, handleTap, doAction, updateSky, rollDay, spawnDaily, castAt, Fishing, fishes, bugs, openBag, openBook, openShop, openBoard, openMenu, openCraft, doCraft, WOODWORK, enterRoom, exitRoom, equip, startLayout, endLayout, trees, applyControls, magic:{ startMagic, endMagic, landTap, magicPlace, castMagic, get mode(){ return magicMode; }, raiseTower, talkWizard, drinkPotion, potionOn, luckW, rollFavors, Q, favorChoices, findTowerSpot, get tower(){ return towerEnt; }, PLACES, TERRA, FALLS } };
+window.__game = { v1:{ scene, camera, OUT, updateSky, updateHUD, snowPass, SNOW_U, townNewDay, applyTown, talkHall, openHallPanel, buildPlaza, refreshStoreItems, buildStoreAll, buildShop, buildMuseumAll, spawnExhibits, exhibitSlots, mentorMoment, teachWoodworking, openCraft, doCook, nearStation, toggleSled, setSled, get sledding(){ return sledding; }, sledV, eatFood, Plant, fullBagCatch, KB, landSeaTap, terraLand, LAMPS:()=>LAMPS, hasUpstairs, ShopItem, Stairs, get exhibits(){ return exhibits; }, KEEPOUT, dayKeyOf, World, startPlacing, checkPlace, get placing(){ return placing; }, FX, homeStock, buyHome, draftUnowned, get homeRack(){ return homeRack; }, openShop, openBuild:(o)=>openBuild(o), closeBuild, get buildMode(){ return buildMode; }, ents, Tree, Stump, Weed, Bug, bugs, player, interact, layoutBar, pickNote, itemToast, reel, Fishing, fishes, relayout, enterRoom:(id)=>enterRoom(id), trees }, get S(){ return S; }, dbg:{ showChoices:(t,c)=>showChoices(t,c), dialog:(...a)=>dialog(...a), setRiding:(v)=>setRiding(v), enterRoom:(id)=>enterRoom(id), openBuild:()=>openBuild(), rooms:()=>Object.keys(ROOMS), get yaw(){ return camYaw; }, set yaw(v){ camYaw=v; }, get riding(){ return riding; }, get snow(){ return SNOW_U.value; }, setWeather:(w)=>{ weatherOverride=w; World.weather=w; snowT=0; }, get dlg(){ return !!dlgState; } }, net:{ visibleRemotes:()=>[...remotes.values()].filter(r=>r.obj.visible).map(r=>[r.name,+r.pos.x.toFixed(1),+r.pos.z.toFixed(1)]), remoteUpsert, remotePos, remoteLeave, remoteEmote, playerState, setInventory, toast:(m)=>toast(m), updateHUD:()=>updateHUD(), get started(){ return started; } }, ITEMS, itemThumb:(id)=>thumb(id), layoutInfo:()=>({ id:LAYOUT_ID, PLACES, PATHS, LOT, rects:RECTS.map(r=>r.slice(0,4)), lot:lotRect() }), terrainH:(x,z)=>rawHeight(x,z), terrainSlope:(x,z)=>hillSlope(x,z), interact, spawnBug:(id,x,z)=>new Bug(id,x,z), tapOdds:()=>Object.fromEntries(Object.keys(TAP_BASE).map(k=>[k, +tapChance({rarity:k}).toFixed(2)])), placingObj:()=>placing&&placing.m, toScreen:v=>{ const p=v.clone().project(camera); return [(p.x*0.5+0.5)*innerWidth, (-p.y*0.5+0.5)*innerHeight]; }, rebuildHome:()=>{ buildPlayerHouse(); rebuildHomeRoom(); }, openBuild, closeBuild, get buildMode(){ return buildMode; }, talkShop, openDonate, talkCurator, spawnMossby, onFelled, findPath, startPlacing, LOT, RECTS, shopEnts, museumEnt, houseEnt:()=>houseEnt, Time, player, ents, ITEMS, residents, World, ROOMS, goTo, handleTap, doAction, updateSky, rollDay, spawnDaily, castAt, Fishing, fishes, bugs, openBag, openBook, openShop, openBoard, openMenu, openCraft, doCraft, WOODWORK, enterRoom, exitRoom, equip, startLayout, endLayout, trees, applyControls, magic:{ startMagic, endMagic, landTap, magicPlace, castMagic, get mode(){ return magicMode; }, raiseTower, talkWizard, drinkPotion, potionOn, luckW, rollFavors, Q, favorChoices, findTowerSpot, get tower(){ return towerEnt; }, PLACES, TERRA, FALLS } };

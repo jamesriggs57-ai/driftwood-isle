@@ -32,6 +32,7 @@ def('stone',    {name:'Stone',          kind:'material', price:75,  model:{t:'st
 def('clay',     {name:'Clay',           kind:'material', price:100, model:{t:'clay'}});
 def('iron',     {name:'Iron Nugget',    kind:'material', price:375, model:{t:'iron'}});
 def('weed',     {name:'Clump of Weeds', kind:'material', price:10,  model:{t:'weed'}});
+def('stump',    {name:'Tree Stump',     kind:'material', price:180, stack:10, model:{t:'stump'}});   // dug up with a shovel; woodworkers turn it into stump furniture
 
 /* ---------- Beach finds ---------- */
 def('scallop',   {name:'Scallop',      kind:'shell', price:60,  rarity:5,   model:{t:'shell', s:'scallop', c:0xf5b9a0}});
@@ -221,6 +222,12 @@ furn('birdhouse','Birdhouse',800,0.3,{shop:'craft'});
 furn('driftchair','Driftwood Chair',1100,0.5,{shop:'craft'});
 furn('arbor','Driftwood Arbor',2400,1.0,{shop:'craft'});
 furn('planterbox','Planter Box',900,0.6,{shop:'craft'});
+// Stump woodworking: every piece needs a stump you dug up yourself
+furn('stumpstool','Mossy Stump Seat',700,0.4,{shop:'craft'});
+furn('stumptable','Stump Side Table',1400,0.55,{shop:'craft'});
+furn('stumpplanter','Hollow Stump Planter',1500,0.5,{shop:'craft'});
+furn('stumplamp','Mushroom Stump Lamp',2600,0.45,{shop:'craft',glow:true});
+furn('stumpbench','Split Stump Bench',2400,0.9,{shop:'craft'});
 
 /* ---------- Woodworking ----------
    No random recipe drops: every plan is visible from the start, with its unlock shown.
@@ -241,6 +248,11 @@ export const WOODWORK = [
   { id:'desk',       mats:{ wood:8, iron:2 },      unlock:8 },
   { id:'dresser',    mats:{ wood:8, iron:2 },      unlock:11 },
   { id:'arbor',      mats:{ softwood:10, wood:4 }, unlock:11 },
+  { id:'stumpstool', mats:{ stump:1 },             unlock:0 },
+  { id:'stumptable', mats:{ stump:1, wood:3 },     unlock:2 },
+  { id:'stumpplanter',mats:{ stump:1, clay:1, weed:3 }, unlock:5 },
+  { id:'stumpbench', mats:{ stump:2, wood:4 },     unlock:5 },
+  { id:'stumplamp',  mats:{ stump:1, iron:1, softwood:2 }, unlock:8 },
 ];
 
 /* ---------- Tools ----------

@@ -272,7 +272,7 @@ export function afterGame() {
   const bar = $('#bar'), menu = $('#bMenu');
   const btn = document.createElement('button'); btn.className = 'rbtn'; btn.id = 'bNet';
   btn.innerHTML = `<svg viewBox="0 0 32 32"><circle cx="11" cy="12" r="4.5" fill="#f2c6a8" stroke="#8b6b50" stroke-width="2"/><circle cx="22" cy="13" r="4" fill="#bfe0d8" stroke="#3f7f78" stroke-width="2"/><path d="M3 26c1-5 4-7 8-7s7 2 8 7z" fill="#e9b77d" stroke="#8b6b50" stroke-width="2"/><path d="M16 26c1-4 3-6 6-6s5 2 6 6z" fill="#9ad3c9" stroke="#3f7f78" stroke-width="2"/></svg><span>${B.mode === 'guest' ? 'Account' : 'Friends'}</span>`;
-  bar.insertBefore(btn, menu); btn.onclick = () => openPanel(B.mode === 'guest' ? 'island' : (peers.size ? 'here' : panelTab));
+  if (menu && menu.parentNode === bar) bar.insertBefore(btn, menu); else bar.appendChild(btn); btn.onclick = () => openPanel(B.mode === 'guest' ? 'island' : (peers.size ? 'here' : panelTab));
   // start screen text
   if (B.startMsg) { const m = $('#backMsg'); if (m) m.textContent = B.startMsg; }
   if (B.prefillName) { const n = $('#inName'); if (n) n.value = B.prefillName; }

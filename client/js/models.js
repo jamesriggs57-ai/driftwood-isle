@@ -115,6 +115,28 @@ function buildSaplingInto(g, type){
   if (type==='pine'||type==='cedar') mk(G.cone(0.3,0.6,8), M(lc), 0,0.8,0,g);
   else for(let i=0;i<4;i++){ const a=i/4*TAU; const l=mk(G.sph(0.14,8,6), M(lc), Math.cos(a)*0.12,0.75+i*0.05,Math.sin(a)*0.12,g); l.scale.set(1.3,0.5,0.8); l.rotation.y=-a; }
 }
+/* A big ugly clump of weeds: scraggly blades in sick greens and dead browns, a dandelion gone to seed,
+   a thistle, burrs. Seeded so each clump on the ground looks a bit different. */
+export function buildWeedClump(seed=1, s=1){
+  let q=seed*9301+49297; const r=()=>{ q=(q*16807)%2147483647; return q/2147483647; };
+  const g=new THREE.Group(), cols=[0x6a8a2a,0x7a9a30,0x8a8a2a,0x5a7a28,0x9a8a3a,0x8a6a2a,0xa08040];
+  const n=16+Math.floor(r()*8);
+  for (let i=0;i<n;i++){ const a=r()*Math.PI*2, d=r()*0.32*s, h=(0.35+r()*0.55)*s, dead=r()<0.3;
+    const b=mk(G.cone(0.035*s+r()*0.03*s, h, 4), MF(dead?cols[5+Math.floor(r()*2)]:cols[Math.floor(r()*5)]), Math.cos(a)*d, h/2, Math.sin(a)*d, g);
+    b.rotation.set(Math.cos(a)*(0.35+r()*0.7), r()*3, Math.sin(a)*(0.35+r()*0.7)); b.castShadow=false; }
+  // broad flat leaves sprawled on the ground (dock/plantain), a bit chewed
+  for (let i=0;i<5;i++){ const a=i/5*Math.PI*2+r(); const l=mk(G.sph(0.16*s,6,4), MF(i%2?0x6a7a2a:0x7a8a34), Math.cos(a)*0.28*s, 0.03*s, Math.sin(a)*0.28*s, g); l.scale.set(1.6,0.18,0.6); l.rotation.y=-a; l.castShadow=false; }
+  // a dandelion gone to seed
+  if (r()<0.85){ const h=(0.7+r()*0.3)*s; const st=mk(G.cyl(0.012*s,0.016*s,h,4), M(0x7a9a3a), 0.08*s, h/2, -0.05*s, g); st.rotation.z=-0.12;
+    const puffM=new THREE.MeshStandardMaterial({ color:0xf4f2ea, roughness:1, transparent:true, opacity:0.85 }); mk(G.sph(0.11*s,10,8), puffM, 0.08*s+h*0.12, h, -0.05*s, g).castShadow=false; }
+  // a scruffy thistle
+  if (r()<0.7){ const h=(0.55+r()*0.3)*s, x=-0.12*s, z=0.1*s; mk(G.cyl(0.014*s,0.02*s,h,4), M(0x6a8a3a), x, h/2, z, g);
+    mk(G.sph(0.06*s,7,5), MF(0x6a8a3a), x, h, z, g); const top=mk(G.cone(0.05*s,0.1*s,7), MF(0xa060b8), x, h+0.07*s, z, g); top.rotation.x=Math.PI; }
+  // burrs
+  for (let i=0;i<4;i++) mk(G.ico(0.03*s,0), MF(0x8a6a3a), (r()-0.5)*0.4*s, (0.15+r()*0.3)*s, (r()-0.5)*0.4*s, g);
+  // a little dirt mound under it all
+  const dirt=mk(G.sph(0.42*s,10,6), MF(0x6a5038), 0, -0.02, 0, g); dirt.scale.set(1,0.14,1); dirt.castShadow=false;
+  return g; }
 export function buildStump(){ const g=new THREE.Group(); mk(G.cyl(0.32,0.42,0.35,12), M(0x8a5e3a), 0,0.17,0,g); mk(G.cyl(0.3,0.3,0.02,12), M(0xd8b080), 0,0.35,0,g); for(let i=0;i<3;i++){ const a=i/3*TAU; const r=mk(G.cyl(0.06,0.1,0.45,6), M(0x7a5232), Math.cos(a)*0.38,0.06,Math.sin(a)*0.38,g); r.rotation.set(Math.sin(a)*1.2,0,-Math.cos(a)*1.2); } return g; }
 export function buildShrub(sp, stage=3, color){
   const g=new THREE.Group(), P=PLANTS[sp]; const s=[0.35,0.55,0.8,1][stage];
@@ -169,7 +191,8 @@ export function buildItemModel(id){
   else if (d.t==='potion'){ const gl=new THREE.MeshStandardMaterial({ color:d.c, transparent:true, opacity:0.85, roughness:0.15, emissive:d.c, emissiveIntensity:0.25 });
     mk(G.sph(0.22,16,12), gl, 0,0.22,0,g); mk(G.cyl(0.07,0.09,0.18,10), gl, 0,0.48,0,g); mk(G.cyl(0.085,0.075,0.08,10), M(0x9a6a3a), 0,0.6,0,g); mk(G.tor(0.08,0.02,6,12), M(0xf3c35a,{metalness:0.6,roughness:0.3}), 0,0.42,0,g).rotation.x=Math.PI/2; }
   else if (d.t==='parcel'){ mk(G.box(0.5,0.32,0.4), M(0xc9a06a), 0,0.16,0,g); mk(G.box(0.52,0.04,0.08), M(0xe2483d), 0,0.33,0,g); mk(G.box(0.08,0.04,0.42), M(0xe2483d), 0,0.33,0,g); }
-  else if (d.t==='weed'){ for(let i=0;i<6;i++){ const b=mk(G.cone(0.06,0.5,5), M(0x5a9a3a), Math.cos(i*1.3)*0.1, 0.25, Math.sin(i*1.3)*0.1, g); b.rotation.set(Math.cos(i)*0.4,0,Math.sin(i)*0.4); } }
+  else if (d.t==='weed'){ g.add(buildWeedClump(7, 0.75)); }
+  else if (d.t==='stump'){ const s=buildStump(); s.scale.setScalar(1.25); g.add(s); }
   else if (d.t==='shell'){
     if(d.s==='scallop'){ const s=mk(G.cone(0.32,0.14,14), M(d.c), 0, 0.08, 0, g); s.scale.set(1,1,0.8); for(let i=-2;i<=2;i++){ const r=mk(G.box(0.03,0.02,0.3), M(0xe89a85), i*0.1, 0.13, 0.02, g); r.rotation.y=i*0.3; } }
     else if(d.s==='conch'){ const s=mk(G.cone(0.2,0.6,10), M(d.c), 0, 0.2, 0, g); s.rotation.z=Math.PI/2.2; mk(G.sph(0.12,10,8), M(0xffe0d0), 0.22, 0.14, 0, g); }

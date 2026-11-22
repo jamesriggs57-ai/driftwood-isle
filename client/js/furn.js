@@ -168,6 +168,50 @@ Object.assign(FURN_BUILDERS, {
     anim(g,t=>{ for (const e of em){ const k=(t*0.5+e.off)%1; e.m.position.set(Math.sin(e.a+t)*0.12*k, 0.45+k*1.2, Math.cos(e.a+t*1.3)*0.12*k); e.m.scale.setScalar(1-k); } }); },
 });
 
+/* ---------- Stump woodworking: furniture made from stumps you dig up ---------- */
+// Tree rings for the cut tops
+let RING=null;
+function ringMat(){ if (RING) return RING; const cv=document.createElement('canvas'); cv.width=cv.height=256; const x=cv.getContext('2d');
+  x.fillStyle='#e6c08a'; x.fillRect(0,0,256,256); let s=11; const r=()=>{ s=(s*16807)%2147483647; return s/2147483647; };
+  for (let k=26;k>0;k--){ const rr=k*4.8+r()*2; x.beginPath(); for (let i=0;i<=60;i++){ const a=i/60*TAU, w=rr*(1+Math.sin(a*3+k)*0.025+Math.sin(a*7)*0.012); x.lineTo(128+Math.cos(a)*w, 128+Math.sin(a)*w); }
+    x.strokeStyle=k%3?'rgba(150,100,55,.45)':'rgba(120,75,40,.7)'; x.lineWidth=k%3?1.2:2.2; x.stroke(); }
+  x.strokeStyle='rgba(110,70,40,.5)'; x.lineWidth=1.5; for (let i=0;i<3;i++){ const a=r()*TAU; x.beginPath(); x.moveTo(128,128); x.lineTo(128+Math.cos(a)*120,128+Math.sin(a)*120); x.stroke(); }   // drying cracks
+  const g=x.createRadialGradient(128,128,90,128,128,128); g.addColorStop(0,'rgba(0,0,0,0)'); g.addColorStop(1,'rgba(90,55,30,.55)'); x.fillStyle=g; x.fillRect(0,0,256,256);
+  const t=new THREE.CanvasTexture(cv); t.colorSpace=THREE.SRGBColorSpace; RING=new THREE.MeshStandardMaterial({ map:t, roughness:0.75, color:0xd8c0a0 }); return RING; }
+// A bark-covered stump body with a ring top and a few root flares
+function stumpBody(g, r, h, roots=4, y0=0){ const bark=woodMat(0x6a4a3a);
+  mk(CYL(r, r*1.14, h, 18), bark, 0,y0+h/2,0,g); mk(CYL(r*0.97, r*0.97, 0.012, 32), ringMat(), 0,y0+h+0.002,0,g);
+  for (let i=0;i<roots;i++){ const a=i/roots*TAU+0.4; const rt=mk(CYL(r*0.14, r*0.3, r*1.0, 7), bark, Math.cos(a)*r*1.05,y0+r*0.14,Math.sin(a)*r*1.05,g); rt.rotation.set(Math.sin(a)*1.25,0,-Math.cos(a)*1.25); }
+  return bark; }
+Object.assign(FURN_BUILDERS, {
+  stumpstool(g){ stumpBody(g, 0.3, 0.46, 3); mk(G.sph(0.06,8,6), shellMat(0x7aa04a,{roughness:0.9,clearcoat:0}), 0.27,0.1,0.12,g).scale.set(1.4,0.5,1); },
+  stumptable(g){ stumpBody(g, 0.32, 0.62, 4);
+    const slab=mk(CYL(0.55,0.53,0.09,28), ringMat(), 0,0.67,0,g); mk(CYL(0.555,0.555,0.06,28,1,true), woodMat(0x6a4a3a), 0,0.66,0,g).material.side=THREE.DoubleSide;
+    const cup=mk(lathe([[0,0],[0.05,0],[0.06,0.1],[0.065,0.11]]), ceramic(0xf0e6d4), 0.18,0.715,0.1,g); mk(G.tor(0.03,0.008,6,10), ceramic(0xf0e6d4), 0.25,0.77,0.1,g).rotation.y=0;
+    const steam=[]; for (let i=0;i<3;i++) steam.push(unshadow(mk(G.sph(0.02,6,4), glassMat(0xffffff,0.35), 0.18,0.85,0.1,g)));
+    anim(g,t=>steam.forEach((s,i)=>{ const k=(t*0.4+i/3)%1; s.position.set(0.18+Math.sin(t*2+i)*0.02, 0.83+k*0.3, 0.1); s.scale.setScalar(1+k*1.5); s.visible=k<0.9; })); },
+  stumpplanter(g){ const bark=woodMat(0x6a4a3a); mk(lathe([[0,0.05],[0.36,0.02],[0.4,0.3],[0.38,0.56],[0.3,0.56],[0.3,0.12],[0,0.12]],24), bark, 0,0,0,g);
+    mk(G.tor(0.34,0.04,8,24), ringMat(), 0,0.56,0,g).rotation.x=Math.PI/2; mk(CYL(0.3,0.3,0.02,20), felt(0x4a3424), 0,0.5,0,g);
+    for (let i=0;i<4;i++){ const a=i/4*TAU+0.3; const rt=mk(CYL(0.04,0.1,0.36,7), bark, Math.cos(a)*0.4,0.05,Math.sin(a)*0.4,g); rt.rotation.set(Math.sin(a)*1.25,0,-Math.cos(a)*1.25); }
+    const fl=[]; const cols=[0xf7c948,0xf08aa8,0xffffff,0xb08ad8,0xf7a04a];
+    for (let i=0;i<7;i++){ const a=i*2.4, d=i?0.16:0; const st=new THREE.Group(); st.position.set(Math.cos(a)*d,0.5,Math.sin(a)*d); g.add(st); const h=0.22+((i*37)%10)*0.02;
+      mk(G.cyl(0.008,0.008,h,4), M(0x4f8a3a), 0,h/2,0,st); const b=new THREE.Group(); b.position.y=h; st.add(b);
+      for (let k=0;k<5;k++){ const q=k/5*TAU; const p=mk(G.sph(0.035,8,6), ceramic(cols[i%5]), Math.cos(q)*0.035,0,Math.sin(q)*0.035,b); p.scale.set(1,0.35,1); } mk(G.sph(0.022,8,6), ceramic(0xf8d040), 0,0.01,0,b);
+      for (const s of [-1,1]){ const l=mk(G.sph(0.04,8,4), shellMat(0x5fae43,{roughness:0.6}), s*0.03,h*0.45,0,st); l.scale.set(1.2,0.25,0.5); l.rotation.z=s*0.5; } fl.push(st); }
+    anim(g,t=>fl.forEach((s,i)=>{ s.rotation.z=Math.sin(t*1.2+i)*0.08; s.rotation.x=Math.cos(t*0.9+i*1.7)*0.06; })); },
+  stumpbench(g){   // two short stumps under a split log, flat side up
+    for (const x of [-0.6,0.6]){ const s=new THREE.Group(); s.position.x=x; g.add(s); stumpBody(s, 0.22, 0.34, 3); }
+    const seat=mk(CYL(0.22,0.22,1.7,20,1,false,0,Math.PI), woodMat(0x6a4a3a), 0,0.56,0,g); seat.rotation.set(0,0,-Math.PI/2);   // curved side down
+    mk(G.box(1.7,0.025,0.44), woodMat(0xd8b080), 0,0.565,0,g); },
+  stumplamp(g){ stumpBody(g, 0.28, 0.42, 3);
+    const caps=[]; for (const [x,z,s,c] of [[0,0,1,0xe86a4a],[0.16,0.1,0.6,0xf0a060],[-0.14,0.12,0.5,0xe86a4a],[0.1,-0.15,0.45,0xf6d6a0]]){ const m=new THREE.Group(); m.position.set(x,0.42,z); g.add(m);
+      mk(CYL(0.035*s,0.05*s,0.28*s,10), ceramic(0xf6eedc), 0,0.14*s,0,m); const cap=mk(G.sph(0.16*s,20,12,0,TAU,0,Math.PI/2), M(c,{emissive:c,emissiveIntensity:0.5}), 0,0.27*s,0,m); cap.scale.y=0.7;
+      for (let k=0;k<5;k++){ const a=k*1.3; mk(G.sph(0.022*s,6,4), M(0xfff4dc,{emissive:0xfff0c0,emissiveIntensity:0.6}), Math.cos(a)*0.1*s,0.27*s+0.06*s,Math.sin(a)*0.1*s,m); }
+      mk(G.sph(0.1*s,12,8), glowMat(0xffd890), 0,0.24*s,0,m).scale.y=0.4; caps.push(m); }
+    addGlow(g,0.9,2.4,0xffc080);
+    anim(g,t=>caps.forEach((m,i)=>{ const k=1+Math.sin(t*1.6+i*2)*0.03; m.scale.set(k,1/k,k); })); },
+});
+
 // Painted globe texture
 function globeTex(){ const cv=document.createElement('canvas'); cv.width=512; cv.height=256; const x=cv.getContext('2d');
   const gg=x.createLinearGradient(0,0,0,256); gg.addColorStop(0,'#bfe0f0'); gg.addColorStop(0.5,'#5a9ad8'); gg.addColorStop(1,'#bfe0f0'); x.fillStyle=gg; x.fillRect(0,0,512,256);

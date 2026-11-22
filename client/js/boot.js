@@ -63,25 +63,48 @@ function islandMaker(title, opts = {}) {
   });
 }
 
+// Resolves true once signed in (the session cookie is set), or null if the player backed out
 export function signUpScreen(opts = {}) {
   return new Promise(res => {
-    const el = screen(`<h2 style="margin:0 0 4px">${opts.title || 'Make an account'}</h2>
-      <div class="muted" style="margin-bottom:8px">${opts.sub || 'Your island gets saved online, and you can invite friends to visit. We email you a sign-in link, no password needed.'}</div>
+    const el = screen(`<div id="suStep1"><h2 style="margin:0 0 4px">${opts.title || 'Make an account'}</h2>
+      <div class="muted" style="margin-bottom:8px">${opts.sub || 'Your island gets saved online, and you can invite friends to visit. We email you a 6-digit code, no password needed.'}</div>
       <label class="f">Email</label><input type="email" id="suEmail" autocomplete="email" maxlength="200">
       <div id="suNew"><label class="f">Your name</label><input type="text" id="suName" maxlength="40" autocomplete="name">
       <label class="f">Character name <span class="muted">(what friends see)</span></label><input type="text" id="suDisp" maxlength="16"></div>
       <div id="suMsg" class="muted" style="min-height:20px;margin-top:8px"></div>
-      <button class="btn" id="suGo">Email me a link</button> <button class="btn alt" id="suIn">I already have an account</button> <button class="btn alt" id="suBack">Back</button>`);
-    let signIn = false;
-    el.querySelector('#suIn').onclick = () => { signIn = !signIn; el.querySelector('#suNew').style.display = signIn ? 'none' : ''; el.querySelector('#suIn').textContent = signIn ? 'I\'m new here' : 'I already have an account'; };
-    el.querySelector('#suBack').onclick = () => res(null);
-    el.querySelector('#suGo').onclick = async () => {
-      const msg = el.querySelector('#suMsg'); msg.textContent = 'Sending...';
-      const r = await api('/api/auth/start', { method: 'POST', body: { email: el.querySelector('#suEmail').value, name: signIn ? '' : el.querySelector('#suName').value, displayName: signIn ? '' : el.querySelector('#suDisp').value } });
-      if (!r.ok) { msg.textContent = r.error || 'Something went wrong.'; return; }
-      if (r.devLink) { msg.innerHTML = `Test server: no email is sent. <a href="${esc(r.devLink)}">Tap here to sign in</a>.`; return; }
-      msg.textContent = 'Check your email for a sign-in link. You can close this tab.';
+      <button class="btn" id="suGo">Email me a code</button> <button class="btn alt" id="suIn">I already have an account</button> <button class="btn alt" id="suBack">Back</button></div>
+      <div id="suStep2" style="display:none"><h2 style="margin:0 0 4px">Check your email</h2>
+      <div class="muted" style="margin-bottom:8px">We sent a 6-digit code to <b id="suTo"></b>. Type it here. It expires in 15 minutes.</div>
+      <input type="text" id="suCode" inputmode="numeric" autocomplete="one-time-code" maxlength="7" placeholder="123456" style="font-size:28px;letter-spacing:8px;text-align:center">
+      <div id="suMsg2" class="muted" style="min-height:20px;margin-top:8px"></div>
+      <button class="btn" id="suOk">Sign in</button> <button class="btn alt" id="suAgain">Send a new code</button> <button class="btn alt" id="suChange">Use a different email</button></div>`);
+    const $e = s => el.querySelector(s);
+    let signIn = false, email = '', busy = false;
+    $e('#suIn').onclick = () => { signIn = !signIn; $e('#suNew').style.display = signIn ? 'none' : ''; $e('#suIn').textContent = signIn ? 'I\'m new here' : 'I already have an account'; };
+    $e('#suBack').onclick = () => res(null);
+    const send = async msg => {
+      msg.textContent = 'Sending...';
+      const r = await api('/api/auth/start', { method: 'POST', body: { email: $e('#suEmail').value, name: signIn ? '' : $e('#suName').value, displayName: signIn ? '' : $e('#suDisp').value } });
+      if (!r.ok) { msg.textContent = r.error || 'Something went wrong.'; return false; }
+      email = $e('#suEmail').value.trim();
+      $e('#suStep1').style.display = 'none'; $e('#suStep2').style.display = ''; $e('#suTo').textContent = email;
+      const m2 = $e('#suMsg2'); m2.textContent = r.devCode ? 'Test server: no email is sent. Your code is ' + r.devCode + '.' : (msg === m2 ? 'New code sent. Use the newest email.' : '');
+      $e('#suCode').value = ''; $e('#suCode').focus(); return true;
     };
+    $e('#suGo').onclick = () => send($e('#suMsg'));
+    $e('#suAgain').onclick = () => send($e('#suMsg2'));
+    $e('#suChange').onclick = () => { $e('#suStep2').style.display = 'none'; $e('#suStep1').style.display = ''; $e('#suMsg').textContent = ''; };
+    const verify = async () => {
+      const code = $e('#suCode').value.replace(/\D/g, ''), msg = $e('#suMsg2');
+      if (code.length !== 6) { msg.textContent = 'The code has 6 digits.'; return; }
+      if (busy) return; busy = true; msg.textContent = 'Signing in...';
+      const r = await api('/api/auth/code', { method: 'POST', body: { email, code } }); busy = false;
+      if (!r.ok) { msg.textContent = r.error || 'Something went wrong.'; return; }
+      res(true);
+    };
+    $e('#suOk').onclick = verify;
+    $e('#suCode').oninput = () => { if ($e('#suCode').value.replace(/\D/g, '').length === 6) verify(); };
+    $e('#suCode').onkeydown = e => { if (e.key === 'Enter') verify(); };
   });
 }
 
@@ -108,7 +131,7 @@ async function start() {
       const el = screen(`<h2 style="margin:0 0 6px">${esc(inv.owner)} invited you!</h2><div style="margin-bottom:10px">${inviteText(inv)}</div><div class="muted">You need an account to visit friends.</div>
         <button class="btn" id="go">Sign up or sign in</button> <button class="btn alt" id="no">Not now</button>`);
       const choice = await new Promise(r => { el.querySelector('#go').onclick = () => r('go'); el.querySelector('#no').onclick = () => r('no'); });
-      if (choice === 'go') { await signUpScreen({ title: 'Sign up to visit ' + esc(inv.owner), sub: 'We email you a sign-in link, no password needed. Your invite is saved.' }); return start(); }
+      if (choice === 'go') { await signUpScreen({ title: 'Sign up to visit ' + esc(inv.owner), sub: 'We email you a 6-digit code, no password needed. Your invite is saved.' }); return start(); }
       sessionStorage.removeItem('dw-invite');
     } else {
       const el = screen(`<h2 style="margin:0 0 6px">${esc(inv.owner)} invited you!</h2><div style="margin-bottom:12px">${inviteText(inv)}</div>

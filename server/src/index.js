@@ -1,6 +1,6 @@
 /* =====================================================================
    DRIFTWOOD ISLE SERVER (Cloudflare Worker + D1 + Durable Objects)
-   - Accounts: sign up with name, email and display name; sign in by emailed link (no passwords).
+   - Accounts: sign up with name, email and display name; sign in with an emailed 6-digit code or link (no passwords).
    - Saves: one island per account, versioned so an older copy never overwrites a newer one.
    - Friends: only through invite links. There is no search or public list of players.
    - Visits: visitor (look, harvest, shop) or resident (same rights as the owner), one-time or standing.
@@ -82,12 +82,32 @@ function clampGuest(d) {
 }
 
 /* ---------- email ---------- */
-async function sendLoginEmail(env, to, link) {
+async function sendLoginEmail(env, to, code, link) {
   const r = await fetch('https://api.resend.com/emails', {
     method: 'POST', headers: { Authorization: 'Bearer ' + env.RESEND_API_KEY, 'content-type': 'application/json' },
-    body: JSON.stringify({ from: env.MAIL_FROM, to: [to], subject: 'Your Driftwood Isle sign-in link',
-      html: `<p>Tap to sign in to Driftwood Isle:</p><p><a href="${link}">Sign in</a></p><p>This link works once and expires in 30 minutes. If you didn't ask for it, ignore this email.</p>` }) });
+    body: JSON.stringify({ from: env.MAIL_FROM, to: [to], subject: `${code} is your Driftwood Isle sign-in code`,
+      text: `Your Driftwood Isle sign-in code is ${code}\n\nType it into the game. It works once and expires in ${CODE_MIN} minutes.\n\nOr sign in with this link: ${link}\n\nIf you didn't ask for this, ignore this email.`,
+      html: `<p>Your Driftwood Isle sign-in code:</p><p style="font-size:32px;font-weight:bold;letter-spacing:6px;margin:8px 0">${code}</p><p>Type it into the game. It works once and expires in ${CODE_MIN} minutes.</p><p>Or <a href="${link}">sign in with this link</a> instead.</p><p>If you didn't ask for this, ignore this email.</p>` }) });
   return r.ok;
+}
+
+/* ---------- sign-in codes ----------
+   Kept in login_tokens (no schema change): one row per code, keyed 'code:<email>:<sha256 of code>',
+   plus one 'tries:<email>' row whose used column counts wrong guesses. A new code clears both. */
+const CODE_MIN = 15, CODE_TRIES = 5;
+function sixDigits() { const a = new Uint32Array(1); let v; do { crypto.getRandomValues(a); v = a[0]; } while (v >= 4294000000); return String(v % 1e6).padStart(6, '0'); }
+async function sha(s) { return [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)))].map(b => b.toString(16).padStart(2, '0')).join(''); }
+const codeKey = async (email, code) => 'code:' + email + ':' + await sha(email + ':' + code);
+const clearCodes = (env, email) => [
+  env.DB.prepare('DELETE FROM login_tokens WHERE substr(token, 1, ?) = ?').bind(('code:' + email + ':').length, 'code:' + email + ':'),
+  env.DB.prepare('DELETE FROM login_tokens WHERE token = ?').bind('tries:' + email)];
+// Make the account if it's new, start a session, and return the cookie that goes with it
+async function startSession(env, row) {
+  let user = await env.DB.prepare('SELECT id FROM users WHERE email = ?').bind(row.email).first();
+  if (!user) { const id = rid(12); await env.DB.prepare('INSERT INTO users (id, email, name, display_name, created) VALUES (?, ?, ?, ?, ?)').bind(id, row.email, row.name || 'Player', row.display_name || 'Islander', Date.now()).run(); user = { id }; }
+  const sid = rid(24);
+  await env.DB.prepare('INSERT INTO sessions (id, user_id, expires) VALUES (?, ?, ?)').bind(sid, user.id, Date.now() + SESSION_DAYS * DAY).run();
+  return `dw_sess=${sid}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${SESSION_DAYS * 86400}`;
 }
 
 /* ---------- friend links ---------- */
@@ -106,7 +126,7 @@ async function api(req, env, url) {
 
   if (p === '/api/time') return json({ now: Date.now() });
 
-  // Sign up or sign in: email a one-time link
+  // Sign up or sign in: email a 6-digit code (and a backup link)
   if (p === '/api/auth/start' && M === 'POST') {
     const b = await body(req); const email = cleanText(b.email, 200).toLowerCase();
     if (!emailOK(email)) return err(400, 'Please enter a valid email.');
@@ -117,23 +137,40 @@ async function api(req, env, url) {
       if (!name || !display) return err(400, 'New here? Enter your name and a character name too.');
       if (display.length < 2) return err(400, 'Character name needs at least 2 letters.');
     }
-    const token = rid(24);
-    await env.DB.prepare('INSERT INTO login_tokens (token, email, name, display_name, expires) VALUES (?, ?, ?, ?, ?)').bind(token, email, name, display, Date.now() + 30 * 60e3).run();
+    const token = rid(24), code = sixDigits(), exp = Date.now() + CODE_MIN * 60e3;
+    await env.DB.batch([...clearCodes(env, email),
+      env.DB.prepare('INSERT INTO login_tokens (token, email, name, display_name, expires) VALUES (?, ?, ?, ?, ?)').bind(token, email, name, display, exp),
+      env.DB.prepare('INSERT INTO login_tokens (token, email, name, display_name, expires) VALUES (?, ?, ?, ?, ?)').bind(await codeKey(email, code), email, name, display, exp)]);
     const link = `${url.origin}/api/auth/verify?t=${token}`;
-    if (env.RESEND_API_KEY) { if (!(await sendLoginEmail(env, email, link))) return err(502, 'Could not send the email. Try again in a minute.'); return json({ sent: true, isNew: !existing }); }
-    if (env.DEV_LOGIN === '1') return json({ sent: false, isNew: !existing, devLink: link });
+    if (env.RESEND_API_KEY) { if (!(await sendLoginEmail(env, email, code, link))) return err(502, 'Could not send the email. Try again in a minute.'); return json({ sent: true, isNew: !existing }); }
+    if (env.DEV_LOGIN === '1') return json({ sent: false, isNew: !existing, devLink: link, devCode: code });
     return err(500, 'Email sending is not set up on this server.');
+  }
+  // Sign in with the 6-digit code from the email, in the same tab
+  if (p === '/api/auth/code' && M === 'POST') {
+    const b = await body(req); const email = cleanText(b.email, 200).toLowerCase(), code = String(b.code || '').replace(/\D/g, '');
+    if (!emailOK(email) || code.length !== 6) return err(400, 'Enter the 6-digit code from the email.');
+    const tries = await env.DB.prepare('SELECT used, expires FROM login_tokens WHERE token = ?').bind('tries:' + email).first();
+    if (tries && tries.expires > Date.now() && tries.used >= CODE_TRIES) return err(429, 'Too many wrong codes. Tap "Send a new code" to get another one.');
+    const key = await codeKey(email, code);
+    const row = await env.DB.prepare('SELECT * FROM login_tokens WHERE token = ?').bind(key).first();
+    if (!row || row.used || row.expires < Date.now()) {
+      await env.DB.prepare('INSERT INTO login_tokens (token, email, expires, used) VALUES (?1, ?2, ?3, 1) ON CONFLICT(token) DO UPDATE SET used = CASE WHEN expires < ?4 THEN 1 ELSE used + 1 END, expires = CASE WHEN expires < ?4 THEN excluded.expires ELSE expires END').bind('tries:' + email, email, Date.now() + CODE_MIN * 60e3, Date.now()).run();
+      const left = CODE_TRIES - ((tries && tries.expires > Date.now() ? tries.used : 0) + 1);
+      if (row && row.expires < Date.now()) return err(400, 'That code has expired. Tap "Send a new code".');
+      return err(400, left > 0 ? 'That code isn\'t right. Check the email and try again.' : 'Too many wrong codes. Tap "Send a new code" to get another one.');
+    }
+    await env.DB.batch(clearCodes(env, email));
+    return json({ ok: true }, 200, { 'set-cookie': await startSession(env, row) });
   }
   if (p === '/api/auth/verify' && M === 'GET') {
     const t = url.searchParams.get('t') || '';
+    if (t.includes(':')) return new Response('This sign-in link is not valid.', { status: 400 });
     const row = await env.DB.prepare('SELECT * FROM login_tokens WHERE token = ?').bind(t).first();
     if (!row || row.used || row.expires < Date.now()) return new Response('This sign-in link has expired or was already used. Go back to the game and ask for a new one.', { status: 400 });
     await env.DB.prepare('UPDATE login_tokens SET used = 1 WHERE token = ?').bind(t).run();
-    let user = await env.DB.prepare('SELECT id FROM users WHERE email = ?').bind(row.email).first();
-    if (!user) { const id = rid(12); await env.DB.prepare('INSERT INTO users (id, email, name, display_name, created) VALUES (?, ?, ?, ?, ?)').bind(id, row.email, row.name || 'Player', row.display_name || 'Islander', Date.now()).run(); user = { id }; }
-    const sid = rid(24);
-    await env.DB.prepare('INSERT INTO sessions (id, user_id, expires) VALUES (?, ?, ?)').bind(sid, user.id, Date.now() + SESSION_DAYS * DAY).run();
-    return new Response(null, { status: 302, headers: { location: '/#signedin', 'set-cookie': `dw_sess=${sid}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${SESSION_DAYS * 86400}` } });
+    await env.DB.batch(clearCodes(env, row.email));
+    return new Response(null, { status: 302, headers: { location: '/#signedin', 'set-cookie': await startSession(env, row) } });
   }
   if (p === '/api/auth/logout' && M === 'POST') {
     const sid = cookie(req, 'dw_sess'); if (sid) await env.DB.prepare('DELETE FROM sessions WHERE id = ?').bind(sid).run();

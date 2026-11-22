@@ -2245,7 +2245,11 @@ function openMenu(){
       $('#dvF').onclick=()=>{ Q.rolledFor=null; Q.offers={}; rollFavors(Math.random); Q.rolledFor=S.day.key; save(); toast('Islanders have new favors to ask.'); };
       $('#dvOff').onclick=()=>{ try{ localStorage.removeItem('dwDev'); }catch(e){} toast('Shortcuts hidden. Open the game with #dev at the end of the address to bring them back.'); render(); }; }
     const w=$('#mW'); w.value=weatherOverride||''; w.onchange=()=>{ weatherOverride=w.value||null; World.weather=weatherOverride||S.day.weather; updateSky(); updateHUD(); };
-    $('#mReset').onclick=()=>{ pBody.innerHTML=`<p>This erases your island, items and friendships. Are you sure?</p><button class="btn warn" id="rY">Yes, start over</button> <button class="btn alt" id="rN">Keep my island</button>`; $('#rY').onclick=()=>{ try{ localStorage.removeItem(SAVE_KEY); }catch(e){} location.reload(); }; $('#rN').onclick=render; };
+    $('#mReset').onclick=()=>{
+      if (VISIT){ pBody.innerHTML=`<p>You're visiting a friend's island. Go back to your own island to start a new one.</p><button class="btn alt" id="rN">OK</button>`; $('#rN').onclick=render; return; }
+      const acct=BOOT.mode==='account';
+      pBody.innerHTML=`<p>${acct?'This replaces your island with a brand new one. Your house, items, clams and progress on it are erased. Friends you\'ve added stay your friends.':'This erases your island, items and friendships.'} Are you sure?</p><button class="btn warn" id="rY">Yes, start over</button> <button class="btn alt" id="rN">Keep my island</button>`;
+      $('#rY').onclick=()=>{ if (acct){ try{ sessionStorage.setItem('dw-newisland','1'); }catch(e){} BOOT.onSave=()=>{}; location.reload(); return; } try{ localStorage.removeItem(SAVE_KEY); }catch(e){} location.reload(); }; $('#rN').onclick=render; };
     sync();
   };
   openPanel('Menu',()=>{ menuOpen=false; scrim.classList.remove('top'); $('#hud').classList.remove('menuprev'); }); menuOpen=true; scrim.classList.add('top'); $('#hud').classList.add('menuprev'); render();

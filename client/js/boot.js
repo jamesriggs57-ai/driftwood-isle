@@ -41,7 +41,7 @@ function layoutPicker(title) {
 }
 
 /* Island maker (new accounts): pick terrain and town style, see a map, reroll until you like it */
-function islandMaker(title) {
+function islandMaker(title, opts = {}) {
   return new Promise(res => {
     let terrain = 'hilly', town = 'suburbs', seed = (Math.random() * 1e9) | 0;
     const opt = (name, map, cur) => Object.entries(map).map(([k, o]) => `<button class="chip${k === cur ? ' on' : ''}" data-${name}="${k}">${esc(o.name)}</button>`).join('');
@@ -50,7 +50,7 @@ function islandMaker(title) {
       <b>Town</b><div class="chips" id="imW" style="margin:4px 0 2px">${opt('w', TOWNS, town)}</div><div class="muted" id="imWb" style="font-size:13px;min-height:18px"></div>
       <canvas id="imMap" width="560" height="560" style="width:100%;max-width:min(320px,34vh);display:block;margin:8px auto;border-radius:18px;border:3px solid #e7d1a6"></canvas>
       <div class="muted" style="font-size:12px;text-align:center;margin-bottom:8px">Red: your home · yellow: shops and museum · purple: a spot for something magical · white: neighbors</div>
-      <button class="btn alt" id="imR">Reroll</button> <button class="btn" id="imGo">Live here</button>`);
+      <button class="btn alt" id="imR">Reroll</button> <button class="btn" id="imGo">Live here</button>${opts.cancel ? ' <button class="btn alt" id="imNo">Keep my old island</button>' : ''}`);
     const draw = () => { const L = generateLayout({ seed, terrain, town }); drawIslandPreview(el.querySelector('#imMap'), L);
       el.querySelector('#imTb').textContent = TERRAINS[terrain].blurb; el.querySelector('#imWb').textContent = TOWNS[town].blurb;
       el.querySelectorAll('[data-t]').forEach(b => b.classList.toggle('on', b.dataset.t === terrain)); el.querySelectorAll('[data-w]').forEach(b => b.classList.toggle('on', b.dataset.w === town)); };
@@ -58,6 +58,7 @@ function islandMaker(title) {
     el.querySelectorAll('[data-w]').forEach(b => b.onclick = () => { town = b.dataset.w; draw(); });
     el.querySelector('#imR').onclick = () => { seed = (Math.random() * 1e9) | 0; draw(); };
     el.querySelector('#imGo').onclick = () => res({ layout: 'gen', gen: { seed, terrain, town }, seed });
+    if (opts.cancel) el.querySelector('#imNo').onclick = () => res(null);
     draw();
   });
 }
@@ -128,6 +129,17 @@ async function start() {
     B.mode = 'account'; B.user = me.user;
     const mine = await api('/api/save');
     let data = mine.data, version = mine.version || 0;
+    // Menu > Start a new island: make a new one in the island maker and replace the saved island right away
+    if (data && sessionStorage.getItem('dw-newisland')) {
+      sessionStorage.removeItem('dw-newisland');
+      const made = await islandMaker('Make a new island', { cancel: true });
+      if (made) {
+        const fresh = { v: 2, ...made, player: '', island: '', clams: 1000, inv: [] };
+        const r = await api('/api/save', { method: 'PUT', body: { data: fresh, baseVersion: version } });
+        if (r.ok) { data = fresh; version = r.version; B.prefillName = me.user.displayName; try { localStorage.removeItem('driftwood-cloud-cache-' + me.user.id); } catch {} }
+        else await info('Could not start over', r.error || 'Your old island is still saved. Try again in a moment.');
+      }
+    }
     if (!data) {
       if (local && local.player) {
         const el = screen(`<h2 style="margin:0 0 6px">Keep your guest island?</h2><div style="margin-bottom:12px">This browser has your guest island <b>${esc(local.island)}</b>.</div>

@@ -11,7 +11,7 @@ run_worker_first = ["/api/*"]
 [[d1_databases]]
 binding = "DB"
 database_name = "driftwood"
-database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+database_id = "90b54329-03f1-412d-bcd5-f06dfcfd973a"
 
 [durable_objects]
 bindings = [{ name = "ROOMS", class_name = "IslandRoom" }]

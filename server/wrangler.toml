@@ -22,7 +22,7 @@ new_sqlite_classes = ["IslandRoom"]
 
 [vars]
 # Shown as the sender of sign-in emails. Must be an address on a domain you verified with Resend.
-MAIL_FROM = "Driftwood Isle <hello@example.com>"
+MAIL_FROM = "Driftwood Isle <hello@mail.vinatix.com>"
 # Secrets (set with `npx wrangler secret put NAME`, never put them here):
 #   RESEND_API_KEY  - without it, sign-in links are returned to the browser instead of emailed (dev only)
 #   DEV_LOGIN       - set to "1" only for local testing to allow that

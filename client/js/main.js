@@ -128,7 +128,7 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.15;
 renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 const scene = new THREE.Scene();
-scene.fog = new THREE.Fog(0xbfe6f0, 70, 170);
+scene.fog = new THREE.Fog(0xbfe6f0, 42, 150);
 const camera = new THREE.PerspectiveCamera(38, 1, 0.3, 900);
 const OUT = new THREE.Group(); scene.add(OUT);   // everything outdoors (hidden when you are inside a house)
 
@@ -153,9 +153,9 @@ const SKY_KEYS = [
   { h:0,    top:0x1f3a7c, bot:0x4a64a8, sun:0xc4d2ff, si:1.35, hs:0xa2b6ec, hg:0x56628c, hi:1.55 },
   { h:4.5,  top:0x284284, bot:0x5c6aa8, sun:0xc8d0ff, si:1.3,  hs:0xa0b0e6, hg:0x565e88, hi:1.5 },
   { h:6,    top:0x7090d4, bot:0xf8bcae, sun:0xffc8aa, si:1.8,  hs:0xecd4e8, hg:0x8a8090, hi:1.4 },
-  { h:7.5,  top:0x7ed0f4, bot:0xffeccc, sun:0xffecd0, si:2.7,  hs:0xf0f8ff, hg:0xa8b88a, hi:1.6 },
-  { h:12,   top:0x62c4f8, bot:0xdcf8ff, sun:0xfffaf0, si:3.1,  hs:0xf4faff, hg:0xa8c48a, hi:1.75 },
-  { h:16.5, top:0x72c0f0, bot:0xfff0cc, sun:0xffe6b8, si:2.8,  hs:0xfcf2e2, hg:0xa8ae8a, hi:1.6 },
+  { h:7.5,  top:0x7ed0f4, bot:0xffeccc, sun:0xffe0b8, si:2.9,  hs:0xc8d8ff, hg:0x8aa07a, hi:1.3 },
+  { h:12,   top:0x62c4f8, bot:0xdcf8ff, sun:0xfff0d8, si:3.1,  hs:0xc4d6ff, hg:0x8cac78, hi:1.35 },
+  { h:16.5, top:0x72c0f0, bot:0xfff0cc, sun:0xffd8a0, si:2.9,  hs:0xccd0f4, hg:0x949a7a, hi:1.3 },
   { h:18.5, top:0x6880c8, bot:0xffb490, sun:0xffaa80, si:2.2,  hs:0xfcc8b8, hg:0x9a8080, hi:1.45 },
   { h:20,   top:0x34488a, bot:0x9276b6, sun:0xbcb4f0, si:1.6,  hs:0xaaa4dc, hg:0x605c80, hi:1.5 },
   { h:22,   top:0x253f80, bot:0x4a62a6, sun:0xc4d2ff, si:1.35, hs:0xa2b6ec, hg:0x56628c, hi:1.55 },
@@ -464,10 +464,39 @@ function visPathDistH(x,z){ let m=1e9; for(const p of PATHS) m=Math.min(m, polyD
 const PAL = PALETTE[World.season];
 const visPathDist = (x,z) => { let m=1e9; for(const p of PATHS) m=Math.min(m, polyDist(x,z,p)); return m; };
 const CLIFF_ROCK=new THREE.Color(0x9a8a74), TIER_EDGE=new THREE.Color(0x6f8c3c), SAND=new THREE.Color(0xf3dca6), WETSAND=new THREE.Color(0xd9be86), DIRT=new THREE.Color(0xc9a06a), SEABED=new THREE.Color(0x6fc8c0), DEEP=new THREE.Color(0x2f7f9a), RIVERBED=new THREE.Color(0x8ab89a);
+// Painted ground: a tiling brush-stroke texture sampled in world space at two scales, strongest on grass
+function groundTex(){ const cv=document.createElement('canvas'); cv.width=cv.height=512; const x=cv.getContext('2d'), W=512, r=mulberry32(5);
+  x.fillStyle='rgb(128,128,128)'; x.fillRect(0,0,W,W);
+  const wrap=f=>{ for (const dx of [-W,0,W]) for (const dy of [-W,0,W]){ x.save(); x.translate(dx,dy); f(); x.restore(); } };
+  for (let i=0;i<46;i++){ const px=r()*W, py=r()*W, rad=40+r()*90, g=128+(r()-0.5)*120;           // G: soft warm/cool clumps
+    wrap(()=>{ const gr=x.createRadialGradient(px,py,0,px,py,rad); gr.addColorStop(0,`rgba(128,${g|0},128,0.55)`); gr.addColorStop(1,'rgba(128,128,128,0)'); x.globalCompositeOperation='source-over'; x.fillStyle=gr; x.fillRect(px-rad,py-rad,rad*2,rad*2); }); }
+  x.lineCap='round';
+  for (let i=0;i<2600;i++){ const px=r()*W, py=r()*W, a=-Math.PI/2+(r()-0.5)*1.4, l=5+r()*12, v=r();         // R: short grass strokes, light and dark
+    const R=v<0.5? 70+v*80 : 140+(v-0.5)*200; x.strokeStyle=`rgba(${R|0},128,128,${0.35+r()*0.4})`; x.lineWidth=1.5+r()*2.5;
+    wrap(()=>{ x.beginPath(); x.moveTo(px,py); x.quadraticCurveTo(px+Math.cos(a)*l*0.5+2,py+Math.sin(a)*l*0.5,px+Math.cos(a)*l,py+Math.sin(a)*l); x.stroke(); }); }
+  for (let i=0;i<500;i++){ const px=r()*W, py=r()*W, s2=1+r()*2.5;                                       // B: grit and speckle for sand and dirt
+    x.fillStyle=`rgba(128,128,${r()<0.5?40:230},0.5)`; wrap(()=>{ x.beginPath(); x.arc(px,py,s2,0,TAU); x.fill(); }); }
+  const t=new THREE.CanvasTexture(cv); t.wrapS=t.wrapT=THREE.RepeatWrapping; t.anisotropy=renderer.capabilities.getMaxAnisotropy?Math.min(8,renderer.capabilities.getMaxAnisotropy()):4; return t; }
+let _terrainMat=null;
+function terrainMat(){ if (_terrainMat) return _terrainMat;
+  const m=new THREE.MeshStandardMaterial({ vertexColors:true, roughness:0.95 }); const tex=groundTex();
+  m.userData.patch=sh=>{ sh.uniforms.uGround={ value:tex };
+    sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nattribute float grassy; varying float vGrassy; varying vec3 vGW;')
+      .replace('#include <project_vertex>','#include <project_vertex>\nvGrassy=grassy; vGW=(modelMatrix*vec4(transformed,1.0)).xyz;');
+    sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\nuniform sampler2D uGround; varying float vGrassy; varying vec3 vGW;')
+      .replace('#include <color_fragment>',`#include <color_fragment>
+      { vec4 a=texture2D(uGround, vGW.xz*0.23); vec4 b=texture2D(uGround, vGW.xz*0.055+vec2(0.37,0.11)); float gr=clamp(vGrassy,0.0,1.0);
+        float strokes=(a.r-0.5)*0.6*gr + (b.r-0.5)*0.16;
+        float warm=(b.g-0.5)*1.6*gr;
+        diffuseColor.rgb *= 1.0 + strokes;
+        diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb*vec3(1.1,1.05,0.78), clamp(warm,0.0,1.0));
+        diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb*vec3(0.86,0.97,1.08), clamp(-warm,0.0,1.0));
+        diffuseColor.rgb *= 1.0 + (a.b-0.5)*0.16*(1.0-gr); }`); };
+  m.onBeforeCompile=m.userData.patch; m.customProgramCacheKey=()=>'ground1'; return _terrainMat=m; }
 function buildTerrain(){
   const SZ=132*SC, N=SC>1 ? (isMobile?320:400) : (isMobile?245:290);
   const g = new THREE.PlaneGeometry(SZ, SZ, N, N); g.rotateX(-Math.PI/2);
-  const pos=g.attributes.position, cols=new Float32Array(pos.count*3), c=new THREE.Color();
+  const pos=g.attributes.position, cols=new Float32Array(pos.count*3), gw=new Float32Array(pos.count), c=new THREE.Color();
   const grass = PAL.grass.map(h=>new THREE.Color(h));
   for(let i=0;i<pos.count;i++){
     const x=pos.getX(i), z=pos.getZ(i), y=rawHeight(x,z); pos.setY(i,y);
@@ -479,14 +508,16 @@ function buildTerrain(){
       const n=fbm(x*0.08,z*0.08); c.copy(grass[0]).lerp(grass[1], n).lerp(grass[2], smooth(0.55,0.85,vnoise(x*0.2,z*0.2))*0.7);
       c.offsetHSL(0,0,(vnoise(x*2.2,z*2.2)-0.5)*0.05);
       const pd=visPathDist(x,z); if (pd<1.4) c.lerp(DIRT, smooth(1.4,0.6,pd)*(World.season==='winter'?0.35:0.7));
+      gw[i]=(1-smooth(1.4,0.6,pd)*0.8)*(inland?1:smooth(SAND_H, SAND_H+0.3, y));
+      { const w=vnoise(x*0.045+7,z*0.045-3); c.offsetHSL((w-0.5)*0.035, (w-0.5)*0.12, (vnoise(x*0.6,z*0.6)-0.5)*0.05); }   // broad warm/cool meadow patches
       if (!inland) c.lerp(SAND, smooth(SAND_H+0.2, SAND_H, y)); else if (y<SAND_H) c.lerp(new THREE.Color(0x9a8a6a), smooth(SAND_H,0.2,y));
       if (HG.h && TERRAIN_STYLE==='tiers'){ const sl=hillSample(HG.s,x,z); if (sl>0.18 && pd>1.4) c.lerp(TIER_EDGE, smooth(0.18,0.6,sl)*0.75);
         if (sl>1.5 || onWall(x,z)) c.lerp(CLIFF_ROCK, Math.max(smooth(1.5,2.6,sl), onWall(x,z)?0.85:0)*0.9).offsetHSL(0,0,(vnoise(x*1.7,z*1.7)-0.5)*0.06); }   // sheer faces show bare rock
     }
     cols[i*3]=c.r; cols[i*3+1]=c.g; cols[i*3+2]=c.b;
   }
-  g.setAttribute('color', new THREE.BufferAttribute(cols,3)); g.computeVertexNormals();
-  const m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ vertexColors:true, roughness:0.95 })); m.receiveShadow = true; return m;
+  g.setAttribute('color', new THREE.BufferAttribute(cols,3)); g.setAttribute('grassy', new THREE.BufferAttribute(gw,1)); g.computeVertexNormals();
+  const m = new THREE.Mesh(g, terrainMat()); m.receiveShadow = true; return m;
 }
 const terrain = buildTerrain(); OUT.add(terrain);
 
@@ -553,14 +584,28 @@ for (const b of BRIDGES){
     const pts=[]; for(let u=-b.len/2+0.3; u<=b.len/2; u+=0.5) pts.push(new THREE.Vector3(u,0.45+0.45*Math.cos(clamp(u/(b.len/2),-1,1)*Math.PI/2)+0.68,s*(b.w-0.05)));
     mk(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts),20,0.05,6), M(0xc99a6a), 0,0,0,g); }
 }
-// Cobblestone paths (instanced)
-{ const r=mulberry32(77); const geo=G.cyl(0.26,0.3,0.08,8); const N=2600; const im=new THREE.InstancedMesh(geo, new THREE.MeshStandardMaterial({ roughness:0.9 }), N); let n=0; const dm=new THREE.Object3D(), col=new THREE.Color();
-  const stoneCols=[0xd8cdb8,0xc8bca6,0xe2d8c4,0xbfb29a];
+// Cobblestone paths (instanced): four worn, irregular stone shapes packed unevenly, each stone its own tone
+function stoneGeo(seed){ const r=mulberry32(seed), g=new THREE.IcosahedronGeometry(0.3,2), p=g.attributes.position, v=new THREE.Vector3();
+  const sx=0.85+r()*0.4, sz=0.75+r()*0.35, ph=r()*10;
+  for (let i=0;i<p.count;i++){ v.fromBufferAttribute(p,i); const n=1+Math.sin(v.x*9+ph)*0.07+Math.cos(v.z*11+ph*2)*0.07+Math.sin((v.x+v.z)*15)*0.03;
+    v.x*=sx*n; v.z*=sz*n; v.y=Math.max(-0.02, Math.min(v.y*0.32, 0.055+Math.sin(v.x*7+ph)*0.008)); p.setXYZ(i,v.x,v.y,v.z); }
+  g.computeVertexNormals(); return g; }
+function stoneTex(){ const cv=document.createElement('canvas'); cv.width=cv.height=128; const x=cv.getContext('2d'), r=mulberry32(19); x.fillStyle='#e8e8e8'; x.fillRect(0,0,128,128);
+  for (let i=0;i<500;i++){ const v=150+r()*105|0; x.fillStyle=`rgba(${v},${v},${v},0.6)`; x.fillRect(r()*128,r()*128,1+r()*3,1+r()*3); }
+  for (let i=0;i<10;i++){ x.strokeStyle='rgba(110,105,100,0.35)'; x.lineWidth=1; x.beginPath(); x.moveTo(r()*128,r()*128); x.lineTo(r()*128,r()*128); x.stroke(); }
+  const t=new THREE.CanvasTexture(cv); t.colorSpace=THREE.SRGBColorSpace; t.wrapS=t.wrapT=THREE.RepeatWrapping; return t; }
+{ const r=mulberry32(77), K=4, N=2000, mat=new THREE.MeshStandardMaterial({ roughness:0.88, map:stoneTex() });
+  const ims=[...Array(K)].map((_,k)=>new THREE.InstancedMesh(stoneGeo(31+k*17), mat, N)), cnt=new Array(K).fill(0); const dm=new THREE.Object3D(), col=new THREE.Color();
+  const stoneCols=[0xd8cdb8,0xc8bca6,0xe2d8c4,0xbfb29a,0xcfc2a8,0xb8b0a0,0xd8c8b0];
   for (const P of PATHS) for(let i=0;i<P.length-1;i++){ const [ax,az]=P[i], [bx,bz]=P[i+1]; const L=Math.hypot(bx-ax,bz-az); const nx=-(bz-az)/L, nz=(bx-ax)/L;
-    for(let d=0; d<L && n<N; d+=0.62){ for(const off of [-0.5,0.05,0.55]){ const j=(r()-0.5)*0.22; const x=ax+(bx-ax)*d/L+nx*(off+j), z=az+(bz-az)*d/L+nz*(off+j);
-      if (!walkable(x,z) || onBridge(x,z) || onDock(x,z) || rawHeight(x,z)<0.3 || r()<0.12) continue;
-      dm.position.set(x, groundY(x,z)+0.0, z); dm.rotation.set((r()-0.5)*0.06, r()*TAU, (r()-0.5)*0.06); const s=0.75+r()*0.45; dm.scale.set(s,1,s*(0.8+r()*0.3)); dm.updateMatrix(); im.setMatrixAt(n, dm.matrix); im.setColorAt(n, col.setHex(stoneCols[n%4]).offsetHSL(0,0,(r()-0.5)*0.05)); n++; } } }
-  im.count=n; im.receiveShadow=true; OUT.add(im); }
+    for(let d=r()*0.25; d<L; d+=0.24+r()*0.16){ const per=r()<0.5?2:1;
+      for (let q=0;q<per;q++){ const off=(r()*2-1)*0.72; const x=ax+(bx-ax)*d/L+nx*off, z=az+(bz-az)*d/L+nz*off;
+        if (!walkable(x,z) || onBridge(x,z) || onDock(x,z) || rawHeight(x,z)<0.3 || r()<0.06) continue;
+        const k=Math.floor(r()*K); if (cnt[k]>=N) continue; const s=0.55+r()*0.6*(1-Math.abs(off)*0.35);
+        dm.position.set(x, groundY(x,z)-0.015-r()*0.02, z); dm.rotation.set((r()-0.5)*0.08, r()*TAU, (r()-0.5)*0.08); dm.scale.set(s,0.8+r()*0.5,s); dm.updateMatrix(); ims[k].setMatrixAt(cnt[k], dm.matrix);
+        col.setHex(stoneCols[Math.floor(r()*stoneCols.length)]).offsetHSL((r()-0.5)*0.03,(r()-0.5)*0.06,(r()-0.5)*0.09); if (r()<0.12) col.lerp(new THREE.Color(0x8aa060), 0.25+r()*0.2);   // some mossy
+        ims[k].setColorAt(cnt[k], col); cnt[k]++; } } }
+  ims.forEach((im,k)=>{ im.count=cnt[k]; im.receiveShadow=true; im.castShadow=false; OUT.add(im); }); }
 /* Part 2: entities (things you can interact with), tools, critters */
 
 const ents=[]; const pickList=[];
@@ -1789,14 +1834,15 @@ function computeSnow(){
 }
 function patchSnow(mat){
   if (mat.userData.snow || mat.userData.char || mat.transparent || !mat.isMeshStandardMaterial) return; mat.userData.snow=true;
-  mat.onBeforeCompile=sh=>{ sh.uniforms.uSnow=SNOW_U;
+  const prev=mat.userData.patch, prevKey=prev?'g':'';
+  mat.onBeforeCompile=sh=>{ if (prev) prev(sh); sh.uniforms.uSnow=SNOW_U;
     sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nvarying vec3 vSnN; varying vec3 vSnP;')
       .replace('#include <defaultnormal_vertex>','#include <defaultnormal_vertex>\nvSnN = normalize((vec4(transformedNormal,0.0)*viewMatrix).xyz);')
       .replace('#include <project_vertex>','#include <project_vertex>\n#ifdef USE_INSTANCING\nvSnP=(modelMatrix*instanceMatrix*vec4(transformed,1.0)).xyz;\n#else\nvSnP=(modelMatrix*vec4(transformed,1.0)).xyz;\n#endif');
     sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\nuniform float uSnow; varying vec3 vSnN; varying vec3 vSnP;')
       .replace('#include <color_fragment>','#include <color_fragment>\nif(uSnow>0.001){ float up=smoothstep(0.45,0.85,normalize(vSnN).y); vec2 c=floor(vSnP.xz*3.0); float nz=fract(sin(dot(c,vec2(12.9898,78.233)))*43758.5453); float nz2=fract(sin(dot(floor(vSnP.xz*0.7),vec2(39.3,11.7)))*24634.6345); float a=up*smoothstep(0.0,0.35,uSnow*1.25-nz*0.3-nz2*0.25); diffuseColor.rgb=mix(diffuseColor.rgb, vec3(0.95,0.97,1.0), clamp(a,0.0,0.94)); }');
   };
-  mat.customProgramCacheKey=()=>'snow1'; mat.needsUpdate=true;
+  mat.customProgramCacheKey=()=>'snow1'+prevKey; mat.needsUpdate=true;
 }
 function snowPass(){ if (World.season!=='winter') return; OUT.traverse(o=>{ if(!o.isMesh) return; const ms=Array.isArray(o.material)?o.material:[o.material]; for(const m of ms) if(m) patchSnow(m); }); }
 let snowT=0;
@@ -1836,7 +1882,7 @@ function updateSky(){
     sky.visible=stars.visible=moon.visible=false; scene.background=new THREE.Color(0x2e2420); scene.fog.color.setHex(0x2e2420); scene.fog.near=60; scene.fog.far=200;
     hemi.color.setHex(0xfff0dc); hemi.groundColor.setHex(0x8a6a50); hemi.intensity=1.6-World.night*0.35; sun.color.setHex(0xfff0dc); sun.intensity=1.3; sunDir.set(0.3,1,0.45).normalize();
     renderer.toneMappingExposure = 1.15*(S.settings.bright||1); return; }
-  sky.visible=stars.visible=true; scene.background=null; scene.fog.near=70; scene.fog.far=170;
+  sky.visible=stars.visible=true; scene.background=null; scene.fog.near=42; scene.fog.far=150;
   const dim = World.weather==='sunny'?0:(World.weather==='cloudy'?0.3:0.6);
   const top=colAt(h,'top',new THREE.Color()), bot=colAt(h,'bot',new THREE.Color());
   const grey=new THREE.Color(0xb4bcc6).multiplyScalar(0.55+0.45*numAt(h,'si')/3.1); top.lerp(grey,dim); bot.lerp(grey,dim*0.9);
@@ -3199,4 +3245,4 @@ function setInventory(inv, seen, equip){ S.inv=inv; if(seen) S.seen=Object.assig
 if (VISIT) setTimeout(()=>toast(`Visiting ${BOOT.host.name}'s island${BOOT.host.island?' ('+BOOT.host.island+')':''} as a ${BOOT.role}.`), 1500);
 
 addEventListener('visibilitychange', ()=>{ if(document.hidden) save(); else if(Snd.ctx) Snd.ctx.resume(); });
-window.__game = { v1:{ scene, camera, OUT, townNewDay, applyTown, talkHall, openHallPanel, buildPlaza, refreshStoreItems, buildStoreAll, buildShop, buildMuseumAll, spawnExhibits, exhibitSlots, mentorMoment, teachWoodworking, openCraft, doCook, nearStation, toggleSled, setSled, get sledding(){ return sledding; }, sledV, eatFood, Plant, fullBagCatch, KB, landSeaTap, terraLand, LAMPS:()=>LAMPS, hasUpstairs, ShopItem, Stairs, get exhibits(){ return exhibits; }, KEEPOUT, dayKeyOf, World, startPlacing, checkPlace, get placing(){ return placing; } }, get S(){ return S; }, dbg:{ showChoices:(t,c)=>showChoices(t,c), dialog:(...a)=>dialog(...a), setRiding:(v)=>setRiding(v), enterRoom:(id)=>enterRoom(id), openBuild:()=>openBuild(), rooms:()=>Object.keys(ROOMS), get yaw(){ return camYaw; }, set yaw(v){ camYaw=v; }, get riding(){ return riding; }, get snow(){ return SNOW_U.value; }, setWeather:(w)=>{ weatherOverride=w; World.weather=w; snowT=0; }, get dlg(){ return !!dlgState; } }, net:{ visibleRemotes:()=>[...remotes.values()].filter(r=>r.obj.visible).map(r=>[r.name,+r.pos.x.toFixed(1),+r.pos.z.toFixed(1)]), remoteUpsert, remotePos, remoteLeave, remoteEmote, playerState, setInventory, toast:(m)=>toast(m), updateHUD:()=>updateHUD(), get started(){ return started; } }, ITEMS, itemThumb:(id)=>thumb(id), layoutInfo:()=>({ id:LAYOUT_ID, PLACES, PATHS, LOT, rects:RECTS.map(r=>r.slice(0,4)), lot:lotRect() }), terrainH:(x,z)=>rawHeight(x,z), terrainSlope:(x,z)=>hillSlope(x,z), interact, spawnBug:(id,x,z)=>new Bug(id,x,z), tapOdds:()=>Object.fromEntries(Object.keys(TAP_BASE).map(k=>[k, +tapChance({rarity:k}).toFixed(2)])), placingObj:()=>placing&&placing.m, toScreen:v=>{ const p=v.clone().project(camera); return [(p.x*0.5+0.5)*innerWidth, (-p.y*0.5+0.5)*innerHeight]; }, rebuildHome:()=>{ buildPlayerHouse(); rebuildHomeRoom(); }, openBuild, closeBuild, get buildMode(){ return buildMode; }, talkShop, openDonate, talkCurator, spawnMossby, onFelled, findPath, startPlacing, LOT, RECTS, shopEnts, museumEnt, houseEnt:()=>houseEnt, Time, player, ents, ITEMS, residents, World, ROOMS, goTo, handleTap, doAction, updateSky, rollDay, spawnDaily, castAt, Fishing, fishes, bugs, openBag, openBook, openShop, openBoard, openMenu, openCraft, doCraft, WOODWORK, enterRoom, exitRoom, equip, startLayout, endLayout, trees, applyControls, magic:{ startMagic, endMagic, landTap, magicPlace, castMagic, get mode(){ return magicMode; }, raiseTower, talkWizard, drinkPotion, potionOn, luckW, rollFavors, Q, favorChoices, findTowerSpot, get tower(){ return towerEnt; }, PLACES, TERRA, FALLS } };
+window.__game = { v1:{ scene, camera, OUT, updateSky, updateHUD, snowPass, SNOW_U, townNewDay, applyTown, talkHall, openHallPanel, buildPlaza, refreshStoreItems, buildStoreAll, buildShop, buildMuseumAll, spawnExhibits, exhibitSlots, mentorMoment, teachWoodworking, openCraft, doCook, nearStation, toggleSled, setSled, get sledding(){ return sledding; }, sledV, eatFood, Plant, fullBagCatch, KB, landSeaTap, terraLand, LAMPS:()=>LAMPS, hasUpstairs, ShopItem, Stairs, get exhibits(){ return exhibits; }, KEEPOUT, dayKeyOf, World, startPlacing, checkPlace, get placing(){ return placing; } }, get S(){ return S; }, dbg:{ showChoices:(t,c)=>showChoices(t,c), dialog:(...a)=>dialog(...a), setRiding:(v)=>setRiding(v), enterRoom:(id)=>enterRoom(id), openBuild:()=>openBuild(), rooms:()=>Object.keys(ROOMS), get yaw(){ return camYaw; }, set yaw(v){ camYaw=v; }, get riding(){ return riding; }, get snow(){ return SNOW_U.value; }, setWeather:(w)=>{ weatherOverride=w; World.weather=w; snowT=0; }, get dlg(){ return !!dlgState; } }, net:{ visibleRemotes:()=>[...remotes.values()].filter(r=>r.obj.visible).map(r=>[r.name,+r.pos.x.toFixed(1),+r.pos.z.toFixed(1)]), remoteUpsert, remotePos, remoteLeave, remoteEmote, playerState, setInventory, toast:(m)=>toast(m), updateHUD:()=>updateHUD(), get started(){ return started; } }, ITEMS, itemThumb:(id)=>thumb(id), layoutInfo:()=>({ id:LAYOUT_ID, PLACES, PATHS, LOT, rects:RECTS.map(r=>r.slice(0,4)), lot:lotRect() }), terrainH:(x,z)=>rawHeight(x,z), terrainSlope:(x,z)=>hillSlope(x,z), interact, spawnBug:(id,x,z)=>new Bug(id,x,z), tapOdds:()=>Object.fromEntries(Object.keys(TAP_BASE).map(k=>[k, +tapChance({rarity:k}).toFixed(2)])), placingObj:()=>placing&&placing.m, toScreen:v=>{ const p=v.clone().project(camera); return [(p.x*0.5+0.5)*innerWidth, (-p.y*0.5+0.5)*innerHeight]; }, rebuildHome:()=>{ buildPlayerHouse(); rebuildHomeRoom(); }, openBuild, closeBuild, get buildMode(){ return buildMode; }, talkShop, openDonate, talkCurator, spawnMossby, onFelled, findPath, startPlacing, LOT, RECTS, shopEnts, museumEnt, houseEnt:()=>houseEnt, Time, player, ents, ITEMS, residents, World, ROOMS, goTo, handleTap, doAction, updateSky, rollDay, spawnDaily, castAt, Fishing, fishes, bugs, openBag, openBook, openShop, openBoard, openMenu, openCraft, doCraft, WOODWORK, enterRoom, exitRoom, equip, startLayout, endLayout, trees, applyControls, magic:{ startMagic, endMagic, landTap, magicPlace, castMagic, get mode(){ return magicMode; }, raiseTower, talkWizard, drinkPotion, potionOn, luckW, rollFavors, Q, favorChoices, findTowerSpot, get tower(){ return towerEnt; }, PLACES, TERRA, FALLS } };

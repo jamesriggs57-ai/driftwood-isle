@@ -14,6 +14,7 @@
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
 html,body{margin:0;height:100%;overflow:hidden;background:#9fd8e8;font-family:'Fredoka',system-ui,sans-serif;color:var(--brown);touch-action:none;overscroll-behavior:none}
 #c{position:fixed;inset:0;width:100%;height:100%;display:block;outline:none}
+#grade{position:fixed;inset:0;pointer-events:none;background:radial-gradient(ellipse at 50% 45%,rgba(255,240,210,0) 55%,rgba(255,226,180,.10) 75%,rgba(70,50,80,.22) 100%);mix-blend-mode:multiply}
 .layer{position:fixed;inset:0;pointer-events:none;padding:calc(env(safe-area-inset-top) + 10px) calc(env(safe-area-inset-right) + 10px) calc(env(safe-area-inset-bottom) + 10px) calc(env(safe-area-inset-left) + 10px)}
 .pill{pointer-events:auto;background:var(--cream);border:3px solid var(--line);border-radius:22px;box-shadow:0 4px 0 rgba(91,67,50,.18),0 8px 20px rgba(0,0,0,.12);padding:8px 14px}
 #clock{position:absolute;top:calc(env(safe-area-inset-top) + 10px);left:calc(env(safe-area-inset-left) + 10px);display:flex;align-items:center;gap:10px}
@@ -197,6 +198,7 @@ select{font-family:inherit;font-size:16px;padding:6px;border-radius:10px;border:
 </head>
 <body>
 <canvas id="c" tabindex="0"></canvas>
+<div id="grade" aria-hidden="true"></div>
 
 <div class="layer" id="hud">
   <div id="clock" class="pill"><span id="wIcon"></span><div><div class="t" id="tTime">--:--</div><div class="d" id="tDate"></div></div></div>

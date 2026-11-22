@@ -19,7 +19,10 @@ def('orange', {name:'Orange', kind:'fruit', price:100, plant:'fruittree', model:
 def('plum',   {name:'Plum',   kind:'fruit', price:100, plant:'fruittree', model:{t:'fruit', c:0x8a4fa8}});
 def('cherry', {name:'Cherries',kind:'fruit',price:100, plant:'fruittree', model:{t:'fruit', c:0xc8202a, cherry:true}});
 def('lemon',  {name:'Lemon',  kind:'fruit', price:100, plant:'fruittree', model:{t:'fruit', c:0xf5dc40, pear:true}});
-def('coconut',{name:'Coconut',kind:'fruit', price:250, plant:'palm', model:{t:'fruit', c:0x8a5a35, big:true}});
+def('coconut',{name:'Coconut',kind:'fruit', price:150, plant:'palm', model:{t:'fruit', c:0x8a5a35, big:true}});
+// Fruit that isn't native to the island sells for more (New Horizons pays 5x; ours is 2.5x because fruit is easier to farm here)
+export const FOREIGN_FRUIT_PRICE = 250;
+export const FRUIT_REGROW_DAYS = 3;   // a picked tree grows fruit again after this many days (New Horizons: 3)
 export const NATIVE_FRUITS = ['apple','pear','peach','orange','plum','cherry','lemon'];
 
 /* ---------- Materials ---------- */
@@ -247,36 +250,36 @@ export const TOOLS = {
   net:    { name:'Net',          does:'Catch bugs', stat:'bugs', tiers:[
     { name:'Flimsy Net',   cost:400,   uses:30,  bonus:0 },
     { name:'Sturdy Net',   cost:2500,  uses:90,  bonus:0.12, req:{ tool:0, desc:'Own a Flimsy Net first' } },
-    { name:'Golden Net',   cost:18000, uses:300, bonus:0.25, req:{ tool:1, stat:40, desc:'Catch 40 bugs' } },
-    { name:'Heirloom Net', cost:45000, uses:0, forever:true, bonus:0.25, req:{ tool:2, stat:120, desc:'Own a Golden Net and catch 120 bugs' } } ] },
+    { name:'Golden Net',   cost:40000, uses:300, bonus:0.25, req:{ tool:1, stat:40, desc:'Catch 40 bugs' } },
+    { name:'Heirloom Net', cost:120000, uses:0, forever:true, bonus:0.25, req:{ tool:2, stat:120, desc:'Own a Golden Net and catch 120 bugs' } } ] },
   rod:    { name:'Fishing Rod',  does:'Catch fish', stat:'fish', tiers:[
     { name:'Flimsy Rod',   cost:400,   uses:30,  bonus:0 },
     { name:'Sturdy Rod',   cost:2500,  uses:90,  bonus:0.12, req:{ tool:0, desc:'Own a Flimsy Rod first' } },
-    { name:'Golden Rod',   cost:18000, uses:300, bonus:0.25, req:{ tool:1, stat:40, desc:'Catch 40 fish' } },
-    { name:'Heirloom Rod', cost:45000, uses:0, forever:true, bonus:0.25, req:{ tool:2, stat:120, desc:'Own a Golden Rod and catch 120 fish' } } ] },
+    { name:'Golden Rod',   cost:40000, uses:300, bonus:0.25, req:{ tool:1, stat:40, desc:'Catch 40 fish' } },
+    { name:'Heirloom Rod', cost:120000, uses:0, forever:true, bonus:0.25, req:{ tool:2, stat:120, desc:'Own a Golden Rod and catch 120 fish' } } ] },
   shovel: { name:'Shovel',       does:'Dig fossils, plant saplings, dig up plants and stumps', stat:'dug', tiers:[
     { name:'Flimsy Shovel',cost:500,   uses:30,  bonus:0 },
     { name:'Sturdy Shovel',cost:2500,  uses:90,  bonus:0.15, req:{ tool:0, desc:'Own a Flimsy Shovel first' } },
-    { name:'Golden Shovel',cost:18000, uses:300, bonus:0.3, req:{ tool:1, stat:30, desc:'Dig up 30 things' } },
-    { name:'Heirloom Shovel',cost:45000, uses:0, forever:true, bonus:0.3, req:{ tool:2, stat:100, desc:'Own a Golden Shovel and dig up 100 things' } } ] },
+    { name:'Golden Shovel',cost:40000, uses:300, bonus:0.3, req:{ tool:1, stat:30, desc:'Dig up 30 things' } },
+    { name:'Heirloom Shovel',cost:120000, uses:0, forever:true, bonus:0.3, req:{ tool:2, stat:100, desc:'Own a Golden Shovel and dig up 100 things' } } ] },
   axe:    { name:'Axe',          does:'Chop wood. Sturdy and Golden axes can cut trees down', stat:'chopped', tiers:[
     { name:'Flimsy Axe',   cost:600,   uses:30,  bonus:0, nofell:true },
     { name:'Sturdy Axe',   cost:3000,  uses:90,  bonus:0, req:{ tool:0, desc:'Own a Flimsy Axe first' } },
-    { name:'Golden Axe',   cost:18000, uses:300, bonus:1, req:{ tool:1, stat:60, desc:'Chop 60 times' } },
-    { name:'Heirloom Axe', cost:45000, uses:0, forever:true, bonus:1, req:{ tool:2, stat:180, desc:'Own a Golden Axe and chop 180 times' } } ] },
+    { name:'Golden Axe',   cost:40000, uses:300, bonus:1, req:{ tool:1, stat:60, desc:'Chop 60 times' } },
+    { name:'Heirloom Axe', cost:120000, uses:0, forever:true, bonus:1, req:{ tool:2, stat:180, desc:'Own a Golden Axe and chop 180 times' } } ] },
   can:    { name:'Watering Can', does:'Water plants so they grow faster', stat:'watered', tiers:[
     { name:'Watering Can', cost:500,   uses:40,  bonus:0 },
-    { name:'Golden Can',   cost:12000, uses:300, bonus:1, req:{ tool:0, stat:40, desc:'Water 40 times' } },
-    { name:'Heirloom Can', cost:30000, uses:0, forever:true, bonus:1, req:{ tool:1, stat:120, desc:'Own a Golden Can and water 120 times' } } ] },
+    { name:'Golden Can',   cost:30000, uses:300, bonus:1, req:{ tool:0, stat:40, desc:'Water 40 times' } },
+    { name:'Heirloom Can', cost:90000, uses:0, forever:true, bonus:1, req:{ tool:1, stat:120, desc:'Own a Golden Can and water 120 times' } } ] },
 };
 
 /* ---------- Backpacks: each one is harder to get ---------- */
 export const BASE_SLOTS = 20;
 export const BACKPACKS = [
-  { name:'Canvas Backpack',       slots:30, cost:2500 },
-  { name:'Explorer Pack',         slots:40, cost:12000,  req:{ caught:25, desc:'Catch 25 fish or bugs' } },
-  { name:'Voyager Pack',          slots:50, cost:40000,  req:{ caught:80, discovered:60, desc:'Catch 80 critters and discover 60 items' } },
-  { name:'Grand Expedition Pack', slots:60, cost:120000, req:{ caught:200, discovered:110, bestFriends:3, desc:'Catch 200 critters, discover 110 items and become best friends with 3 islanders' } },
+  { name:'Canvas Backpack',       slots:30, cost:5000 },
+  { name:'Explorer Pack',         slots:40, cost:30000,  req:{ caught:25, desc:'Catch 25 fish or bugs' } },
+  { name:'Voyager Pack',          slots:50, cost:100000,  req:{ caught:80, discovered:60, desc:'Catch 80 critters and discover 60 items' } },
+  { name:'Grand Expedition Pack', slots:60, cost:300000, req:{ caught:200, discovered:110, bestFriends:3, desc:'Catch 200 critters, discover 110 items and become best friends with 3 islanders' } },
 ];
 
 /* ---------- Home upgrades (pay into the Island Board at your own pace). room = interior size [w,d] ---------- */
@@ -441,20 +444,20 @@ def('mossby_acorn',{ name:'Mossby\'s Acorn', kind:'sapling', plant:'oak', price:
    specialists pay more for what they love and won't touch the rest. Investing (later in the game) upgrades them. ---------- */
 export const SHOPS = {
   general:{ id:'general', name:'Pemberton\'s General Store', keeper:'pemberton', buys:null, hours:null,
-    sell:[1.0,1.05,1.1,1.2], discount:[0,0.05,0.1,0.15], slots:[6,8,10,12],
+    sell:[1.0,1.03,1.06,1.1], discount:[0,0.05,0.1,0.15], slots:[6,8,10,12],
     tiers:['Market Stall','Corner Shop','General Store','Grand Emporium'],
-    perks:['', 'Two more furniture slots, 5% off, +5% when you sell', 'Clocks and rarer pieces in stock, 10% off, +10% when you sell', 'Pianos and peddler-quality finds, 15% off, +20% when you sell'] },
+    perks:['', 'Two more furniture slots, 5% off, +3% when you sell', 'Clocks and rarer pieces in stock, 10% off, +6% when you sell', 'Pianos and peddler-quality finds, 15% off, +10% when you sell'] },
   aquarium:{ id:'aquarium', name:'Tidepool Aquarium Supply', keeper:'marlo', buys:['fish'], hours:[8,22],
-    sell:[1.3,1.45,1.65,2.0], discount:[0,0.05,0.1,0.15], slots:[3,4,5,6],
+    sell:[1.2,1.3,1.4,1.5], discount:[0,0.05,0.1,0.15], slots:[3,4,5,6],
     tiers:['Bait Shack','Aquarium Supply','Tidepool Aquarium','Grand Aquarium Hall'],
-    perks:['', 'Fish sell for 145%, ship\'s wheels and buoy lamps', 'Fish sell for 165%, coral lamps', 'Fish sell for double, the Grand Aquarium'] },
+    perks:['', 'Fish sell for 130%, ship\'s wheels and buoy lamps', 'Fish sell for 140%, coral lamps', 'Fish sell for 150%, the Grand Aquarium'] },
   garden:{ id:'garden', name:'Sprig\'s Bug & Bloom', keeper:'sprig', buys:['bug','flower'], hours:[8,22],
-    sell:[1.3,1.45,1.65,2.0], discount:[0,0.05,0.1,0.15], slots:[4,5,6,8],
+    sell:[1.2,1.3,1.4,1.5], discount:[0,0.05,0.1,0.15], slots:[4,5,6,8],
     tiers:['Seed Cart','Bug & Bloom','Bug & Bloom Greenhouse','Botanical Conservatory'],
-    perks:['', 'Bugs and flowers sell for 145%, saplings and moth lanterns', 'Bugs and flowers sell for 165%, rose arches', 'Bugs and flowers sell for double, garden fountains'] },
+    perks:['', 'Bugs and flowers sell for 130%, saplings and moth lanterns', 'Bugs and flowers sell for 140%, rose arches', 'Bugs and flowers sell for 150%, garden fountains'] },
 };
 // Investing opens once you have a real house and you've done this much trade at the shop (buying plus selling).
-export const INVEST = { cost:[0,20000,60000,150000], trade:10000 };
+export const INVEST = { cost:[0,100000,300000,800000], trade:50000 };
 
 export const KEEPERS = {
   pemberton:{ id:'pemberton', name:'Pemberton', species:'bear', ears:'round', fur:0x8a8a92, muzzle:0xf4f0ea, shirt:0x6a8a4a, cheek:0xe0a0a0, voice:300, stripe:true,
@@ -485,10 +488,10 @@ export const MUSEUM = { kinds:['fish','bug','fossil','shell'], gifts:[[10,'globe
 
 /* ---------- Home builder ----------
    The house is a set of rectangular rooms on a 7 x 6 grid. Outside, each cell is 1.25 m; inside, 2.4 m (cozy logic).
-   Cells cost clams the first time you build them; restyling is always free. */
+   Cells cost clams the first time you build them; styles you already own are free to switch. */
 export const BUILD = {
   GW:7, GD:6, EC:1.25, IC:2.4,
-  cellCost:n => n<=12 ? 150 : n<=24 ? 450 : 1200,
+  cellCost:n => n<=9 ? 1000 : n<=12 ? 3000 : n<=24 ? 10000 : 25000,   // a 9-square starter fits a guest wallet; big houses are a long-term goal
   walls:[['siding','Siding'],['plank','Board & batten'],['shingle','Shingles'],['brick','Brick'],['stone','Stone'],['stucco','Stucco'],['log','Log cabin']],
   roofs:[['gable','Gable'],['steep','Steep gable'],['hip','Hip'],['shed','Lean-to'],['flat','Flat']],
   doors:[['plank','Plank'],['arched','Arched'],['glass','French'],['dutch','Dutch']],
@@ -505,3 +508,58 @@ export const BUILD = {
   doorColors:[0x8a5a3a,0x5a3a2a,0xe2483d,0x2f6ab0,0x3a8a5a,0xf0c040,0xe88aa8,0xffffff,0x3a3a40,0x6ac0c0],
   floorColors:[0xc99a6a,0xe8c49a,0x9a6a40,0x6a4a3a,0xd8d0c0,0x8a9098,0xe0a090,0x8ab0d8,0x9ac08a,0xc0a0d0,0xf0e0c0],
 };
+
+/* =====================================================================
+   v0.9 CONTENT: Wendell the wizard (potions, moving buildings, shaping land) and islanders' favors
+   ===================================================================== */
+/* Potions: drink from your bag. Each lasts 10 real minutes and makes rare finds of one kind much more likely. */
+def('potion_fish', { name:'Angler\'s Draught', kind:'potion', price:400, buy:3000, luck:'fish', mins:10, stack:10, model:{t:'potion', c:0x3aa6d8}, desc:'Rare fish bite far more often for 10 minutes.' });
+def('potion_bug',  { name:'Fluttercharm Tonic', kind:'potion', price:400, buy:3000, luck:'bug', mins:10, stack:10, model:{t:'potion', c:0x7cc35a}, desc:'Rare bugs show up far more often for 10 minutes.' });
+def('potion_dig',  { name:'Diviner\'s Elixir', kind:'potion', price:400, buy:3000, luck:'dig', mins:10, stack:10, model:{t:'potion', c:0xd8a040}, desc:'Rare fossils and beach finds turn up far more often for 10 minutes, and dig spots hide more swatch books.' });
+def('potion_star', { name:'Lucky Star Elixir', kind:'potion', price:1200, buy:8000, luck:'all', mins:10, stack:10, model:{t:'potion', c:0xc8a0f0}, desc:'All three luck charms at once, for 10 minutes.' });
+export const POTIONS = ['potion_fish','potion_bug','potion_dig','potion_star'];
+def('parcel', { name:'Neighbor\'s Parcel', kind:'quest', price:0, stack:1, model:{t:'parcel'} });
+
+export const WIZARD = { id:'wendell', name:'Wendell', voice:260,
+  first:['Ah! So YOU are the one who answered the starfish wish. Splendid.','I am Wendell. Wizard, retired. Mostly retired. Semi-retired.','I brew luck potions, and for a fee I can move buildings and reshape the very land. Island magic is fussy, though. It needs a well-loved island to work with.'],
+  greet:['Mm? Oh, hello. Mind the cauldron, it bites.','Back again! The stars said you would be. Or was it the pigeons?','Potions, spells, unsolicited advice. What will it be?'],
+  night:['The stars are out. My best working hours, truthfully.'],
+  moveLock:'Moving whole buildings takes a lot of island magic. Come back when you\'ve built a house of at least {cells} floor squares and backed at least {shops} of the shops.',
+  landLock:'Shaping land is the hardest magic of all. I\'ll need a house of at least {cells} floor squares, and every shop on the island backed by you.',
+  cast:['Hocus... focus... TERRA-FIRMA-RE-FORMA!','A wiggle of the staff, a pinch of star dust, and...','Stand back. Further. A little further. Perfect.'] };
+// Wizard services. Moving prices follow New Horizons (your house 30,000; anything else 50,000). Land work is per cell.
+export const MAGIC = { moveHome:30000, moveOther:50000, raise:1500, lower:1500, water:2500, fill:2500,
+  unlockMove:{ cells:16, shops:2 }, unlockLand:{ cells:24, shops:3 } };
+
+/* Favors: islanders ask for small things. Rewards are clams plus a chance at something rare.
+   Story favors unlock things on the island. */
+export const STORY = {
+  wizard:{ who:'lumi', need:[['starfish',2],['sanddollar',1]],
+    ask:['I keep seeing little sparkles near the plaza at night, {c}. Like someone magic is looking for a place to live.','They say wizards can\'t resist a wish made on starfish. Could you bring me 2 starfish and a sand dollar? They wash up on the beach.'],
+    done:['You found them! Okay, okay. I\'m making the wish right now, {c}...','...','Did you feel that? The ground went all tingly! Look over there!'] },
+  beacon:{ who:'otis', need:[['iron',3],['wood',10]],
+    ask:['Hey {p}! The old dock beacon is busted, {c}. Traders sail right past us at night.','Bring me 3 iron nuggets and 10 wood and I\'ll fix it up. More traders means more rare stuff!'],
+    done:['Perfect! A few whacks with the hammer and... she\'s shining, {c}!','Fennick and friends will find the dock much more often now.'] },
+  swatches:{ who:'juniper', need:[['fossil',1],['lantern',1]],
+    ask:['Darling, your house deserves better finishes, {c}. I have a cousin in the paint trade.','Bring me any fossil and a Garden Lantern, and I\'ll have her send you a few of her sample books.'],
+    done:['Exquisite. My cousin will be thrilled, {c}.','Here, these swatch books are yours. Do use them with restraint.'] },
+};
+// Things islanders ask for. kind:'item' = a specific item, kind:'kind' = anything of that kind.
+export const FAVOR_ASKS = [
+  { kind:'item', id:'wood', n:[5,10], line:'Could you bring me {n} wood? I\'m fixing a wobbly chair, {c}.' },
+  { kind:'item', id:'softwood', n:[4,8], line:'I need {n} branches for a little project. Don\'t ask what it is yet, {c}!' },
+  { kind:'item', id:'stone', n:[3,6], line:'I\'m building a rock garden. Could you bring me {n} stones, {c}?' },
+  { kind:'item', id:'clay', n:[2,3], line:'I want to try pottery! Could you find me {n} clay, {c}?' },
+  { kind:'item', id:'iron', n:[1,2], line:'My gate hinge snapped. Could you bring me {n} iron nugget{s}, {c}?' },
+  { kind:'item', id:'native', n:[3,6], line:'I\'m baking a pie. Could you bring me {n} {item}, {c}?' },
+  { kind:'item', id:'coconut', n:[2,3], line:'I have a coconut craving. {n} coconuts, please, {c}!' },
+  { kind:'item', id:'weed', n:[5,8], line:'Odd request, but I need {n} clumps of weeds for compost, {c}.' },
+  { kind:'kind', id:'fish', n:[1,2], line:'I\'d love {n} fish for dinner. Any kind, {c}!' },
+  { kind:'kind', id:'bug', n:[1,2], line:'I\'m sketching bugs. Could you bring me {n} bug{s}? Any kind, {c}.' },
+  { kind:'kind', id:'fossil', n:[1,1], line:'I\'ve always wanted a fossil for my shelf. Any fossil, {c}.' },
+  { kind:'kind', id:'shell', n:[2,3], line:'Could you bring me {n} beach finds? I\'m making a mobile, {c}.' },
+  { kind:'kind', id:'flower', n:[2,4], line:'My vase is empty. {n} flowers would brighten things up, {c}.' },
+  { kind:'catch', id:'fish', n:[1,1], line:'Have you ever caught a {item}? I\'d love to see one up close, {c}.' },
+  { kind:'catch', id:'bug', n:[1,1], line:'I keep hearing about the {item}. Could you catch me one, {c}?' },
+  { kind:'deliver', n:[1,1], line:'Could you take this parcel to {to} for me? I promised I\'d send it today, {c}.' },
+];

@@ -6,11 +6,11 @@
    Then it loads main.js, which reads window.__BOOT.
    ===================================================================== */
 import { Time } from './util.js';
-import { LAYOUTS, GUEST_LAYOUTS } from './layouts.js';
+import { LAYOUTS, GUEST_LAYOUTS, TERRAINS, TOWNS, generateLayout, drawIslandPreview } from './layouts.js';
 
 const SAVE_KEY = 'driftwood-isle-save-v1';
-const PLAYER_KEYS = ['player','clams','inv','seen','rec','friend','pack','tools','toolEver','equip','stats','craft','craftHint','caught','settings'];
-const WORLD_KEYS = ['island','seed','placed','ground','plants','cut','home','shops','museum','nativeFruit','layout','house','fund'];
+const PLAYER_KEYS = ['player','clams','inv','seen','rec','friend','pack','tools','toolEver','equip','stats','craft','craftHint','caught','settings','quests','potions'];
+const WORLD_KEYS = ['island','seed','placed','ground','plants','cut','home','shops','museum','nativeFruit','layout','house','fund','gen','terra','magic','fruitPicked','refLamps','stumps'];
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' })[c]);
 
@@ -37,6 +37,28 @@ function layoutPicker(title) {
     const el = screen(`<h2 style="margin:0 0 4px">${esc(title)}</h2><div class="muted" style="margin-bottom:10px">Pick the island you'd like to live on. You can't change it later.</div>
       ${GUEST_LAYOUTS.map(id => `<button class="layoutCard" data-l="${id}"><b>${esc(LAYOUTS[id].name)}</b><span>${esc(LAYOUTS[id].blurb)}</span></button>`).join('')}`);
     el.querySelectorAll('[data-l]').forEach(b => b.onclick = () => res(b.dataset.l));
+  });
+}
+
+/* Island maker (new accounts): pick terrain and town style, see a map, reroll until you like it */
+function islandMaker(title) {
+  return new Promise(res => {
+    let terrain = 'hilly', town = 'suburbs', seed = (Math.random() * 1e9) | 0;
+    const opt = (name, map, cur) => Object.entries(map).map(([k, o]) => `<button class="chip${k === cur ? ' on' : ''}" data-${name}="${k}">${esc(o.name)}</button>`).join('');
+    const el = screen(`<h2 style="margin:0 0 4px">${esc(title)}</h2><div class="muted" style="margin-bottom:8px">Make your island. Reroll as many times as you like.</div>
+      <b>Terrain</b><div class="chips" id="imT" style="margin:4px 0 2px">${opt('t', TERRAINS, terrain)}</div><div class="muted" id="imTb" style="font-size:13px;min-height:18px"></div>
+      <b>Town</b><div class="chips" id="imW" style="margin:4px 0 2px">${opt('w', TOWNS, town)}</div><div class="muted" id="imWb" style="font-size:13px;min-height:18px"></div>
+      <canvas id="imMap" width="560" height="560" style="width:100%;max-width:min(320px,34vh);display:block;margin:8px auto;border-radius:18px;border:3px solid #e7d1a6"></canvas>
+      <div class="muted" style="font-size:12px;text-align:center;margin-bottom:8px">Red: your home · yellow: shops and museum · purple: a spot for something magical · white: neighbors</div>
+      <button class="btn alt" id="imR">Reroll</button> <button class="btn" id="imGo">Live here</button>`);
+    const draw = () => { const L = generateLayout({ seed, terrain, town }); drawIslandPreview(el.querySelector('#imMap'), L);
+      el.querySelector('#imTb').textContent = TERRAINS[terrain].blurb; el.querySelector('#imWb').textContent = TOWNS[town].blurb;
+      el.querySelectorAll('[data-t]').forEach(b => b.classList.toggle('on', b.dataset.t === terrain)); el.querySelectorAll('[data-w]').forEach(b => b.classList.toggle('on', b.dataset.w === town)); };
+    el.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { terrain = b.dataset.t; draw(); });
+    el.querySelectorAll('[data-w]').forEach(b => b.onclick = () => { town = b.dataset.w; draw(); });
+    el.querySelector('#imR').onclick = () => { seed = (Math.random() * 1e9) | 0; draw(); };
+    el.querySelector('#imGo').onclick = () => res({ layout: 'gen', gen: { seed, terrain, town }, seed });
+    draw();
   });
 }
 
@@ -108,16 +130,18 @@ async function start() {
     let data = mine.data, version = mine.version || 0;
     if (!data) {
       if (local && local.player) {
-        const el = screen(`<h2 style="margin:0 0 6px">Bring your island online?</h2><div style="margin-bottom:12px">This browser has your guest island <b>${esc(local.island)}</b>. Move it to your account so it's saved online and friends can visit. Guest limits are lifted once it's moved.</div>
-          <button class="btn" id="y">Move ${esc(local.island)} online</button> <button class="btn alt" id="n">Start a new island instead</button>`);
+        const el = screen(`<h2 style="margin:0 0 6px">Keep your guest island?</h2><div style="margin-bottom:12px">This browser has your guest island <b>${esc(local.island)}</b>.</div>
+          <div class="notice" style="margin-bottom:8px"><b>Keep ${esc(local.island)}</b><br><span class="muted">Move it to your account as it is. Guest limits are lifted once it's moved.</span></div>
+          <div class="notice" style="margin-bottom:12px"><b>Start from scratch</b><br><span class="muted">Make a brand new island: pick the terrain and how the town is laid out. New islands are twice as big. Everything you built, bought and found as a guest stays behind.</span></div>
+          <button class="btn" id="y">Keep ${esc(local.island)}</button> <button class="btn alt" id="n">Start from scratch</button>`);
         const c = await new Promise(r => { el.querySelector('#y').onclick = () => r('y'); el.querySelector('#n').onclick = () => r('n'); });
         if (c === 'y') { const r = await api('/api/save/import', { method: 'POST', body: { data: local } });
           if (r.ok) { data = r.data; version = r.version; localStorage.setItem(SAVE_KEY + '-moved', JSON.stringify(local)); localStorage.removeItem(SAVE_KEY); }
           else await info('Could not move it', r.error || 'Try again later.'); }
       }
-      if (!data) { const layout = await layoutPicker('Welcome, ' + me.user.displayName + '!'); data = { v: 2, layout, player: '' }; version = 0; B.prefillName = me.user.displayName;
+      if (!data) { const made = await islandMaker('Welcome, ' + me.user.displayName + '!'); data = { v: 2, ...made, player: '' }; version = 0; B.prefillName = me.user.displayName;
         // going straight to a friend's island: create your save now so gifts and trades have somewhere to land
-        if (sessionStorage.getItem('dw-visit')) { data = { v: 2, layout, player: me.user.displayName, island: '', clams: 1000, inv: [] }; const r = await api('/api/save', { method: 'PUT', body: { data, baseVersion: 0 } }); if (r.ok) version = r.version; } }
+        if (sessionStorage.getItem('dw-visit')) { data = { v: 2, ...made, player: me.user.displayName, island: '', clams: 1000, inv: [] }; const r = await api('/api/save', { method: 'PUT', body: { data, baseVersion: 0 } }); if (r.ok) version = r.version; } }
     }
     // Visiting a friend?
     const visitId = sessionStorage.getItem('dw-visit');

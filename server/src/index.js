@@ -13,7 +13,7 @@ const DAY = 86400e3;
 const SESSION_DAYS = 30;
 const GUEST = { clams: 10000, minRarity: 3 };
 // Parts of a save that belong to the island (shared with residents) vs to the player
-export const WORLD_KEYS = ['island', 'seed', 'placed', 'ground', 'plants', 'cut', 'home', 'shops', 'museum', 'nativeFruit', 'layout', 'house', 'fund'];
+export const WORLD_KEYS = ['island', 'seed', 'placed', 'ground', 'plants', 'cut', 'home', 'shops', 'museum', 'nativeFruit', 'layout', 'house', 'fund', 'gen', 'terra', 'magic', 'fruitPicked', 'refLamps', 'stumps'];
 
 /* ---------- helpers ---------- */
 const json = (data, status = 200, headers = {}) => new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store', ...headers } });
@@ -253,7 +253,7 @@ async function api(req, env, url) {
     if (!pass || pass.friend_id !== me.id) return err(403, 'Your visit has ended.');
     if (pass.role !== 'resident') return err(403, 'Visitors cannot change this island.');
     const cur = await loadSave(env, ownerId); if (!cur) return err(404, 'Island not found.');
-    const next = { ...cur.data }; for (const k of WORLD_KEYS) if (b.world && b.world[k] !== undefined && k !== 'seed' && k !== 'layout') next[k] = b.world[k];
+    const next = { ...cur.data }; for (const k of WORLD_KEYS) if (b.world && b.world[k] !== undefined && k !== 'seed' && k !== 'layout' && k !== 'gen' && k !== 'refLamps') next[k] = b.world[k];
     const bad = checkSave(next); if (bad) return err(400, bad);
     const r = await casSaveStmt(env, ownerId, next, b.baseVersion | 0).run();
     if (!r.meta.changes) return json({ error: 'conflict', version: cur.version, world: worldOf(cur.data) }, 409);

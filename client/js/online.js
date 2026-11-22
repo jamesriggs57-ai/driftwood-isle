@@ -5,8 +5,8 @@
 import { api, signUpScreen } from './boot.js';
 
 const SAVE_KEY = 'driftwood-isle-save-v1';
-const PLAYER_KEYS = ['player','clams','inv','seen','rec','friend','pack','tools','toolEver','equip','stats','craft','craftHint','caught','settings'];
-const WORLD_KEYS = ['island','seed','placed','ground','plants','cut','home','shops','museum','nativeFruit','layout','house','fund'];
+const PLAYER_KEYS = ['player','clams','inv','seen','rec','friend','pack','tools','toolEver','equip','stats','craft','craftHint','caught','settings','quests','potions'];
+const WORLD_KEYS = ['island','seed','placed','ground','plants','cut','home','shops','museum','nativeFruit','layout','house','fund','gen','terra','magic','fruitPicked','refLamps','stumps'];
 const EMOTES = [['wave','Hi!'],['happy','Yay!'],['laugh','Haha!'],['heart','Love it!'],['surprised','Whoa!'],['sad','Aww...'],['thinking','Hmm...'],['sleepy','Zzz'],['thanks','Thanks!'],['bye','Bye!']];
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' })[c]);
@@ -32,7 +32,7 @@ function mergeWorld(S, server) {
 const own = () => B.mode === 'visit' ? B.own : null;
 
 export function setup(boot) {
-  B = boot;
+  B = boot; B.flush = flush;   // the wizard's spells save and reload the island
   ownVer = B.mode === 'visit' ? B.ownVersion : (B.version || 0); hostVer = B.hostVersion || 0;
   if (B.mode === 'account') B.onSave = S => { cacheLocal(S); queue(); };
   if (B.mode === 'visit') { base = snap(B.save); lastWorld = JSON.stringify(worldForPush(B.save)); B.onSave = () => queue(); }

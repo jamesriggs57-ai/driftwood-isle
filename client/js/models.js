@@ -162,6 +162,9 @@ export function buildItemModel(id){
   else if (d.t==='stone'){ const s=mk(G.dod(0.3), MF(0x9aa1a8), 0, 0.22, 0, g); s.scale.set(1,0.75,0.9); }
   else if (d.t==='clay'){ const s=mk(G.sph(0.28,10,8), M(0xc87a50), 0, 0.2, 0, g); s.scale.set(1.1,0.7,1); }
   else if (d.t==='iron'){ const s=mk(G.dod(0.22), MF(0x6a7078,{metalness:0.6,roughness:0.4}), 0, 0.2, 0, g); mk(G.dod(0.12), MF(0xa8b0b8,{metalness:0.8,roughness:0.3}), 0.12,0.28,0.05,g); }
+  else if (d.t==='potion'){ const gl=new THREE.MeshStandardMaterial({ color:d.c, transparent:true, opacity:0.85, roughness:0.15, emissive:d.c, emissiveIntensity:0.25 });
+    mk(G.sph(0.22,16,12), gl, 0,0.22,0,g); mk(G.cyl(0.07,0.09,0.18,10), gl, 0,0.48,0,g); mk(G.cyl(0.085,0.075,0.08,10), M(0x9a6a3a), 0,0.6,0,g); mk(G.tor(0.08,0.02,6,12), M(0xf3c35a,{metalness:0.6,roughness:0.3}), 0,0.42,0,g).rotation.x=Math.PI/2; }
+  else if (d.t==='parcel'){ mk(G.box(0.5,0.32,0.4), M(0xc9a06a), 0,0.16,0,g); mk(G.box(0.52,0.04,0.08), M(0xe2483d), 0,0.33,0,g); mk(G.box(0.08,0.04,0.42), M(0xe2483d), 0,0.33,0,g); }
   else if (d.t==='weed'){ for(let i=0;i<6;i++){ const b=mk(G.cone(0.06,0.5,5), M(0x5a9a3a), Math.cos(i*1.3)*0.1, 0.25, Math.sin(i*1.3)*0.1, g); b.rotation.set(Math.cos(i)*0.4,0,Math.sin(i)*0.4); } }
   else if (d.t==='shell'){
     if(d.s==='scallop'){ const s=mk(G.cone(0.32,0.14,14), M(d.c), 0, 0.08, 0, g); s.scale.set(1,1,0.8); for(let i=-2;i<=2;i++){ const r=mk(G.box(0.03,0.02,0.3), M(0xe89a85), i*0.1, 0.13, 0.02, g); r.rotation.y=i*0.3; } }

@@ -77,3 +77,19 @@ Invite links use whatever address the game was opened on, so after adding your d
 **Prices.** Rebalanced toward New Horizons' ratios: fruit regrows 3 days after picking, coconuts sell for 150, fruit from other islands sells for 250, and houses, investing, tools, bags, the bike and house styles cost more. Values are in `client/js/content.js` (and `BIKE_COST`, `STYLE_BASE` in `main.js`).
 
 **Testing shortcuts.** Open the game with `#dev` at the end of the address (for example `https://vinatix.com/#dev`). Menu > Testing tools then has +50,000 clams, raise the wizard tower, skip wizard requirements and new favors. They only show on a device that opened the `#dev` link.
+
+## v1.0: a growing town, cooking, two-story houses
+
+**Town.** New islands start with three neighbors (Pippa, Bramble, Mabel). The rest move in over the next days: a "Moving in!" sign and boxes appear on their plot the day before. Islands made before v1.0 keep everyone. Clementine runs the town from a tent near the plaza; chip in clams to grow it into the Town Hall (room for more neighbors, flower beds and benches in the plaza) and then the Grand Town Hall (a fountain, and Wendell learns to make new land). Builders work overnight.
+
+**Museum.** Starts as a tiny curio cottage and grows overnight as the collection does (12, 35 and 65 donations): a hall, the full museum, then two wings. Anonymous islanders sometimes leave a common find at the museum overnight.
+
+**Shops.** Pemberton's is a real shop you walk into: today's furniture is on display stands and seeds are on a table, walk up to buy; talk to Pemberton for tools, bags, selling and investing. Marlo's and Sprig's start as market stands by the road and build a storefront once you back them. Better tools only show up in the shop once you could buy and use them.
+
+**Paths.** Islands other than the original Spread out layout (and any island where buildings were moved) lay their paths on a grid that knows where buildings stand, so paths go around houses instead of through them. Trees are still placed around the original paths, so saved trees keep their keys; trees that now stand on a path don't grow.
+
+**Houses.** Place windows yourself (Layout > Windows), mix any paint color once the paint mixer is unlocked, and with the Two stories style unlocked, build real upstairs rooms (Layout > Upstairs) connected by stairs.
+
+**Farming and cooking.** Vegetable and herb seeds (tomato, carrot, potato, pumpkin, lettuce, onion, basil, mint, rosemary) plant on grass without a shovel. Mabel teaches cooking once she knows you. Cook at a campfire (now craftable) or a Wood Stove; dishes sell well, islanders love them, and eating one makes you walk a little faster for 5 minutes.
+
+**Other.** Sled (winter, or with the snow weather preview) slides you down hills. Fences snap end to end and the next one is ready at the end of the line. Fishing takes more patience: fish only notice a bobber close by, may hesitate or lose interest, and landing right on top of one scares it. A catch with a full bag asks whether to let it go or swap something out. Wendell can raise new land from the sea next to the shore. On a computer, clicking no longer walks you anywhere: walk with WASD, drag (or swipe sideways on a trackpad) to look around, and change shortcuts in Menu > Controls. The pond no longer flickers (the deep-sea plane sat at the same height as the pond bed). Testing tools add "Town: skip a day".

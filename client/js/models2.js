@@ -55,12 +55,31 @@ export function planGrid(plan){
 }
 export const linkKey = (a,b) => a<b ? a+'|'+b : b+'|'+a;
 export const linkOf = (plan,a,b) => (plan.links||{})[linkKey(a,b)] || 'door';
-export function planCells(plan){ return plan.rooms.reduce((a,r)=>a+r.w*r.d,0); }
+export function planCells(plan){ return plan.rooms.reduce((a,r)=>a+r.w*r.d,0) + (plan.up?plan.up.rooms.reduce((a,r)=>a+r.w*r.d,0):0); }
+// Windows: every outside wall edge of a cell can have one. side k: 0 front (+z), 1 back, 2 east, 3 west. row 0 downstairs, 1 upstairs.
+// Unset edges use the old checkerboard, so houses built before windows could be placed look the same.
+export const winDefault = (i,j,k,row) => (i+j+k+row)%2===0;
+export const winKey = (i,j,k,row) => `${row}:${i},${j},${k}`;
+export function winAt(plan,i,j,k,row){ const v=plan.win&&plan.win[winKey(i,j,k,row)]; return v===undefined ? winDefault(i,j,k,row) : !!v; }
+export const hasUpstairs = plan => !!(plan.up && plan.up.rooms && plan.up.rooms.length);
+function floorProblem(F, label){
+  const { GW, GD } = BUILD;
+  for (const r of F.rooms){ if (r.x<0||r.z<0||r.x+r.w>GW||r.z+r.d>GD||r.w<1||r.d<1) return `A room ${label} is outside the lot.`; }
+  for (let a=0;a<F.rooms.length;a++) for (let b=a+1;b<F.rooms.length;b++){ const A=F.rooms[a], B=F.rooms[b]; if (A.x<B.x+B.w && B.x<A.x+A.w && A.z<B.z+B.d && B.z<A.z+A.d) return `Rooms ${label} can't overlap.`; }
+  return ''; }
+function reachable(F, startK){ const occ=planGrid(F), seen=new Set([startK]), q=[startK];
+  while (q.length){ const k=q.pop(); const r=F.rooms[k];
+    for (let j=r.z;j<r.z+r.d;j++) for (let i=r.x;i<r.x+r.w;i++) for (const [di,dj] of [[1,0],[-1,0],[0,1],[0,-1]]){ const n=occ[j+dj]?.[i+di]; if (n===undefined||n<0||n===k||seen.has(n)) continue; if (linkOf(F,F.rooms[k].id,F.rooms[n].id)==='wall') continue; seen.add(n); q.push(n); } }
+  return seen.size; }
 // Problems with a plan, or '' if it's fine. Used live by the editor.
 export function planProblem(plan){
   const { GW, GD } = BUILD; if (!plan.rooms.length) return 'A house needs at least one room.';
-  for (const r of plan.rooms){ if (r.x<0||r.z<0||r.x+r.w>GW||r.z+r.d>GD||r.w<1||r.d<1) return 'A room is outside the lot.'; }
-  for (let a=0;a<plan.rooms.length;a++) for (let b=a+1;b<plan.rooms.length;b++){ const A=plan.rooms[a], B=plan.rooms[b]; if (A.x<B.x+B.w && B.x<A.x+A.w && A.z<B.z+B.d && B.z<A.z+A.d) return 'Rooms can\'t overlap.'; }
+  const fp=floorProblem(plan,'downstairs').replace(' downstairs',''); if (fp) return fp;
+  if (hasUpstairs(plan)){ const U=plan.up, p2=floorProblem(U,'upstairs'); if (p2) return p2; const g0=planGrid(plan), g1=planGrid(U);
+    for (let j=0;j<GD;j++) for (let i=0;i<GW;i++) if (g1[j][i]>=0 && !(g0[j][i]>=0)) return 'Upstairs rooms need a room under them.';
+    const st=plan.stairs; if (!st || !(g0[st.j]?.[st.i]>=0) || !(g1[st.j]?.[st.i]>=0)) return 'Add stairs: pick a spot that has a room upstairs and downstairs.';
+    if (plan.door && st.i===plan.door.i && st.j===plan.door.j) return 'The stairs can\'t go right inside the front door.';
+    if (reachable(U, g1[st.j][st.i])<U.rooms.length) return 'Every upstairs room needs a way in from the stairs.'; }
   // every room must be reachable from the front door through doorways or open walls
   const occ=planGrid(plan), d=plan.door; if (!d || occ[d.j]?.[d.i]===undefined || occ[d.j][d.i]<0 || (d.j+1<GD && occ[d.j+1][d.i]>=0)) return 'The front door needs an outside wall facing the front.';
   const seen=new Set([occ[d.j][d.i]]), q=[occ[d.j][d.i]];
@@ -145,29 +164,36 @@ function houseDoor(g, x, y, z, E){
 /* ---------- Player house, outside. Origin = lot center. ---------- */
 export function buildCustomHouse(home){
   const { GW, GD, EC } = BUILD; const plan=home.plan, E=home.ext; const g=new THREE.Group();
-  const occ=planGrid(plan); const cx=i=>(i-GW/2)*EC, cz=j=>(j-GD/2)*EC; const F=0.35, H = E.stories===2 ? 4.3 : 2.35;
+  const occ=planGrid(plan); const cx=i=>(i-GW/2)*EC, cz=j=>(j-GD/2)*EC; const F=0.35;
+  const UP=hasUpstairs(plan), occU=UP?planGrid(plan.up):null, H1=2.35, H2=2.2;
+  const H = UP ? H1 : E.stories===2 ? 4.3 : 2.35;
   const rects=[]; let chimney=null, best=null;
   const foundKind = { stone:['stone',0xa8a8a0], brick:['brick',0xb5523b], wood:['lattice',0xc8a878], none:['stucco',0x9a948a] }[E.found]||['stone',0xa8a8a0];
+  const box=(r, y0, h, roof, top)=>{ const x0=cx(r.x), x1=cx(r.x+r.w), z0=cz(r.z), z1=cz(r.z+r.d), W=x1-x0, D=z1-z0, mx=(x0+x1)/2, mz=(z0+z1)/2;
+    const wl=texBox(E.wall, E.wallC, W, h, D); wl.position.set(mx, y0+h/2, mz); wl.castShadow=wl.receiveShadow=true; g.add(wl);
+    mk(G.box(W+0.12,0.12,D+0.12), M(E.trimC), mx, y0+h, mz, g);
+    if (!UP && E.stories===2) mk(G.box(W+0.1,0.1,D+0.1), M(E.trimC), mx, F+2.15, mz, g);
+    for (const ax of [x0,x1]) for (const az of [z0,z1]) mk(G.box(0.14,h,0.14), M(E.trimC), ax, y0+h/2, az, g);
+    if (roof){ const rg=new THREE.Group(); rg.position.set(mx,0,mz); g.add(rg); const rise=roofOn(rg, E.roof, W, D, y0+h, E.roofC, E.trimC, E.wall, E.wallC);
+      if (!best || r.w*r.d*(top?2:1)>best.a) best={ a:r.w*r.d*(top?2:1), x:x1-Math.min(0.7,W*0.25), z:z0+Math.min(0.7,D*0.3), top:y0+h+rise+0.6 }; }
+    else mk(G.box(W+0.1,0.16,D+0.1), M(new THREE.Color(E.roofC).offsetHSL(0,0,-0.1).getHex()), mx, y0+h+0.04, mz, g);
+    return [x0,z0,x1,z1]; };
   plan.rooms.forEach(r=>{
     const x0=cx(r.x), x1=cx(r.x+r.w), z0=cz(r.z), z1=cz(r.z+r.d), W=x1-x0, D=z1-z0, mx=(x0+x1)/2, mz=(z0+z1)/2;
-    rects.push([x0,z0,x1,z1]);
     const fh = E.found==='none' ? 0.15 : F; const fd=texBox(foundKind[0], foundKind[1], W+0.2, fh+0.8, D+0.2, 0.9); fd.position.set(mx,(fh-0.8)/2,mz); g.add(fd); fd.castShadow=true; fd.receiveShadow=true;
-    const wl=texBox(E.wall, E.wallC, W, H, D); wl.position.set(mx, F+H/2, mz); wl.castShadow=wl.receiveShadow=true; g.add(wl);
-    mk(G.box(W+0.12,0.12,D+0.12), M(E.trimC), mx, F+H, mz, g);
-    if (E.stories===2) mk(G.box(W+0.1,0.1,D+0.1), M(E.trimC), mx, F+2.15, mz, g);
-    for (const ax of [x0,x1]) for (const az of [z0,z1]) mk(G.box(0.14,H,0.14), M(E.trimC), ax, F+H/2, az, g);
-    const rg=new THREE.Group(); rg.position.set(mx,0,mz); g.add(rg);
-    const rise=roofOn(rg, E.roof, W, D, F+H, E.roofC, E.trimC, E.wall, E.wallC);
-    if (!best || r.w*r.d>best.a) best={ a:r.w*r.d, x:x1-Math.min(0.7,W*0.25), z:z0+Math.min(0.7,D*0.3), top:F+H+rise+0.6 };
+    let covered=UP; if (UP) for (let j=r.z;j<r.z+r.d;j++) for (let i=r.x;i<r.x+r.w;i++) if (!(occU[j][i]>=0)) covered=false;
+    rects.push(box(r, F, H, !covered, false));
   });
-  // windows on outside edges (every other cell, skipping the door)
-  const d=plan.door; const rows = E.stories===2 ? [F+1.25, F+3.3] : [F+1.3];
-  for (let j=0;j<GD;j++) for (let i=0;i<GW;i++){ if (occ[j][i]<0) continue;
-    const empty=(a,b)=>!(occ[b]?.[a]>=0);
+  if (UP) plan.up.rooms.forEach(r=>box(r, F+H1, H2, true, true));
+  // windows on outside edges (placed in the builder, or the default checkerboard), skipping the front door
+  const d=plan.door;
+  const winRow=(grid, y, row)=>{ for (let j=0;j<GD;j++) for (let i=0;i<GW;i++){ if (grid[j][i]<0) continue; const empty=(a,b)=>!(grid[b]?.[a]>=0);
     const sides=[ [0,1, cx(i)+EC/2, cz(j+1)+0.03, 0], [0,-1, cx(i)+EC/2, cz(j)-0.03, Math.PI], [1,0, cx(i+1)+0.03, cz(j)+EC/2, Math.PI/2], [-1,0, cx(i)-0.03, cz(j)+EC/2, -Math.PI/2] ];
     sides.forEach(([di,dj,x,z,ry],k)=>{ if(!empty(i+di,j+dj)) return; const isDoor = d && d.i===i && d.j===j && dj===1;
-      rows.forEach((y,ri)=>{ if (isDoor && ri===0) return; if (isDoor && ri===1){ houseWindow(g,x,y,z,ry,E,0.8); return; } if ((i+j+k+ri)%2===0) houseWindow(g,x,y,z,ry,E,0.85); }); });
-  }
+      if (isDoor && row===0) return; if (isDoor && row===1 && !UP){ if (winAt(plan,i,j,k,1)) houseWindow(g,x,y,z,ry,E,0.8); return; }
+      if (winAt(plan,i,j,k,row)) houseWindow(g,x,y,z,ry,E,0.85); }); } };
+  winRow(occ, F+1.3, 0);
+  if (UP) winRow(occU, F+H1+1.15, 1); else if (E.stories===2) winRow(occ, F+3.3, 1);
   // front door, porch, lamps
   let doorPt=[0,0], porchD=0;
   if (d){ const x=cx(d.i)+EC/2, z=cz(d.j+1); doorPt=[x,z];
@@ -197,8 +223,9 @@ export function buildCustomHouse(home){
 
 /* ---------- Player house, inside. Origin = grid center. ---------- */
 const FLOOR_KIND = { wood:'wood', parquet:'parquet', tile:'tile', stone:'stone', carpet:'carpet' };
-export function buildHomeInterior(home){
-  const { GW, GD, IC } = BUILD; const plan=home.plan; const g=new THREE.Group(); const occ=planGrid(plan);
+export function buildHomeInterior(home, upper=false){
+  const { GW, GD, IC } = BUILD; const full=home.plan, plan = upper ? { rooms:full.up.rooms, links:full.up.links||{}, door:null } : full; const g=new THREE.Group(); const occ=planGrid(plan);
+  const row = upper ? 1 : 0;
   const cx=i=>(i-GW/2)*IC, cz=j=>(j-GD/2)*IC; const WH=3.0, T=0.16;
   const walls=[], segs=[]; let bb=[1e9,1e9,-1e9,-1e9];
   const paperMat = (r, len) => tiled(r.paper==='plain'?'stucco':'p:'+r.paper, r.paperC, len, WH, 1.6);
@@ -222,23 +249,25 @@ export function buildHomeInterior(home){
       if (kind==='ext'){ const m=piece(ax,az,bx,bz,rA,sA); m&&ms.push(m); } else { const m1=piece(ax,az,bx,bz,rA,sA,WH,0,true), m2=piece(ax,az,bx,bz,rB,sB,WH,0,true); m1&&ms.push(m1); m2&&ms.push(m2); } }
     if (gap){ const [ax,az]=P(gap[0]), [bx,bz]=P(gap[1]); const geo=horiz?G.box(Math.abs(bx-ax),WH-2.3,T):G.box(T,WH-2.3,Math.abs(bz-az)); const l=new THREE.Mesh(geo, M(0xf2ead8)); l.position.set((ax+bx)/2+(kind==='ext'&&!horiz?-sA*T/2:0), 2.3+(WH-2.3)/2, (az+bz)/2+(kind==='ext'&&horiz?-sA*T/2:0)); g.add(l); lintels.push(l);
       for (const t of gap){ const [px,pz]=P(t); const post=mk(horiz?G.box(0.1,2.3,T+0.04):G.box(T+0.04,2.3,0.1), M(0xf2ead8), px+(kind==='ext'&&!horiz?-sA*T/2:0), 1.15, pz+(kind==='ext'&&horiz?-sA*T/2:0), g); post.castShadow=false; lintels.push(post); } }
-    walls.push({ meshes:ms, lintels, horiz, z: horiz?za:null });
+    const w={ meshes:ms, lintels, horiz, z: horiz?za:null }; walls.push(w); return w;
   };
+  const inWin=(w, x, z, ry)=>{ const p=new THREE.Group(); p.position.set(x,1.7,z); p.rotation.y=ry; g.add(p); mk(G.box(1.1,1.0,0.06),M(0xffffff),0,0,0,p); mk(G.box(0.92,0.82,0.04),windowMat,0,0,0.03,p); mk(G.box(0.05,0.82,0.06),M(0xffffff),0,0,0.05,p); mk(G.box(1.2,0.08,0.16),M(0xffffff),0,-0.5,0.06,p); w.lintels.push(p); };
   // outer walls, merged along runs
   const d=plan.door; let doorPt=[0,0];
   const runs=[]; // [line, a, b, dir, roomIdx]
   for (let j=0;j<GD;j++) for (let i=0;i<GW;i++){ const k=occ[j][i]; if (k<0) continue;
     const e=(a,b)=>!(occ[b]?.[a]>=0);
-    if (e(i,j-1)) runs.push({ horiz:true, z:cz(j), a:cx(i), b:cx(i+1), side:+1, k, cell:[i,j], front:false });
-    if (e(i,j+1)) runs.push({ horiz:true, z:cz(j+1), a:cx(i), b:cx(i+1), side:-1, k, cell:[i,j], front:true });
-    if (e(i-1,j)) runs.push({ horiz:false, x:cx(i), a:cz(j), b:cz(j+1), side:+1, k, cell:[i,j] });
-    if (e(i+1,j)) runs.push({ horiz:false, x:cx(i+1), a:cz(j), b:cz(j+1), side:-1, k, cell:[i,j] });
+    if (e(i,j-1)) runs.push({ horiz:true, z:cz(j), a:cx(i), b:cx(i+1), side:+1, k, cell:[i,j], front:false, wk:1 });
+    if (e(i,j+1)) runs.push({ horiz:true, z:cz(j+1), a:cx(i), b:cx(i+1), side:-1, k, cell:[i,j], front:true, wk:0 });
+    if (e(i-1,j)) runs.push({ horiz:false, x:cx(i), a:cz(j), b:cz(j+1), side:+1, k, cell:[i,j], wk:3 });
+    if (e(i+1,j)) runs.push({ horiz:false, x:cx(i+1), a:cz(j), b:cz(j+1), side:-1, k, cell:[i,j], wk:2 });
   }
   for (const r of runs){ const room=plan.rooms[r.k]; const isDoor = r.front && d && d.i===r.cell[0] && d.j===r.cell[1];
     if (r.horiz){ const gap = isDoor ? [(IC/2-0.65)/IC, (IC/2+0.65)/IC] : null; if (isDoor) doorPt=[(r.a+r.b)/2, r.z];
-      addWall(r.a, r.z, r.b, r.z, 'ext', room, r.side, null, 0, gap);
-      if (!r.front && (r.cell[0]%2===0)){ const w=new THREE.Group(); w.position.set((r.a+r.b)/2,1.7,r.z+0.02); g.add(w); mk(G.box(1.1,1.0,0.06),M(0xffffff),0,0,0,w); mk(G.box(0.92,0.82,0.04),windowMat,0,0,0.03,w); mk(G.box(0.05,0.82,0.06),M(0xffffff),0,0,0.05,w); mk(G.box(1.2,0.08,0.16),M(0xffffff),0,-0.5,0.06,w); }
-    } else addWall(r.x, r.a, r.x, r.b, 'ext', room, r.side, null, 0, null);
+      const w=addWall(r.a, r.z, r.b, r.z, 'ext', room, r.side, null, 0, gap);
+      if (!isDoor && winAt(full, r.cell[0], r.cell[1], r.wk, row)) inWin(w, (r.a+r.b)/2, r.z+r.side*0.02, r.side>0?0:Math.PI);
+    } else { const w=addWall(r.x, r.a, r.x, r.b, 'ext', room, r.side, null, 0, null);
+      if (winAt(full, r.cell[0], r.cell[1], r.wk, row)) inWin(w, r.x+r.side*0.02, (r.a+r.b)/2, r.side>0?Math.PI/2:-Math.PI/2); }
   }
   // inside walls between rooms
   const shared=new Map();
@@ -258,7 +287,8 @@ export function buildHomeInterior(home){
   // front door frame inside
   if (d){ mk(G.box(1.3,0.08,0.3), M(0x8b5e3a), doorPt[0], 0.04, doorPt[1]+0.1, g).castShadow=false; mk(G.box(1.1,0.04,0.6), M(0xc04a3a), doorPt[0], 0.02, doorPt[1]-0.5, g).castShadow=false; }
   const light=new THREE.PointLight(0xffe0b0, 40, 26, 1.4); light.position.set((bb[0]+bb[2])/2, 2.8, (bb[1]+bb[3])/2+0.5); g.add(light);
-  g.userData={ walls, segs, door:doorPt, bbox:bb, occ };
+  let stairs=null; if (hasUpstairs(full) && full.stairs){ const st=full.stairs; stairs=[cx(st.i)+IC/2, cz(st.j)+IC/2]; }
+  g.userData={ walls, segs, door:doorPt, bbox:bb, occ, stairs };
   return g;
 }
 

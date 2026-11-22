@@ -477,6 +477,9 @@ export const KEEPERS = {
     closed:'Closed for the night. Bug & Bloom opens at 8 AM. (Shh, the beetles are sleeping.)',
     lock:'If you ever get a real house, and we trade {t} clams, I\'d love a partner to help me grow!',
     invest:['A partner! I\'ll build a little greenhouse!','More glass, more plants, more bugs! Thank you!','A conservatory. A whole conservatory. I need to sit down.'] },
+  clementine:{ id:'clementine', name:'Clementine', species:'hedgehog', ears:'round', fur:0xa88a6a, muzzle:0xf4e6d4, shirt:0xe8a040, cheek:0xf0a0a0, voice:520,
+    greet:['Town business, town business! What can I do for you?','Good to see you! The island is growing every day.','Oh! Hello! I was just sorting the mail by smell. Long story.'],
+    first:['Oh, you must be the new face everyone is talking about! I\'m Clementine. I run the town.','Well, I run the tent. It\'s a very official tent.','New neighbors come to me first, and so do the island\'s big projects. Chip in a few clams and we\'ll turn this tent into a proper town hall!'] },
   thistle:{ id:'thistle', name:'Professor Thistle', species:'tortoise', ears:'none', fur:0x9ab07a, muzzle:0xd8e0b8, shirt:0x8a6a4a, cheek:0xe0b0a0, voice:200,
     greet:['Ah, welcome, welcome. Slowly now. Everything in here is very old. Including me.','Hello again! Have you brought something for the collection?'],
     night:['Mm? Oh. I was resting my eyes. The museum never closes. Neither do I, apparently.'],
@@ -499,7 +502,7 @@ export const BUILD = {
   founds:[['stone','Stone'],['brick','Brick'],['wood','Wood lattice'],['none','None']],
   porches:[['none','None'],['step','Steps'],['deck','Deck'],['covered','Covered porch']],
   chimneys:[['none','None'],['brick','Brick'],['stone','Stone']],
-  stories:[[1,'One story'],[2,'Two-story look']],
+  stories:[[1,'One story'],[2,'Two stories']],
   floors:[['wood','Wood planks'],['parquet','Parquet'],['tile','Checker tile'],['stone','Flagstone'],['carpet','Carpet']],
   papers:[['plain','Plain'],['stripe','Stripes'],['dots','Dots'],['check','Check'],['wainscot','Wainscot'],['brick','Brick']],
   wallColors:[0xfff1d6,0xffffff,0xf6e0c8,0xe8d0b0,0xf2c9b0,0xf0b8b0,0xd8e8c8,0xbfe0d8,0xc8d8f0,0xd8c8e8,0xa8b8c8,0x8a6a50,0x5a6a7a,0x3a4a3a],
@@ -562,4 +565,78 @@ export const FAVOR_ASKS = [
   { kind:'catch', id:'fish', n:[1,1], line:'Have you ever caught a {item}? I\'d love to see one up close, {c}.' },
   { kind:'catch', id:'bug', n:[1,1], line:'I keep hearing about the {item}. Could you catch me one, {c}?' },
   { kind:'deliver', n:[1,1], line:'Could you take this parcel to {to} for me? I promised I\'d send it today, {c}.' },
+];
+
+/* =====================================================================
+   v1.0 CONTENT: farming, cooking, the sled, new neighbors, islanders' gifts
+   ===================================================================== */
+/* ---------- Vegetables and herbs: plant seeds on grass (no shovel), water them, harvest when ripe.
+   regrow: after picking, the plant grows back (tomatoes and herbs). Otherwise you pull up the whole plant. ---------- */
+export const CROPS = {
+  tomato:  { name:'Tomato',   price:120, days:4, n:[2,4], regrow:true,  c:0xe2483d, herb:false },
+  carrot:  { name:'Carrot',   price:110, days:3, n:[2,3], regrow:false, c:0xf08a2a },
+  potato:  { name:'Potato',   price:100, days:4, n:[3,4], regrow:false, c:0xc8a070 },
+  pumpkin: { name:'Pumpkin',  price:300, days:5, n:[1,2], regrow:false, c:0xf0902a },
+  lettuce: { name:'Lettuce',  price:110, days:3, n:[1,2], regrow:false, c:0x9ad86a },
+  onion:   { name:'Onion',    price:100, days:3, n:[2,3], regrow:false, c:0xe8d8b0 },
+  basil:   { name:'Basil',    price:90,  days:2, n:[1,2], regrow:true,  c:0x4f9a3a, herb:true },
+  mint:    { name:'Mint',     price:90,  days:2, n:[1,2], regrow:true,  c:0x7cd8a0, herb:true },
+  rosemary:{ name:'Rosemary', price:100, days:3, n:[1,2], regrow:true,  c:0x6a8a6a, herb:true },
+};
+for (const [id,c] of Object.entries(CROPS)){
+  const pid='crop_'+id;   // the plant is crop_x, the harvest is x
+  PLANTS[pid]={ name:c.name, ptype:'crop', days:c.days, colors:[c.c], crop:id };
+  def(id, { name:c.name, kind:c.herb?'herb':'veg', price:c.price, model:{t:'furn', b:'v_'+id} });
+  def(id+'_seeds', { name:c.name+(c.herb?' Starts':' Seeds'), kind:'seed', plant:pid, price:60, buy:c.herb?320:240, model:{t:'seed', sp:pid} });
+}
+/* ---------- Cooking: every recipe is listed from the start. Cook at a Wood Stove (anything) or a campfire (simple things). ---------- */
+export const RECIPES = [
+  { id:'grilled_fish',  name:'Grilled Fish',       need:[['fish',1]],                              fire:true },
+  { id:'baked_potato',  name:'Baked Potato',       need:[['potato',1]],                            fire:true },
+  { id:'roast_carrots', name:'Herb Roasted Carrots',need:[['carrot',2],['rosemary',1]],            fire:true },
+  { id:'mint_tea',      name:'Mint Tea',           need:[['mint',2]],                              fire:true },
+  { id:'garden_salad',  name:'Garden Salad',       need:[['lettuce',1],['tomato',1],['carrot',1]] },
+  { id:'tomato_soup',   name:'Tomato Basil Soup',  need:[['tomato',2],['basil',1]] },
+  { id:'veg_stew',      name:'Vegetable Stew',     need:[['carrot',1],['potato',1],['onion',1]] },
+  { id:'pumpkin_soup',  name:'Pumpkin Soup',       need:[['pumpkin',1],['onion',1]] },
+  { id:'fish_chips',    name:'Fish & Chips',       need:[['fish',1],['potato',2]] },
+  { id:'fruit_tart',    name:'Fruit Tart',         need:[['fruit',3]] },
+  { id:'coconut_curry', name:'Coconut Curry',      need:[['coconut',1],['carrot',1],['onion',1]] },
+];
+const KIND_VALUE = { fish:200, fruit:120 };
+for (const r of RECIPES){
+  const v=r.need.reduce((a,[id,n])=>a+(ITEMS[id]?ITEMS[id].price:KIND_VALUE[id]||100)*n,0);
+  def(r.id, { name:r.name, kind:'food', price:Math.round((v*1.5+100)/10)*10, stack:10, model:{t:'furn', b:'d_'+r.id} });
+}
+def('sled', { name:'Wooden Sled', kind:'gear', price:500, buy:3000, stack:1, model:{t:'furn', b:'sled'} });
+// a campfire is now something you can build yourself
+WOODWORK.push({ id:'campfire', mats:{ stone:4, wood:3, softwood:2 }, unlock:2 });
+ITEMS.campfire.shop='rare';
+// who loves a good meal
+for (const R of RESIDENTS){ if (['lazy','caring'].includes(R.personality)) R.loves.push('food'); else R.likes.push('food'); }
+
+/* ---------- A new neighbor's first hello ---------- */
+export const ARRIVE = {
+  cheerful:['Hi hi! I just moved in! Everything still smells like cardboard, {c}!','I\'m so happy to be here. Will you be my first friend on the island?'],
+  gruff:['Hrm. You\'re the welcome committee? ...Fine. I just moved in.','Don\'t mind the boxes. I\'ll sort them. Eventually. {c}.'],
+  dreamy:['Oh. Hello. I followed a shooting star here, and here I am, {c}.','My boxes are full of shells and old maps. I think I\'m going to like it here.'],
+  sporty:['Hey! New neighbor here! Moved all my boxes in one trip, {c}!','This island has great jogging paths. We should race sometime!'],
+  caring:['Oh, hello, dear! I just moved in. Have you eaten today, {c}?','I\'ll bake something once the oven is unpacked. You must come by.'],
+  elegant:['Darling, I\'ve arrived. Do try to contain your excitement, {c}.','The house is small, but I have plans. Big plans. Wallpaper plans.'],
+  lazy:['Oh hey. I just moved in. Moving is exhausting. Nap time, {c}.','If you need me, I\'ll be unpacking. Slowly. Very slowly.'],
+};
+
+/* ---------- Islanders' gifts: once they know you a little, neighbors share something useful.
+   Not on day one: each has a day and friendship it waits for, and only one of these happens per day. ---------- */
+export const MENTOR = [
+  { who:'pippa', day:1, friend:3, give:[['tulip_seeds',3],['daisy_seeds',2]],
+    lines:['{p}! I saved these for you, {c}! Tulip and daisy seeds!','Plant them by your door, and every morning they\'ll say hi to you. That\'s how flowers work. I\'m pretty sure.'] },
+  { who:'mabel', day:2, friend:3, cook:true, give:[['tomato_seeds',3],['basil_seeds',2],['potato_seeds',2],['campfire',1]],
+    lines:['{p}, dear, you look like you\'ve been living on fruit and nothing else, {c}.','Here. Seeds from my garden. Tomatoes, basil, potatoes. Plant them on grass and water them every day.','And take my old campfire. Grill a fish on it, or bake a potato. When you get a Wood Stove, you can make soups and stews too.','Every recipe I know is in your Cookbook now. Promise me you\'ll eat properly.'] },
+  { who:'clover', day:3, friend:4, give:[['blanket',1],['native',3]],
+    lines:['Mmm, {p}. I was going to nap on this, but then I thought... you need a nap more, {c}.','A picnic blanket. And some fruit. For snacks. During the nap. You\'re welcome.'] },
+  { who:'lumi', day:4, friend:5, give:[['mothlamp',1],['potion_bug',1]],
+    lines:['{p}, I made you something, {c}. A little lantern for the moths. They get lonely in the dark.','And this tonic... Wendell gave it to me, but I think the bugs would rather meet you.'] },
+  { who:'otis', day:4, friend:4, winter:true, give:[['sled',1]],
+    lines:['{p}! You know what snow means? SLED SEASON, {c}!','Here, take my spare sled. Hop on at the top of a hill and let gravity do the cardio!'] },
 ];

@@ -341,7 +341,7 @@ export class IslandRoom {
     if (typeof raw === 'string' && raw.length > 4000) return;
     switch (m.t) {
       case 'pos': {   // position, facing, moving; numbers only
-        const st = { x: +m.x || 0, z: +m.z || 0, y: +m.y || 0, f: +m.f || 0, w: m.w ? 1 : 0, in: typeof m.in === 'string' ? m.in.slice(0, 20) : null };
+        const st = { x: +m.x || 0, z: +m.z || 0, y: +m.y || 0, f: +m.f || 0, w: m.w ? 1 : 0, b: m.b ? 1 : 0, in: typeof m.in === 'string' ? m.in.slice(0, 20) : null };
         me.st = st; this.broadcast({ t: 'pos', id: me.id, ...st }, ws); break; }
       case 'emote': if (EMOTES.includes(m.e)) this.broadcast({ t: 'emote', id: me.id, e: m.e }); break;
       case 'world': if (me.role === 'owner' || me.role === 'resident') this.broadcast({ t: 'world', id: me.id, v: m.v | 0 }, ws); break;   // "island changed, refresh when ready"

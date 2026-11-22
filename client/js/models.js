@@ -7,8 +7,12 @@ export const MODEL = { season:'autumn', month:11 };
 
 /* ---------- Materials & helpers ---------- */
 const MATS = new Map();
-export function M(color, o){ const k='s'+color+(o?JSON.stringify(o):''); if(!MATS.has(k)) MATS.set(k, new THREE.MeshStandardMaterial(Object.assign({ color, roughness:0.8 }, o||{}))); return MATS.get(k); }
-export function MF(color, o){ const k='f'+color+(o?JSON.stringify(o):''); if(!MATS.has(k)) MATS.set(k, new THREE.MeshStandardMaterial(Object.assign({ color, roughness:0.9, flatShading:true }, o||{}))); return MATS.get(k); }
+// Characters get their own materials, so weather effects on buildings (snow) never land on people and animals
+let CHAR = 0;
+export const charMats = on => { CHAR = Math.max(0, CHAR + (on ? 1 : -1)); };
+export function M(color, o){ const k=(CHAR?'c':'s')+color+(o?JSON.stringify(o):''); if(!MATS.has(k)){ const m=new THREE.MeshStandardMaterial(Object.assign({ color, roughness:0.8 }, o||{})); if(CHAR) m.userData.char=true; MATS.set(k, m); } return MATS.get(k); }
+export const asChar = fn => (...a) => { charMats(true); try { return fn(...a); } finally { charMats(false); } };
+export function MF(color, o){ const k=(CHAR?'cf':'f')+color+(o?JSON.stringify(o):''); if(!MATS.has(k)){ const m=new THREE.MeshStandardMaterial(Object.assign({ color, roughness:0.9, flatShading:true }, o||{})); if(CHAR) m.userData.char=true; MATS.set(k, m); } return MATS.get(k); }
 export function mk(geo, mat, x=0, y=0, z=0, parent){ const m=new THREE.Mesh(geo, mat); m.position.set(x,y,z); m.castShadow=true; m.receiveShadow=true; if(parent) parent.add(m); return m; }
 export const G = {
   sph:(r,w=16,h=12,...a)=>new THREE.SphereGeometry(r,w,h,...a), ico:(r,d=0)=>new THREE.IcosahedronGeometry(r,d), box:(x,y,z)=>new THREE.BoxGeometry(x,y,z),
@@ -37,7 +41,7 @@ export const PALETTE = {
   spring:{ grass:[0x8ed36a,0x7cc65a,0xa2de78], flower:[0xffb6c9,0xffffff,0xffe066,0xc7a0ff] },
   summer:{ grass:[0x6cc050,0x5fb447,0x80cc5e], flower:[0xff7f7f,0xffffff,0xffd04d,0x8fb0ff] },
   autumn:{ grass:[0x9cc45e,0x8dba55,0xb3c968], flower:[0xffb347,0xfff1c4,0xe8743c] },
-  winter:{ grass:[0xe8f0f4,0xdfe9ee,0xf2f6f8], flower:[] },
+  winter:{ grass:[0xa7b38c,0x9eaa84,0xb1ba94], flower:[] },   // dormant grass; snow piles on top of it (main.js snow buildup)
 };
 const LEAVES = {
   oak:{ spring:[0x7ccf5c,0x8ad866,0x6cc050], summer:[0x4fae46,0x5cba4e,0x45a040], autumn:[0xe8913a,0xd8642e,0xf0a83a] },
@@ -326,7 +330,8 @@ function limbs(g, body, skinMat, sleeveMat, legMat, footMat){
   const legs=[]; for(const s of [-1,1]){ const p=new THREE.Group(); p.position.set(s*0.17,0.42,0); g.add(p); outline(mk(G.cap(0.1,0.16,4,10),legMat,0,-0.16,0,p)); const f=outline(mk(G.sph(0.12,12,8),footMat,0,-0.36,0.05,p)); f.scale.set(1,0.55,1.35); legs.push(p); }
   return { arms, legs };
 }
-export function buildAnimal(spec){
+export const buildAnimal = asChar(_buildAnimal);
+function _buildAnimal(spec){
   const g=new THREE.Group(), body=new THREE.Group(); g.add(body); const fur=M(spec.fur), muz=M(spec.muzzle||spec.belly||0xffffff), shirt=M(spec.shirt);
   const torso=outline(mk(G.sph(0.42,20,16), shirt, 0,0.78,0,body)); torso.scale.set(1,1.05,0.9);
   mk(G.tor(0.2,0.05,8,16), M(new THREE.Color(spec.shirt).offsetHSL(0,0,0.12).getHex()), 0,1.12,0,body).rotation.x=Math.PI/2;
@@ -354,7 +359,25 @@ export function buildAnimal(spec){
   if (tail) tail();
   g.userData={ body, head, arms:L.arms, legs:L.legs }; return g;
 }
-export function buildPlayer(o={}){
+// A cozy bicycle, faces +z like the player
+export function buildBike(color=0xd8604a){
+  const g=new THREE.Group(), frame=M(color), dark=M(0x3a3430), chrome=M(0xd9d4c8), seat=M(0x6a4a3a);
+  const wheel=z=>{ const w=new THREE.Group(); w.position.set(0,0.34,z); g.add(w);
+    const tire=mk(new THREE.TorusGeometry(0.3,0.045,8,22), dark, 0,0,0,w); tire.rotation.y=Math.PI/2;
+    for(let i=0;i<3;i++){ const sp=mk(G.box(0.02,0.56,0.02), chrome, 0,0,0,w); sp.rotation.x=i*Math.PI/3; }
+    mk(G.box(0.06,0.08,0.08), chrome, 0,0,0,w); return w; };
+  const wf=wheel(0.48), wb=wheel(-0.48);
+  const bar=(x1,y1,z1,x2,y2,z2,r=0.035,mat=frame)=>{ const a=new THREE.Vector3(x1,y1,z1), b=new THREE.Vector3(x2,y2,z2), L=a.distanceTo(b); const m=mk(G.cyl(r,r,L,8), mat, (x1+x2)/2,(y1+y2)/2,(z1+z2)/2, g); m.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), b.clone().sub(a).normalize()); return m; };
+  bar(0,0.34,-0.48, 0,0.42,0.02); bar(0,0.42,0.02, 0,0.78,-0.12); bar(0,0.78,-0.12, 0,0.82,0.36); bar(0,0.42,0.02, 0,0.82,0.36);
+  bar(0,0.34,0.48, 0,0.95,0.38); bar(0,0.34,-0.48, 0,0.78,-0.12, 0.03);
+  bar(-0.26,0.98,0.36, 0.26,0.98,0.36, 0.03, chrome);
+  for(const s of [-1,1]) mk(G.cap(0.04,0.08,4,8), dark, s*0.28,0.98,0.36, g).rotation.z=Math.PI/2;
+  const st=mk(G.box(0.18,0.06,0.3), seat, 0,0.86,-0.16, g);
+  const basket=mk(G.box(0.34,0.18,0.24), M(0xc9a06a), 0,0.86,0.58, g);
+  g.userData={ wheels:[wf,wb] }; return g;
+}
+export const buildPlayer = asChar(_buildPlayer);
+function _buildPlayer(o={}){
   const g=new THREE.Group(), body=new THREE.Group(); g.add(body);
   const skin=M(o.skin||0xf3c9a5), hair=M(o.hair||0x6a4030), shirt=M(o.shirt||0x6fb7d8), shorts=M(0x4a5a8a), shoe=M(0x8a4a2a);
   const t=outline(mk(G.cap(0.33,0.32,6,16), shirt, 0,0.78,0,body)); t.scale.set(1,1,0.85);
@@ -467,19 +490,24 @@ export function buildRoom(spec, W, D){
     else if(pat==='check') for(let i=0;i<4;i++) for(let j=0;j<4;j++) if((i+j)%2) x.fillRect(i*32,j*32,32,32); }, [W/1.6, 2]);
   const wallMat=new THREE.MeshStandardMaterial({ map:tex, roughness:0.9 });
   const H=3.2;
-  const back=mk(G.box(W+0.4,H,0.2), wallMat, 0,H/2,-D/2-0.1,g);
+  const back=mk(G.box(W+0.4,H,0.2), wallMat, 0,H/2,-D/2-0.1,g); back.geometry.translate(0,-H/2,0); back.position.y=0;
   const tex2=tex.clone(); tex2.repeat.set(D/1.6,2); tex2.needsUpdate=true; const sideMat=new THREE.MeshStandardMaterial({ map:tex2, roughness:0.9 });
-  for(const s of [-1,1]) mk(G.box(0.2,H,D+0.2), sideMat, s*(W/2+0.1),H/2,0,g);
+  const sides=[-1,1].map(s=>{ const w=mk(G.box(0.2,H,D+0.2), sideMat, s*(W/2+0.1),0,0,g); w.geometry.translate(0,H/2,0); return w; });
+  // front wall with a doorway, so the room looks finished when you turn the camera around
+  const fw=(W-2.2)/2, front=[-1,1].map(s=>{ const w=mk(G.box(fw,H,0.2), wallMat, s*(1.1+fw/2),0,D/2+0.1,g); w.geometry.translate(0,H/2,0); return w; });
+  const lintel=mk(G.box(2.2,H-2.4,0.2), wallMat, 0,2.4+(H-2.4)/2,D/2+0.1,g);
+  // walls that drop away when the camera looks through them (normal points out of the room)
+  const backDeco=[]; g.userData.cutWalls=[ { meshes:[back], hide:backDeco, nx:0, nz:-1 }, { meshes:[sides[0]], nx:-1, nz:0 }, { meshes:[sides[1]], nx:1, nz:0 }, { meshes:front, hide:[lintel], nx:0, nz:1 } ];
   const acc=M(spec.accent||0x8b5e3a);
   mk(G.box(W,0.22,0.06), acc, 0,0.11,-D/2+0.03,g); for(const s of [-1,1]) mk(G.box(0.06,0.22,D), acc, s*(W/2-0.03),0.11,0,g);
-  mk(G.box(W+0.4,0.12,0.24), acc, 0,H,-D/2-0.1,g);
+  backDeco.push(mk(G.box(W+0.4,0.12,0.24), acc, 0,H,-D/2-0.1,g));
   for(const s of [-1,1]) mk(G.box(W/2-0.8,0.25,0.15), acc, s*(W/4+0.4),0.12,D/2-0.05,g);
   // window + curtains
-  const win=new THREE.Group(); win.position.set(-W/4,1.8,-D/2+0.02); g.add(win); mk(G.box(1.2,1.1,0.06),M(0xffffff),0,0,0,win); mk(G.box(1.0,0.9,0.04),windowMat,0,0,0.03,win); mk(G.box(0.05,0.9,0.06),M(0xffffff),0,0,0.05,win);
+  const win=new THREE.Group(); win.position.set(-W/4,1.8,-D/2+0.02); g.add(win); backDeco.push(win); mk(G.box(1.2,1.1,0.06),M(0xffffff),0,0,0,win); mk(G.box(1.0,0.9,0.04),windowMat,0,0,0.03,win); mk(G.box(0.05,0.9,0.06),M(0xffffff),0,0,0.05,win);
   for(const s of [-1,1]) mk(G.box(0.32,1.4,0.05),acc,s*0.72,0,0.08,win); mk(G.box(1.8,0.06,0.06),M(0x8b5e3a),0,0.72,0.1,win);
   // painting
   const pt=canvasTex(64,48,x=>{ const r=mulberry32((spec.floor||1)%997); x.fillStyle='#bfe6f0'; x.fillRect(0,0,64,48); x.fillStyle='#8ed36a'; x.fillRect(0,30,64,18); x.fillStyle='#f6c94d'; x.beginPath(); x.arc(14+r()*30,14,7,0,TAU); x.fill(); x.fillStyle='#e07a5a'; x.fillRect(36,22,14,14); x.fillStyle='#8a4a3a'; x.beginPath(); x.moveTo(34,23); x.lineTo(43,15); x.lineTo(52,23); x.fill(); });
-  const pa=mk(G.box(1.0,0.78,0.06),M(0x8b5e3a),W/4,1.9,-D/2+0.03,g); mk(G.box(0.86,0.64,0.02),new THREE.MeshStandardMaterial({map:pt}),W/4,1.9,-D/2+0.07,g);
+  const pa=mk(G.box(1.0,0.78,0.06),M(0x8b5e3a),W/4,1.9,-D/2+0.03,g); backDeco.push(pa, mk(G.box(0.86,0.64,0.02),new THREE.MeshStandardMaterial({map:pt}),W/4,1.9,-D/2+0.07,g));
   mk(G.box(1.2,0.03,0.7), M(spec.accent||0xd8805a), 0,0.015,D/2-0.45,g).castShadow=false;
   const light=new THREE.PointLight(0xffe0b0, 30, 18, 1.6); light.position.set(0,2.8,0.5); light.castShadow=false; g.add(light);
   return g;

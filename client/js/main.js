@@ -7,7 +7,7 @@ import { TAU, clamp, lerp, smooth, mulberry32, hashStr, hash2, vnoise, fbm, weig
 import { ITEMS, NATIVE_FRUITS, PLANTS, TOOLS, WOODWORK, BACKPACKS, BASE_SLOTS, HOUSE_LEVELS, RESIDENTS, DIALOGUE, PEDDLER, EVENTS, rarityLabel, RARITY_COLORS, SHOPS, INVEST, KEEPERS, MUSEUM, BUILD } from './content.js';
 import { Snd } from './audio.js';
 import { LAYOUTS } from './layouts.js';
-import { MODEL, M, mk, G, outline, windowMat, glowMats, glowMat, glowSprites, addGlow, textSprite, PALETTE, buildItemModel, thumb, toolThumb, FURN_BUILDERS,
+import { buildBike, MODEL, M, mk, G, outline, windowMat, glowMats, glowMat, glowSprites, addGlow, textSprite, PALETTE, buildItemModel, thumb, toolThumb, FURN_BUILDERS,
   buildTree, buildStump, buildShrub, buildFlower, buildTool, buildAnimal, buildPlayer, buildHouse, buildStall, buildBoard, buildPlankDeck, buildRoom, buildBird, buildGull, buildDuck } from './models.js';
 import { buildCustomHouse, buildHomeInterior, buildShopBuilding, buildMuseum, buildKeeper, buildMossby, buildExhibit, planGrid, planCells, planProblem, fixDoor, linkKey, linkOf, defaultExt, defaultRoom } from './models2.js';
 
@@ -21,7 +21,7 @@ const SAVE_KEY = 'driftwood-isle-save-v1';
 function freshState(){
   return { v:2, player:'', island:'', seed:(Math.random()*1e9)|0, clams:1000, inv:[], seen:{}, rec:{}, placed:[], ground:[], plants:[], cut:{},
     friend:{}, house:0, fund:0, home:null, shops:{}, museum:{}, pack:-1, tools:{}, toolEver:{}, equip:null, stats:{ bugs:0, fish:0, dug:0, chopped:0, watered:0 }, craft:null, craftHint:false, day:null, nativeFruit:null, caught:0,
-    settings:{ sound:true, music:0.6, bright:1 }, layout:'classic' };
+    settings:{ sound:true, music:0.6, bright:1 }, layout:'classic', styles:{} };
 }
 function migrate(s){
   if (s.v===1){ s.v=2; s.day=null; s.ground=[]; s.clams=(s.clams||0)+500; s.migratedFrom1=true; }
@@ -170,9 +170,7 @@ function baseHeight(x, z){
    and your lot sit flat on one terrace; paths ramp smoothly between terraces.
    'hills': the earlier smooth-hills test. 'flat': the original island.
    Trees and rocks are still placed using the original heights, so every saved tree keeps its spot. */
-let TERRAIN_STYLE='tiers'; try { TERRAIN_STYLE=localStorage.getItem('driftwood-terrain')||'tiers'; } catch(e){}
-if (!['tiers','hills','flat'].includes(TERRAIN_STYLE)) TERRAIN_STYLE='tiers';
-const HILLS = [ [-38,-16,7,14], [-24,30,6.5,13], [18,34,5.5,11], [30,-25,5.5,11] ];   // smooth style: x, z, height, radius
+const TERRAIN_STYLE='tiers';   // gentle terraces are the island's terrain (decided 2026-11-22)
 const MOUNDS = LAY.mounds;   // tier style
 const TIER = { step:0.55, off:0.85, riser:0.2 };   // terrace height, lowest terrace, share of each step used by the slope between terraces
 const HG = { x0:-62, z0:-62, step:0.5, n:249, h:null, s:null };
@@ -253,17 +251,7 @@ const newPathDist = (x,z) => { let m=1e9; for(const p of PATHS_NEW) m=Math.min(m
   const natMask=(x,z)=>{ const a=Math.atan2(z,x), t=Math.hypot(x,z)/islandR(a); let m=smooth(0.86,0.72,t);
     if (LAY.cliff){ const c=Math.cos(a); m=lerp(m, smooth(0.995,0.97,t), smooth(-0.15,-0.6,c)); m=lerp(m, smooth(0.78,0.66,t), smooth(0.15,0.6,c)); }
     if(m<=0) return 0; return m*smooth(5,10,polyDist(x,z,RIVER))*smooth(8,13,Math.hypot(x-POND.x,z-POND.z)); };
-  if (TERRAIN_STYLE==='hills'){
-    const spots=Object.entries(PLACES).map(([k,p])=>[p[0], p[1]+(k==='museum'?3:1), k==='plaza'?7:6.5]);
-    for(let j=0;j<n;j++) for(let i=0;i<n;i++){ const x=HG.x0+i*HG.step, z=HG.z0+j*HG.step;
-      let m=natMask(x,z); if(m<=0) continue;
-      m*=smooth(1.4,4.5,visPathDistH(x,z)); if(m<=0) continue;
-      for(const [px,pz,r] of spots){ m*=smooth(r,r+5,Math.hypot(x-px,z-pz)); if(m<=0) break; } if(m<=0) continue;
-      m*=smooth(1,5,lotDist(x,z)); if(m<=0) continue;
-      let v=1.5*smooth(0.42,0.78,fbm(x*0.035+11,z*0.035-4));
-      for(const [cx,cz,A,R] of HILLS){ const d=Math.hypot(x-cx,z-cz)/R; if(d<1) v+=A*(0.5+0.5*Math.cos(Math.PI*d)); }
-      h[j*n+i]=v*m; }
-  } else if (TERRAIN_STYLE==='tiers'){
+  {
     const { step, off, riser }=TIER;
     const lift=(x,z)=>{ let v=1.2*smooth(0.35,0.8,fbm(x*0.022+5,z*0.022+9)) + (LAY.cliff ? 2.2*smooth(-16,-40,x) : 0); const wx=x+(fbm(x*0.06+21,z*0.06+3)-0.5)*10, wz=z+(fbm(x*0.06-7,z*0.06+17)-0.5)*10;   // warped so terraces have natural, wobbly outlines
       for(const [cx,cz,A,R] of MOUNDS){ const d=Math.hypot(wx-cx,wz-cz)/R; if(d<1) v+=A*(0.5+0.5*Math.cos(Math.PI*d)); } return v; };
@@ -313,7 +301,6 @@ function buildTerrain(){
       c.offsetHSL(0,0,(vnoise(x*2.2,z*2.2)-0.5)*0.05);
       const pd=visPathDist(x,z); if (pd<1.4) c.lerp(DIRT, smooth(1.4,0.6,pd)*(World.season==='winter'?0.35:0.7));
       if (!inland) c.lerp(SAND, smooth(SAND_H+0.2, SAND_H, y)); else if (y<SAND_H) c.lerp(new THREE.Color(0x9a8a6a), smooth(SAND_H,0.2,y));
-      if (HG.h && TERRAIN_STYLE==='hills'){ const hl=hillSample(HG.h,x,z); if (hl>0.4) c.offsetHSL(0.012,-0.03,smooth(0.4,5,hl)*0.07); }
       if (HG.h && TERRAIN_STYLE==='tiers'){ const sl=hillSample(HG.s,x,z); if (sl>0.18 && pd>1.4) c.lerp(TIER_EDGE, smooth(0.18,0.6,sl)*0.75); }
     }
     cols[i*3]=c.r; cols[i*3+1]=c.g; cols[i*3+2]=c.b;
@@ -463,6 +450,7 @@ class DigSpot extends Ent {
   label(){ return 'Dig'; }
   act(){ if(!needTool('shovel') || !useTool('shovel')) return; Snd.dig(); puff(this.pos.clone().add(new THREE.Vector3(0,0.2,0)), 0xb08a5a, 8, 0.6, 2.5, 1, 0.6); S.day.digs[this.i].dug=true; S.stats.dug++;
     const f=weightedPick(Math.random, Object.values(ITEMS).filter(i=>i.kind==='fossil' && allowedFind(i)), i=>i.rarity); this.remove(); setTimeout(()=>dropNear(f.id, this.pos, 0.3, true), 200);
+    if (Math.random()<0.12){ setTimeout(()=>{ const got=grantRandomStyle(); if(got){ Snd.jingle(); toast(`You dug up a swatch book! You can now use ${got} in the house builder.`); } }, 900); }
     if (toolTier('shovel')>=2 && Math.random()<0.3){ addClams(300); toast(`Your ${TOOLS.shovel.tiers[toolTier('shovel')].name.toLowerCase()} turned up 300 clams too!`); Snd.coin(); } save(); }
 }
 class GroundItem extends Ent {
@@ -797,10 +785,23 @@ function rebuildHomeRoom(home=S.home){
   R.group.add(R.shell);
 }
 // Walls between you and the camera drop down so you can see into every room (like a dollhouse).
+// Works for any camera direction: a wall drops when it faces the camera and sits between you and the camera.
+const _wv=new THREE.Vector3();
 function updateCutaway(){
-  const R=ROOMS.home; if (!R || !R.walls || World.inside!=='home') return;
-  const refZ = buildMode ? camTarget.z-1 : player.pos.z; const key=Math.round(refZ*4); if (R.cutState===key) return; R.cutState=key;
-  for (const w of R.walls){ if(!w.horiz) continue; const low = w.z+R.gz > refZ+0.3; for(const m of w.meshes) m.scale.y = low?0.15:1; for(const l of w.lintels) l.visible=!low; }
+  if (!World.inside) return; const R=ROOMS[World.inside]; if (!R) return;
+  const yaw = buildMode ? buildMode.yaw : camYaw, cx=Math.sin(yaw), cz=Math.cos(yaw);
+  const ref = buildMode ? camTarget : player.pos;
+  const key=Math.round(ref.x*4)+','+Math.round(ref.z*4)+','+Math.round(yaw*20); if (R.cutState===key) return; R.cutState=key;
+  if (R.walls){   // the player's own house
+    for (const w of R.walls){
+      if (w.cx===undefined){ let sx=0,sz=0; for(const m of w.meshes){ m.getWorldPosition(_wv); sx+=_wv.x; sz+=_wv.z; } w.cx=sx/Math.max(1,w.meshes.length); w.cz=sz/Math.max(1,w.meshes.length); }
+      const facing = w.horiz ? Math.abs(cz)>0.42 : Math.abs(cx)>0.42;
+      const ahead = (w.cx-ref.x)*cx + (w.cz-ref.z)*cz;
+      const low = facing && ahead > 0.3 && (w.horiz ? Math.abs(w.cz-ref.z)>0.2 : Math.abs(w.cx-ref.x)>0.2);
+      for(const m of w.meshes) m.scale.y = low?0.15:1; for(const l of w.lintels) l.visible=!low; }
+  }
+  const cw = R.shell && R.shell.userData.cutWalls;   // shops, museum, neighbors' homes
+  if (cw) for (const w of cw){ const low = w.nx*cx + w.nz*cz > 0.35; for (const m of w.meshes) m.scale.y = low?0.12:1; for (const m of (w.hide||[])) m.visible=!low; }
 }
 
 /* ---------- Buildings ---------- */
@@ -912,8 +913,8 @@ function spawnPlants(){ for(const e of plantEnts) if(!e.removed) e.remove(); pla
     for(let k=0;k<150&&m<fN;k++){ const p=randLand(r,SAND_H+0.2,9,0.3,10); if(!p) continue; const fc=new THREE.Color(PAL.flower[Math.floor(r()*PAL.flower.length)]); wildFlowerSpots.push(p);
       for(let j=0;j<6&&m<fN;j++){ const x=p[0]+(r()-0.5)*1.6, z=p[1]+(r()-0.5)*1.6; if(rawHeight(x,z)<SAND_H+0.1||pathDist(x,z)<1.2) continue; dummy.position.set(x,rawHeight(x,z)-0.02,z); dummy.rotation.set(0,r()*TAU,0); dummy.scale.setScalar(0.8+r()*0.5); dummy.updateMatrix(); stems.setMatrixAt(m,dummy.matrix); heads.setMatrixAt(m,dummy.matrix); heads.setColorAt(m,fc); m++; } }
     stems.count=heads.count=m; OUT.add(stems,heads); }
-  if (World.season==='autumn'){ const lg=G.box(0.16,0.01,0.1); const leaves=new THREE.InstancedMesh(lg,new THREE.MeshStandardMaterial({roughness:1}),1500); let m=0; const lc=[0xe8913a,0xd8642e,0xf0b84a].map(h=>new THREE.Color(h));
-    for(const tr of trees){ if(['palm','pine','cedar'].includes(tr.type)) continue; for(let j=0;j<18;j++){ const a=r()*TAU, d=r()*2.6; const x=tr.pos.x+Math.cos(a)*d, z=tr.pos.z+Math.sin(a)*d; if(!walkable(x,z)||m>=1500) continue; dummy.position.set(x,groundY(x,z)+0.01,z); dummy.rotation.set(0,r()*TAU,0); dummy.scale.setScalar(1); dummy.updateMatrix(); leaves.setMatrixAt(m,dummy.matrix); leaves.setColorAt(m,lc[m%3]); m++; } }
+  if (World.season==='autumn'){ const lg=G.box(0.16,0.01,0.1); const LEAF_N=isMobile?2600:3600; const leaves=new THREE.InstancedMesh(lg,new THREE.MeshStandardMaterial({roughness:1}),LEAF_N); let m=0; const lc=[0xe8913a,0xd8642e,0xf0b84a,0xb8743a,0xc9a04a].map(h=>new THREE.Color(h));
+    for(const tr of trees){ if(['palm','pine','cedar'].includes(tr.type)) continue; for(let j=0;j<32;j++){ const a=r()*TAU, d=Math.sqrt(r())*2.9; const x=tr.pos.x+Math.cos(a)*d, z=tr.pos.z+Math.sin(a)*d; if(!walkable(x,z)||m>=LEAF_N) continue; dummy.position.set(x,groundY(x,z)+0.012+r()*0.01,z); dummy.rotation.set((r()-0.5)*0.3,r()*TAU,(r()-0.5)*0.3); dummy.scale.setScalar(0.85+r()*0.8); dummy.updateMatrix(); leaves.setMatrixAt(m,dummy.matrix); leaves.setColorAt(m,lc[Math.floor(r()*lc.length)]); m++; } }   // light leaf litter under each tree
     leaves.count=m; leaves.receiveShadow=true; OUT.add(leaves); }
   for(let i=0;i<12;i++){ const p=randLand(r,0.15,SAND_H-0.05,1); if(!p) continue; const g=new THREE.Group(); const l=mk(G.cyl(0.12,0.16,1.6+r(),8),M(0xc8b49a),0,0.12,0,g); l.rotation.z=Math.PI/2; g.rotation.y=r()*TAU; g.position.set(p[0],groundY(p[0],p[1]),p[1]); OUT.add(g); }
   // lily pads + reeds on the pond and river
@@ -979,6 +980,41 @@ function updatePrecip(dt,t){
 }
 
 /* ---------- Bugs spawn by time, month, weather and habitat ---------- */
+/* ---------- Snow buildup ---------- */
+// Snow piles up over snowy winter days and melts on clear ones. It settles on anything facing up
+// (ground, roofs, tree tops, fences, rocks), never on people or animals, and never indoors.
+const SNOW_U={ value:0 };
+function dayWeatherFor(daysAgo){ const d=new Date(Time.now().getTime()-daysAgo*864e5); const key=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  const r=mulberry32(hashStr(key+':'+S.seed)); const w=r(); return seasonOf(d.getMonth()+1)!=='winter' ? 'none' : w<0.6?'sunny':(w<0.82?'cloudy':'snow'); }
+let snowTarget=0;
+function computeSnow(){
+  if (World.season!=='winter') return 0;
+  let lv=0.12;   // a little frost all winter
+  for (let i=6;i>=1;i--){ const w=dayWeatherFor(i); if (w==='snow') lv=Math.min(1, lv+0.45); else if (w==='sunny') lv=Math.max(0.12, lv*0.7); else if (w==='cloudy') lv=Math.max(0.12, lv*0.92); }
+  if (World.weather==='snow'){ const h=Time.hour()+Time.now().getMinutes()/60; lv=Math.min(1, lv + 0.6*clamp((h-0)/14,0.25,1)); }   // builds up through a snowy day
+  else if (World.weather==='sunny') lv=Math.max(0.12, lv*0.85);
+  if (weatherOverride==='snow') lv=Math.max(lv,0.9);
+  return lv;
+}
+function patchSnow(mat){
+  if (mat.userData.snow || mat.userData.char || mat.transparent || !mat.isMeshStandardMaterial) return; mat.userData.snow=true;
+  mat.onBeforeCompile=sh=>{ sh.uniforms.uSnow=SNOW_U;
+    sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nvarying vec3 vSnN; varying vec3 vSnP;')
+      .replace('#include <defaultnormal_vertex>','#include <defaultnormal_vertex>\nvSnN = normalize((vec4(transformedNormal,0.0)*viewMatrix).xyz);')
+      .replace('#include <project_vertex>','#include <project_vertex>\n#ifdef USE_INSTANCING\nvSnP=(modelMatrix*instanceMatrix*vec4(transformed,1.0)).xyz;\n#else\nvSnP=(modelMatrix*vec4(transformed,1.0)).xyz;\n#endif');
+    sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\nuniform float uSnow; varying vec3 vSnN; varying vec3 vSnP;')
+      .replace('#include <color_fragment>','#include <color_fragment>\nif(uSnow>0.001){ float up=smoothstep(0.45,0.85,normalize(vSnN).y); vec2 c=floor(vSnP.xz*3.0); float nz=fract(sin(dot(c,vec2(12.9898,78.233)))*43758.5453); float nz2=fract(sin(dot(floor(vSnP.xz*0.7),vec2(39.3,11.7)))*24634.6345); float a=up*smoothstep(0.0,0.35,uSnow*1.25-nz*0.3-nz2*0.25); diffuseColor.rgb=mix(diffuseColor.rgb, vec3(0.95,0.97,1.0), clamp(a,0.0,0.94)); }');
+  };
+  mat.customProgramCacheKey=()=>'snow1'; mat.needsUpdate=true;
+}
+function snowPass(){ if (World.season!=='winter') return; OUT.traverse(o=>{ if(!o.isMesh) return; const ms=Array.isArray(o.material)?o.material:[o.material]; for(const m of ms) if(m) patchSnow(m); }); }
+let snowT=0;
+function updateSnow(dt){
+  if (World.season!=='winter'){ SNOW_U.value=0; return; }
+  snowT-=dt; if (snowT<=0){ snowT=5; snowTarget=computeSnow(); snowPass(); }
+  SNOW_U.value = World.inside ? 0 : lerp(SNOW_U.value, snowTarget, Math.min(1, dt*0.8));
+}
+
 function bugPool(){ const h=Time.hour(), m=Time.month(); return Object.values(ITEMS).filter(i=>i.kind==='bug' && inMonths(m,i.months) && inHours(h,i.hours) && (!i.weather || i.weather===World.weather) && !(World.weather==='rain' && !i.weather && i.where==='air' && i.hours && i.hours[0]<12)); }
 let bugT=0;
 function updateBugs(dt){
@@ -1030,13 +1066,13 @@ function updateSky(){
 const fadeEl=$('#fade');
 function fade(cb){ fadeEl.classList.add('show'); setTimeout(()=>{ cb(); setTimeout(()=>fadeEl.classList.remove('show'), 60); }, 260); }
 function enterRoom(id){
-  fade(()=>{ const R=ROOMS[id]; World.inside=id; OUT.visible=false; for(const k in ROOMS) ROOMS[k].group.visible=(k===id);
+  fade(()=>{ const R=ROOMS[id]; World.inside=id; camYaw=0; OUT.visible=false; for(const k in ROOMS) ROOMS[k].group.visible=(k===id);
     if (Fishing.state!=='idle') reel(); stopMove(); player.pos.set(R.entry[0],0,R.entry[1]); player.face=Math.PI; player.obj.rotation.y=Math.PI; camTarget.copy(player.pos); updateSky(); updateCamera(1);
     const res=residents.find(r=>r.spec.id===id); if (res && res.loc==='in' && !res.asleep){ const P=DIALOGUE[res.spec.personality]; setTimeout(()=>dialog(res.spec.name,res.spec.voice,[fill(P.home[Math.floor(Math.random()*P.home.length)],{c:res.spec.catch})]),350); } });
   Snd.door();
 }
 function exitRoom(){
-  const R=ROOMS[World.inside]; fade(()=>{ World.inside=null; OUT.visible=true; for(const k in ROOMS) ROOMS[k].group.visible=false; stopMove();
+  const R=ROOMS[World.inside]; fade(()=>{ World.inside=null; camYaw=0; OUT.visible=true; for(const k in ROOMS) ROOMS[k].group.visible=false; stopMove();
     player.pos.set(R.exit[0],0,R.exit[1]); player.pos.y=groundY(player.pos.x,player.pos.z); player.face=0; player.obj.rotation.y=0; camTarget.copy(player.pos); updateSky(); updateCamera(1); });
   Snd.door();
 }
@@ -1049,7 +1085,7 @@ function dialog(name, voice, lines, done, choices){ dlgState={ name, voice, line
 function nextLine(){
   const d=dlgState; if(!d) return;
   if (d.i>=d.lines.length){
-    if (d.choices){ dlgChoices.innerHTML=''; dlgMore.style.display='none'; d.choices.forEach(c=>{ const b=document.createElement('button'); b.className='btn'+(c.alt?' alt':''); b.textContent=c.label; b.onclick=(e)=>{ e.stopPropagation(); Snd.click(); const fn=c.fn; closeDialog(false); fn(); }; dlgChoices.appendChild(b); }); return; }
+    if (d.choices){ dlgChoices.innerHTML=''; dlgMore.style.display='none'; d.choices.forEach(c=>{ const b=document.createElement('button'); b.className='btn'+(c.alt?' alt':''); b.textContent=c.label; b.onclick=(e)=>{ e.stopPropagation(); Snd.click(); const fn=c.fn; closeDialog(false); fn(); }; dlgChoices.appendChild(b); }); dlgSel=0; markChoice(); return; }
     closeDialog(true); return; }
   d.full=d.lines[d.i++]; d.chars=0; dlgText.textContent=''; dlgMore.style.display='none';
 }
@@ -1059,7 +1095,22 @@ function tickDialog(dt){
   d.acc=(d.acc||0)+dt*55; while(d.acc>=1 && d.chars<d.full.length){ d.acc--; d.chars++; const ch=d.full[d.chars-1]; if(d.chars%2===0 && /[a-z]/i.test(ch)) Snd.blip(d.voice); }
   dlgText.textContent=d.full.slice(0,d.chars);
 }
-$('#dlgBox').addEventListener('pointerdown', e=>{ e.stopPropagation(); const d=dlgState; if(!d) return; if(d.chars<d.full.length){ d.chars=d.full.length; dlgText.textContent=d.full; } else if(!dlgChoices.children.length || d.i<d.lines.length) nextLine(); });
+function advanceDialog(){ const d=dlgState; if(!d) return; if(d.chars<d.full.length){ d.chars=d.full.length; dlgText.textContent=d.full; } else if(!dlgChoices.children.length || d.i<d.lines.length) nextLine(); }
+$('#dlgBox').addEventListener('pointerdown', e=>{ e.stopPropagation(); advanceDialog(); });
+// Keyboard: WASD / arrows pick a choice, Enter / Space / E advance or confirm
+let dlgSel=0;
+function markChoice(){ const bs=[...dlgChoices.children]; bs.forEach((b,i)=>b.classList.toggle('sel', i===dlgSel)); }
+function dialogKey(k){
+  const bs=[...dlgChoices.children];
+  if (bs.length){
+    if (['w','a','arrowup','arrowleft'].includes(k)){ dlgSel=(dlgSel-1+bs.length)%bs.length; markChoice(); Snd.click(); return true; }
+    if (['s','d','arrowdown','arrowright'].includes(k)){ dlgSel=(dlgSel+1)%bs.length; markChoice(); Snd.click(); return true; }
+    if (k==='enter'||k===' '||k==='e'){ (bs[dlgSel]||bs[0]).click(); return true; }
+    return true;
+  }
+  if (k==='enter'||k===' '||k==='e'){ advanceDialog(); return true; }
+  return ['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright'].includes(k);
+}
 function showChoices(title, choices){ dialog(title, 500, [], null, choices); dlgName.textContent=title; dlgText.textContent='What would you like to do?'; }
 function friendLevel(id){ const f=S.friend[id]||0; return f>=15?2:(f>=5?1:0); }
 function greetingFor(res){
@@ -1089,6 +1140,7 @@ function giveGift(res, slot, menu){
   const pts = tier==='love'?3:tier==='like'?2:1; S.friend[res.spec.id]=(S.friend[res.spec.id]||0)+pts; save();
   const c={ c:res.spec.catch, item:it.name }; const lines=[fill(P[tier][Math.floor(Math.random()*P[tier].length)],c)]; let reward=null;
   if ((S.friend[res.spec.id]>=4 && Math.random()<0.35) || (tier==='love' && Math.random()<0.2)){ const pool=Object.values(ITEMS).filter(i=>i.kind==='furniture'&&i.shop==='stall'&&inMonths(Time.month(),i.months)); reward=pool[Math.floor(Math.random()*pool.length)].id; lines.push(fill(P.returnGift[0],c)); }
+  let styleGift=null; if (!reward && S.friend[res.spec.id]>=6 && Math.random()<0.25){ styleGift=grantRandomStyle(); if(styleGift) lines.push(fill(`Oh, and I had some leftover supplies from fixing up my place. Here, try ${styleGift} on your house!`,c)); }
   if (tier==='love'){ Snd.jingle(); sparkle(res.pos.clone().add(new THREE.Vector3(0,2,0))); }
   dialog(res.spec.name, res.spec.voice, lines, ()=>{ if(reward){ const r=addItem(reward); if(r) itemToast(reward, r==='new', 'Received'); else dropNear(reward, player.pos); } menu(); });
 }
@@ -1307,7 +1359,7 @@ function doInvest(id){ if (noEdit()) return false;
 }
 function openShop(which){
   let tab='buy', sel=-1; const sid=shopKey(which);
-  const tabs = which==='rare' ? [['buy','Rare finds'],['sell','Sell']] : which==='stall' ? [['buy','Furniture'],['garden','Garden'],['tools','Tools'],['packs','Backpacks'],['sell','Sell'],['invest','Invest']] : [['buy','Shop'],['sell','Sell'],['invest','Invest']];
+  const tabs = which==='rare' ? [['buy','Rare finds'],['sell','Sell']] : which==='stall' ? [['buy','Furniture'],['garden','Garden'],['tools','Tools'],['packs','Bags & bike'],['sell','Sell'],['invest','Invest']] : [['buy','Shop'],['sell','Sell'],['invest','Invest']];
   const buyRow=(id,i,sold,price,orig)=>{ const it=ITEMS[id]; return `<div class="row"><img src="${thumb(id)}"><div class="grow"><div class="nm">${it.name}</div><div class="sub">${fmt(price)} clams${orig&&orig!==price?` <s>${fmt(orig)}</s>`:''}${it.kind==='seed'?' · plant on grass':''}${it.kind==='sapling'?' · needs a shovel to plant':''}</div></div><button class="btn" data-b="${i}" ${sold||S.clams<price?'disabled':''}>${sold?'Sold':'Buy'}</button></div>`; };
   let list=[];
   const render=()=>{
@@ -1324,6 +1376,7 @@ function openShop(which){
         h+='</div>'; } }
     if (tab==='packs'){
       h+=`<div class="muted" style="margin-bottom:8px">Bigger backpacks hold more. Each one is harder to get. You have ${slotsMax()} slots now.</div>`;
+      h+=`<div class="row"><img src="${bikeThumb()}"><div class="grow"><div class="nm">Bicycle</div><div class="sub">${fmt(BIKE_COST)} clams · ride about twice as fast outdoors. Press B or the Bike button to hop on and off.${GUEST?'<br>Guest wallets top out at 10,000 clams, so you need an account for this one.':''}</div></div>${S.bike?'<span class="muted">Owned</span>':`<button class="btn" id="buyBike" ${S.clams<BIKE_COST?'disabled':''}>Buy</button>`}</div>`;
       BACKPACKS.forEach((p,i)=>{ const owned=i<=S.pack, next=i===S.pack+1, ok=next&&packReq(i);
         h+=`<div class="row"><div class="slot" style="width:56px;border-width:2px;font-weight:700">${p.slots}</div><div class="grow"><div class="nm">${p.name}</div><div class="sub">${p.slots} slots · ${fmt(p.cost)} clams${p.req?`<br>${p.req.desc}`:''}${next&&p.req?`<br>Progress: ${S.caught} caught · ${discovered()} discovered · ${bestFriends()} best friends`:''}</div></div>${owned?'<span class="muted">Owned</span>':`<button class="btn" data-pack="${i}" ${!ok||S.clams<p.cost?'disabled':''}>${next?'Buy':'Locked'}</button>`}</div>`; }); }
     if (tab==='sell'){
@@ -1345,6 +1398,7 @@ function openShop(which){
     pBody.querySelectorAll('[data-b]').forEach(b=>b.onclick=()=>{ const i=+b.dataset.b; const id=list[i], it=ITEMS[id], price=buyPrice(which,it);
       if(S.clams<price) return; if(!canAdd(id)){ toast('Your bag is full.'); return; } S.clams-=price; if(tab==='garden') S.day.gsold[i]=true; else markSold(which,id,i); addTrade(which,price); const r=addItem(id); Snd.coin(); updateHUD(); itemToast(id, r==='new', 'Bought'); render(); });
     pBody.querySelectorAll('[data-tool]').forEach(b=>b.onclick=()=>{ const [t,k]=b.dataset.tool.split(':'); const tr=TOOLS[t].tiers[+k]; if(S.clams<tr.cost) return; S.clams-=tr.cost; addTrade(which,tr.cost); S.tools[t]={ tier:+k, uses:tr.forever?0:tr.uses }; S.toolEver[t]=Math.max(S.toolEver[t]??-1, +k); Snd.coin(); equip(t); updateHUD(); toast(`You got the ${tr.name}! It's in your hand now.`, toolThumb(t,+k)); save(); render(); });
+    const bb=pBody.querySelector('#buyBike'); if(bb) bb.onclick=()=>{ if(S.bike||S.clams<BIKE_COST) return; S.clams-=BIKE_COST; addTrade(which,BIKE_COST); S.bike=true; Snd.fanfare(); updateHUD(); setBikeBtn(); toast('You got a bicycle! Press B or tap Bike to ride.'); save(); render(); };
     pBody.querySelectorAll('[data-pack]').forEach(b=>b.onclick=()=>{ const i=+b.dataset.pack, p=BACKPACKS[i]; if(i!==S.pack+1||!packReq(i)||S.clams<p.cost) return; S.clams-=p.cost; addTrade(which,p.cost); S.pack=i; Snd.fanfare(); updateHUD(); toast(`You got the ${p.name}! Your bag now holds ${p.slots} items.`); save(); render(); });
     pBody.querySelectorAll('[data-invest]').forEach(b=>b.onclick=()=>doInvest(b.dataset.invest));
   };
@@ -1600,10 +1654,45 @@ function doorTap(fx,fz){
   renderBuild(true);
 }
 // ---- outside ----
-const chipRow = (obj, key, opts, type='s') => `<div class="chips">${opts.map(([v,n])=>`<button class="chip${obj[key]===v?' on':''}" data-k="${key}" data-v="${v}" data-ty="${type}">${n}</button>`).join('')}</div>`;
-const swatchRow = (obj, key, cols) => `<div class="sws">${cols.map(c=>`<div class="sw${obj[key]===c?' on':''}" style="background:${hexs(c)}" data-k="${key}" data-v="${c}" data-ty="n"></div>`).join('')}</div>`;
+/* ---- House style unlocks ----
+   Every paint, material and style has to be unlocked once (buy it here, find a swatch while digging,
+   or get one from a neighbor who likes you). After that, switching to it is always free. */
+const STYLE_LIST={ wall:'walls', roof:'roofs', door:'doors', win:'windows', porch:'porches', found:'founds', chimney:'chimneys', stories:'stories', floor:'floors', paper:'papers',
+  wallC:'wallColors', roofC:'roofColors', trimC:'trimColors', doorC:'doorColors', shutC:'doorColors', floorC:'floorColors', paperC:'wallColors' };
+const STYLE_NAMES={ walls:'walls', roofs:'roof', doors:'door', windows:'windows', porches:'porch', founds:'foundation', chimneys:'chimney', stories:'height', floors:'floor', papers:'wallpaper',
+  wallColors:'wall paint', roofColors:'roof paint', trimColors:'trim paint', doorColors:'door paint', floorColors:'floor stain' };
+const STYLE_BASE={ walls:1500, roofs:1200, doors:600, windows:700, porches:1800, founds:500, chimneys:1400, stories:9000, floors:900, papers:700 };
+const isColorList = list => /Colors$/.test(list);
+const freeCount = list => isColorList(list) ? 4 : 2;
+function styleCost(list, i){ if (i<freeCount(list)) return 0; if (isColorList(list)) return 250 + (i-freeCount(list))*120; return Math.round(STYLE_BASE[list]*(1+(i-2)*0.75)/50)*50; }
+function styleOwned(list, v){ const opts=BUILD[list]; const i=opts.findIndex(o=>String(Array.isArray(o)?o[0]:o)===String(v)); return i<0 || i<freeCount(list) || !!(S.styles&&S.styles[list+':'+v]); }
+function unlockStyle(list, v){ (S.styles=S.styles||{})[list+':'+v]=true; save(); }
+const styleLabel = (list, v) => { const o=BUILD[list].find(o=>String(Array.isArray(o)?o[0]:o)===String(v)); return Array.isArray(o) ? `${o[1]} (${STYLE_NAMES[list]})` : `a new ${STYLE_NAMES[list]} color`; };
+// A random locked style, for swatches you find or get as gifts
+function grantRandomStyle(){
+  const all=[]; for (const list of Object.keys(STYLE_NAMES)){ BUILD[list].forEach((o,i)=>{ const v=Array.isArray(o)?o[0]:o; if(!styleOwned(list,v) && (!GUEST || list in GUEST_BUILD && (GUEST_BUILD[list]||[]).some(x=>String(Array.isArray(x)?x[0]:x)===String(v)))) all.push([list,v,i]); }); }
+  if (!all.length) return null; all.sort((a,b)=>a[2]-b[2]); const pick=all[Math.floor(Math.random()*Math.min(all.length, 8))];   // cheaper styles come first
+  unlockStyle(pick[0], pick[1]); return styleLabel(pick[0], pick[1]);
+}
+// Grandfather: anything an existing house already uses counts as owned
+function ownCurrentStyles(){ const h=S.home; if(!h) return; S.styles=S.styles||{}; const own=(key,val)=>{ const l=STYLE_LIST[key]; if(l && val!==undefined && val!==null) S.styles[l+':'+val]=true; };
+  if (h.ext) for (const k in h.ext) own(k, h.ext[k]); if (h.plan && h.plan.rooms) for (const r of h.plan.rooms) for (const k of ['floor','floorC','paper','paperC']) own(k, r[k]); }
+if (!S.stylesGrandfathered){ ownCurrentStyles(); S.stylesGrandfathered=1; }
+const lockTag = (list, i) => `<span class="lk">${fmt(styleCost(list,i))}</span>`;
+const chipRow = (obj, key, opts, type='s') => { const list=type==='b'?null:STYLE_LIST[key]; return `<div class="chips">${opts.map(([v,n],i)=>{ const locked=list && !styleOwned(list,v); return `<button class="chip${obj[key]===v?' on':''}${locked?' locked':''}" data-k="${key}" data-v="${v}" data-ty="${type}" ${locked?`data-lock="${list}" data-i="${i}"`:''}>${n}${locked?lockTag(list,i):''}</button>`; }).join('')}</div>`; };
+const swatchRow = (obj, key, cols) => { const list=STYLE_LIST[key]; return `<div class="sws">${cols.map((c,i)=>{ const locked=list && !styleOwned(list,c); return `<div class="sw${obj[key]===c?' on':''}${locked?' locked':''}" style="background:${hexs(c)}" data-k="${key}" data-v="${c}" data-ty="n" ${locked?`data-lock="${list}" data-i="${i}" title="${fmt(styleCost(list,i))} clams"`:''}></div>`; }).join('')}</div>`; };
 const toggle = (obj, key, on, off) => chipRow(obj, key, [[true,on],[false,off]], 'b');
-function bindStyle(obj, after){ bBody.querySelectorAll('[data-k]').forEach(el=>el.onclick=()=>{ const t=el.dataset.ty, v=el.dataset.v; obj[el.dataset.k] = t==='n'?+v : t==='b'?v==='true' : v; Snd.click(); after(); }); }
+function bindStyle(obj, after){ bBody.querySelectorAll('[data-k]').forEach(el=>el.onclick=()=>{ const t=el.dataset.ty, v=el.dataset.v;
+  if (el.dataset.lock){ offerUnlock(el.dataset.lock, v, +el.dataset.i, ()=>{ obj[el.dataset.k] = t==='n'?+v : t==='b'?v==='true' : v; after(); }); return; }
+  obj[el.dataset.k] = t==='n'?+v : t==='b'?v==='true' : v; Snd.click(); after(); }); }
+function offerUnlock(list, v, i, apply){
+  const cost=styleCost(list,i), name=styleLabel(list,v); let bar=$('#unlockBar');
+  if (!bar){ bar=document.createElement('div'); bar.id='unlockBar'; bBody.prepend(bar); }
+  bar.innerHTML=`<div><b>Unlock ${name}?</b><br><span class="muted">${fmt(cost)} clams, then it's yours to use any time for free. You can also find swatches while digging, and neighbors who like you sometimes share them.</span></div><div style="margin-top:6px"><button class="btn" id="ulYes" ${S.clams<cost?'disabled':''}>${S.clams<cost?'Not enough clams':'Unlock'}</button> <button class="btn alt" id="ulNo">Not now</button></div>`;
+  bar.scrollIntoView({ block:'nearest' });
+  $('#ulNo').onclick=()=>{ bar.remove(); };
+  $('#ulYes').onclick=()=>{ if(S.clams<cost) return; S.clams-=cost; unlockStyle(list,v); Snd.coin(); updateHUD(); toast(`Unlocked ${name}!`); apply(); };
+}
 // Guests get a smaller set of house styles
 const GUEST_BUILD = Object.assign({}, BUILD, { walls:BUILD.walls.slice(0,3), roofs:BUILD.roofs.slice(0,2), doors:BUILD.doors.slice(0,2), windows:BUILD.windows.slice(0,2), porches:BUILD.porches.slice(0,2), chimneys:BUILD.chimneys.slice(0,1), stories:BUILD.stories.slice(0,1) });
 function renderExtTab(){
@@ -1641,7 +1730,7 @@ function openBoard(){
     h+=`<div class="notice"><b>Your progress</b><br>Critters caught: ${S.caught} · Items discovered: ${discovered()} · Best friends: ${bestFriends()}</div>`;
     h+=`<div class="notice"><b>Your home</b><br>`;
     if (!S.home.built) h+=`You're still in a tent! Design a real house: draw the rooms, pick the walls, roof, windows, door and porch, then lay out the inside. A starter house of 9 floor squares costs ${fmt(houseCost(9,0))} clams. <br><button class="btn" id="bdOpen" style="margin-top:8px">Design my house</button>`;
-    else h+=`${S.home.plan.rooms.length} room${S.home.plan.rooms.length>1?'s':''} · ${planCells(S.home.plan)} floor squares. Restyling is always free; new floor space costs clams. You can also tap <b>Build</b> near your house.<br><button class="btn" id="bdOpen" style="margin-top:8px">Open build mode</button>`;
+    else h+=`${S.home.plan.rooms.length} room${S.home.plan.rooms.length>1?'s':''} · ${planCells(S.home.plan)} floor squares. Restyling with styles you've unlocked is free; new styles and new floor space cost clams. You can also tap <b>Build</b> near your house.<br><button class="btn" id="bdOpen" style="margin-top:8px">Open build mode</button>`;
     h+=`</div><div class="notice"><b>Museum</b><br>${donatedCount()} of ${MUSEUM_TOTAL} displays filled. Professor Thistle is just south of the plaza.</div>`;
     pBody.innerHTML=h;
     pBody.querySelector('#bdOpen').onclick=()=>{ panelClose=null; closePanel(); openBuild(); };
@@ -1658,7 +1747,6 @@ function openMenu(){
     <label class="f">Sound <select id="mSnd"><option value="1">On</option><option value="0">Off</option></select></label>
     <label class="f">Music volume</label><input type="range" id="mMus" min="0" max="1" step="0.05" value="${S.settings.music}">
     <label class="f">Brightness</label><input type="range" id="mBr" min="0.7" max="1.7" step="0.05" value="${S.settings.bright}">
-    <label class="f">Terrain (preview) <select id="mTer"><option value="tiers">Gentle terraces</option><option value="hills">Smooth hills</option><option value="flat">Original flat</option></select></label>
     <div class="notice" style="margin-top:14px"><b>Controls</b>
       <label class="f">Walking <select id="cMove"><option value="joystick">On-screen joystick</option><option value="tap">Tap and hold to walk</option></select></label>
       <div id="cJoy">
@@ -1678,7 +1766,6 @@ function openMenu(){
     <button class="btn warn" id="mReset">Start a new island</button>${saveOK?'':'<div class="muted" style="margin-top:8px">Saving isn\'t available in this browser.</div>'}`;
     const snd=$('#mSnd'); snd.value=S.settings.sound?'1':'0'; snd.onchange=()=>{ Snd.setOn(snd.value==='1'); save(); };
     $('#mMus').oninput=e=>{ Snd.setMusic(+e.target.value); save(); };
-    const ter=$('#mTer'); ter.value=TERRAIN_STYLE; ter.onchange=()=>{ try{ localStorage.setItem('driftwood-terrain', ter.value); }catch(e){} save(); location.reload(); };
     $('#mBr').oninput=e=>{ S.settings.bright=+e.target.value; save(); updateSky(); };
     const sync=()=>{ $('#cJoy').style.display=c.move==='joystick'?'':'none'; save(); applyControls(); };
     $('#cMove').value=c.move; $('#cMove').onchange=e=>{ c.move=e.target.value; sync(); };
@@ -1754,7 +1841,9 @@ $('#pOk').onclick=()=>{ if(!checkPlace()) return; const p=placing.m.position, id
 
 /* ---------- Input ---------- */
 const keys={};
-addEventListener('keydown', e=>{ if(e.target.tagName==='INPUT') return; const k=e.key.toLowerCase(); keys[k]=true; if((k===' '||k==='e') && !e.repeat){ e.preventDefault(); doAction(); } if(k==='q' && !e.repeat) cycleTool(); });
+addEventListener('keydown', e=>{ if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT'||e.target.tagName==='TEXTAREA') return; const k=e.key.toLowerCase();
+  if (dlgState){ if (!e.repeat && dialogKey(k)) e.preventDefault(); return; }
+  keys[k]=true; if((k===' '||k==='e') && !e.repeat){ e.preventDefault(); doAction(); } if(k==='q' && !e.repeat) cycleTool(); if(k==='b' && !e.repeat) toggleBike(); });
 addEventListener('keyup', e=>{ keys[e.key.toLowerCase()]=false; });
 const ray=new THREE.Raycaster(), ndc=new THREE.Vector2(), plane0=new THREE.Plane(new THREE.Vector3(0,1,0),0);
 function entVisible(e){ if (World.inside){ const R=ROOMS[World.inside]; return e.pos.x>500 && roomAt(e.pos.x,e.pos.z)===R; } return e.pos.x<500 && e.obj.parent===OUT; }
@@ -1822,7 +1911,7 @@ function handleTap(cx,cy){
 function interact(e, mode='tap'){ if(!ents.includes(e)) return; player.face=Math.atan2(e.pos.x-player.pos.x, e.pos.z-player.pos.z); if(!(e instanceof Bug)) player.act=0.35; hideHint(); e.act(mode); }
 function nearestEnt(){ let best=null, bd=1e9; for(const e of ents){ if(e.removed||!e.label()) continue; const d=Math.hypot(e.pos.x-player.pos.x,e.pos.z-player.pos.z); if(d<e.reach+0.3 && d<bd && entVisible(e)){ bd=d; best=e; } } return best; }
 function facingWater(){ if(World.inside) return null; for(const d of [2.5,3.5,4.5]){ const x=player.pos.x+Math.sin(player.face)*d, z=player.pos.z+Math.cos(player.face)*d; if(isFishWater(x,z)) return new THREE.Vector3(x,0,z); } return null; }
-function doAction(){ if(dlgState||scrim.classList.contains('show')||placing||layoutMode||buildMode) return; if(CatchMeter.bug){ resolveSwing(); return; } if(Fishing.state!=='idle'){ reel(); return; } const e=nearestEnt(); if(e){ stopMove(); interact(e,'manual'); return; } const w=facingWater(); if(w){ castAt(w); hideHint(); } }
+function doAction(){ if(dlgState||scrim.classList.contains('show')||placing||layoutMode||buildMode) return; if(riding) setRiding(false); if(CatchMeter.bug){ resolveSwing(); return; } if(Fishing.state!=='idle'){ reel(); return; } const e=nearestEnt(); if(e){ stopMove(); interact(e,'manual'); return; } const w=facingWater(); if(w){ castAt(w); hideHint(); } }
 $('#act').addEventListener('click', e=>{ e.stopPropagation(); if(layoutMode) return; doAction(); });
 let hintHidden=false; function hideHint(){ if(hintHidden) return; hintHidden=true; $('#hint').style.opacity=0; }
 
@@ -1871,10 +1960,17 @@ addEventListener('resize', ()=>applyControls());
 
 // Canvas pointer: tap, hold-to-walk, pinch-zoom, wheel-zoom
 const ptrs=new Map(); let camDist=isMobile?21:22, pinch0=0, dist0=0;
+// Camera turning: right-drag (mouse), two-finger twist (touch), or Z / C keys. Free indoors; outdoors a small swing that eases back.
+let camYaw=0, camYawHeld=false, rotPtr=null, twist0=0, yaw0=0;
+const CAM_OUT_SWING=0.45;
+canvas.addEventListener('contextmenu', e=>e.preventDefault());
+canvas.addEventListener('pointerdown', e=>{ if(e.button===2 && !buildMode){ rotPtr={ id:e.pointerId, x:e.clientX }; e.stopImmediatePropagation(); } }, true);
+addEventListener('pointermove', e=>{ if(rotPtr && e.pointerId===rotPtr.id){ camYaw-=(e.clientX-rotPtr.x)*0.008; rotPtr.x=e.clientX; } });
+addEventListener('pointerup', e=>{ if(rotPtr && e.pointerId===rotPtr.id) rotPtr=null; });
 function groundAtScreen(cx,cy){ const rect=canvas.getBoundingClientRect(); ndc.set((cx-rect.left)/rect.width*2-1, -(cy-rect.top)/rect.height*2+1); ray.setFromCamera(ndc,camera); return rayGround(ray.ray); }
-canvas.addEventListener('pointerdown', e=>{ canvas.focus(); ptrs.set(e.pointerId,{ x:e.clientX, y:e.clientY, t:performance.now(), sx:e.clientX, sy:e.clientY, held:false }); if(ptrs.size===2){ const [a,b]=[...ptrs.values()]; pinch0=Math.hypot(a.x-b.x,a.y-b.y); dist0=camDist; if(placing) placing.drag=null; }
+canvas.addEventListener('pointerdown', e=>{ canvas.focus(); ptrs.set(e.pointerId,{ x:e.clientX, y:e.clientY, t:performance.now(), sx:e.clientX, sy:e.clientY, held:false }); if(ptrs.size===2){ const [a,b]=[...ptrs.values()]; pinch0=Math.hypot(a.x-b.x,a.y-b.y); dist0=camDist; twist0=Math.atan2(b.y-a.y,b.x-a.x); yaw0=camYaw; if(placing) placing.drag=null; }
   if (placing && ptrs.size===1 && !dlgState){ const g=groundAtScreen(e.clientX,e.clientY); if(g){ const m=placing.m.position; const near=Math.hypot(g.x-m.x,g.z-m.z)<2.2; placing.drag={ id:e.pointerId, ox:near?m.x-g.x:0, oz:near?m.z-g.z:0 }; placing.dragged=false; } } });
-canvas.addEventListener('pointermove', e=>{ const p=ptrs.get(e.pointerId); if(!p) return; const px=p.x; p.x=e.clientX; p.y=e.clientY; if(ptrs.size===2){ const [a,b]=[...ptrs.values()]; const pd=Math.hypot(a.x-b.x,a.y-b.y); if(buildMode){ if(p.pd) buildMode.dist=clamp(buildMode.dist*p.pd/pd,12,40); p.pd=pd; } else camDist=clamp(dist0*pinch0/pd,11,36); return; }
+canvas.addEventListener('pointermove', e=>{ const p=ptrs.get(e.pointerId); if(!p) return; const px=p.x; p.x=e.clientX; p.y=e.clientY; if(ptrs.size===2){ const [a,b]=[...ptrs.values()]; const pd=Math.hypot(a.x-b.x,a.y-b.y); if(buildMode){ if(p.pd) buildMode.dist=clamp(buildMode.dist*p.pd/pd,12,40); p.pd=pd; } else { camDist=clamp(dist0*pinch0/pd,11,36); let da=Math.atan2(b.y-a.y,b.x-a.x)-twist0; da=Math.atan2(Math.sin(da),Math.cos(da)); camYaw=yaw0-da; } return; }
   if (buildMode && ptrs.size===1){ if (buildMode.view==='out') buildMode.yaw -= (e.clientX-px)*0.008; p.held=true; return; }
   if (placing && placing.drag && placing.drag.id===e.pointerId && Math.hypot(p.x-p.sx,p.y-p.sy)>4){ const g=groundAtScreen(e.clientX,e.clientY); if(g){ const x=g.x+placing.drag.ox, z=g.z+placing.drag.oz; placing.m.position.set(x, World.inside?0:groundY(x,z), z); placing.dragged=true; p.held=true; checkPlace(); } } });
 function endPtr(e){ const p=ptrs.get(e.pointerId); if(!p) return; ptrs.delete(e.pointerId); const moved=Math.hypot(p.x-p.sx,p.y-p.sy), dt=performance.now()-p.t;
@@ -1888,11 +1984,11 @@ function updateHold(dt){ if(CT().move!=='tap') return; holdAcc+=dt; if(holdAcc<0
 
 /* ---------- Movement and camera ---------- */
 function movePlayer(dt,t){
-  const u=player.obj.userData; let mv=null; const speed=5.4; let spd=1;
+  const u=player.obj.userData; let mv=null; if(riding && (World.inside||buildMode)) setRiding(false); const speed=riding?10.2:5.4; let spd=1;
   const kx=(keys['d']||keys['arrowright']?1:0)-(keys['a']||keys['arrowleft']?1:0), kz=(keys['s']||keys['arrowdown']?1:0)-(keys['w']||keys['arrowup']?1:0);
   const jm=Math.hypot(joy.x,joy.y), busy=dlgState||placing||layoutMode||buildMode||CatchMeter.bug;
-  if (joy.active && jm>0.15 && !busy){ stopMove(); if(Fishing.state!=='idle') reel(); mv=new THREE.Vector3(joy.x,0,joy.y).normalize(); spd=clamp((jm-0.15)/0.7,0.25,1); hideHint(); }
-  else if ((kx||kz) && !busy){ stopMove(); if(Fishing.state!=='idle') reel(); mv=new THREE.Vector3(kx,0,kz).normalize(); if(keys['shift']) spd=0.4; hideHint(); }
+  if (joy.active && jm>0.15 && !busy){ stopMove(); if(Fishing.state!=='idle') reel(); mv=new THREE.Vector3(joy.x*Math.cos(camYaw)+joy.y*Math.sin(camYaw),0,-joy.x*Math.sin(camYaw)+joy.y*Math.cos(camYaw)).normalize(); spd=clamp((jm-0.15)/0.7,0.25,1); hideHint(); }
+  else if ((kx||kz) && !busy){ stopMove(); if(Fishing.state!=='idle') reel(); mv=new THREE.Vector3(kx*Math.cos(camYaw)+kz*Math.sin(camYaw),0,-kx*Math.sin(camYaw)+kz*Math.cos(camYaw)).normalize(); if(keys['shift']) spd=0.4; hideHint(); }
   else if (player.target){
     if (player.targetEnt){ if(player.targetEnt.removed) stopMove(); else player.target.copy(player.targetEnt.pos); }
     if (player.target){ const d=player.target.clone().sub(player.pos); d.y=0; const L=d.length(); const stopAt=player.targetEnt?player.targetEnt.reach:0.15;
@@ -1918,9 +2014,10 @@ function movePlayer(dt,t){
     if (!ok){ for(const s of [0.9,-0.9,1.6,-1.6]){ const c=Math.cos(s), sn=Math.sin(s); const vx=mv.x*c-mv.z*sn, vz=mv.x*sn+mv.z*c; const ax=p.x+vx*step, az=p.z+vz*step; if(walkable(ax,az)&&!blocked(ax,az,0.35)){ p.x=ax; p.z=az; ok=true; break; } } }
     ignoreRects=false; if (ok) player.speedFrac=spd;
     player.face=Math.atan2(mv.x,mv.z);
-    const ph=t*(5+6*spd); u.legs[0].rotation.x=Math.sin(ph)*0.7*spd; u.legs[1].rotation.x=-Math.sin(ph)*0.7*spd; u.arms[0].rotation.x=-Math.sin(ph)*0.6*spd; if(!S.equip) u.arms[1].rotation.x=Math.sin(ph)*0.6*spd; else u.arms[1].rotation.x=-0.3; u.body.position.y=Math.abs(Math.sin(ph))*0.07*spd;
+    if (riding){ bikeSpin(dt*spd*speed); const ph=t*9; u.legs[0].rotation.x=-0.9+Math.sin(ph)*0.5; u.legs[1].rotation.x=-0.9-Math.sin(ph)*0.5; u.arms[0].rotation.x=-0.9; u.arms[1].rotation.x=-0.9; } else {
+    const ph=t*(5+6*spd); u.legs[0].rotation.x=Math.sin(ph)*0.7*spd; u.legs[1].rotation.x=-Math.sin(ph)*0.7*spd; u.arms[0].rotation.x=-Math.sin(ph)*0.6*spd; if(!S.equip) u.arms[1].rotation.x=Math.sin(ph)*0.6*spd; else u.arms[1].rotation.x=-0.3; u.body.position.y=Math.abs(Math.sin(ph))*0.07*spd; }
     if (!World.inside && Math.random()<dt*6*spd && rawHeight(p.x,p.z)<SAND_H && !onDock(p.x,p.z) && !onBridge(p.x,p.z)) puff(p.clone().add(new THREE.Vector3(0,0.05,0)),0xf3dca6,1,0.2,0.6,0.5,0.4);
-  } else { u.legs.forEach(l=>l.rotation.x*=0.8); u.body.position.y*=0.8; u.arms[0].rotation.x*=0.8;
+  } else if (riding){ u.legs[0].rotation.x=-0.9; u.legs[1].rotation.x=-0.9; u.arms[0].rotation.x=-0.9; u.arms[1].rotation.x=-0.9; } else { u.legs.forEach(l=>l.rotation.x*=0.8); u.body.position.y*=0.8; u.arms[0].rotation.x*=0.8;
     u.arms[1].rotation.x = player.act>0 ? -Math.sin(player.act/0.35*Math.PI)*1.6 : (Fishing.state!=='idle'?-1.1:(S.equip?-0.3:u.arms[1].rotation.x*0.8)); }
   player.act=Math.max(0,player.act-dt);
   if (World.inside && !buildMode){ const R=ROOMS[World.inside]; if (R.exitCheck ? R.exitCheck(player.pos.x,player.pos.z) : (player.pos.z > R.oz+R.d/2-0.35 && Math.abs(player.pos.x-R.ox)<1.3)) exitRoom(); }
@@ -1936,8 +2033,11 @@ function updateCamera(dt){
     camera.setViewOffset(innerWidth, innerHeight, 0, buildEl.offsetHeight*0.5, innerWidth, innerHeight);
     sky.position.copy(camera.position); stars.position.copy(camera.position); sun.target.position.copy(camTarget); sun.position.copy(camTarget).addScaledVector(sunDir,50); return; }
   camTarget.lerp(player.pos.clone().add(new THREE.Vector3(0,0.8,0)), Math.min(1,dt*5));
+  const turn=(keys['c']?1:0)-(keys['z']?1:0); if(turn && !dlgState) camYaw+=turn*dt*1.8;
+  camYawHeld = !!rotPtr || ptrs.size===2 || !!turn;
+  if (!World.inside){ camYaw=clamp(camYaw,-CAM_OUT_SWING,CAM_OUT_SWING); if(!camYawHeld) camYaw*=Math.exp(-dt*2.5); }   // outdoors: north stays up
   const dist = World.inside ? Math.min(camDist,15) : camDist; const pitch = World.inside ? 0.95 : 0.62+(camDist-11)/25*0.18;
-  camera.position.set(camTarget.x, camTarget.y+Math.sin(pitch)*dist, camTarget.z+Math.cos(pitch)*dist); camera.lookAt(camTarget);
+  const ch=Math.cos(pitch)*dist; camera.position.set(camTarget.x+Math.sin(camYaw)*ch, camTarget.y+Math.sin(pitch)*dist, camTarget.z+Math.cos(camYaw)*ch); camera.lookAt(camTarget);
   sky.position.copy(camera.position); stars.position.copy(camera.position);
   sun.target.position.copy(camTarget); sun.position.copy(camTarget).addScaledVector(sunDir,50);
 }
@@ -1959,7 +2059,7 @@ function frame(){
   const dt=Math.min(0.05, clock.getDelta()); t+=dt;
   secT+=dt; if(secT>1){ secT=0; if(rollDay()){ spawnDaily(); toast('A new day on '+(S.island||'the island')+'!'); } updateSky(); updateHUD(); }
   saveT+=dt; if(saveT>15){ saveT=0; save(); }
-  updateRemotes(dt,t);
+  updateRemotes(dt,t); updateSnow(dt);
   if (started){ updateHold(dt); movePlayer(dt,t); updateBugs(dt); updateFishing(dt,t); updateCatchMeter(dt); tickDialog(dt); updateActButton(); updateCutaway(); }
   for(const e of ents.slice()){ if (e.removed) continue; if (e instanceof Resident || Math.abs(e.pos.x-player.pos.x)<40) e.update(dt,t); }
   if (!World.inside){ updateWater(t); updateAmbient(dt,t); foam.scale.setScalar(1+Math.sin(t*0.8)*0.006);
@@ -1986,6 +2086,30 @@ $('#bStart').onclick=()=>{
   else if (S.migratedFrom1){ delete S.migratedFrom1; save(); setTimeout(()=>dialog(p.spec.name, p.spec.voice, [fill('{p}! Did you notice? The island got so much BIGGER overnight, {c}!',{c:p.spec.catch}), 'There\'s a river, a pond, and four new neighbors! And the stall sells tools now. You\'ll need them for bugs, fish and digging.', 'Your old furniture is safe. Anything that didn\'t fit went back in your bag.']), 700); }
   else toast('Welcome back, '+S.player+'!');
 };
+/* ---------- Bicycle ---------- */
+const BIKE_COST=25000;
+let riding=false, bikeObj=null;
+const BIKE_SVG='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><circle cx="8" cy="21" r="5.5" fill="none" stroke="#5b4336" stroke-width="2.5"/><circle cx="24" cy="21" r="5.5" fill="none" stroke="#5b4336" stroke-width="2.5"/><path d="M8 21l6-9h8l2 9M14 12l4 9h-10M20 9h4" fill="none" stroke="#d8604a" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+function bikeThumb(){ return 'data:image/svg+xml,'+encodeURIComponent(BIKE_SVG); }
+function setRiding(on){
+  on = !!on && !!S.bike && !World.inside && !buildMode;
+  if (on===riding) return; riding=on;
+  if (on && !bikeObj){ bikeObj=buildBike(); }
+  const u=player.obj.userData;
+  if (on){ player.obj.add(bikeObj); if(u.body) u.body.position.y=0.42; Snd.pop(); }
+  else { if(bikeObj) player.obj.remove(bikeObj); if(u.body) u.body.position.y=0; }
+  const b=$('#bBike'); if(b) b.classList.toggle('on', riding);
+}
+function toggleBike(){ if(!S.bike) return; if(World.inside){ toast('Park your bike outside first.'); return; } if(dlgState||placing||buildMode) return; setRiding(!riding); }
+function bikeSpin(d){ if(bikeObj) for(const w of bikeObj.userData.wheels) w.rotation.x+=d/0.3; }
+function setBikeBtn(){
+  if (!S.bike || $('#bBike')) return;
+  const bar=$('#bar'), b=document.createElement('button'); b.className='rbtn'; b.id='bBike';
+  b.innerHTML=BIKE_SVG+'Bike';
+  bar.insertBefore(b, bar.firstChild); b.onclick=()=>toggleBike();
+}
+setTimeout(setBikeBtn, 0);
+
 /* ---------- Other players (live visits) ---------- */
 // Friends on the same island right now. Positions come from the live room; we smooth between updates.
 const remotes=new Map();
@@ -2005,21 +2129,46 @@ function remoteUpsert(id, name, st){
   if (st) remotePos(id, st);
   return r;
 }
-function remotePos(id, st){ const r=remotes.get(id); if(!r) return; r.tgt.set(st.x, st.y||0, st.z); r.f=st.f||0; r.w=st.w; r.in=st.in||null; if(!r.seen){ r.pos.copy(r.tgt); r.seen=true; } }
+function remotePos(id, st){ const r=remotes.get(id); if(!r) return; r.tgt.set(st.x, st.y||0, st.z); r.f=st.f||0; r.w=st.w; r.in=st.in||null;
+  const wantBike=!!st.b; if(wantBike!==!!r.bike){ const u=r.obj.userData; if(wantBike){ r.bike=buildBike(0x5a9ad8); r.obj.add(r.bike); if(u.body) u.body.position.y=0.42; } else { r.obj.remove(r.bike); r.bike=null; if(u.body) u.body.position.y=0; } } if(!r.seen){ r.pos.copy(r.tgt); r.seen=true; } }
 function remoteLeave(id){ const r=remotes.get(id); if(!r) return; scene.remove(r.obj); remotes.delete(id); }
 function remoteEmote(id, e){ const txt=EMOTE_TEXT[e]; if(!txt) return; const pos = id==='me' ? player.pos : remotes.get(id)?.pos; if(!pos) return; const v=pos.clone(); v.y+=0.6; floatText(txt, v); if(id!=='me') Snd.pop(); }
+// Jelly feel: bodies squash and stretch on a little spring, and friends bump each other apart.
+function jelly(obj, st, dt, moving, t){
+  const u=obj.userData; if(!u.body) return;
+  st.v=(st.v||0) + (-(st.x||0)*120 - (st.v||0)*9)*dt; st.x=(st.x||0)+st.v*dt;
+  if (moving){ st.prevMoving=true; } else if (st.prevMoving){ st.prevMoving=false; st.v-=1.6; }   // little settle wobble when stopping
+  const walk = moving ? Math.sin(t*14)*0.05 : 0, k=clamp(st.x+walk,-0.35,0.35);
+  u.body.scale.set(1-k*0.5, 1+k, 1-k*0.5);
+}
+const playerJelly={}, knock=new THREE.Vector2();
+function bumpFriends(dt){
+  if (!remotes.size) { knock.multiplyScalar(Math.exp(-dt*6)); return; }
+  for (const r of remotes.values()){ if(!r.obj.visible) continue;
+    const dx=player.pos.x-r.pos.x, dz=player.pos.z-r.pos.z, d=Math.hypot(dx,dz), R=riding||r.bike?1.3:0.95;
+    if (d<R && d>1e-4){ const push=(R-d)/R;
+      if (!r.touching){ r.touching=true; playerJelly.v=(playerJelly.v||0)-3.2*push-1.2; r.jel=r.jel||{}; r.jel.v=(r.jel.v||0)-3.2*push-1.2; Snd.pop(); }
+      knock.x+=dx/d*push*26*dt; knock.y+=dz/d*push*26*dt; }
+    else r.touching=false; }
+  const p=player.pos, nx=p.x+knock.x*dt, nz=p.z+knock.y*dt;
+  if (knock.lengthSq()>1e-4 && walkable(nx,nz) && !blocked(nx,nz,0.35)){ p.x=nx; p.z=nz; } else if (!walkable(nx,nz)||blocked(nx,nz,0.35)) knock.set(0,0);
+  knock.multiplyScalar(Math.exp(-dt*6));
+}
 function updateRemotes(dt,t){
-  for (const r of remotes.values()){
+  if (started && !buildMode) bumpFriends(dt);
+  jelly(player.obj, playerJelly, dt, player.speedFrac>0.05, t);
+  for (const r of remotes.values()){ r.jel=r.jel||{}; jelly(r.obj, r.jel, dt, !!r.w, t);
     r.pos.lerp(r.tgt, Math.min(1, dt*8)); r.obj.position.copy(r.pos);
     let d=r.f-r.obj.rotation.y; d=Math.atan2(Math.sin(d),Math.cos(d)); r.obj.rotation.y+=d*Math.min(1,dt*10);
     r.obj.visible = r.seen && (r.in||null)===(World.inside||null);
-    const u=r.obj.userData; if(u.legs){ const ph=t*11, a=r.w?1:0; u.legs[0].rotation.x=Math.sin(ph)*0.7*a; u.legs[1].rotation.x=-Math.sin(ph)*0.7*a; if(u.arms){ u.arms[0].rotation.x=-Math.sin(ph)*0.6*a; u.arms[1].rotation.x=Math.sin(ph)*0.6*a; } }
+    const u=r.obj.userData; if(r.bike){ if(r.w) for(const w of r.bike.userData.wheels) w.rotation.x+=dt*30; if(u.legs){ u.legs[0].rotation.x=-0.9+Math.sin(t*9)*0.5*r.w; u.legs[1].rotation.x=-0.9-Math.sin(t*9)*0.5*r.w; } if(u.arms){ u.arms[0].rotation.x=-0.9; u.arms[1].rotation.x=-0.9; } continue; }
+    if(u.legs){ const ph=t*11, a=r.w?1:0; u.legs[0].rotation.x=Math.sin(ph)*0.7*a; u.legs[1].rotation.x=-Math.sin(ph)*0.7*a; if(u.arms){ u.arms[0].rotation.x=-Math.sin(ph)*0.6*a; u.arms[1].rotation.x=Math.sin(ph)*0.6*a; } }
   }
 }
-const playerState = () => ({ x:+player.pos.x.toFixed(2), z:+player.pos.z.toFixed(2), y:+player.pos.y.toFixed(2), f:+player.face.toFixed(2), w:player.speedFrac>0.05?1:0, in:World.inside||null });
+const playerState = () => ({ b:riding?1:0, x:+player.pos.x.toFixed(2), z:+player.pos.z.toFixed(2), y:+player.pos.y.toFixed(2), f:+player.face.toFixed(2), w:player.speedFrac>0.05?1:0, in:World.inside||null });
 // The server changed our bag (gift, mail or trade): take its copy
 function setInventory(inv, seen, equip){ S.inv=inv; if(seen) S.seen=Object.assign(S.seen||{}, seen); if(equip!==undefined){ S.equip=equip; } try{ updateHeld(); updateToolBtn(); }catch(e){} updateHUD(); }
 if (VISIT) setTimeout(()=>toast(`Visiting ${BOOT.host.name}'s island${BOOT.host.island?' ('+BOOT.host.island+')':''} as a ${BOOT.role}.`), 1500);
 
 addEventListener('visibilitychange', ()=>{ if(document.hidden) save(); else if(Snd.ctx) Snd.ctx.resume(); });
-window.__game = { get S(){ return S; }, net:{ visibleRemotes:()=>[...remotes.values()].filter(r=>r.obj.visible).map(r=>[r.name,+r.pos.x.toFixed(1),+r.pos.z.toFixed(1)]), remoteUpsert, remotePos, remoteLeave, remoteEmote, playerState, setInventory, toast:(m)=>toast(m), updateHUD:()=>updateHUD(), get started(){ return started; } }, ITEMS, itemThumb:(id)=>thumb(id), layoutInfo:()=>({ id:LAYOUT_ID, PLACES, PATHS, LOT, rects:RECTS.map(r=>r.slice(0,4)), lot:lotRect() }), terrainH:(x,z)=>rawHeight(x,z), terrainSlope:(x,z)=>hillSlope(x,z), interact, spawnBug:(id,x,z)=>new Bug(id,x,z), tapOdds:()=>Object.fromEntries(Object.keys(TAP_BASE).map(k=>[k, +tapChance({rarity:k}).toFixed(2)])), placingObj:()=>placing&&placing.m, toScreen:v=>{ const p=v.clone().project(camera); return [(p.x*0.5+0.5)*innerWidth, (-p.y*0.5+0.5)*innerHeight]; }, rebuildHome:()=>{ buildPlayerHouse(); rebuildHomeRoom(); }, openBuild, closeBuild, get buildMode(){ return buildMode; }, talkShop, openDonate, talkCurator, spawnMossby, onFelled, findPath, startPlacing, LOT, RECTS, shopEnts, museumEnt, houseEnt:()=>houseEnt, Time, player, ents, ITEMS, residents, World, ROOMS, goTo, handleTap, doAction, updateSky, rollDay, spawnDaily, castAt, Fishing, fishes, bugs, openBag, openBook, openShop, openBoard, openMenu, openCraft, doCraft, WOODWORK, enterRoom, exitRoom, equip, startLayout, endLayout, trees, applyControls };
+window.__game = { get S(){ return S; }, dbg:{ showChoices:(t,c)=>showChoices(t,c), dialog:(...a)=>dialog(...a), setRiding:(v)=>setRiding(v), enterRoom:(id)=>enterRoom(id), openBuild:()=>openBuild(), rooms:()=>Object.keys(ROOMS), get yaw(){ return camYaw; }, set yaw(v){ camYaw=v; }, get riding(){ return riding; }, get snow(){ return SNOW_U.value; }, setWeather:(w)=>{ weatherOverride=w; World.weather=w; snowT=0; }, get dlg(){ return !!dlgState; } }, net:{ visibleRemotes:()=>[...remotes.values()].filter(r=>r.obj.visible).map(r=>[r.name,+r.pos.x.toFixed(1),+r.pos.z.toFixed(1)]), remoteUpsert, remotePos, remoteLeave, remoteEmote, playerState, setInventory, toast:(m)=>toast(m), updateHUD:()=>updateHUD(), get started(){ return started; } }, ITEMS, itemThumb:(id)=>thumb(id), layoutInfo:()=>({ id:LAYOUT_ID, PLACES, PATHS, LOT, rects:RECTS.map(r=>r.slice(0,4)), lot:lotRect() }), terrainH:(x,z)=>rawHeight(x,z), terrainSlope:(x,z)=>hillSlope(x,z), interact, spawnBug:(id,x,z)=>new Bug(id,x,z), tapOdds:()=>Object.fromEntries(Object.keys(TAP_BASE).map(k=>[k, +tapChance({rarity:k}).toFixed(2)])), placingObj:()=>placing&&placing.m, toScreen:v=>{ const p=v.clone().project(camera); return [(p.x*0.5+0.5)*innerWidth, (-p.y*0.5+0.5)*innerHeight]; }, rebuildHome:()=>{ buildPlayerHouse(); rebuildHomeRoom(); }, openBuild, closeBuild, get buildMode(){ return buildMode; }, talkShop, openDonate, talkCurator, spawnMossby, onFelled, findPath, startPlacing, LOT, RECTS, shopEnts, museumEnt, houseEnt:()=>houseEnt, Time, player, ents, ITEMS, residents, World, ROOMS, goTo, handleTap, doAction, updateSky, rollDay, spawnDaily, castAt, Fishing, fishes, bugs, openBag, openBook, openShop, openBoard, openMenu, openCraft, doCraft, WOODWORK, enterRoom, exitRoom, equip, startLayout, endLayout, trees, applyControls };

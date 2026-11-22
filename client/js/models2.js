@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { TAU, mulberry32 } from './util.js';
 import { BUILD } from './content.js';
-import { M, MF, mk, G, outline, windowMat, glowMat, addGlow, FURN_BUILDERS, buildItemModel, buildAnimal } from './models.js';
+import { asChar, M, MF, mk, G, outline, windowMat, glowMat, addGlow, FURN_BUILDERS, buildItemModel, buildAnimal } from './models.js';
 
 /* ---------- Canvas textures (cached by kind + color) ---------- */
 const TEX = new Map();
@@ -325,7 +325,8 @@ export function buildMuseum(){
 }
 
 /* ---------- Shopkeepers ---------- */
-export function buildKeeper(spec){
+export const buildKeeper = asChar(_buildKeeper);
+function _buildKeeper(spec){
   const a=buildAnimal(spec); const u=a.userData;
   if (spec.species==='tortoise'){ const sh=outline(mk(G.sph(0.5,16,12,0,TAU,0,Math.PI/2), M(0x6a7a4a), 0,0.75,-0.32,u.body)); sh.rotation.x=-Math.PI/2+0.2; sh.scale.set(1,1,0.8);
     for(let i=0;i<5;i++){ const a2=i/5*TAU; mk(G.cyl(0.12,0.12,0.03,6),M(0x8a9a5a),Math.cos(a2)*0.22,0.75+Math.sin(a2)*0.22,-0.72,u.body).rotation.x=Math.PI/2; }
@@ -338,7 +339,8 @@ export function buildKeeper(spec){
 }
 
 /* ---------- Mossby, the grumpy little tree keeper ---------- */
-export function buildMossby(){
+export const buildMossby = asChar(_buildMossby);
+function _buildMossby(){
   const g=new THREE.Group(), body=new THREE.Group(); g.add(body);
   const moss=M(0x6a9a4a), mossD=M(0x557f3a), face=M(0xc8d8a0);
   const b=outline(mk(G.sph(0.32,18,14), moss, 0,0.36,0,body)); b.scale.set(1,1.05,0.95);

@@ -366,7 +366,7 @@ function genPathsGrid(P, only){
   for (const p of nodes){ const c=cellOf(p); blk[c]=0; near[c]=9; }   // every node is reachable from its own cell
   const NB=[[1,0,1],[-1,0,1],[0,1,1],[0,-1,1],[1,1,1.414],[1,-1,1.414],[-1,1,1.414],[-1,-1,1.414]];
   const stepCost=c=>1+(near[c]<1.6?(1.6-near[c])*2.2:0);
-  const dijkstra=src=>{ const g=new Float32Array(N).fill(Infinity), from=new Int32Array(N).fill(-1), heap=[[0,src]]; g[src]=0;
+  const dijkstra=src=>{ const g=new Float64Array(N).fill(Infinity), from=new Int32Array(N).fill(-1), heap=[[0,src]]; g[src]=0;
     const push=(k,f)=>{ heap.push([f,k]); let i=heap.length-1; while(i>0){ const p=(i-1)>>1; if(heap[p][0]<=heap[i][0]) break; [heap[p],heap[i]]=[heap[i],heap[p]]; i=p; } };
     const pop=()=>{ const top=heap[0], last=heap.pop(); if(heap.length){ heap[0]=last; let i=0; for(;;){ const l=i*2+1, r=l+1; let m=i; if(l<heap.length&&heap[l][0]<heap[m][0]) m=l; if(r<heap.length&&heap[r][0]<heap[m][0]) m=r; if(m===i) break; [heap[m],heap[i]]=[heap[i],heap[m]]; i=m; } } return top; };
     while (heap.length){ const [f,c]=pop(); if (f>g[c]) continue; const i=c%n, j=(c-i)/n;

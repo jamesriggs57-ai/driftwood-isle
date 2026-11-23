@@ -50,7 +50,7 @@ const FISH_LOOK = {
 };
 export const fishLook = id => FISH_LOOK[id] || { pat:'scales' };
 export function fishSkin(id, d){ return once('fish:'+id, ()=>{
-  const L=fishLook(id), W=256, H=128, back=col(d.c), belly=col(d.c2), r=mulberry32(hashStr(id)), mark=col(L.mark||0x333333);
+  const L=fishLook(id), W=512, H=256, back=col(d.c), belly=col(d.c2), r=mulberry32(hashStr(id)), mark=col(L.mark||0x333333);
   const blobs=[]; for (let i=0;i<(L.n||12);i++) blobs.push([r(), 0.45+r()*0.5, 0.012+r()*0.03]);
   const koi=[]; for (let i=0;i<7;i++) koi.push([0.1+r()*0.75, r()*0.18, 0.1+r()*0.1, i>4]);
   const emit = L.glow===true;
@@ -66,7 +66,7 @@ export function fishSkin(id, d){ return once('fish:'+id, ()=>{
     if (P==='tiger' && up>0.1 && Math.sin(v*60 + Math.sin(up*6)*2.2)>0.55) c.lerp(mark,0.85);
     if (P==='bars' && Math.sin(v*38)>0.4 && v>0.15 && v<0.8) c.lerp(mark,0.45);
     if (P==='bars' && v<0.18 && Math.abs(up)<0.4 && v>0.12) c.copy(col(L.gill));
-    if (P==='speck'||P==='spots'||P==='dots'||P==='bean'||P==='trout'){ for (const [bu,bv,br] of blobs){ const du=Math.min(Math.abs(u-bu),1-Math.abs(u-bu)), dv=Math.abs(v-bv*0.9); const rr=P==='spots'?br*1.6:P==='bean'?br*1.3:br; if (Math.hypot(du*(P==='bean'?1.6:1), dv)<rr && up>-0.6) c.lerp(mark,0.9); } }
+    if (P==='speck'||P==='spots'||P==='dots'||P==='bean'||P==='trout'){ for (const [bu,bv,br] of blobs){ if (Math.abs(v-bv*0.9)>0.08) continue; const du=Math.min(Math.abs(u-bu),1-Math.abs(u-bu)), dv=Math.abs(v-bv*0.9); const rr=P==='spots'?br*1.6:P==='bean'?br*1.3:br; if (Math.hypot(du*(P==='bean'?1.6:1), dv)<rr && up>-0.6) c.lerp(mark,0.9); } }
     if (P==='trout' && Math.abs(up-0.0)<0.08) c.lerp(col(L.red),0.55);
     if (P==='trout'){ for (const [bu,bv,br] of blobs.slice(0,6)){ const du=Math.min(Math.abs(u-((bu+0.5)%1)),1-Math.abs(u-((bu+0.5)%1))); if (Math.hypot(du,v-bv*0.9)<br) c.copy(col(L.red)); } }
     if (P==='mottle'||P==='blotch'){ const n=Math.sin(u*31+Math.sin(v*17)*3)*Math.sin(v*23+u*9); if (n>(P==='blotch'?0.45:0.25) && up>-0.5) c.lerp(mark,0.6); }
@@ -81,6 +81,12 @@ export function fishSkin(id, d){ return once('fish:'+id, ()=>{
     if (P==='gold'){ c.lerp(col(0xffe8a0), smooth01(-0.3,-0.9,up)*0.6); }
     if (L.pearl) c.lerp(col(0xf0f4ff), 0.2*Math.sin(v*20+u*13)+0.2);
     if (v<0.1) c.offsetHSL(0,0,-0.04);   // head a touch darker
+    // gill cover: a curved seam with a light rim, and the mouth line at the snout
+    { const gv=0.2+0.05*up*up; const dg=v-gv; if (Math.abs(up)<0.78 && dg>-0.012 && dg<0) c.offsetHSL(0,0.04,-0.13); else if (Math.abs(up)<0.78 && dg>=0 && dg<0.008) c.offsetHSL(0,0,0.05); else if (Math.abs(up)<0.7 && v<gv && v>0.08) c.offsetHSL(0,0,0.02*(1-Math.abs(up))); }
+    if (v<0.045 && up>-0.42 && up<-0.08 && Math.abs(up+0.25-v*1.5)<0.035) c.offsetHSL(0,0.05,-0.18);
+    // fine scale shimmer on every scaled fish, lateral line dots
+    if (!['eel','loach','catfish','squid','octopus','shark','tadpole','turtle','seahorse','ray'].includes(id) && v>0.2 && v<0.92){ const gx=v*70, gy=(up+1)*12+(Math.floor(gx)%2)*0.5, fx=gx-Math.floor(gx), fy=gy-Math.floor(gy); const e=Math.hypot(fx-0.15,(fy-0.5)*0.8); if (e>0.45&&e<0.52) c.offsetHSL(0,0,-0.035); else if (e<0.3) c.offsetHSL(0,0,0.012); }
+    if (v>0.22 && v<0.92 && Math.abs(up-0.12+v*0.06)<0.012 && (v*90)%1<0.55) c.offsetHSL(0,0,-0.08);
     const i=(py*W+px)*4; img.data[i]=c.r*255; img.data[i+1]=c.g*255; img.data[i+2]=c.b*255; img.data[i+3]=255;
     if (eimg){ let e=0; if (P==='photo'){ for (const [bu,bv] of blobs){ if (Math.hypot(Math.min(Math.abs(u-((bu*0.5)+0.12)),1),v-bv*0.9)<0.018 && up<0.2) e=1; } if (Math.abs(up+0.35)<0.04 && (v*14)%1<0.4) e=1; }
       eimg.data[i]=eimg.data[i+1]=eimg.data[i+2]=e*255; eimg.data[i+3]=255; if (e) { img.data[i]=255; img.data[i+1]=230; img.data[i+2]=140; } } }
@@ -107,7 +113,7 @@ const WING_LOOK = {
 };
 export function wingTex(id, d){ return once('wing:'+id, ()=>{
   const L=WING_LOOK[id]||{}, r=mulberry32(hashStr(id)), c=col(d.c), c2=col(d.c2), hex=k=>'#'+col(k).getHexString();
-  const cv=canvas(256,256,(x,W,H)=>{
+  const cv=canvas(512,512,(x,W,H)=>{ x.scale(2,2); W=256; H=256;
     const g=x.createRadialGradient(0,H*0.5,10,0,H*0.5,W*1.05); g.addColorStop(0, L.grad?hex(L.grad):hex(c.clone().offsetHSL(0,0,-0.08))); g.addColorStop(0.7, hex(c)); g.addColorStop(1, hex(c.clone().offsetHSL(0,0.05,0.08))); x.fillStyle=g; x.fillRect(0,0,W,H);
     if (L.leaf){ x.strokeStyle=hex(c2); x.lineWidth=4; x.beginPath(); x.moveTo(0,H*0.5); x.lineTo(W,H*0.45); x.stroke(); for (let i=1;i<6;i++){ x.lineWidth=2; x.beginPath(); x.moveTo(i*W/6,H*0.49); x.lineTo(i*W/6+30,H*0.15); x.moveTo(i*W/6,H*0.49); x.lineTo(i*W/6+30,H*0.85); x.stroke(); } }
     if (L.band){ x.fillStyle=hex(L.band); x.globalAlpha=0.85; x.beginPath(); x.ellipse(W*0.55,H*0.5,W*0.12,H*0.42,0.2,0,TAU); x.fill(); x.globalAlpha=1; }

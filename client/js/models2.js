@@ -358,6 +358,7 @@ export function buildMuseum(){
 export const buildKeeper = asChar(_buildKeeper);
 function _buildKeeper(spec){
   const a=buildAnimal(spec); const u=a.userData;
+  if (u.v2){ if (spec.id==='marlo'){ const ap=mk(G.box(0.5,0.46,0.04),M(0xffffff),0,0.6,0.41,u.body); ap.rotation.x=-0.18; } return a; }   // the new builder draws shells, tails and stripes itself
   if (spec.species==='tortoise'){ const sh=outline(mk(G.sph(0.5,16,12,0,TAU,0,Math.PI/2), M(0x6a7a4a), 0,0.75,-0.32,u.body)); sh.rotation.x=-Math.PI/2+0.2; sh.scale.set(1,1,0.8);
     for(let i=0;i<5;i++){ const a2=i/5*TAU; mk(G.cyl(0.12,0.12,0.03,6),M(0x8a9a5a),Math.cos(a2)*0.22,0.75+Math.sin(a2)*0.22,-0.72,u.body).rotation.x=Math.PI/2; }
   }

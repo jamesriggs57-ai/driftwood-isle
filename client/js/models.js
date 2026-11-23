@@ -3,6 +3,9 @@ import * as THREE from 'three';
 import { TAU, hash2, mulberry32 } from './util.js';
 import { ITEMS, PLANTS } from './content.js';
 import { canopyGeo, coniferGeo, trunkGeo, frondsGeo, foliageMat, barkMat, leafy, treeTint } from './trees.js';
+import * as CR from './critters.js';
+import * as CH from './chars.js';
+const buildFossilInto=CR.buildFossilInto;
 import { felt, knit, eyeMat, noseMat, glintMat, threadMat, fabricMat, fishSkin, fishLook, finMat, wingTex, wingLook, clearWingMat, shellMat, fuzzMat, woodMat, glassMat, brass, ceramic, waterMat2 } from './look.js';
 
 export const MODEL = { season:'autumn', month:11 };
@@ -81,18 +84,28 @@ export function buildTree(r, type, opt={}){
   // deciduous
   const tall=(type==='birch'?2.4:1.8)*size, bend=[(r()-0.5)*0.5,(r()-0.5)*0.5];
   const pal=(LEAVES[type]||LEAVES.oak)[season];
-  const nb = pal ? 3 : 7, branches=[];
-  for (let i=0;i<nb;i++) branches.push([tall*(pal?0.6+r()*0.35:0.45+i/nb*0.5), i/nb*TAU*(pal?1:2.3)+r()*0.8, pal?0.9+r()*0.3:0.9+r()*0.5, 0.5+r()*0.6]);
-  const tr=new THREE.Mesh(trunkGeo({ h:tall+(pal?0.4:0.9), r0:type==='birch'?0.2:0.3, r1:pal?0.12:0.035, rb:0.12, bend, color:barkC, branches, flare:true, twigs:!pal }, r), barkMat(type==='birch')); tr.castShadow=tr.receiveShadow=true; top.add(tr);
+  let crowns=null;
+  if (pal){
+    const base = type==='birch' ? [[0,tall+1.25,0,0.85],[0.42,tall+0.45,0.22,0.78],[-0.4,tall+0.55,-0.22,0.8]]
+      : (r()<0.5 ? [[0,tall+1.55,0,1.15],[0.95,tall+0.6,0.35,1.05],[-0.85,tall+0.65,-0.35,1.1],[-0.15,tall+0.6,0.95,1.0]]
+               : [[0,tall+1.6,-0.1,1.1],[0.9,tall+0.7,0.4,1.05],[-0.9,tall+0.65,-0.2,1.05],[0.05,tall+0.55,1.0,0.95],[0.25,tall+0.6,-0.95,0.95]]);
+    const rot=r()*TAU; crowns=base.map(([x,y,z,s],i)=>{ const c=Math.cos(rot), sn=Math.sin(rot), k=i?0.85+r()*0.35:1; return [ (x*c-z*sn)*size+bend[0]+(r()-0.5)*0.2, y+(r()-0.5)*0.25, (x*sn+z*c)*size+bend[1]+(r()-0.5)*0.2, s*size*k ]; });
+  }
+  const nb = pal ? 0 : 7, branches=[];
+  for (let i=0;i<nb;i++) branches.push([tall*(0.45+i/nb*0.5), i/nb*TAU*2.3+r()*0.8, 0.9+r()*0.5, 0.5+r()*0.6]);
+  // leafy trees: one branch into the middle of each outer clump, ending well inside it so no wood shows between clumps
+  const trunkH = tall+(pal?0.9:0.9);
+  if (pal) for (const [cx,cy,cz,cs] of crowns.slice(1)){ const by=tall*0.72, t=by/trunkH, sx=bend[0]*t*t, sz=bend[1]*t*t;
+    const dx=cx-sx, dz=cz-sz, Hd=Math.hypot(dx,dz)*0.8, Vd=(cy-cs*0.15-by)*0.8, ang=Math.atan2(dz,dx);
+    let lo=-1, hi=4; for (let k=0;k<30;k++){ const up=(lo+hi)/2, v=Hd*up+0.25*Hd*Math.sqrt(1+up*up); if (v>Vd) hi=up; else lo=up; }
+    const up=(lo+hi)/2; branches.push([by, ang, Hd*Math.sqrt(1+up*up), up]); }
+  const tr=new THREE.Mesh(trunkGeo({ h:trunkH, r0:type==='birch'?0.2:0.3, r1:pal?0.12:0.035, rb:0.12, bend, color:barkC, branches, flare:true, twigs:!pal }, r), barkMat(type==='birch')); tr.castShadow=tr.receiveShadow=true; top.add(tr);
   if (!pal){ // winter: bare branches; the snow pass dusts their tops
     if (opt.fruit && stage===3){ const fm=M(ITEMS[opt.fruit].model.c); for(let i=0;i<6;i++){ const a=i/6*TAU+r()*0.4; fruits.push(hangFruit(top, fm, Math.cos(a)*0.85+bend[0], tall+0.55+(i%2)*0.35, Math.sin(a)*0.85+bend[1], opt.fruit)); } }
     return g;
   }
-  const base = type==='birch' ? [[0,tall+0.9,0,0.95],[0.45,tall+0.3,0.3,0.7],[-0.4,tall+0.4,-0.2,0.75],[0,tall+1.6,0,0.7]]
-    : [[0,tall+0.85,0,1.35],[0.85,tall+0.5,0.3,0.95],[-0.8,tall+0.55,-0.2,1.0],[0.1,tall+1.6,-0.1,1.0],[-0.25,tall+0.6,0.8,0.9],[0.35,tall+0.45,-0.75,0.85]];
-  const rot=r()*TAU, crowns=base.map(([x,y,z,s],i)=>{ const c=Math.cos(rot), sn=Math.sin(rot), k=i?0.85+r()*0.35:1; return [ (x*c-z*sn)*size+bend[0]+(r()-0.5)*0.2, y+(r()-0.5)*0.25, (x*sn+z*c)*size+bend[1]+(r()-0.5)*0.2, s*size*k ]; });
   const kind = type==='birch' ? 'small' : (type==='blossom'&&season==='spring') ? 'blossom' : 'broad';
-  top.add(leafy(new THREE.Mesh(canopyGeo(crowns, pal, r, tint, { density:type==='birch'?40:32, card:type==='birch'?0.72:0.95 }), foliageMat(kind)), foliageMat(kind)));
+  top.add(leafy(new THREE.Mesh(canopyGeo(crowns, pal, r, tint, { density:type==='birch'?40:32, card:type==='birch'?0.72:0.95, kind }), foliageMat(kind)), foliageMat(kind)));
   if (opt.fruit && stage===3){ const fm=M(ITEMS[opt.fruit].model.c);
     const outer=crowns.slice(1); for(let i=0;i<6;i++){ const [x,y,z,s]=outer[i%outer.length]; let dx=x-bend[0]+(r()-0.5)*0.6, dz=z-bend[1]+(r()-0.5)*0.6; if(Math.hypot(dx,dz)<0.3){ const a=i/6*TAU; dx=Math.cos(a); dz=Math.sin(a); }
       const L=Math.hypot(dx,dz); const dy=-0.3-r()*0.3; const n=Math.hypot(dx/L,dy,dz/L); const ux=dx/L/n, uy=dy/n, uz=dz/L/n; const rr=s*1.08;
@@ -203,22 +216,9 @@ export function buildItemModel(id){
     else if(d.s==='glass'){ mk(G.dod(0.18), MF(d.c,{transparent:true,opacity:0.75,roughness:0.15}), 0,0.12,0,g).scale.set(1.2,0.5,1); }
     else if(d.s==='pearl'){ const a=mk(G.sph(0.28,12,6,0,TAU,0,Math.PI/2), M(d.c), 0, 0.05, 0, g); a.scale.set(1,0.4,0.9); const b=mk(G.sph(0.28,12,6), M(0xb8c0c8), -0.05, 0.25, -0.12, g); b.scale.set(1,0.25,0.9); b.rotation.x=-0.7; mk(G.sph(0.1,14,12), M(0xfdf8f0,{roughness:0.15,metalness:0.3}), 0, 0.14, 0.02, g); }
   }
-  else if (d.t==='fossil'){
-    const base=mk(G.dod(0.32), MF(0xd9c7a3), 0, 0.18, 0, g); base.scale.set(1.15,0.55,1); const fc=M(0xb59c74);
-    const s=d.s;
-    if(s==='spiral'){ const t=mk(G.tor(0.15,0.06,8,16), fc, 0, 0.36, 0, g); t.rotation.x=Math.PI/2.4; }
-    else if(s==='bug'){ const b=mk(G.sph(0.18,10,8), fc, 0, 0.34, 0, g); b.scale.set(0.8,0.35,1.2); for(let i=-1;i<=1;i++) mk(G.box(0.34,0.03,0.04), fc, 0, 0.4, i*0.09, g); }
-    else if(s==='leaf'||s==='wing'){ const l=mk(G.sph(0.2,10,6), M(s==='leaf'?0x8a9a6a:0xa8a090), 0, 0.33, 0, g); l.scale.set(s==='wing'?1.4:0.5,0.12,s==='wing'?0.4:1.2); }
-    else if(s==='tooth'){ const t=mk(G.cone(0.13,0.4,5), M(0xf2ead8), 0, 0.5, 0, g); t.rotation.z=0.2; }
-    else if(s==='amber'){ mk(G.ico(0.17,1), M(0xf0a030,{transparent:true,opacity:0.85,roughness:0.2,emissive:0x8a4a00,emissiveIntensity:0.3}), 0, 0.4, 0, g); }
-    else if(s==='urchin'){ const u=mk(G.sph(0.17,12,10), fc, 0, 0.36, 0, g); u.scale.y=0.6; }
-    else if(s==='claw'){ const c=mk(G.cone(0.08,0.45,8), M(0xe8dcc0), 0, 0.45, 0, g); c.rotation.z=0.9; }
-    else if(s==='lily'){ for(let i=0;i<5;i++){ const a=i/5*TAU; const p=mk(G.cyl(0.02,0.03,0.25,5),fc,Math.cos(a)*0.08,0.45,Math.sin(a)*0.08,g); p.rotation.set(Math.sin(a)*0.6,0,-Math.cos(a)*0.6); } mk(G.cyl(0.04,0.05,0.2,6),fc,0,0.32,0,g); }
-    else if(s==='tusk'){ const t=mk(G.tor(0.3,0.06,8,16,Math.PI*0.8), M(0xf2ead8), 0, 0.32, 0, g); t.rotation.z=0.2; }
-    else if(s==='egg'){ const e=mk(G.sph(0.2,14,12), M(0xe0d0b0), 0, 0.45, 0, g); e.scale.y=1.3; }
-  }
-  else if (d.t==='fish') buildFishInto(g, d, id);
-  else if (d.t==='bug') buildBugInto(g, d, id);
+  else if (d.t==='fossil') buildFossilInto(g, d);
+  else if (d.t==='fish') CR.buildFishInto(g, d, id);
+  else if (d.t==='bug') CR.buildBugInto(g, d, id);
   else if (d.t==='furn') FURN_BUILDERS[d.b](g);
   else if (d.t==='flower'){ g.add(buildFlower(d.sp, 3)); }
   else if (d.t==='seed'){ const P=PLANTS[d.sp]; mk(G.box(0.4,0.5,0.06), M(0xf3e2c4), 0,0.25,0,g); mk(G.box(0.42,0.08,0.07), M(0xd8c0a0), 0,0.48,0,g); const f=mk(G.cyl(0.11,0.11,0.02,14), M(P.colors[0]), 0,0.24,0.04,g); f.rotation.x=Math.PI/2; mk(G.cyl(0.04,0.04,0.025,10),M(0xf8d040),0,0.24,0.05,g).rotation.x=Math.PI/2; }
@@ -464,7 +464,7 @@ function dress(body, head, spec){
 }
 const brassBtn = () => noseMat(0xd8b050);
 const ceramicBead = () => noseMat(0xf8f4ec);
-export const buildAnimal = asChar(_buildAnimal);
+export const buildAnimal = asChar(spec => CH.buildCritter(spec.look ? { ...CH.parseLook(spec.look), acc:spec.acc, accC:spec.accC } : spec));
 function _buildAnimal(spec){
   const g=new THREE.Group(), body=new THREE.Group(); g.add(body); const fur=felt(spec.fur), muzC=spec.muzzle||spec.belly||0xffffff, inner=felt(spec.cheek);
   const torso=mk(G.sph(0.48,26,20), fur, 0,0.7,0,body); torso.scale.set(1,0.92,0.86);
@@ -513,7 +513,7 @@ export function buildBike(color=0xd8604a){
   const basket=mk(G.box(0.34,0.18,0.24), M(0xc9a06a), 0,0.86,0.58, g);
   g.userData={ wheels:[wf,wb] }; return g;
 }
-export const buildPlayer = asChar(_buildPlayer);
+export const buildPlayer = asChar((o={}) => CH.buildCritter(typeof o.look==='string' ? CH.parseLook(o.look) : (o.look || CH.defaultLook())));
 function _buildPlayer(o={}){
   const g=new THREE.Group(), body=new THREE.Group(); g.add(body);
   const skinC=o.skin||0xf6cfae, skin=felt(skinC), hairC=o.hair||0x6a4030, shirt=o.shirt||0x6fb7d8;

@@ -594,13 +594,47 @@ export const CROPS = {
   basil:   { name:'Basil',    price:90,  days:2, n:[1,2], regrow:true,  c:0x4f9a3a, herb:true },
   mint:    { name:'Mint',     price:90,  days:2, n:[1,2], regrow:true,  c:0x7cd8a0, herb:true },
   rosemary:{ name:'Rosemary', price:100, days:3, n:[1,2], regrow:true,  c:0x6a8a6a, herb:true },
+  // v1.8 berries: perennial, you pick the berries and the plant stays. regrowTo: the stage it drops back to after picking.
+  strawberry:{ name:'Strawberries', price:80, days:3, n:[2,4], regrow:true, regrowTo:2, c:0xe0303a, berry:true },
+  blueberry: { name:'Blueberries',  price:90, days:4, n:[3,5], regrow:true, regrowTo:2, c:0x4a5ab8, berry:true },
+  raspberry: { name:'Raspberries',  price:90, days:4, n:[2,4], regrow:true, regrowTo:2, c:0xd8406a, berry:true },
 };
 for (const [id,c] of Object.entries(CROPS)){
   const pid='crop_'+id;   // the plant is crop_x, the harvest is x
   PLANTS[pid]={ name:c.name, ptype:'crop', days:c.days, colors:[c.c], crop:id };
-  def(id, { name:c.name, kind:c.herb?'herb':'veg', price:c.price, model:{t:'furn', b:'v_'+id} });
-  def(id+'_seeds', { name:c.name+(c.herb?' Starts':' Seeds'), kind:'seed', plant:pid, price:60, buy:c.herb?320:240, model:{t:'seed', sp:pid} });
+  def(id, { name:c.name, kind:c.herb?'herb':c.berry?'berry':'veg', price:c.price, model:{t:'furn', b:'v_'+id} });
+  // v1.8: crop seeds stack to 99 and sell for little, since every harvest gives some back
+  def(id+'_seeds', { name:(c.berry?c.name.replace(/ies$/,'y').replace(/s$/,''):c.name)+(c.herb?' Starts':' Seeds'), kind:'seed', plant:pid, price:10, buy:c.herb?320:240, stack:99, model:{t:'seed', sp:pid} });
 }
+/* ---------- v1.8: island seeds ----------
+   Every island has a few crops that grow wild there: cheap and always in stock at the shops, and their seed packets turn up
+   on the ground every day. Which ones is random per island, weighted by the island's terrain. */
+export const SEED_TERRAIN = {
+  flat:        { lettuce:3, strawberry:3, tomato:3, carrot:2, pumpkin:2, basil:2, onion:1, potato:1, mint:1, blueberry:1, raspberry:1, rosemary:1 },
+  hilly:       { potato:3, carrot:3, raspberry:3, blueberry:2, onion:2, pumpkin:2, tomato:1, lettuce:1, strawberry:1, mint:1, basil:1, rosemary:1 },
+  mountainous: { potato:3, blueberry:3, rosemary:3, onion:2, carrot:2, raspberry:2, mint:2, lettuce:1, pumpkin:1, strawberry:1, tomato:1, basil:1 },
+  cliffs:      { rosemary:3, mint:3, tomato:2, strawberry:2, onion:2, basil:2, carrot:1, potato:1, lettuce:1, blueberry:1, raspberry:1, pumpkin:1 },
+};
+export const ISLAND_SEED_N = 4, ISLAND_SEED_BUY = 30;
+export function islandSeedPool(seed, terrain){
+  let s=(seed^0x5eed5)>>>0; const r=()=>{ s=(s+0x6D2B79F5)|0; let t=Math.imul(s^s>>>15,1|s); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; };
+  const w=Object.entries(SEED_TERRAIN[terrain]||SEED_TERRAIN.flat), out=[];
+  while (out.length<ISLAND_SEED_N && w.length){ const tot=w.reduce((a,[,v])=>a+v,0); let x=r()*tot, k=0; while (k<w.length-1 && (x-=w[k][1])>0) k++; out.push(w.splice(k,1)[0][0]+'_seeds'); }
+  return out;
+}
+/* ---------- v1.8: gardens. Building one is free; fences and decorations cost clams. per = clams per fence piece (one side of one square). ---------- */
+export const GARDEN_FENCES = {
+  rustic: { name:'Rustic rails',   per:40 },
+  picket: { name:'White picket',   per:60 },
+  stone:  { name:'Low stone wall', per:70 },
+  hedge:  { name:'Boxwood hedge',  per:90 },
+};
+export const GARDEN_DECOR = {
+  sign:      { name:'Garden sign',     price:500,  blurb:'A painted sign by the gate.' },
+  scarecrow: { name:'Scarecrow',       price:1200, blurb:'Keeps an eye on things.' },
+  lanterns:  { name:'Corner lanterns', price:1600, blurb:'Glow on the corners at night. Needs a fence.' },
+  arch:      { name:'Flower arch',     price:2000, blurb:'Climbing roses over the gate.' },
+};
 /* ---------- Cooking: every recipe is listed from the start. Cook at a Wood Stove (anything) or a campfire (simple things). ---------- */
 export const RECIPES = [
   { id:'grilled_fish',  name:'Grilled Fish',       need:[['fish',1]],                              fire:true },
@@ -614,8 +648,10 @@ export const RECIPES = [
   { id:'fish_chips',    name:'Fish & Chips',       need:[['fish',1],['potato',2]] },
   { id:'fruit_tart',    name:'Fruit Tart',         need:[['fruit',3]] },
   { id:'coconut_curry', name:'Coconut Curry',      need:[['coconut',1],['carrot',1],['onion',1]] },
+  { id:'berry_tart',    name:'Berry Tart',         need:[['berry',4]] },
+  { id:'berry_jam',     name:'Berry Jam',          need:[['berry',3],['mint',1]],                 fire:true },
 ];
-const KIND_VALUE = { fish:200, fruit:120 };
+const KIND_VALUE = { fish:200, fruit:120, berry:90 };
 for (const r of RECIPES){
   const v=r.need.reduce((a,[id,n])=>a+(ITEMS[id]?ITEMS[id].price:KIND_VALUE[id]||100)*n,0);
   def(r.id, { name:r.name, kind:'food', price:Math.round((v*1.5+100)/10)*10, stack:10, model:{t:'furn', b:'d_'+r.id} });

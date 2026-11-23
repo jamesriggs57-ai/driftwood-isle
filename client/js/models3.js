@@ -136,6 +136,7 @@ export const CROP_LOOK = {
   tomato:{ c:0xe2483d, leaf:0x4f9a3a, kind:'vine' }, carrot:{ c:0xf08a2a, leaf:0x5fae43, kind:'root' }, potato:{ c:0xc8a070, leaf:0x5a9a3a, kind:'bush' },
   pumpkin:{ c:0xf0902a, leaf:0x4f8a3a, kind:'gourd' }, lettuce:{ c:0x9ad86a, leaf:0x7cc35a, kind:'head' }, onion:{ c:0xe8d8b0, leaf:0x6aae4a, kind:'root' },
   basil:{ c:0x4f9a3a, leaf:0x4f9a3a, kind:'herb' }, mint:{ c:0x7cd8a0, leaf:0x6ac890, kind:'herb' }, rosemary:{ c:0x6a8a6a, leaf:0x5a7a5a, kind:'spike' },
+  strawberry:{ c:0xe0303a, leaf:0x4f9a3a, kind:'runner' }, blueberry:{ c:0x4a5ab8, leaf:0x5a8a5a, kind:'berrybush' }, raspberry:{ c:0xd8406a, leaf:0x5f9a45, kind:'cane' },
 };
 export function buildCrop(sp, stage){
   const L=CROP_LOOK[sp]||CROP_LOOK.basil, g=new THREE.Group(), r=mulberry32(sp.length*31+stage), lf=M(L.leaf);
@@ -150,6 +151,14 @@ export function buildCrop(sp, stage){
   else if (L.kind==='gourd'){ for (let i=0;i<4;i++){ const l=mk(G.cyl(0.14*s+0.04,0.14*s+0.04,0.02,8), lf, Math.cos(i*1.6)*0.25*s, 0.1, Math.sin(i*1.6)*0.25*s, g); l.rotation.x=0.2; }
     if (stage>=2){ const p=mk(G.sph(stage===3?0.24:0.12,14,10), M(stage===3?L.c:0x9ac04a), 0.05,stage===3?0.2:0.12,0.05,g); p.scale.y=0.75; mk(G.cyl(0.02,0.03,0.08,5), M(WOOD2), 0.05,stage===3?0.4:0.22,0.05,g); } }
   else if (L.kind==='head'){ for (let i=0;i<7;i++){ const l=mk(G.sph(0.12*s+0.04,8,6), M(i<3?L.c:L.leaf), Math.cos(i*0.9)*0.06*s, 0.1+(i<3?0.06:0), Math.sin(i*0.9)*0.06*s, g); l.scale.set(1,0.7,1); } }
+  else if (L.kind==='runner'){ for (let i=0;i<6;i++){ const a=i/6*TAU+r()*0.4, l=mk(G.sph(0.08*s+0.04,8,6), lf, Math.cos(a)*0.13*s, 0.1+0.04*s, Math.sin(a)*0.13*s, g); l.scale.set(1.3,0.45,1.1); l.rotation.y=-a; }
+    if (stage>=2) for (let i=0;i<5;i++){ const a=i*1.3+0.4; mk(G.sph(0.025,6,4), M(0xffffff), Math.cos(a)*0.2, 0.18, Math.sin(a)*0.2, g); }
+    if (stage===3) for (let i=0;i<5;i++){ const a=i*1.26+0.2, b=mk(G.cone(0.055,0.11,8), M(L.c), Math.cos(a)*0.24, 0.07, Math.sin(a)*0.24, g); b.rotation.x=Math.PI; } }
+  else if (L.kind==='berrybush'){ for (let i=0;i<7;i++) mk(G.ico(0.1*s+0.05,1), lf, Math.cos(i*0.9)*0.15*s, 0.16+(i%3)*0.11*s, Math.sin(i*0.9)*0.15*s, g);
+    if (stage===3) for (let i=0;i<12;i++){ const a=i*2.4, h=0.18+(i%4)*0.07; mk(G.sph(0.035,8,6), M(i%5?L.c:0x8a9ae0), Math.cos(a)*0.2, h, Math.sin(a)*0.2, g); } }
+  else if (L.kind==='cane'){ for (let i=0;i<4;i++){ const c=mk(G.cyl(0.012,0.018,0.7*s+0.1,4), M(0x8a5a4a), Math.cos(i*1.6)*0.06, (0.7*s+0.1)/2, Math.sin(i*1.6)*0.06, g); c.rotation.set(Math.cos(i)*0.2,0,Math.sin(i)*0.2);
+      for (let k=0;k<3;k++){ const l=mk(G.sph(0.06*s+0.03,8,6), lf, c.position.x+Math.cos(i*1.6+k)*0.07, 0.15+k*0.22*s, c.position.z+Math.sin(i*1.6+k)*0.07, g); l.scale.set(1.3,0.5,1); } }
+    if (stage===3) for (let i=0;i<9;i++){ const a=i*2.1; mk(G.ico(0.04,1), M(L.c), Math.cos(a)*0.14, 0.2+(i%3)*0.16, Math.sin(a)*0.14, g); } }
   else if (L.kind==='spike'){ for (let i=0;i<7;i++){ const b=mk(G.cyl(0.012,0.018,0.45*s+0.1,4), lf, Math.cos(i*0.9)*0.08, (0.45*s+0.1)/2+0.04, Math.sin(i*0.9)*0.08, g); b.rotation.set(Math.cos(i)*0.25,0,Math.sin(i)*0.25); } }
   else { for (let i=0;i<8;i++){ const l=mk(G.sph(0.06*s+0.03,8,6), lf, Math.cos(i*0.8)*0.1*s, 0.08+i*0.035*s, Math.sin(i*0.8)*0.1*s, g); l.scale.set(1.3,0.5,1); } }
   return g;
@@ -167,6 +176,11 @@ Object.assign(FURN_BUILDERS, {
   v_basil: veg('basil', (g,c,l)=>{ mk(G.cyl(0.015,0.015,0.35,4), M(0x5a8a3a), 0,0.17,0,g); for (let i=0;i<6;i++){ const s=mk(G.sph(0.08,8,6), l, Math.cos(i*1.05)*0.08,0.12+i*0.04,Math.sin(i*1.05)*0.08,g); s.scale.set(1.3,0.4,0.9); } }),
   v_mint: veg('mint', (g,c,l)=>{ mk(G.cyl(0.015,0.015,0.35,4), M(0x5a9a6a), 0,0.17,0,g); for (let i=0;i<6;i++){ const s=mk(G.sph(0.07,8,6), l, Math.cos(i*1.05)*0.07,0.12+i*0.04,Math.sin(i*1.05)*0.07,g); s.scale.set(1.2,0.4,1.0); } }),
   v_rosemary: veg('rosemary', (g,c,l)=>{ for (let i=0;i<3;i++){ const b=mk(G.cyl(0.012,0.012,0.5,4), M(0x7a6a4a), (i-1)*0.05,0.25,0,g); b.rotation.z=(i-1)*0.2; for (let k=0;k<6;k++) mk(G.box(0.08,0.01,0.015), l, b.position.x+Math.sin(b.rotation.z)*(-0.2+k*0.08), 0.06+k*0.07, 0, g); } }),
+  v_strawberry: veg('strawberry', (g,c,l)=>{ for (let i=0;i<3;i++){ const b=mk(G.cone(0.13,0.24,10), c, (i-1)*0.17,0.13,(i%2)*0.08,g); b.rotation.x=Math.PI; for (let k=0;k<4;k++){ const s=mk(G.cone(0.03,0.08,4), l, b.position.x+Math.cos(k*1.57)*0.05,0.26,b.position.z+Math.sin(k*1.57)*0.05,g); s.rotation.set(Math.sin(k*1.57)*1.3,0,-Math.cos(k*1.57)*1.3); } } }),
+  v_blueberry: veg('blueberry', (g,c)=>{ for (let i=0;i<9;i++){ const a=i*2.4, d=i?0.1+(i%3)*0.05:0; mk(G.sph(0.08,10,8), c, Math.cos(a)*d,0.08+(i>5?0.1:0),Math.sin(a)*d,g); } }),
+  v_raspberry: veg('raspberry', (g,c)=>{ for (let i=0;i<3;i++){ const x=(i-1)*0.18; for (let k=0;k<10;k++){ const a=k*2.4, h=k/10; mk(G.sph(0.04,6,5), c, x+Math.cos(a)*0.07*(1-h*0.4),0.08+h*0.18,Math.sin(a)*0.07*(1-h*0.4),g); } } }),
+  seedbin(g){ mk(G.box(0.9,0.55,0.6), M(WOOD), 0,0.28,0,g); mk(G.box(0.96,0.06,0.66), M(WOOD2), 0,0.57,0,g); const cs=[0xe0303a,0xf08a2a,0x9ad86a,0xc8a070,0x4a5ab8,0x7cd8a0];
+    for (let i=0;i<6;i++){ const x=-0.3+(i%3)*0.3, z=i<3?-0.14:0.14; mk(G.box(0.26,0.04,0.24), M(0xe8d8b0), x,0.6,z,g); mk(G.box(0.12,0.16,0.02), M(cs[i]), x,0.7,z+0.08,g); for (let k=0;k<5;k++) mk(G.sph(0.025,5,4), M(0x8a6a4a), x+Math.cos(k*1.3)*0.06,0.63,z-0.02+Math.sin(k*1.3)*0.05,g); } },
   seedtable(g){ mk(G.box(2.4,0.06,1.4), M(WOODL), 0,0.6,0,g); for (const x of [-1.1,1.1]) for (const z of [-0.6,0.6]) mk(G.box(0.08,0.6,0.08), M(WOOD2), x,0.3,z,g); mk(G.box(2.2,0.04,1.2), M(0x6a8a4a), 0,0.64,0,g); },
   sled(g){ const run=M(0xd8604a), wd=M(WOOD); for (const s of [-0.28,0.28]){ mk(G.box(0.06,0.06,1.3), run, s,0.05,0,g); const c=mk(G.tor(0.12,0.03,6,10,Math.PI), run, s,0.17,0.65,g); c.rotation.y=Math.PI/2; c.rotation.z=-Math.PI/2; for (const z of [-0.4,0.3]) mk(G.box(0.04,0.16,0.04), M(WOOD2), s,0.14,z,g); }
     for (let i=0;i<5;i++) mk(G.box(0.7,0.05,0.2), wd, 0,0.24,-0.5+i*0.22,g); const rope=mk(G.tor(0.18,0.015,4,12,Math.PI), M(0xe8d8b0), 0,0.28,0.72,g); rope.rotation.x=-Math.PI/2; },
@@ -175,7 +189,7 @@ Object.assign(FURN_BUILDERS, {
 const DISH_LOOK = {
   tomato_soup:{ bowl:true, c:0xd8402a }, veg_stew:{ bowl:true, c:0xb06a30, bits:[0xf08a2a,0xe8d8b0,0xc8a070] }, pumpkin_soup:{ bowl:true, c:0xf0a040 }, mint_tea:{ cup:true, c:0x9ad8a0 },
   baked_potato:{ c:0xc8a070, big:0xd8b080 }, grilled_fish:{ fish:true }, fish_chips:{ fish:true, bits:[0xf0c860,0xf0c860,0xf0c860] }, garden_salad:{ c:0x8ac860, bits:[0xe2483d,0xf08a2a,0xe2483d] },
-  roast_carrots:{ c:0xf08a2a, bits:[0xf08a2a,0xf08a2a,0x5a7a5a] }, fruit_tart:{ tart:true, c:0xe2483d }, coconut_curry:{ bowl:true, c:0xe8c050, bits:[0xf08a2a,0xffffff] }, herb_bread:{ bread:true },
+  roast_carrots:{ c:0xf08a2a, bits:[0xf08a2a,0xf08a2a,0x5a7a5a] }, fruit_tart:{ tart:true, c:0xe2483d }, berry_tart:{ tart:true, c:0x4a5ab8 }, berry_jam:{ cup:true, c:0xb8203a }, coconut_curry:{ bowl:true, c:0xe8c050, bits:[0xf08a2a,0xffffff] }, herb_bread:{ bread:true },
 };
 for (const [id,d] of Object.entries(DISH_LOOK)) FURN_BUILDERS['d_'+id]=g=>{
   const plate=M(0xfaf6ee), food=M(d.c||0xc8a070);

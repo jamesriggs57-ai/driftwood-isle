@@ -5,7 +5,8 @@
 import * as THREE from 'three';
 import { TAU, clamp, lerp, smooth, mulberry32, hashStr, hash2, vnoise, fbm, weightedPick, inHours, inMonths, fmt, polyDist, segDist, Time, seasonOf } from './util.js';
 import { ITEMS, NATIVE_FRUITS, PLANTS, TOOLS, WOODWORK, BACKPACKS, BASE_SLOTS, HOUSE_LEVELS, RESIDENTS, DIALOGUE, PEDDLER, EVENTS, rarityLabel, RARITY_COLORS, SHOPS, INVEST, KEEPERS, MUSEUM, BUILD,
-  FOREIGN_FRUIT_PRICE, FRUIT_REGROW_DAYS, POTIONS, WIZARD, MAGIC, STORY, FAVOR_ASKS, CROPS, RECIPES, ARRIVE, MENTOR } from './content.js';
+  FOREIGN_FRUIT_PRICE, FRUIT_REGROW_DAYS, POTIONS, WIZARD, MAGIC, STORY, FAVOR_ASKS, CROPS, RECIPES, ARRIVE, MENTOR, islandSeedPool, ISLAND_SEED_BUY, GARDEN_FENCES, GARDEN_DECOR } from './content.js';
+import { CELL, buildSoil, buildFences, buildStake, buildGardenSign, buildScarecrow, buildLanternPost, buildFlowerArch } from './farm.js';
 import { Snd } from './audio.js';
 import { LAYOUTS, DEFAULT_SHAPE, islandRadius, generateLayout, bluffD } from './layouts.js';
 import { buildBike, MODEL, M, mk, G, outline, windowMat, glowMats, glowMat, glowSprites, addGlow, textSprite, PALETTE, buildItemModel, thumb, toolThumb, FURN_BUILDERS, MF,
@@ -28,7 +29,7 @@ const SAVE_KEY = 'driftwood-isle-save-v1';
 function freshState(){
   return { v:2, player:'', island:'', seed:(Math.random()*1e9)|0, clams:1000, inv:[], seen:{}, rec:{}, placed:[], ground:[], plants:[], cut:{},
     friend:{}, house:0, fund:0, home:null, shops:{}, museum:{}, pack:-1, tools:{}, toolEver:{}, equip:null, stats:{ bugs:0, fish:0, dug:0, chopped:0, watered:0 }, craft:null, craftHint:false, day:null, nativeFruit:null, caught:0,
-    settings:{ sound:true, music:0.6, bright:1 }, layout:'classic', styles:{} };
+    settings:{ sound:true, music:0.6, bright:1 }, layout:'classic', styles:{}, gardens:[] };
 }
 function migrate(s){
   if (s.v===1){ s.v=2; s.day=null; s.ground=[]; s.clams=(s.clams||0)+500; s.migratedFrom1=true; }
@@ -737,7 +738,8 @@ class DigSpot extends Ent {
 class GroundItem extends Ent {
   constructor(rec){ super('item',rec.x,rec.z,0.35); this.rec=rec; this.reach=1.2; const m=buildItemModel(rec.id); m.scale.setScalar(ITEMS[rec.id].kind==='furniture'?0.6:0.95); const g=new THREE.Group(); g.add(m); this.attach(g); this.hitSphere(0.45,0.3); this.spin=Math.random()*TAU; this.bounce=rec.fresh?1:0; delete rec.fresh; }
   label(){ return 'Pick up'; }
-  act(){ if (!this.rec.beach && noEdit()) return; const id=this.rec.id, res=addItem(id, this.rec.m); if(!res){ toast('Your bag is full. Sell or drop something first.'); return; } Snd.pop(); const i=S.ground.indexOf(this.rec); if(i>=0) S.ground.splice(i,1); if (VISIT && this.rec.beach){ (S.day.vpicked=S.day.vpicked||[]).push(Math.round(this.rec.x*10)+','+Math.round(this.rec.z*10)); } this.remove(); save(); itemToast(id, res==='new', 'Picked up'); craftNudge(id); }
+  act(){ if (!this.rec.beach && noEdit()) return; const id=this.rec.id, res=addItem(id, this.rec.m); if(!res){ toast('Your bag is full. Sell or drop something first.'); return; }
+    for (let k=1;k<(this.rec.n||1);k++){ if (!addItem(id)) break; pickNote(id,'Picked up'); } Snd.pop(); const i=S.ground.indexOf(this.rec); if(i>=0) S.ground.splice(i,1); if (VISIT && this.rec.beach){ (S.day.vpicked=S.day.vpicked||[]).push(Math.round(this.rec.x*10)+','+Math.round(this.rec.z*10)); } this.remove(); save(); itemToast(id, res==='new', 'Picked up'); craftNudge(id); }
   update(dt,t){ this.obj.children[0].rotation.y=this.spin+Math.sin(t*1.5+this.spin)*0.2; if(this.bounce>0){ this.bounce=Math.max(0,this.bounce-dt*2.2); this.obj.position.y=this.pos.y+Math.abs(Math.sin(this.bounce*Math.PI*2))*this.bounce*1.4; } }
 }
 class Weed extends Ent {
@@ -746,16 +748,29 @@ class Weed extends Ent {
   act(){ const r=addItem('weed'); if(!r){ toast('Your bag is full.'); return; } Snd.rustle(); puff(this.pos.clone().add(new THREE.Vector3(0,0.3,0)),0x6a8a2a,8,0.5,2,0.8,0.5); puff(this.pos.clone().add(new THREE.Vector3(0,0.1,0)),0x6a5038,5,0.4,1.5,0.7,0.5); S.day.weeds[this.i].pulled=true; FX.yank(this.obj); this.remove(true); save(); itemToast('weed', r==='new','Pulled'); }
 }
 
+/* ---------- v1.8 harvesting ---------- */
+const cropWord = (C,n) => { const w=C.name.toLowerCase(); return n>1&&!/s$/.test(w)&&!C.herb ? (C.name==='Tomato'||C.name==='Potato'?w+'es':w+'s') : w; };
+const seedOf = rec => { const P=PLANTS[rec.sp]; return P.ptype==='crop' ? P.crop+'_seeds' : rec.sp+'_seeds'; };
+// would these all fit in the bag?
+function roomFor(list){ const inv=S.inv.map(x=>({...x})); for (const [id,k0] of list){ let k=k0; const st=ITEMS[id].stack; for (const x of inv){ if (x.id===id && !x.m && x.n<st){ const t=Math.min(k,st-x.n); x.n+=t; k-=t; } }
+  while (k>0){ if (inv.length>=slotsMax()) return false; const t=Math.min(k,st); inv.push({ id, n:t }); k-=t; } } return true; }
+// bulk: don't drop anything; return null if it won't fit
+function harvestRec(rec, bulk){ const P=PLANTS[rec.sp], C=CROPS[P.crop], n=C.n[0]+Math.floor(Math.random()*(C.n[1]-C.n[0]+1)), seeds=1+Math.floor(Math.random()*4), sid=P.crop+'_seeds';
+  if (bulk && !roomFor([[P.crop,n],[sid,seeds]])) return null;
+  const at=new THREE.Vector3(rec.x, groundY(rec.x,rec.z), rec.z); let isNew=false, dropped=false;
+  for (let i=0;i<n;i++){ const r=addItem(P.crop); if (r){ if (r==='new') isNew=true; } else { dropNear(P.crop, at, 0.9); dropped=true; } }
+  for (let i=0;i<seeds;i++){ if (!addItem(sid)){ dropNear(sid, at, 0.9); dropped=true; } }
+  const e=plantEntOf(rec);
+  if (C.regrow){ rec.stage=C.regrowTo||1; if (e) e.rebuild(); } else { S.plants.splice(S.plants.indexOf(rec),1); if (e) e.remove(); }
+  S.stats.harvested=(S.stats.harvested||0)+n; return { n, seeds, isNew, dropped }; }
 /* ---------- Planted flowers and shrubs ---------- */
 function waterPlant(rec, pos){ if(!useTool('can')) return; rec.watered=today(); S.stats.watered++; Snd.water(); for(let i=0;i<8;i++) puff(pos.clone().add(new THREE.Vector3((Math.random()-0.5)*0.6,0.8,(Math.random()-0.5)*0.6)),0x7fc8f0,1,0.15,-1,0.4,0.5); toast('Watered. It will grow faster tomorrow.'); save(); }
 class Plant extends Ent {
   // Vegetables and herbs: pick a few. Tomatoes and herbs grow back; the rest come up whole.
-  harvest(){ const P=PLANTS[this.rec.sp], C=CROPS[P.crop], n=C.n[0]+Math.floor(Math.random()*(C.n[1]-C.n[0]+1)); let got=0, isNew=false;
-    for (let i=0;i<n;i++){ const r=addItem(P.crop); if (r){ got++; if (r==='new') isNew=true; } else dropNear(P.crop, this.pos, 0.9); }
-    Snd.pop(); puff(this.pos.clone().add(new THREE.Vector3(0,0.3,0)),0x7cc35a,6,0.5,1.5,0.7,0.5);
-    if (C.regrow){ this.rec.stage=1; this.rebuild(); } else { S.plants.splice(S.plants.indexOf(this.rec),1); this.remove(); }
-    S.stats.harvested=(S.stats.harvested||0)+n; save(); toast(`${isNew?'New! ':''}Harvested ${n} ${C.name.toLowerCase()}${n>1&&!/s$/.test(C.name)&&!C.herb?(C.name==='Tomato'||C.name==='Potato'?'es':'s'):''}${got<n?' (some landed on the ground, your bag is full)':''}`, thumb(P.crop), isNew?'new':'');
-    if (isNew) Snd.fanfare(); }
+  // Vegetables, herbs and berries: you get some of the crop and 1 to 4 seeds back. Tomatoes, herbs and berries stay planted and grow back.
+  harvest(){ const r=harvestRec(this.rec, false); if (!r) return; Snd.pop(); puff(this.pos.clone().add(new THREE.Vector3(0,0.3,0)),0x7cc35a,6,0.5,1.5,0.7,0.5); save();
+    const C=CROPS[PLANTS[this.rec.sp].crop]; toast(`${r.isNew?'New! ':''}Harvested ${r.n} ${cropWord(C,r.n)} and ${r.seeds} seed${r.seeds>1?'s':''}${r.dropped?' (some landed on the ground, your bag is full)':''}`, thumb(PLANTS[this.rec.sp].crop), r.isNew?'new':'');
+    if (r.isNew) Snd.fanfare(); }
   constructor(rec){ super('plant',rec.x,rec.z,0.3); this.rec=rec; this.reach=1.3; this.attach(this.model()); this.hitSphere(0.4,0.3); this.obj.rotation.y=rec.rot||0; }
   model(){ const P=PLANTS[this.rec.sp]; return P.ptype==='crop' ? buildCrop(P.crop, this.rec.stage) : P.ptype==='flower' ? buildFlower(this.rec.sp, this.rec.stage, this.rec.color) : buildShrub(this.rec.sp, this.rec.stage, this.rec.color); }
   rebuild(){ const ry=this.obj.rotation.y; this.swap(this.model()); this.hitSphere(0.4,0.3); this.obj.rotation.y=ry; this.solid = PLANTS[this.rec.sp].ptype==='shrub' && this.rec.stage>=2; this.r = this.solid?0.6:0.3; }
@@ -775,6 +790,98 @@ class Plant extends Ent {
     const st=(P.ptype==='crop'?['just planted','sprouting','growing','ready to harvest']:['just planted','sprouting','growing','fully grown'])[this.rec.stage];
     toast(`${P.name}: ${st}.`);
   }
+}
+
+/* =====================================================================
+   v1.8 GARDENS. Seeds go in on a grid (CELL squares). Planting next to a garden grows it; building one is free.
+   A garden: { id, cells:['i,j'], gate:edgeKey, fence:style|null, fenced:[edgeKey], decor:{ sign, scarecrow, lanterns, arch } }
+   Edge keys: 'i,j,E' is the side between squares (i,j) and (i+1,j); 'i,j,S' between (i,j) and (i,j+1).
+   ===================================================================== */
+const ckey=(i,j)=>i+','+j;
+const cellOf=(x,z)=>[Math.round(x/CELL), Math.round(z/CELL)];
+const GCELLS=new Map();
+function indexGardens(){ GCELLS.clear(); for (const g of (S.gardens||[])) for (const k of g.cells) GCELLS.set(k,g); }
+const gardenAtCell=(i,j)=>GCELLS.get(ckey(i,j));
+const gardenAtXZ=(x,z)=>{ if (x>500) return null; const [i,j]=cellOf(x,z); return GCELLS.get(ckey(i,j)); };
+const NB=[[1,0],[-1,0],[0,1],[0,-1]];
+const edgeKey=(i,j,di,dj)=>di===1?`${i},${j},E`:di===-1?`${i-1},${j},E`:dj===1?`${i},${j},S`:`${i},${j-1},S`;
+function edgeLine(k){ const [a,b,d]=k.split(','), i=+a, j=+b, h=CELL/2;
+  return d==='E' ? { x:(i+0.5)*CELL, z:j*CELL, rot:Math.PI/2, p:[(i+0.5)*CELL, j*CELL-h, (i+0.5)*CELL, j*CELL+h] } : { x:i*CELL, z:(j+0.5)*CELL, rot:0, p:[i*CELL-h, (j+0.5)*CELL, i*CELL+h, (j+0.5)*CELL] }; }
+// the garden's outside edge only: holes left around a tree or rock in the middle don't get fenced
+function perimeter(g){ const set=new Set(g.cells), b=gardenBox(g), seen=new Set(), q=[];
+  for (let i=b.i0-1;i<=b.i1+1;i++) for (let j=b.j0-1;j<=b.j1+1;j++) if (i===b.i0-1||i===b.i1+1||j===b.j0-1||j===b.j1+1){ const k=ckey(i,j); seen.add(k); q.push([i,j]); }
+  while (q.length){ const [i,j]=q.pop(); for (const [di,dj] of NB){ const a=i+di, c=j+dj, k=ckey(a,c); if (a<b.i0||a>b.i1||c<b.j0||c>b.j1||seen.has(k)||set.has(k)) continue; seen.add(k); q.push([a,c]); } }
+  const out=[]; for (const k of g.cells){ const [i,j]=k.split(',').map(Number); for (const [di,dj] of NB){ const n=ckey(i+di,j+dj); if (!set.has(n) && seen.has(n)) out.push({ key:edgeKey(i,j,di,dj), i, j, di, dj }); } } return out; }
+const edgeOut=(e,d=0.6)=>[(e.i+e.di*0.5)*CELL+e.di*d, (e.j+e.dj*0.5)*CELL+e.dj*d];   // a point just outside a perimeter side
+function gardenBox(g){ let a=1e9,b=-1e9,c=1e9,d=-1e9; for (const k of g.cells){ const [i,j]=k.split(',').map(Number); a=Math.min(a,i); b=Math.max(b,i); c=Math.min(c,j); d=Math.max(d,j); } return { i0:a, i1:b, j0:c, j1:d }; }
+function nearestSide(g, x, z){ let best=null, bd=1e9; for (const e of perimeter(g)){ const [ox,oz]=edgeOut(e), d=Math.hypot(ox-x,oz-z)+(walkable(ox,oz)?0:50); if (d<bd){ bd=d; best=e; } } return best; }
+function gateOf(g){ const per=perimeter(g); let e=per.find(p=>p.key===g.gate); if (!e){ e=nearestSide(g, player.pos.x, player.pos.z); g.gate=e?e.key:null; } return e; }
+const gardenPlants = g => S.plants.filter(p=>gardenAtXZ(p.x,p.z)===g);
+const plantEntOf = rec => plantEnts.find(e=>e.rec===rec && !e.removed);
+const isRipe = rec => { const P=PLANTS[rec.sp]; return P && (P.ptype==='crop'||P.ptype==='flower') && rec.stage===3; };
+const islandTerrain = () => LAYOUT_ID==='gen' ? ((S.gen&&S.gen.terrain)||'hilly') : LAYOUT_ID==='highlands' ? 'hilly' : 'flat';
+const islandSeeds = () => islandSeedPool(S.seed, islandTerrain());
+
+// Fences you can't walk through. Every side that has a fence piece is a segment; the gate is left open.
+var FENCE_SEGS=[], moverFrom=null;
+function fenceDist(x,z,s){ const [x1,z1,x2,z2]=s, dx=x2-x1, dz=z2-z1, t=Math.max(0,Math.min(1,((x-x1)*dx+(z-z1)*dz)/(dx*dx+dz*dz))); return Math.hypot(x-x1-dx*t, z-z1-dz*t); }
+function fenceHit(x,z,r){ for (const s of FENCE_SEGS){ if (x<Math.min(s[0],s[2])-r-0.1 || x>Math.max(s[0],s[2])+r+0.1 || z<Math.min(s[1],s[3])-r-0.1 || z>Math.max(s[1],s[3])+r+0.1) continue;
+  const d=fenceDist(x,z,s); if (d>=r) continue; if (moverFrom){ const d0=fenceDist(moverFrom.x,moverFrom.z,s); if (d0<r && d>=d0) continue; }   // already touching it: you can always step away
+  return true; } return false; }
+
+// Can a seed go in this square?
+function cellFree(i,j, near){ const x=i*CELL, z=j*CELL; if (World.inside) return false;
+  if (!walkable(x,z) || onDock(x,z) || onBridge(x,z) || rawHeight(x,z)<=SAND_H+0.05 || visPathDist(x,z)<1.0) return false;
+  let lo=1e9, hi=-1e9; for (const [ox,oz] of [[-0.4,-0.4],[0.4,-0.4],[-0.4,0.4],[0.4,0.4]]){ if (!walkable(x+ox,z+oz)) return false; const y=rawHeight(x+ox,z+oz); lo=Math.min(lo,y); hi=Math.max(hi,y); }
+  if (hi-lo>0.35) return false;
+  if (blocked(x,z,0.3)) return false;
+  for (const q of (near||S.plants)) if (Math.abs(q.x-x)<0.55 && Math.abs(q.z-z)<0.55) return false;
+  for (const t of trees) if (!t.removed && Math.abs(t.pos.x-x)<1.0 && Math.abs(t.pos.z-z)<1.0 && Math.hypot(t.pos.x-x,t.pos.z-z)<1.0) return false;
+  return true; }
+
+// Add squares to the garden they touch (merging gardens they join), or start a new one.
+function addToGarden(cells){
+  const touch=new Set(); for (const [i,j] of cells){ const g0=gardenAtCell(i,j); if (g0) touch.add(g0); for (const [di,dj] of NB){ const g=gardenAtCell(i+di,j+dj); if (g) touch.add(g); } }
+  let g; if (!touch.size){ g={ id:'g'+Date.now().toString(36)+Math.floor(Math.random()*1e3), cells:[], gate:null, fence:null, fenced:[], decor:{} }; S.gardens.push(g); }
+  else { const list=[...touch]; g=list[0]; for (const o of list.slice(1)){ g.cells.push(...o.cells); g.fenced=[...(g.fenced||[]), ...(o.fenced||[])]; if (!g.fence) g.fence=o.fence; g.decor=Object.assign({}, o.decor, g.decor); S.gardens.splice(S.gardens.indexOf(o),1); } }
+  const set=new Set(g.cells); for (const [i,j] of cells) set.add(ckey(i,j)); g.cells=[...set]; indexGardens(); gateOf(g); return g; }
+
+/* ---------- Drawing gardens: soil, fences, gate, decorations, the garden's stake (tap it for the garden menu) ---------- */
+let GARDEN_GFX=null; const gardenEnts=[], COVER=[];
+class GardenSpot extends Ent {
+  constructor(g, x, z, rot, model){ super('garden', x, z, 0.3); this.g=g; this.reach=1.4; model.rotation.y=rot; this.attach(model); this.hitSphere(0.55,0.5); }
+  label(){ return 'Garden'; }
+  act(){ openGarden(this.g); }
+  update(dt,t){ const b=this.obj.userData.bird; if (b) b.rotation.y=Math.sin(t*0.7)*0.6; }
+}
+// grass tufts, clover and wild flowers inside a garden are hidden so the soil shows
+function applyCover(){ for (const c of COVER){ const a=c.im.instanceMatrix.array; a.set(c.orig); for (let k=0;k<c.im.count;k++){ if (gardenAtXZ(a[k*16+12], a[k*16+14])) for (let q=0;q<16;q++) a[k*16+q]=0; } c.im.instanceMatrix.needsUpdate=true; } }
+function rebuildGardens(){
+  indexGardens(); if (GARDEN_GFX) OUT.remove(GARDEN_GFX); GARDEN_GFX=new THREE.Group(); OUT.add(GARDEN_GFX);
+  for (const e of gardenEnts) if (!e.removed) e.remove(); gardenEnts.length=0; FENCE_SEGS=[];
+  GARDEN_GFX.add(buildSoil([...GCELLS.keys()].map(k=>{ const [i,j]=k.split(',').map(Number); return [i*CELL,j*CELL]; }), (x,z)=>groundY(x,z)));
+  const byStyle={};
+  for (const g of S.gardens){ if (!g.cells.length) continue; const per=perimeter(g), gate=gateOf(g), fenced=new Set(g.fenced||[]);
+    if (g.fence){ const L=(byStyle[g.fence]=byStyle[g.fence]||{ edges:[], posts:new Map(), gates:[] });
+      for (const e of per){ if (e.key===g.gate || !fenced.has(e.key)) continue; const l=edgeLine(e.key); L.edges.push({ x:l.x, y:groundY(l.x,l.z), z:l.z, rot:l.rot }); FENCE_SEGS.push(l.p);
+        for (const [px,pz] of [[l.p[0],l.p[1]],[l.p[2],l.p[3]]]) L.posts.set(px.toFixed(2)+','+pz.toFixed(2), { x:px, y:groundY(px,pz), z:pz }); }
+      if (gate){ const l=edgeLine(gate.key); for (const [px,pz] of [[l.p[0],l.p[1]],[l.p[2],l.p[3]]]){ L.posts.delete(px.toFixed(2)+','+pz.toFixed(2)); L.gates.push({ x:px, y:groundY(px,pz), z:pz }); } } }
+    if (!gate) continue; const [sx,sz]=edgeOut(gate, 0.55), face=Math.atan2(gate.di, gate.dj), D=g.decor||{};
+    // what grows here most, for the sign
+    const counts={}; for (const p of gardenPlants(g)) counts[p.sp]=(counts[p.sp]||0)+1; const top=Object.entries(counts).sort((a,b)=>b[1]-a[1])[0], TP=top&&PLANTS[top[0]];
+    const stake = D.sign && D.sign!=='off' ? buildGardenSign(TP?TP.name:'Garden', TP&&TP.colors&&TP.colors[0]!==undefined?TP.colors[0]:0x6aae4a) : buildStake();
+    const ox=Math.cos(face)*0.62, oz=-Math.sin(face)*0.62;   // beside the gate, not in it
+    gardenEnts.push(new GardenSpot(g, sx+ox, sz+oz, face, stake));
+    if (D.arch && D.arch!=='off'){ const l=edgeLine(gate.key), a=buildFlowerArch(); a.position.set(l.x, groundY(l.x,l.z), l.z); a.rotation.y=l.rot; GARDEN_GFX.add(a); }
+    const bx=gardenBox(g), corners=[[bx.i0,bx.j0,-1,-1],[bx.i1,bx.j0,1,-1],[bx.i0,bx.j1,-1,1],[bx.i1,bx.j1,1,1]];
+    if (D.lanterns && D.lanterns!=='off') for (const [ci,cj,si,sj] of corners){ let best=null, bd=1e9; for (const k of g.cells){ const [i,j]=k.split(',').map(Number), d=Math.abs(i-ci)+Math.abs(j-cj); if (d<bd){ bd=d; best=[i,j]; } }
+      const x=(best[0]+si*0.5)*CELL+si*0.12, z=(best[1]+sj*0.5)*CELL+sj*0.12, lp=buildLanternPost(); lp.position.set(x, groundY(x,z), z); lp.rotation.y=Math.atan2(-si,-sj)+Math.PI/2; GARDEN_GFX.add(lp); }
+    if (D.scarecrow && D.scarecrow!=='off'){ // in a corner square away from the gate, or just outside one
+      const far=corners.slice().sort((a,b)=>Math.hypot(b[0]*CELL-sx,b[1]*CELL-sz)-Math.hypot(a[0]*CELL-sx,a[1]*CELL-sz));
+      for (const [ci,cj,si,sj] of far){ const x=(ci+si*1.1)*CELL, z=(cj+sj*1.1)*CELL; if (!walkable(x,z) || gardenAtXZ(x,z)) continue; const sc=buildScarecrow(); sc.position.set(x, groundY(x,z), z); sc.rotation.y=Math.atan2(sx-x, sz-z); GARDEN_GFX.add(sc); break; } }
+  }
+  for (const [st,L] of Object.entries(byStyle)) GARDEN_GFX.add(buildFences(st, L.edges, [...L.posts.values()], L.gates));
+  applyCover();
 }
 
 /* ---------- Furniture and buildings ---------- */
@@ -1113,7 +1220,7 @@ function inRects(x,z,r){ if (x>500) return false; for(const q of RECTS){ if (x>q
 let ignoreRects=false;
 // Room kept free for buildings that grow later (museum, town hall, shops): trees and rocks don't grow there
 const KEEPOUT=[]; const keptOut=(x,z)=>KEEPOUT.some(([a,b,r])=>Math.hypot(x-a,z-b)<r);
-function blocked(x,z,r,self){ if (!ignoreRects && inRects(x,z,r)) return true; for(const e of ents){ if(!e.solid||e===self||e.removed) continue; if(Math.abs(x-e.pos.x)>6||Math.abs(z-e.pos.z)>6) continue; if(Math.hypot(x-e.pos.x,z-e.pos.z) < e.r+r) return true; } return false; }
+function blocked(x,z,r,self){ if (!ignoreRects && inRects(x,z,r)) return true; if (FENCE_SEGS && FENCE_SEGS.length && x<500 && fenceHit(x,z,r)) return true; for(const e of ents){ if(!e.solid||e===self||e.removed) continue; if(Math.abs(x-e.pos.x)>6||Math.abs(z-e.pos.z)>6) continue; if(Math.hypot(x-e.pos.x,z-e.pos.z) < e.r+r) return true; } return false; }
 /* Would something lying at (x,z) be hidden from the camera? The camera looks north from the south (+z),
    so a tree canopy, a rock or a building just south of a spot covers it. */
 function hiddenSpot(x,z){
@@ -1312,7 +1419,11 @@ function refreshStoreItems(){
   const W=R.w, D=R.d, stock=shopStock('stall'), cols=Math.min(4, Math.ceil(stock.length/2)), sx=Math.min(2.2,(W-3.6)/Math.max(1,cols-1));
   stock.forEach((id,i)=>{ const c=i%cols, r=Math.floor(i/cols); new ShopItem('stall', i, id, R.ox+(c-(cols-1)/2)*sx, R.oz-D/2+3.3+r*1.8, false); });
   (S.day.garden||[]).forEach((id,i)=>{ const e=new ShopItem('garden', i, id, R.ox-W/2+1.3+(i%3)*0.7, R.oz+D/2-2.3+Math.floor(i/3)*0.6, true); e.obj.position.y=0.62; });
+  if (!ents.some(e=>e instanceof SeedBin)) new SeedBin(R.ox-W/2+0.7, R.oz+D/2-3.3);
 }
+// v1.8: the seed bin holds this island's own seeds, always in stock
+class SeedBin extends Ent { constructor(x,z){ super('seedbin',x,z,0.5); this.solid=true; this.reach=1.5; const g=new THREE.Group(); FURN_BUILDERS.seedbin(g); g.rotation.y=Math.PI/2; this.attach(g); this.hitSphere(0.6,0.5); }
+  label(){ return 'Look'; } act(){ openShop('stall','garden'); } }
 
 /* Specialist shops start as a market stand by the road. Back one (invest) and they build a real storefront you walk into. */
 const SHOP_ROOMS = {
@@ -1820,8 +1931,8 @@ const footprintClear = (x,z,r,self) => {
   let lo=99, hi=-99; for (let i=0;i<13;i++){ const a=i/12*TAU, rr=i===12?0:r, px=x+Math.cos(a)*rr, pz=z+Math.sin(a)*rr; if (!walkable(px,pz) && !inRects(px,pz,0) || (TERRA_ANY && terraWet(px,pz)>0)) return 'There\'s water or a cliff in the way.'; const h=rawHeight(px,pz); lo=Math.min(lo,h); hi=Math.max(hi,h); }
   if (hi-lo>3.2) return 'The ground there is too steep.';
   if (!walkable(x, z+r+1.5)) return 'The front door would open onto water or a cliff.';
-  const stuff=S.plants.filter(p=>Math.hypot(p.x-x,p.z-z)<r+0.5).length + S.placed.filter(p=>p.x<500 && Math.hypot(p.x-x,p.z-z)<r+0.5).length;
-  if (stuff) return `Move the ${stuff} plant${stuff>1?'s':''} or furniture there first.`;
+  const stuff=[...GCELLS.keys()].filter(k=>{ const [i,j]=k.split(',').map(Number); return Math.hypot(i*CELL-x,j*CELL-z)<r+0.5; }).length + S.plants.filter(p=>Math.hypot(p.x-x,p.z-z)<r+0.5 && !gardenAtXZ(p.x,p.z)).length + S.placed.filter(p=>p.x<500 && Math.hypot(p.x-x,p.z-z)<r+0.5).length;
+  if (stuff) return `Clear the plants, garden or furniture there first.`;
   return null; };
 function magicPlace(x,z){
   const M=magicMode; if (!M || M.kind!=='move') return; M.at=[+x.toFixed(1), +z.toFixed(1)];
@@ -1888,7 +1999,7 @@ function landTap(x,z){
   if (inRects(cx,cz,2.2) || inLotZone(cx,cz,1.5) || Math.hypot(cx,cz)<9) return no('There\'s a building in the way.');
   for (const kk in PLACES){ const p=PLACES[kk]; if (Math.hypot(cx-p[0], cz-p[1]-(kk==='museum'?3:1)) < (kk==='museum'?8:kk==='board'?3:5)) return no('Too close to a building.'); }
   for (const kk in PLACES){ if (kk==='plaza'||kk==='board') continue; const d=door(kk,doorOff(kk)); if (Math.hypot(cx-d[0],cz-d[1])<3.8) return no('That would block someone\'s front door.'); }
-  const hasStuff = S.plants.some(p=>terraKey(p.x,p.z)===k) || S.placed.some(p=>p.x<500 && terraKey(p.x,p.z)===k) || S.stumps.some(p=>terraKey(p.x,p.z)===k);
+  const hasStuff = [...GCELLS.keys()].some(c=>{ const [i,j]=c.split(',').map(Number); return terraKey(i*CELL,j*CELL)===k; }) || S.plants.some(p=>terraKey(p.x,p.z)===k) || S.placed.some(p=>p.x<500 && terraKey(p.x,p.z)===k) || S.stumps.some(p=>terraKey(p.x,p.z)===k);
   const wetNow = (pend.w!==undefined ? pend.w : cur.w) || 0;
   if (tool==='raise' || tool==='lower'){ if (wetNow) return no('Fill the water in first.');
     const total=(cur.d||0)+(pend.d||0)+(tool==='raise'?1:-1); if (total>6) return no('That\'s as high as the magic goes.'); if (total<-4) return no('That\'s as low as the magic goes.');
@@ -2091,6 +2202,7 @@ const plantEnts=[];
 function spawnPlants(){ for(const e of plantEnts) if(!e.removed) e.remove(); plantEnts.length=0;
   for (const rec of S.plants){ const P=PLANTS[rec.sp]; if(!P) continue; plantEnts.push(P.ptype==='tree' ? new Tree(rec.id, rec.x, rec.z, rec.sp, rec.fruit||(rec.sp==='palm'?'coconut':null), rec) : new Plant(rec)); } }
 // grass tufts, wild flowers, fallen leaves, driftwood (instanced)
+const COVER0=OUT.children.length;
 { const r=mulberry32(S.seed+7); const dummy=new THREE.Object3D(); const col=new THREE.Color();
   const okGrass=(x,z,pd=1.3)=>{ const h=rawHeight(x,z); return !(h<SAND_H+0.15||pathDist(x,z)<pd||polyDist(x,z,RIVER)<4.3); };
   // grass: tufts of curved blades in three shapes, gathered into clumps that are denser in some places, swaying in the wind
@@ -2146,6 +2258,8 @@ function spawnPlants(){ for(const e of plantEnts) if(!e.removed) e.remove(); pla
   for(let i=0;i<14;i++){ const a=r()*TAU, d=r()*POND.r*0.8; const p=mk(G.cyl(0.35,0.35,0.02,12,1,false,0,TAU*0.88),M(0x5aa84a),POND.x+Math.cos(a)*d,0.04,POND.z+Math.sin(a)*d,OUT); p.rotation.y=r()*TAU; p.castShadow=false; if(i%4===0) mk(G.ico(0.09,1),M(0xf8c0d8),p.position.x,0.1,p.position.z,OUT); }
   for(let i=0;i<40;i++){ const k=Math.floor(r()*(RIVER.length-1)), t=r(); const a=RIVER[k], b=RIVER[k+1]; const s=r()<0.5?1:-1; const L=Math.hypot(b[0]-a[0],b[1]-a[1]); const x=lerp(a[0],b[0],t)+(-(b[1]-a[1])/L)*s*2.6, z=lerp(a[1],b[1],t)+((b[0]-a[0])/L)*s*2.6; if(rawHeight(x,z)<-0.3||rawHeight(x,z)>0.6||Math.hypot(x,z)>48*SC) continue; for(let j=0;j<4;j++){ const rd=mk(G.cyl(0.02,0.03,0.9+r()*0.5,4),M(0x7a9a4a),x+(r()-0.5)*0.4,0.4,z+(r()-0.5)*0.4,OUT); rd.rotation.set((r()-0.5)*0.3,0,(r()-0.5)*0.3); rd.castShadow=false; } }
 }
+// v1.8: remember the ground cover so gardens can hide it under their soil
+for (const o of OUT.children.slice(COVER0)) if (o.isInstancedMesh) COVER.push({ im:o, orig:o.instanceMatrix.array.slice() });
 const clouds=[]; { const r=mulberry32(99); for(let i=0;i<18;i++){ const g=new THREE.Group(); const n=3+Math.floor(r()*3); for(let k=0;k<n;k++){ const s=mk(G.ico(2+r()*2,2),new THREE.MeshStandardMaterial({ color:0xffffff, roughness:1, transparent:true, opacity:0.95 }),k*2.6-n*1.3,r()*1.2,r()*1.5,g); s.castShadow=false; s.receiveShadow=false; s.scale.y=0.65; } g.position.set((r()-0.5)*260, 36+r()*14, (r()-0.5)*260-30); g.userData.v=0.6+r()*0.8; OUT.add(g); clouds.push(g); } }
 const residents = RESIDENTS.filter(R=>livesHere(R.id)).map(R=>new Resident(R));
 spawnAmbient();
@@ -2170,6 +2284,8 @@ function rollDay(){
   const shellPool=Object.values(ITEMS).filter(i=>i.kind==='shell');
   S.ground = S.ground.filter(g=>!g.beach);
   for(let i=0;i<8;i++){ for(let k=0;k<30;k++){ const a=r()*TAU, d=(40+r()*16)*SC; const x=Math.cos(a)*d, z=Math.sin(a)*d; if(isBeach(x,z) && !onDock(x,z)){ S.ground.push({ id:weightedPick(r,shellPool.filter(allowedFind),i=>i.rarity).id, x, z, beach:true }); break; } } }
+  // v1.8: packets of this island's own seeds turn up in the grass every day
+  { const pool=islandSeeds(); for (let i=0;i<6;i++){ const p=randLand(r,SAND_H+0.2,9,0.8); if (p && !gardenAtXZ(p[0],p[1])) S.ground.push({ id:pool[Math.floor(r()*pool.length)], x:p[0], z:p[1], beach:true, wild:true, n:2+Math.floor(r()*3) }); } }
   // plants grow overnight (watered plants always grow)
   if (!VISIT) for (const p of S.plants){ if (p.lastGrow===key) continue; const watered = p.watered && p.watered!==key; if (p.stage<3 && (watered || r()<0.55)) p.stage++; p.watered=null; p.lastGrow=key; }
   S.day={ key, fruit:{}, branch:{}, chop:{}, rock:{}, lucky:Math.floor(r()*9), digs, weeds, weather, peddler:!GUEST && r()<(S.magic&&S.magic.beacon?0.55:0.35),
@@ -2194,6 +2310,7 @@ ensureFavors();
 // furniture: validate saved positions (the island changed shape in v2)
 for (const rec of S.placed.slice()){ const inRoom=rec.x>500; if (!inRoom && (!walkable(rec.x,rec.z) || blocked(rec.x,rec.z,ITEMS[rec.id].r))){ S.placed.splice(S.placed.indexOf(rec),1); S.inv.length<slotsMax() ? S.inv.push({id:rec.id,n:1}) : null; continue; } new Furniture(rec); }
 for (const res of residents) if (res.wantsHome()) res.setLoc('in');
+S.gardens=S.gardens||[]; rebuildGardens();
 
 /* ---------- Weather ---------- */
 const RAIN_N=isMobile?600:1100; const rainGeo=new THREE.BufferGeometry(); const rainPos=new Float32Array(RAIN_N*6); rainGeo.setAttribute('position',new THREE.BufferAttribute(rainPos,3));
@@ -2413,7 +2530,7 @@ function updateHUD(){
   const wi=(World.weather==='sunny' && World.night>0.5)?'night':World.weather; if(wi!==lastWIcon){ $('#wIcon').innerHTML=WICONS[wi]; lastWIcon=wi; }
   $('#mAmt').textContent=fmt(S.clams);
 }
-const kindName = k => ({veg:'Vegetable',herb:'Herb',food:'Food',gear:'Gear',fruit:'Fruit',material:'Material',shell:'Beach find',fossil:'Fossil',fish:'Fish',bug:'Bug',furniture:'Furniture',flower:'Flower',seed:'Seeds',sapling:'Plant',potion:'Potion',quest:'Favor item'})[k]||k;
+const kindName = k => ({veg:'Vegetable',herb:'Herb',berry:'Berry',food:'Food',gear:'Gear',fruit:'Fruit',material:'Material',shell:'Beach find',fossil:'Fossil',fish:'Fish',bug:'Bug',furniture:'Furniture',flower:'Flower',seed:'Seeds',sapling:'Plant',potion:'Potion',quest:'Favor item'})[k]||k;
 const canPlant = it => it.kind==='seed' || it.kind==='sapling' || (it.kind==='fruit' && it.plant);
 
 /* Bag: tap an item and its actions appear in the bar pinned to the bottom of the panel */
@@ -2437,7 +2554,7 @@ function openBag(mode='view', onPick, onCancel){
       if(a==='eat'){ eatFood(sel); if(!S.inv[sel]) sel=-1; render(); return; }
       if(a==='sled'){ panelClose=null; closePanel(); toggleSled(); return; }
       if(a==='place'){ panelClose=null; closePanel(); startPlacing(s.id,'furn'); }
-      if(a==='plant'){ panelClose=null; closePanel(); startPlacing(s.id,'plant'); }
+      if(a==='plant'){ panelClose=null; closePanel(); if (ITEMS[s.id].kind==='seed') openPlantPanel(s.id); else startPlacing(s.id,'plant'); }
       if(a==='drop'){ const it=ITEMS[s.id]; const m=s.m; removeAt(sel,1); if(it.kind==='fish'||it.kind==='bug'){ toast(`You let the ${it.name} go.`); Snd.swoosh(); } else dropNear(s.id, player.pos, 1.2, false, m); if(!S.inv[sel]) sel=-1; render(); } });
   };
   openPanel(mode==='give'?'Give a gift':mode==='swap'?'Make room':'Your Bag', onCancel); render();
@@ -2497,7 +2614,7 @@ function nearStation(){ let best=null;
     if (Math.hypot(e.pos.x-player.pos.x, e.pos.z-player.pos.z)<3.2){ if (id==='stove') return 'stove'; best='campfire'; } }
   return best; }
 const haveNeed = ([id,n],k=1) => (ITEMS[id] ? countItem(id) : S.inv.filter(s=>ITEMS[s.id].kind===id).reduce((a,s)=>a+s.n,0)) >= n*k;
-const needName = id => ITEMS[id] ? ITEMS[id].name : ({ fish:'Any fish', fruit:'Any fruit' })[id];
+const needName = id => ITEMS[id] ? ITEMS[id].name : ({ fish:'Any fish', fruit:'Any fruit', berry:'Any berries' })[id];
 const needHave = id => ITEMS[id] ? countItem(id) : S.inv.filter(s=>ITEMS[s.id].kind===id).reduce((a,s)=>a+s.n,0);
 function cookMax(r){ let k=99; for (const [id,n] of r.need) k=Math.min(k, Math.floor(needHave(id)/n)); while (k>0 && !cookFits(r,k)) k--; return k; }
 function cookFits(r,k){ // never lose anything to a full bag: worst case, all ingredients free up no slot
@@ -2663,12 +2780,15 @@ function openShop(which, startTab){
   const tabs = which==='rare' ? [['buy','Rare finds'],['sell','Sell']] : which==='stall' ? [['buy','Furniture'],['home','Home goods'],['garden','Garden'],['tools','Tools'],['packs','Bags & bike'],['sell','Sell'],['invest','Invest']] : [['buy','Shop'],['sell','Sell'],['invest','Invest']];
   const buyRow=(id,i,sold,price,orig)=>{ const it=ITEMS[id]; return `<div class="row"><img src="${thumb(id)}"><div class="grow"><div class="nm">${it.name}</div><div class="sub">${fmt(price)} clams${orig&&orig!==price?` <s>${fmt(orig)}</s>`:''}${it.kind==='seed'?' · plant on grass':''}${it.kind==='sapling'?' · needs a shovel to plant':''}</div></div><button class="btn" data-b="${i}" ${sold||S.clams<price?'disabled':''}>${sold?'Sold':'Buy'}</button></div>`; };
   let list=[];
+  // v1.8: this island's own seeds, always in stock, cheap, by the handful
+  const islandRows=()=>`<div class="notice" style="margin-bottom:10px"><b>Grows wild here</b> <span class="muted">· always in stock</span>`+islandSeeds().map(id=>{ const it=ITEMS[id];
+    return `<div class="row" style="margin:8px 0 0"><img src="${thumb(id)}"><div class="grow"><div class="nm">${it.name}</div><div class="sub">${fmt(ISLAND_SEED_BUY)} clams each${countItem(id)?` · you have ${countItem(id)}`:''}</div></div><button class="btn alt" data-is="${id}:1" ${S.clams<ISLAND_SEED_BUY?'disabled':''}>1</button><button class="btn" data-is="${id}:10" ${S.clams<ISLAND_SEED_BUY*10?'disabled':''}>10</button></div>`; }).join('')+'</div>';
   const render=()=>{
     let h='<div class="tabs">'+tabs.map(([k,n])=>`<button class="tab${k===tab?' on':''}" data-t="${k}">${n}</button>`).join('')+'</div>'; setFoot('');
     if (tab==='buy'){ list=shopStock(which);
       const intro = which==='rare'?'Rare finds, today only.' : which==='stall'?'New furniture every day. At night, leave clams in the jar.' : which==='aquarium'?'Marlo\'s salty stock changes every day.' : 'Sprig\'s plants and bug gear change every day.';
-      h+=`<div class="muted" style="margin-bottom:8px">${intro}</div>`; list.forEach((id,i)=>h+=buyRow(id,i,isSold(which,id,i),buyPrice(which,ITEMS[id]),ITEMS[id].buy)); }
-    if (tab==='garden'){ list=S.day.garden; h+='<div class="muted" style="margin-bottom:8px">Seeds and plants change daily.</div>'; list.forEach((id,i)=>h+=buyRow(id,i,S.day.gsold[i],buyPrice(which,ITEMS[id]),ITEMS[id].buy)); }
+      h+=`<div class="muted" style="margin-bottom:8px">${intro}</div>`; if (sid==='garden') h+=islandRows(); list.forEach((id,i)=>h+=buyRow(id,i,isSold(which,id,i),buyPrice(which,ITEMS[id]),ITEMS[id].buy)); }
+    if (tab==='garden'){ list=S.day.garden; h+=islandRows()+'<div class="muted" style="margin-bottom:8px">Other seeds and plants change daily.</div>'; list.forEach((id,i)=>h+=buyRow(id,i,S.day.gsold[i],buyPrice(which,ITEMS[id]),ITEMS[id].buy)); }
     if (tab==='tools'){
       for (const [t,T] of Object.entries(TOOLS)){ const own=S.tools[t];
         h+=`<div class="notice"><b>${T.name}</b> <span class="muted">· ${T.does}</span><br><span class="muted">${own?`You have: ${T.tiers[own.tier].name}, ${T.tiers[own.tier].forever?'never breaks':own.uses+' uses left'}`:'You don\'t have one yet.'}</span>`;
@@ -2710,6 +2830,8 @@ function openShop(which, startTab){
     pBody.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>{ tab=b.dataset.t; sel=-1; Snd.click(); render(); pBody.scrollTop=0; });
     pBody.querySelectorAll('.slot[data-i]').forEach(el=>el.onclick=()=>{ sel=+el.dataset.i; Snd.click(); render(); });
     const sAll=pBody.querySelector('#sAllShop'); if(sAll) sAll.onclick=()=>{ let tot=0; for(let i=S.inv.length-1;i>=0;i--){ const x=S.inv[i], p=sellPrice(x,which); if(p===null) continue; if(GUEST && S.clams+tot+p*x.n>GUEST_CAP.clams) continue; tot+=p*x.n; S.inv.splice(i,1); } addClams(tot); addTrade(which,tot); Snd.coin(); save(); sel=-1; render(); };
+    pBody.querySelectorAll('[data-is]').forEach(b=>b.onclick=()=>{ const [id,k0]=b.dataset.is.split(':'), k=+k0, price=ISLAND_SEED_BUY*k; if (S.clams<price) return; if (!roomFor([[id,k]])){ toast('Your bag is full.'); return; }
+      S.clams-=price; addTrade(which,price); let isNew=false; for (let q=0;q<k;q++) if (addItem(id)==='new') isNew=true; Snd.coin(); updateHUD(); toast(`${isNew?'New! ':''}Bought ${k} ${ITEMS[id].name.toLowerCase()}.`, thumb(id), isNew?'new':''); save(); render(); });
     pBody.querySelectorAll('[data-b]').forEach(b=>b.onclick=()=>{ const i=+b.dataset.b; const id=list[i], it=ITEMS[id], price=buyPrice(which,it);
       if(S.clams<price) return; if(!canAdd(id)){ toast('Your bag is full.'); return; } S.clams-=price; if(tab==='garden') S.day.gsold[i]=true; else markSold(which,id,i); addTrade(which,price); const r=addItem(id); Snd.coin(); updateHUD(); itemToast(id, r==='new', 'Bought'); render(); });
     pBody.querySelectorAll('[data-tool]').forEach(b=>b.onclick=()=>{ const [t,k]=b.dataset.tool.split(':'); const tr=TOOLS[t].tiers[+k]; if(S.clams<tr.cost) return; S.clams-=tr.cost; addTrade(which,tr.cost); S.tools[t]={ tier:+k, uses:tr.forever?0:tr.uses }; S.toolEver[t]=Math.max(S.toolEver[t]??-1, +k); Snd.coin(); equip(t); updateHUD(); toast(`You got the ${tr.name}! It's in your hand now.`, toolThumb(t,+k)); save(); render(); });
@@ -3309,6 +3431,7 @@ function snapFence(){ const p=placing.m.position, a=fenceAxis(placing.rot); let 
   if (best){ p.set(best[0], World.inside?0:groundY(best[0],best[1]), best[1]); } }
 function blockedFence(x,z,self){ if (inRects(x,z,0.3)) return true; for (const e of ents){ if (!e.solid||e.removed||e===self) continue; if (e instanceof Furniture && isFence(e.rec.id)){ if (Math.hypot(x-e.pos.x,z-e.pos.z)<0.3) return true; continue; } if (Math.hypot(x-e.pos.x,z-e.pos.z)<e.r+0.3) return true; } return false; }
 function checkPlace(){
+  if (placing.mode==='grid') return checkGrid();
   if (placing.mode==='furn' && isFence(placing.id)) snapFence();
   const p=placing.m.position, it=ITEMS[placing.id]; let ok=walkable(p.x,p.z) && Math.hypot(p.x-player.pos.x,p.z-player.pos.z)>0.6 && !onDock(p.x,p.z) && !onBridge(p.x,p.z);
   if (placing.mode==='furn') ok = ok && (isFence(placing.id) ? !blockedFence(p.x,p.z,placing.moving) : !blocked(p.x,p.z,it.r));
@@ -3317,10 +3440,10 @@ function checkPlace(){
   placing.ok=ok; placing.m.traverse(c=>{ for(const mt of (Array.isArray(c.material)?c.material:[c.material])) if(mt&&mt.emissive&&!c.userData.outline) mt.emissive.setHex(ok?0x000000:0x882020); }); if(placing.ring) placing.ring.material.color.setHex(ok?0xffffff:0xe2604d); $('#pOk').disabled=!ok; return ok;
 }
 function endPlacing(){ const mv=placing.moving; if (mv && !placing.done){ mv.obj.visible=true; mv.solid=!ITEMS[mv.rec.id].flat; } scene.remove(placing.m); placing=null; $('#placeBar').classList.remove('show'); }
-const turnBy = a => { if(!placing) return; if (isFence(placing.id)) a=Math.sign(a)*Math.PI/4; placing.rot=((placing.rot+a)%TAU+TAU)%TAU; placing.m.rotation.y=placing.rot; Snd.click(); checkPlace(); };
+const turnBy = a => { if(!placing) return; if (placing.mode==='grid'){ placing.orient^=1; Snd.click(); checkGrid(); return; } if (isFence(placing.id)) a=Math.sign(a)*Math.PI/4; placing.rot=((placing.rot+a)%TAU+TAU)%TAU; placing.m.rotation.y=placing.rot; Snd.click(); checkPlace(); };
 $('#pRotL').onclick=()=>turnBy(Math.PI/12); $('#pRotR').onclick=()=>turnBy(-Math.PI/12);
 $('#pNo').onclick=()=>{ endPlacing(); Snd.click(); };
-$('#pOk').onclick=()=>{ if(!checkPlace()) return; const p=placing.m.position, id=placing.id, it=ITEMS[id];
+$('#pOk').onclick=()=>{ if (placing && placing.mode==='grid'){ plantGrid(); return; } if(!checkPlace()) return; const p=placing.m.position, id=placing.id, it=ITEMS[id];
   if (placing.moving){ const e=placing.moving, rec=e.rec; rec.x=p.x; rec.z=p.z; rec.rot=placing.rot; e.pos.set(p.x, World.inside?0:groundY(p.x,p.z), p.z); e.obj.position.copy(e.pos); e.model.rotation.y=rec.rot; e.obj.visible=true; e.solid=!it.flat; placing.done=true; }
   else if (placing.mode==='furn'){ const rec={ id, x:p.x, z:p.z, rot:placing.rot }; removeItem(id,1); S.placed.push(rec); new Furniture(rec);
     if (isFence(id) && countItem(id)>0){ const a=fenceAxis(placing.rot), nx=p.x+a[0], nz=p.z+a[1], rot=placing.rot;   // the next fence waits at the end of the line
@@ -3331,6 +3454,106 @@ $('#pOk').onclick=()=>{ if(!checkPlace()) return; const p=placing.m.position, id
     if (it.kind==='fruit') rec.fruit=id; removeItem(id,1); S.plants.push(rec); if (P.ptype==='tree') onReplant(p.clone()); const pe=P.ptype==='tree' ? new Tree(rec.id,rec.x,rec.z,rec.sp,rec.fruit||(rec.sp==='palm'?'coconut':null),rec) : new Plant(rec); plantEnts.push(pe); FX.sprout(pe); Snd.dig(); toast(`Planted! ${P.ptype==='tree'?'Trees take a few days to grow.':P.ptype==='crop'?`Ready in about ${P.days} days. Water it every day to speed it up.`:'Water it to help it grow.'}`);
     if (P.ptype==='crop' && countItem(id)>0 && !World.inside){ const last=p.clone(), keepId=id, rot=placing.rot; setTimeout(()=>{ if (placing || countItem(keepId)<1) return; startPlacing(keepId,'plant'); if (placing){ placing.m.position.set(last.x+0.9*Math.cos(rot), groundY(last.x+0.9,last.z), last.z-0.9*Math.sin(rot)); checkPlace(); } }, 50); } }
   if (placing.mode==='furn' || placing.moving) puff(p.clone().add(new THREE.Vector3(0,0.3,0)),0xffffff,8,0.6,1.5,1,0.6); Snd.pop(); save(); endPlacing(); };
+
+/* =====================================================================
+   v1.8 PLANTING IN ROWS. Pick how many and how long each row is (up to 10 x 10), then drag the patch where you want it.
+   Near a garden, the patch snaps up against it (or into its empty squares) so gardens grow neatly.
+   ===================================================================== */
+const TILE_GEO=new THREE.PlaneGeometry(CELL*0.86, CELL*0.86).rotateX(-Math.PI/2), TILE_MAT=new THREE.MeshBasicMaterial({ color:0xffffff, transparent:true, opacity:0.55, depthWrite:false });
+const GREEN=new THREE.Color(0x8fe08a), RED=new THREE.Color(0xe2604d);
+function openPlantPanel(id, g){ if (noEdit()) return; const it=ITEMS[id]; const have=countItem(id); if (!have) return;
+  let w=Math.min(10, have), n=Math.min(have, 100);
+  openPanel('Plant '+it.name);
+  pBody.innerHTML=`<div class="row"><img src="${thumb(id)}"><div class="grow"><div class="nm">${it.name}</div><div class="sub">You have ${have}</div></div></div>
+    <label class="f">How many: <b id="gpN"></b></label><input type="range" id="gpNr" min="1" max="${Math.min(have,100)}" value="${n}">
+    <label class="f">Row length: <b id="gpW"></b></label><input type="range" id="gpWr" min="1" max="10" value="${w}">
+    <div id="gpGrid" style="display:grid;gap:3px;margin:12px auto 4px;width:max-content"></div>`;
+  setFoot(`<button class="btn" id="gpGo">Choose a spot</button>`);
+  const draw=()=>{ const max=Math.min(have, w*10); if (n>max) n=max; const nr=$('#gpNr'); nr.max=max; nr.value=n; const rows=Math.ceil(n/w);
+    $('#gpN').textContent=n; $('#gpW').textContent=`${w} · ${rows} row${rows>1?'s':''}`;
+    const gd=$('#gpGrid'); gd.style.gridTemplateColumns=`repeat(${w}, 16px)`; gd.innerHTML=Array.from({length:rows*w},(_,k)=>`<i style="display:block;width:16px;height:16px;border-radius:4px;background:${k<n?'#7a5a3a':'#eadfca'}"></i>`).join(''); };
+  $('#gpNr').oninput=e=>{ n=+e.target.value; draw(); }; $('#gpWr').oninput=e=>{ w=+e.target.value; draw(); }; draw();
+  $('#gpGo').onclick=()=>{ panelClose=null; closePanel(); startGridPlacing(id, n, w, g); }; }
+
+function startGridPlacing(id, n, w, g){ if (noEdit()) return; if (placing) endPlacing();
+  const grp=new THREE.Group(), tiles=new THREE.InstancedMesh(TILE_GEO, TILE_MAT, w*10); tiles.frustumCulled=false; tiles.count=0; grp.add(tiles); scene.add(grp);
+  const f=player.face, rows=Math.ceil(n/w), orient = Math.abs(Math.sin(f))>Math.abs(Math.cos(f)) ? 1 : 0;   // rows run across the way you're facing
+  const reach=(rows*CELL)/2+1.2; grp.position.set(player.pos.x+Math.sin(f)*reach, 0, player.pos.z+Math.cos(f)*reach);
+  if (g && g.cells.length){ const b=gardenBox(g); grp.position.set((b.i0+b.i1)/2*CELL, 0, (b.j0+b.j1)/2*CELL); }
+  placing={ id, mode:'grid', m:grp, tiles, n, w, orient, rot:0, cells:[] }; $('#placeBar').classList.add('show'); $('#pNo').textContent='Cancel';
+  checkGrid(); }
+// cells to plant, in reading order, from an origin square; skips squares that can't take a seed
+function gridFill(i0, j0, P, near){ const out=[], bad=[]; const W=P.w;
+  for (let r=0;r<10 && out.length<P.n;r++) for (let c=0;c<W && out.length<P.n;c++){ const [i,j] = P.orient ? [i0+r, j0+c] : [i0+c, j0+r]; (cellFree(i,j,near)?out:bad).push([i,j]); }
+  return { out, bad }; }
+function checkGrid(){ const P=placing, m=P.m, ax=m.position.x, az=m.position.z;
+  const rows=Math.ceil(P.n/P.w), EW=P.orient?rows:P.w, EH=P.orient?P.w:rows;   // extent in squares along x and z
+  let i0=Math.round(ax/CELL-(EW-1)/2), j0=Math.round(az/CELL-(EH-1)/2);
+  // snap: into a nearby garden's empty squares, or flush against one of its sides
+  let best=null, bd=1.6+(EW+EH)*CELL*0.25;
+  for (const g of S.gardens){ const b=gardenBox(g), cx=(b.i0+b.i1)/2*CELL, cz=(b.j0+b.j1)/2*CELL; if (Math.hypot(cx-ax,cz-az) > 8+(b.i1-b.i0+b.j1-b.j0)*CELL) continue;
+    const cand=[[b.i1+1,b.j0],[b.i1+1,b.j1-EH+1],[b.i0-EW,b.j0],[b.i0-EW,b.j1-EH+1],[b.i0,b.j1+1],[b.i1-EW+1,b.j1+1],[b.i0,b.j0-EH],[b.i1-EW+1,b.j0-EH]];
+    if (gardenPlants(g).length<g.cells.length) cand.push([b.i0,b.j0]);
+    for (const [ci,cj] of cand){ const d=Math.hypot((ci+(EW-1)/2)*CELL-ax, (cj+(EH-1)/2)*CELL-az); if (d<bd){ bd=d; best=[ci,cj]; } } }
+  if (best){ [i0,j0]=best; }
+  const near=S.plants.filter(q=>q.x>(i0-1)*CELL && q.x<(i0+EW+11)*CELL && q.z>(j0-1)*CELL && q.z<(j0+EH+11)*CELL);
+  const { out, bad }=gridFill(i0, j0, P, near); P.cells=out;
+  const cx=(i0+(EW-1)/2)*CELL, cz=(j0+(EH-1)/2)*CELL;
+  const d=new THREE.Object3D(); let k=0; const put=([i,j],col)=>{ const x=i*CELL, z=j*CELL; d.position.set(x-cx, groundY(x,z)+0.09, z-cz); d.updateMatrix(); P.tiles.setMatrixAt(k,d.matrix); P.tiles.setColorAt(k,col); k++; };
+  out.forEach(c=>put(c,GREEN)); bad.slice(0, P.tiles.instanceMatrix.count-out.length).forEach(c=>put(c,RED)); P.tiles.count=k; P.tiles.instanceMatrix.needsUpdate=true; if (P.tiles.instanceColor) P.tiles.instanceColor.needsUpdate=true;
+  m.position.set(cx, 0, cz);
+  P.ok=out.length>0; $('#pOk').disabled=!P.ok; $('#pOk').textContent=out.length?`Plant ${out.length}`:'No room'; return P.ok; }
+function plantGrid(){ const P=placing; if (!checkGrid()) return; const id=P.id, it=ITEMS[id], PL=PLANTS[it.plant], n=Math.min(P.cells.length, countItem(id)); if (n<1){ endPlacing(); return; }
+  const cells=P.cells.slice(0,n), made=[], base=Date.now().toString(36);
+  cells.forEach(([i,j],k)=>{ const rec={ id:'p'+base+k.toString(36)+Math.floor(Math.random()*1e3), sp:it.plant, x:i*CELL, z:j*CELL, stage:0, rot:(PL.ptype==='crop'?(Math.random()-0.5)*0.5:Math.random()*TAU), color:(PL.colors&&PL.colors.length)?PL.colors[Math.floor(Math.random()*PL.colors.length)]:undefined, lastGrow:today() };
+    S.plants.push(rec); const pe=new Plant(rec); plantEnts.push(pe); made.push(pe); pe.obj.scale.setScalar(0.001); });
+  // pop up row by row
+  let t=0; FX.add(dt=>{ t+=dt; let busy=false; made.forEach((pe,k)=>{ if (pe.removed) return; const q=Math.max(0,(t-k*0.015)/0.3); if (q<1) busy=true; pe.obj.scale.setScalar(q>=1?1:Math.max(0.001,easeOut(q)*(1+Math.sin(q*Math.PI)*0.25))); }); return busy; });
+  if (made[0]) FX.hole(made[0].pos, 0.32, 1.1);
+  removeItem(id, n); const g=addToGarden(cells); if (g.fence) g.fenced=[...new Set([...(g.fenced||[])])]; rebuildGardens();
+  Snd.dig(); toast(`Planted ${n} ${it.name.replace(/ (Seeds|Starts)$/,'').toLowerCase()}${PL.ptype==='crop'?`. Ready in about ${PL.days} days`:''}.`, thumb(id));
+  save(); endPlacing(); }
+
+/* ---------- The garden menu (tap the garden's stake or sign) ---------- */
+function openGarden(g){
+  const render=()=>{ if (!S.gardens.includes(g)){ closePanel(); return; }
+    const plants=gardenPlants(g), ripe=plants.filter(isRipe), dry=plants.filter(p=>p.stage<3 && p.watered!==today()), per=perimeter(g), fenced=new Set(g.fenced||[]);
+    const sides=per.filter(e=>e.key!==g.gate), gaps=sides.filter(e=>!fenced.has(e.key)), seedStacks=[...new Set(S.inv.filter(x=>ITEMS[x.id].kind==='seed').map(x=>x.id))];
+    let h=`<div class="muted" style="margin-bottom:8px">${g.cells.length} square${g.cells.length>1?'s':''} · ${plants.length} planted · ${ripe.length} ready</div>`;
+    h+=`<div class="row"><div class="grow"><div class="nm">Harvest everything ready</div><div class="sub">${ripe.length ? `${ripe.length} plant${ripe.length>1?'s':''}` : 'Nothing is ready yet'}</div></div><button class="btn" id="gHv" ${ripe.length?'':'disabled'}>Harvest</button></div>`;
+    h+=`<div class="row"><div class="grow"><div class="nm">Water everything</div><div class="sub">${!hasTool('can') ? 'Needs a watering can' : dry.length ? `${dry.length} plant${dry.length>1?'s':''} need water` : 'All watered today'}</div></div><button class="btn" id="gWa" ${hasTool('can')&&dry.length&&CAN_EDIT?'':'disabled'}>Water</button></div>`;
+    if (CAN_EDIT){
+      h+=`<div class="f" style="margin-top:12px;font-weight:700">Plant here</div>`;
+      h+= seedStacks.length ? `<div style="display:flex;flex-wrap:wrap;gap:6px">${seedStacks.map(id=>`<button class="btn alt" data-gs="${id}" style="display:flex;align-items:center;gap:6px;padding:4px 10px"><img src="${thumb(id)}" style="width:28px;height:28px">${ITEMS[id].name} x${countItem(id)}</button>`).join('')}</div>` : `<div class="muted">No seeds in your bag.</div>`;
+      h+=`<div class="f" style="margin-top:14px;font-weight:700">Fence</div>`;
+      if (g.fence && gaps.length) h+=`<div class="row"><div class="grow"><div class="nm">Close the gaps</div><div class="sub">${gaps.length} piece${gaps.length>1?'s':''} of ${GARDEN_FENCES[g.fence].name.toLowerCase()} · ${fmt(gaps.length*GARDEN_FENCES[g.fence].per)} clams</div></div><button class="btn" id="gGap" ${S.clams<gaps.length*GARDEN_FENCES[g.fence].per?'disabled':''}>Build</button></div>`;
+      for (const [st,F] of Object.entries(GARDEN_FENCES)){ const cost=sides.length*F.per, cur=g.fence===st;
+        h+=`<div class="row"><div class="grow"><div class="nm">${F.name}${cur?' <span class="muted">(yours)</span>':''}</div><div class="sub">${fmt(F.per)} clams a piece · ${sides.length} pieces · ${fmt(cost)} clams</div></div>${cur?'':`<button class="btn" data-gf="${st}" ${S.clams<cost?'disabled':''}>${g.fence?'Switch':'Build'}</button>`}</div>`; }
+      h+=`<div class="row"><div class="grow"><div class="nm">Move the gate</div><div class="sub">To the side nearest where you're standing. Free.</div></div><button class="btn alt" id="gGate">Move</button></div>`;
+      h+=`<div class="f" style="margin-top:14px;font-weight:700">Decorations</div>`;
+      for (const [k,Dc] of Object.entries(GARDEN_DECOR)){ const own=g.decor&&g.decor[k], on=own&&own!=='off';
+        h+=`<div class="row"><div class="grow"><div class="nm">${Dc.name}</div><div class="sub">${Dc.blurb}${own?'':` · ${fmt(Dc.price)} clams`}</div></div>${own?`<button class="btn alt" data-gd="${k}">${on?'Put away':'Put out'}</button>`:`<button class="btn" data-gd="${k}" ${S.clams<Dc.price?'disabled':''}>Buy</button>`}</div>`; }
+      if (!plants.length) h+=`<div class="row" style="margin-top:12px"><div class="grow"><div class="nm">Take out this garden</div><div class="sub">The grass grows back. Fences and decorations aren't refunded.</div></div><button class="btn warn" id="gDel">Take out</button></div>`;
+    }
+    pBody.innerHTML=h; setFoot('');
+    const pay=(n)=>{ if (S.clams<n){ toast('Not enough clams.'); Snd.fail(); return false; } S.clams-=n; Snd.coin(); updateHUD(); return true; };
+    const on=(sel,fn)=>{ const b=pBody.querySelector(sel); if (b) b.onclick=fn; };
+    on('#gHv', ()=>{ let n=0, seeds=0, kinds={}, full=false, isNew=false; for (const p of ripe){ const P=PLANTS[p.sp];
+        if (P.ptype==='flower'){ const r=addItem(p.sp); if (!r){ full=true; break; } if (r==='new') isNew=true; p.stage=2; const e=plantEntOf(p); if (e) e.rebuild(); n++; continue; }
+        const r=harvestRec(p, true); if (!r){ full=true; break; } n+=r.n; seeds+=r.seeds; if (r.isNew) isNew=true; kinds[P.crop]=(kinds[P.crop]||0)+r.n; }
+      if (n){ Snd.pop(); if (isNew) Snd.fanfare(); for (const p of ripe.slice(0,12)) puff(new THREE.Vector3(p.x,groundY(p.x,p.z)+0.3,p.z),0x7cc35a,4,0.4,1.4,0.6,0.5);
+        const what=Object.entries(kinds).map(([c,k])=>`${k} ${cropWord(CROPS[c],k)}`).join(', ')||`${n} flowers`; toast(`Harvested ${what}${seeds?` and ${seeds} seeds`:''}.${full?' Your bag filled up, so some are still growing.':''}`, ripe[0]?thumb(PLANTS[ripe[0].sp].crop||ripe[0].sp):null); }
+      else if (full) toast('Your bag is full.'); save(); rebuildGardens(); render(); });
+    on('#gWa', ()=>{ if (noEdit() || !needTool('can')) return; let n=0; for (const p of dry){ if (!S.tools.can) break; p.watered=today(); S.stats.watered++; useTool('can'); n++; }
+      Snd.water(); for (const p of dry.slice(0,16)) puff(new THREE.Vector3(p.x,groundY(p.x,p.z)+0.8,p.z),0x7fc8f0,2,0.2,-1,0.4,0.5); toast(`Watered ${n} plant${n>1?'s':''}. They'll grow faster tomorrow.`); save(); render(); });
+    pBody.querySelectorAll('[data-gs]').forEach(b=>b.onclick=()=>{ panelClose=null; closePanel(); openPlantPanel(b.dataset.gs, g); });
+    on('#gGap', ()=>{ if (!pay(gaps.length*GARDEN_FENCES[g.fence].per)) return; g.fenced=[...new Set([...(g.fenced||[]), ...gaps.map(e=>e.key)])]; rebuildGardens(); save(); render(); });
+    pBody.querySelectorAll('[data-gf]').forEach(b=>b.onclick=()=>{ const st=b.dataset.gf; if (!pay(sides.length*GARDEN_FENCES[st].per)) return; g.fence=st; g.fenced=sides.map(e=>e.key); rebuildGardens(); save(); toast(`${GARDEN_FENCES[st].name} it is.`); render(); });
+    on('#gGate', ()=>{ const e=nearestSide(g, player.pos.x, player.pos.z); if (!e) return; const old=g.gate; g.gate=e.key; if (g.fence && old && !(g.fenced||[]).includes(old)) g.fenced=[...(g.fenced||[]), old]; Snd.click(); rebuildGardens(); save(); render(); });
+    pBody.querySelectorAll('[data-gd]').forEach(b=>b.onclick=()=>{ const k=b.dataset.gd; g.decor=g.decor||{}; if (g.decor[k]) g.decor[k] = g.decor[k]==='off' ? true : 'off'; else { if (!pay(GARDEN_DECOR[k].price)) return; g.decor[k]=true; } Snd.pop(); rebuildGardens(); save(); render(); });
+    on('#gDel', ()=>{ if (gardenPlants(g).length) return; S.gardens.splice(S.gardens.indexOf(g),1); rebuildGardens(); save(); closePanel(); toast('The garden is gone. The grass will grow back.'); });
+  };
+  openPanel('Garden'); render(); }
 
 /* ---------- Input ---------- */
 const keys={};
@@ -3545,10 +3768,10 @@ function movePlayer(dt,t){
   player.speedFrac=0; player.lastX=player.pos.x; player.lastZ=player.pos.z;
   if (sledding){ if (player.target) stopMove(); if (!dlgState && !scrim.classList.contains('show')) sledMove(dt, mv, t); mv=null; }
   if (mv && !dlgState && Fishing.state==='idle' && !CatchMeter.bug && !buildMode && !magicMode){
-    const step=speed*spd*dt; const p=player.pos; const nx=p.x+mv.x*step, nz=p.z+mv.z*step; let ok=false; ignoreRects = !World.inside && !!inRects(p.x,p.z,0.3);
+    const step=speed*spd*dt; const p=player.pos; const nx=p.x+mv.x*step, nz=p.z+mv.z*step; let ok=false; ignoreRects = !World.inside && !!inRects(p.x,p.z,0.3); moverFrom=p;
     if(walkable(nx,nz)&&!blocked(nx,nz,0.35)){ p.x=nx; p.z=nz; ok=true; } else if(walkable(nx,p.z)&&!blocked(nx,p.z,0.35)){ p.x=nx; ok=true; } else if(walkable(p.x,nz)&&!blocked(p.x,nz,0.35)){ p.z=nz; ok=true; }
     if (!ok){ for(const s of [0.9,-0.9,1.6,-1.6]){ const c=Math.cos(s), sn=Math.sin(s); const vx=mv.x*c-mv.z*sn, vz=mv.x*sn+mv.z*c; const ax=p.x+vx*step, az=p.z+vz*step; if(walkable(ax,az)&&!blocked(ax,az,0.35)){ p.x=ax; p.z=az; ok=true; break; } } }
-    ignoreRects=false; if (ok) player.speedFrac=spd;
+    ignoreRects=false; moverFrom=null; if (ok) player.speedFrac=spd;
     player.face=Math.atan2(mv.x,mv.z);
     if (riding){ bikeSpin(dt*spd*speed); const ph=t*9; u.legs[0].rotation.x=-0.9+Math.sin(ph)*0.5; u.legs[1].rotation.x=-0.9-Math.sin(ph)*0.5; u.arms[0].rotation.x=-0.9; u.arms[1].rotation.x=-0.9; } else {
     const ph=t*(5+6*spd); u.legs[0].rotation.x=Math.sin(ph)*0.7*spd; u.legs[1].rotation.x=-Math.sin(ph)*0.7*spd; u.arms[0].rotation.x=-Math.sin(ph)*0.6*spd; if(!S.equip) u.arms[1].rotation.x=Math.sin(ph)*0.6*spd; else u.arms[1].rotation.x=-0.3; u.body.position.y=Math.abs(Math.sin(ph))*0.07*spd; }
@@ -3944,3 +4167,4 @@ if (VISIT) setTimeout(()=>toast(`Visiting ${BOOT.host.name}'s island${BOOT.host.
 
 addEventListener('visibilitychange', ()=>{ if(document.hidden) save(); else if(Snd.ctx) Snd.ctx.resume(); });
 window.__game = { v1:{ scene, camera, OUT, updateSky, updateHUD, snowPass, SNOW_U, townNewDay, applyTown, talkHall, openHallPanel, buildPlaza, refreshStoreItems, buildStoreAll, buildShop, buildMuseumAll, spawnExhibits, exhibitSlots, mentorMoment, teachWoodworking, openCraft, doCook, nearStation, toggleSled, setSled, get sledding(){ return sledding; }, sledV, eatFood, Plant, fullBagCatch, KB, landSeaTap, terraLand, LAMPS:()=>LAMPS, hasUpstairs, ShopItem, Stairs, get exhibits(){ return exhibits; }, KEEPOUT, dayKeyOf, World, startPlacing, checkPlace, get placing(){ return placing; }, FX, homeStock, buyHome, draftUnowned, get homeRack(){ return homeRack; }, openShop, openBuild:(o)=>openBuild(o), closeBuild, get buildMode(){ return buildMode; }, ents, Tree, Stump, Weed, Bug, bugs, player, interact, layoutBar, pickNote, itemToast, reel, Fishing, fishes, relayout, enterRoom:(id)=>enterRoom(id), trees }, get S(){ return S; }, dbg:{ showChoices:(t,c)=>showChoices(t,c), dialog:(...a)=>dialog(...a), setRiding:(v)=>setRiding(v), enterRoom:(id)=>enterRoom(id), openBuild:()=>openBuild(), rooms:()=>Object.keys(ROOMS), get yaw(){ return camYaw; }, set yaw(v){ camYaw=v; }, get riding(){ return riding; }, get snow(){ return SNOW_U.value; }, setWeather:(w)=>{ weatherOverride=w; World.weather=w; snowT=0; }, get dlg(){ return !!dlgState; } }, walkable, blocked, groundY, launchRag, ragdolls, swing, meBody, refreshPortals, portalArches, get portalEnt(){ return portalEnt; }, enterRoom, PLACES, net:{ bonked, visibleRemotes:()=>[...remotes.values()].filter(r=>r.obj.visible).map(r=>[r.name,+r.pos.x.toFixed(1),+r.pos.z.toFixed(1)]), remoteUpsert, remotePos, remoteLeave, remoteEmote, playerState, setInventory, toast:(m)=>toast(m), updateHUD:()=>updateHUD(), get started(){ return started; } }, ITEMS, itemThumb:(id)=>thumb(id), layoutInfo:()=>({ id:LAYOUT_ID, PLACES, PATHS, LOT, rects:RECTS.map(r=>r.slice(0,4)), lot:lotRect() }), terrainH:(x,z)=>rawHeight(x,z), terrainSlope:(x,z)=>hillSlope(x,z), interact, spawnBug:(id,x,z)=>new Bug(id,x,z), tapOdds:()=>Object.fromEntries(Object.keys(TAP_BASE).map(k=>[k, +tapChance({rarity:k}).toFixed(2)])), placingObj:()=>placing&&placing.m, toScreen:v=>{ const p=v.clone().project(camera); return [(p.x*0.5+0.5)*innerWidth, (-p.y*0.5+0.5)*innerHeight]; }, rebuildHome:()=>{ buildPlayerHouse(); rebuildHomeRoom(); }, openBuild, closeBuild, get buildMode(){ return buildMode; }, talkShop, openDonate, talkCurator, spawnMossby, onFelled, findPath, startPlacing, LOT, RECTS, shopEnts, museumEnt, houseEnt:()=>houseEnt, Time, player, ents, ITEMS, residents, World, ROOMS, goTo, handleTap, doAction, updateSky, rollDay, spawnDaily, castAt, Fishing, fishes, bugs, openBag, openBook, openShop, openBoard, openMenu, openCraft, doCraft, WOODWORK, enterRoom, exitRoom, equip, startLayout, endLayout, trees, applyControls, magic:{ startMagic, endMagic, landTap, magicPlace, castMagic, get mode(){ return magicMode; }, raiseTower, talkWizard, drinkPotion, potionOn, luckW, rollFavors, Q, favorChoices, findTowerSpot, get tower(){ return towerEnt; }, PLACES, TERRA, FALLS } };
+window.__game.farm = { openPlantPanel, startGridPlacing, plantGrid, checkGrid, openGarden, rebuildGardens, gardenAtXZ, islandSeeds, harvestRec, perimeter, get fenceSegs(){ return FENCE_SEGS; }, fenceHit, get placing(){ return placing; }, plantEnts, gardenEnts, CELL };

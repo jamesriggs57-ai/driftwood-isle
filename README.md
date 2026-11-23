@@ -146,3 +146,11 @@ Code: `npcBonkTarget`, `tryBonkNpc`, `launchRag`, `updateRag`, `endRag` in `main
 - **Friends and visitors ragdoll** with the same physics as islanders. The person who gets hit runs the tumble in their own game and sends their pose (`rg` rotation, `rs` lying still) with their position, so everyone sees the same thing. While you tumble you can't walk; you're back up in about 2 to 3 seconds.
 - **Fixed:** an islander tumbling into you no longer stops you from walking (tumbling islanders aren't solid until they get up), and islanders never knock you over.
 Code: `swing`, `airSwing`, `airCast`, `swingTarget`, `launchRag`, `updateRag`, `remoteRag`, `meBody` in `main.js`; `rg`/`rs` accepted in the server's `pos` message.
+
+## v1.7: Portal Station
+
+Every island now has a Portal Station near the plaza: a round stone platform with an arch over stairs going down (spot picked the same way every time from the island seed, saved as `S.portalAt`, with a path to it on the classic island). "Go down" leads to an underground hall:
+- **Portal arches**, one per island you can visit (from your friends list), each with the friend's name and its own color. Step in, confirm, and you spin into the swirl, a lilac shimmer covers the trip, and you pop out of the Portal Station on their island. Up to 5 arches; with more friends the last arch opens the Friends list. Islands with no visits left show a dark arch.
+- **Home portal** when you're visiting someone.
+- **Invite booth** opens the invite panel (make a visitor or resident link). Visitors are told to make invites from their own island; guests are pointed to making an account.
+The old Friends button still works the same way. Code: `findPortalSpot`, `buildPortalStation`, `PortalArch`, `InviteBooth`, `refreshPortals`, `portalGo`, `portalArrive` in `main.js`; `B.portal` in `online.js`.

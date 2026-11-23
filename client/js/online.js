@@ -281,6 +281,12 @@ export function afterGame() {
   // guest warning once per session
   if (B.mode === 'guest' && !sessionStorage.getItem('dw-guest-warned')) { sessionStorage.setItem('dw-guest-warned', '1');
     setTimeout(() => banner('Guest island: saved in this browser only, and it can be lost.' + (B.online ? ' Make an account to keep it safe.' : ''), B.online ? 'Make account' : null, () => { $('#netBanner').style.display = 'none'; openPanel('island'); }), 4000); }
+  // the Portal Station (main.js) uses these to list islands, travel, and open the invite panel
+  B.portal = { online: online(),
+    list: () => api('/api/friends'),
+    visit: async id => { await flush(); sessionStorage.setItem('dw-visit', id); location.reload(); },
+    home: async () => { await flush(); location.href = location.pathname; },
+    invite: () => openPanel('friends'), friends: () => openPanel('friends'), account: () => openPanel('island') };
   if (online()) {
     api('/api/me').then(r => { if (r.ok) myId = r.user.id; });
     connect(); posTimer = setInterval(tickPos, 200);

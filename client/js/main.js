@@ -279,11 +279,28 @@ if (S.town && !VISIT && S.town.at===undefined) S.town.at = findHallSpot();
 if (S.town && S.town.at) PLACES.hall = S.town.at.slice();
 for (const [k,p] of Object.entries(S.terra.moved||{})){ if (!PLACES[k] || !Array.isArray(p)) continue; if (k==='home'){ LOT.x += p[0]-PLACES.home[0]; LOT.z += p[1]-PLACES.home[1]; } PLACES[k]=[p[0],p[1]]; }
 for (const R of RESIDENTS) R.home = PLACES[R.id];
+/* Portal Station (v1.7): a stone entrance with stairs down to an underground hall of portals, one to each friend's island.
+   Every island gets one near the plaza, picked the same way every time (so a visitor's game finds the same spot). */
+const PORT_FOOT=2.6;
+function findPortalSpot(){
+  const r=mulberry32((S.seed|0)+7171), tw=S.magic.at || LAY.places.tower;
+  for (let k=0;k<2500;k++){ const a=r()*TAU, d=(9+r()*16)*Math.min(SC,1.2)+k*0.01, x=Math.cos(a)*d, z=Math.sin(a)*d;
+    if (Math.hypot(x,z)/islandR(a)>0.66 || polyDist(x,z,RIVER)<8 || Math.hypot(x-POND.x,z-POND.z)<POND.r+7 || nearFall(x,z,5)) continue;
+    if (x>DOCK.x0-12 && Math.abs(z-DOCK.z)<10) continue;
+    if (Math.abs(x-LOT0.x)<BUILD.GW*BUILD.EC/2+6 && z>LOT0.z-BUILD.GD*BUILD.EC/2-6 && z<LOT0.z+BUILD.GD*BUILD.EC/2+8) continue;
+    if (Object.entries(PLACES).some(([kk,p])=>kk!=='board' && Math.hypot(x-p[0],z-p[1]) < (kk==='plaza'?8:kk==='museum'?9.5:kk==='hall'?HALL_FOOT+3.5:6.5)+PORT_FOOT)) continue;
+    if (tw && Math.hypot(x-tw[0],z-tw[1])<PORT_FOOT+7) continue;
+    let lo=99, hi=-99, bad=false; for (let i=0;i<=10;i++){ const aa=i/10*TAU, rr=i===10?0:PORT_FOOT+0.6, h=baseHeight(x+Math.cos(aa)*rr, z+Math.sin(aa)*rr); if (h<0.6){ bad=true; break; } lo=Math.min(lo,h); hi=Math.max(hi,h); }
+    if (bad || hi-lo>0.9 || baseHeight(x,z+PORT_FOOT+2.5)<0.6) continue;
+    return [+x.toFixed(1), +z.toFixed(1)]; }
+  return null; }
+if (Array.isArray(S.portalAt)) PLACES.portal=S.portalAt.slice();
+else { const p=findPortalSpot(); if (p){ PLACES.portal=p; if (!VISIT) S.portalAt=p; } }
 const MOVED = Object.keys(S.terra.moved||{}).length>0;
-const ALTERED = MOVED || TERRA_ANY || FALLS.length>0 || !!PLACES.tower || !!LAY.gen;   // trees and rocks then also skip spots that changed
+const ALTERED = MOVED || TERRA_ANY || FALLS.length>0 || !!PLACES.tower || !!PLACES.portal || !!LAY.gen;   // trees and rocks then also skip spots that changed
 const door = (k,off=3.2) => [PLACES[k][0], PLACES[k][1]+off];
 const door0 = (k,off=3.2) => [PLACES0[k][0], PLACES0[k][1]+off];
-const doorOff = k => k==='museum'?6.2 : k==='aquarium'||k==='garden'?4.4 : k==='tower'?3.6 : k==='hall'?4.2 : 3.2;
+const doorOff = k => k==='portal'?2.9 : k==='museum'?6.2 : k==='aquarium'||k==='garden'?4.4 : k==='tower'?3.6 : k==='hall'?4.2 : 3.2;
 const bA=BRIDGES[0], bB=BRIDGES[1];
 const bEnd = (b,s) => [b.x+b.ux*s*(b.len/2+0.6), b.z+b.uz*s*(b.len/2+0.6)];
 // The original island layout. Trees and rocks were placed around these, so they stay the reference for placing them
@@ -349,7 +366,7 @@ function genPathsRouted(P){
    trunks), water is crossed only on bridges, and a path keeps a little distance from walls.
    This only changes the paths you see. Trees and rocks are still placed around the original paths (PATHS_V4), so every
    saved tree keeps its key; trees that would now stand on a path just don't grow. */
-const BLOCK_R = k => k==='museum'?6.4 : k==='home'?0 : k==='aquarium'||k==='garden'?4.0 : k==='shop'?3.4 : k==='tower'?3.0 : k==='hall'?HALL_FOOT-0.4 : 2.9;
+const BLOCK_R = k => k==='portal'?2.4 : k==='museum'?6.4 : k==='home'?0 : k==='aquarium'||k==='garden'?4.0 : k==='shop'?3.4 : k==='tower'?3.0 : k==='hall'?HALL_FOOT-0.4 : 2.9;
 function genPathsGrid(P, only){
   const ST=1.25, R0=Math.ceil(66*SC), n=Math.ceil(R0*2/ST), N=n*n, X=i=>-R0+(i+0.5)*ST;
   const blk=new Uint8Array(N), near=new Float32Array(N);
@@ -391,7 +408,7 @@ function genPathsGrid(P, only){
   return out;
 }
 let PATHS;
-if (LAYOUT_ID==='classic' && !MOVED){ PATHS = [...PATHS_V4.filter((p,i)=>i!==8 && i!==9), ...PATHS_NEW]; const add=['tower','hall'].filter(k=>PLACES[k]); if (add.length) PATHS.push(...genPathsGrid(PLACES, add)); }
+if (LAYOUT_ID==='classic' && !MOVED){ PATHS = [...PATHS_V4.filter((p,i)=>i!==8 && i!==9), ...PATHS_NEW]; const add=['tower','hall','portal'].filter(k=>PLACES[k]); if (add.length) PATHS.push(...genPathsGrid(PLACES, add)); }
 else PATHS = genPathsGrid(PLACES);
 const REROUTED = LAYOUT_ID!=='classic' || MOVED;   // the paths you see differ from the ones trees were placed around
 if (LAYOUT_ID!=='classic') PATHS_V4.push(...(LAYOUT_ID==='gen' ? genPathsRouted(PLACES0) : genPaths(PLACES0)));
@@ -1343,6 +1360,7 @@ function buildMuseumAll(){
 // Keep room around every building for the biggest it can grow, so trees never end up inside a bigger version later
 KEEPOUT.push([PLACES.museum[0], PLACES.museum[1]+0.5, 8.4], [PLACES.shop[0], PLACES.shop[1], 4.8], [PLACES.aquarium[0], PLACES.aquarium[1], 5.9], [PLACES.garden[0], PLACES.garden[1], 6.1]);
 if (PLACES.hall) KEEPOUT.push([PLACES.hall[0], PLACES.hall[1]+0.6, HALL_FOOT+0.6]);
+if (PLACES.portal) KEEPOUT.push([PLACES.portal[0], PLACES.portal[1]+0.4, PORT_FOOT+0.8]);
 // Shops, museum and town hall go up once the day is set (the store shelves need today's stock)
 function initTownBuildings(){ buildStoreAll(); for (const id of ['aquarium','garden']) buildShop(id); buildMuseumAll(); buildHall(); buildPlaza(); refreshSmoke(); }
 let rebuildOnExit={};   // a shop you're standing in is rebuilt when you step outside
@@ -1498,6 +1516,115 @@ function buildTowerEnt(){
   const [dx,dz]=towerEnt.doorPt; wizard=new Wizard(Object.assign({ build:buildWizard }, WIZARD), dx+2.1, dz-0.2, ()=>talkWizard());
 }
 buildTowerEnt();
+/* ---------- Portal Station (v1.7) ----------
+   Outside: a round stone platform with an arch over stairs going down, a glowing crystal on top.
+   Below: a hall with a portal arch for each friend's island you can visit (and one home, when you're visiting),
+   plus the invite booth for inviting friends to yours. Step into a portal and you're off. */
+let portalEnt=null; const portalArches=[];
+function buildPortalEntrance(){
+  const g=new THREE.Group(), stone=M(0xa8a6b4), dark=M(0x2a2438), trim=M(0x8a86a0);
+  mk(G.cyl(2.3,2.45,0.34,28), stone, 0,0.17,0,g);
+  mk(G.cyl(2.32,2.32,0.06,28), trim, 0,0.37,0,g);
+  // stairwell opening and the first steps going down into the dark
+  mk(G.box(1.5,0.04,1.9), dark, 0,0.39,0.15,g).castShadow=false;
+  for (let i=0;i<3;i++) mk(G.box(1.4,0.05,0.32), M(0x6e6a84-i*0x101010), 0,0.38-i*0.0, 0.95-i*0.42,g).position.y=0.4-i*0.12;
+  // steps up onto the platform from the path
+  for (let i=0;i<2;i++) mk(G.box(1.8,0.16,0.4), stone, 0,0.08+i*0.0,2.45-i*0.0,g).position.set(0,0.08*(i+1),2.55-i*0.35);
+  // the arch over the stairs
+  for (const sx of [-0.95,0.95]) mk(G.box(0.34,2.3,0.4), stone, sx,1.5,0.15,g);
+  const arch=new THREE.Mesh(new THREE.TorusGeometry(0.95,0.2,10,24,Math.PI), stone); arch.position.set(0,2.65,0.15); arch.castShadow=true; g.add(arch);
+  const crystal=new THREE.Mesh(new THREE.OctahedronGeometry(0.32,0), new THREE.MeshStandardMaterial({ color:0xb89aff, emissive:0x7a4ae0, emissiveIntensity:0.9, roughness:0.3 })); crystal.position.set(0,3.95,0.15); g.add(crystal);
+  addGlow(g, 3.95, 2.2, 0xb89aff);
+  // little rune stones around the rim that glow at night
+  const runeMat=new THREE.MeshStandardMaterial({ color:0xd8c8ff, emissive:0x8a6af0, emissiveIntensity:0.6 });
+  for (let i=0;i<8;i++){ const a=i/8*TAU+0.2; if (Math.sin(a)>0.55) continue; mk(G.box(0.22,0.14,0.22), runeMat, Math.cos(a)*2.05,0.44,Math.sin(a)*2.05,g); }
+  g.userData.door=[0,1.75]; g.userData.rects=[[-2.3,-2.3,-0.78,1.6],[0.78,-2.3,2.3,1.6],[-0.78,-2.3,0.78,-0.6]]; g.userData.crystal=crystal;
+  return g; }
+function swirlTex(){ const cv=document.createElement('canvas'); cv.width=cv.height=128; const x=cv.getContext('2d'); x.translate(64,64);
+  const gr=x.createRadialGradient(0,0,4,0,0,64); gr.addColorStop(0,'rgba(255,255,255,1)'); gr.addColorStop(0.5,'rgba(255,255,255,0.55)'); gr.addColorStop(1,'rgba(255,255,255,0.15)'); x.fillStyle=gr; x.beginPath(); x.arc(0,0,64,0,TAU); x.fill();
+  x.strokeStyle='rgba(255,255,255,0.9)'; x.lineWidth=5; x.lineCap='round'; for (let arm=0;arm<4;arm++){ x.beginPath(); for (let t=0;t<1;t+=0.02){ const a=arm/4*TAU+t*5, r=6+t*56; x.lineTo(Math.cos(a)*r, Math.sin(a)*r); } x.stroke(); }
+  return new THREE.CanvasTexture(cv); }
+let _swirl=null;
+class PortalArch extends Ent {
+  constructor(x, z, o){ super('portal',x,z,0.5); this.o=o; this.reach=2.0; this.solid=false;
+    const g=new THREE.Group(), stone=M(0x8a86a0), on=!!o.on, col=new THREE.Color().setHSL(o.hue??0.75, 0.65, 0.62);
+    for (const sx of [-0.95,0.95]) mk(G.box(0.3,2.0,0.36), stone, sx,1.0,0,g);
+    const arch=new THREE.Mesh(new THREE.TorusGeometry(0.95,0.17,10,24,Math.PI), stone); arch.position.y=2.0; g.add(arch);
+    const back=mk(G.box(1.62,2.0,0.06), new THREE.MeshBasicMaterial({ color: on ? col.clone().multiplyScalar(0.35) : 0x3a3648 }), 0,1.0,-0.05,g); back.castShadow=false;
+    const backTop=new THREE.Mesh(new THREE.CircleGeometry(0.81,24,0,Math.PI), back.material); backTop.position.set(0,2.0,-0.05); g.add(backTop);
+    _swirl=_swirl||swirlTex();
+    const disc=new THREE.Mesh(new THREE.CircleGeometry(0.78,32), new THREE.MeshBasicMaterial({ map:_swirl, color: on ? col : 0x55506a, transparent:true, opacity: on?0.95:0.35, blending: on?THREE.AdditiveBlending:THREE.NormalBlending, depthWrite:false }));
+    disc.position.set(0,1.45,0.02); g.add(disc); this.disc=disc;
+    if (on) addGlow(g, 1.45, 2.6, col.getHex());
+    const tag=nameTag(o.name); tag.position.y=3.35; g.add(tag);
+    this.attach(g); this.hitSphere(1.0,1.4); this.obj.rotation.y=o.rot||0; }
+  label(){ return this.o.verb; }
+  act(){ this.o.act(this); }
+  update(dt,t){ this.disc.rotation.z -= dt*(this.o.on?2.2:0.3); if (this.o.on){ const k=1+Math.sin(t*3+this.pos.x)*0.04; this.disc.scale.set(k,k,1); } }
+}
+function buildPortalStation(){
+  if (portalEnt){ portalEnt.remove(); setRects('portal',[]); portalEnt=null; } clearRoom('portal');
+  if (!PLACES.portal) return;
+  const [px,pz]=PLACES.portal, model=buildPortalEntrance();
+  portalEnt=placeBuilding('portal', px, pz, model, 'Go down', ()=>{ Snd.door(); enterRoom('portal'); });
+  portalEnt.reach=2.2;
+  const W=12, D=10, R=makeRoom('portal', 20, { floor:0x5a5e7a, wall:0x3a3c5e, pattern:'dots', accent:0x9a7ad8, items:[] }, W, D, [portalEnt.doorPt[0], portalEnt.doorPt[1]+0.2]);
+  // glowing crystals in the corners and a booth for invites
+  const cmat=new THREE.MeshStandardMaterial({ color:0xb89aff, emissive:0x6a3ad0, emissiveIntensity:0.8, roughness:0.3 });
+  for (const [cx,cz,s] of [[-W/2+0.7,-D/2+0.7,1],[W/2-0.7,-D/2+0.7,0.8],[-W/2+0.6,D/2-1.6,0.6],[W/2-0.6,D/2-1.6,0.7]]){ const c=new THREE.Mesh(new THREE.OctahedronGeometry(0.4*s,0), cmat); c.scale.y=2.2; c.position.set(R.ox+cx, 0.9*s, R.oz+cz); R.group.add(c); addGlow(c, 0, 2.0, 0xb89aff); }
+  new InviteBooth(R.ox-W/2+1.4, R.oz+0.6);
+  refreshPortals(true); }
+class InviteBooth extends Ent {
+  constructor(x,z){ super('booth',x,z,0.6); this.reach=1.9; this.solid=true;
+    const g=new THREE.Group(), brass=M(0xc9a04a), wood=M(0x8a5a3a);
+    mk(G.box(1.1,1.1,0.8), wood, 0,0.55,0,g); mk(G.box(1.2,0.08,0.9), brass, 0,1.14,0,g);
+    const scr=mk(G.box(0.8,0.5,0.06), new THREE.MeshStandardMaterial({ color:0x2a2050, emissive:0x8a6af0, emissiveIntensity:0.7 }), 0,1.5,-0.25,g); scr.rotation.x=-0.25;
+    mk(G.box(0.36,0.06,0.12), M(0x2a2438), 0,1.19,0.28,g);   // ticket slot
+    const bell=mk(G.sph(0.1,10,8), brass, 0.4,1.24,0.2,g);
+    const tag=nameTag('Invites'); tag.position.y=2.3; g.add(tag);
+    this.attach(g); this.hitSphere(0.8,0.8); this.obj.rotation.y=Math.PI/2; }
+  label(){ return 'Invite'; }
+  act(){ Snd.pop(); const P=BOOT.portal;
+    if (!P || !P.online){ dialog('Station', 620, ['The portals need an account and an internet connection.', ...(GUEST?['Make an account from the Account button, and you can invite friends here.']:[])], GUEST&&P?()=>P.account():null); return; }
+    if (VISIT){ toast('Make invites from the station on your own island.'); return; }
+    P.invite(); } }
+// (re)build the arches: one per island you can visit, plus home when you're visiting
+let portalBusy=false;
+async function refreshPortals(quick){
+  const R=ROOMS.portal; if (!R || portalBusy) return; portalBusy=true;
+  const list=[], P=BOOT.portal;
+  try {
+    if (!P || !P.online) list.push({ name: GUEST?'Needs an account':'Offline', on:false, verb:'Look', act:()=>toast(GUEST?'Make an account to visit friends and invite them here.':'The portals need an internet connection.') });
+    else if (quick) list.push({ name:'...', on:false, verb:null, act:()=>{} });
+    else {
+      if (VISIT) list.push({ name:'Home', hue:0.33, on:true, verb:'Go home', act:a=>portalGo(a, 'your island', ()=>P.home()) });
+      const f=await P.list(); const can=(f.canVisit||[]).filter(v=>!(VISIT && BOOT.host && v.ownerId===BOOT.host.id));
+      const max = VISIT ? 4 : 5;
+      can.slice(0, can.length>max ? max-1 : max).forEach(v=>{ const ok=v.standing || v.visitsLeft>0;
+        list.push({ name:v.name, hue:(hashStr(v.ownerId)%360)/360, on:ok, verb: ok?'Visit':'Look', act: ok ? a=>portalGo(a, `${v.name}'s island`, ()=>P.visit(v.ownerId)) : ()=>toast(`No visits left to ${v.name}'s island. Ask for a new invite.`) }); });
+      if (can.length>max) list.push({ name:`${can.length-max+1} more`, hue:0.6, on:true, verb:'More', act:()=>P.friends() });
+      if (!can.length && !VISIT) list.push({ name:'No islands yet', on:false, verb:'Look', act:()=>dialog('Station',620,['No portals open yet. When a friend sends you an invite link and you open it, their island gets a portal here.', 'To invite friends to your island, use the booth.']) });
+    }
+  } catch(e){ list.length=0; list.push({ name:'Offline', on:false, verb:'Look', act:()=>toast('Could not reach the portals. Try again in a bit.') }); }
+  for (const a of portalArches) a.remove(); portalArches.length=0;
+  const n=list.length, gap=Math.min(2.4, (R.w-3)/Math.max(1,n));
+  list.forEach((o,i)=>{ const a=new PortalArch(R.ox+(i-(n-1)/2)*gap, R.oz-1.9, o); R.group.add(a.obj); portalArches.push(a); });
+  portalBusy=false; }
+// step into a portal: walk in, spin down into the swirl, lilac shimmer, then the trip
+function portalGo(a, where, go){
+  dialog('Station', 620, [`Off to ${where}?`], null, [
+    { label:'Step in', fn:()=>{ stopMove(); const from=player.pos.clone(), to=new THREE.Vector3(a.pos.x, from.y, a.pos.z+0.2), s0=player.obj.scale.clone(); cine={ camT:new THREE.Vector3(a.pos.x, 1, a.pos.z+0.5), dist:9, pitch:0.6, shake:0 }; $('#hud').classList.add('magic'); Snd.magic();
+        timeline(1.2, (t)=>{ const k=Math.min(1,t/0.6); player.pos.lerpVectors(from,to,k); player.obj.position.copy(player.pos); player.face=Math.PI; if (t>0.6){ const q=(t-0.6)/0.6; player.obj.rotation.y=Math.PI+q*q*14; player.obj.scale.copy(s0).multiplyScalar(Math.max(0.02,1-q)); if (Math.random()<0.5) swirl(new THREE.Vector3(a.pos.x, 0.6, a.pos.z), 0.8, 1, a.o.hue!=null?new THREE.Color().setHSL(a.o.hue,0.6,0.7).getHex():0xc8b0ff); } },
+          ()=>{ player.obj.visible=false; try { sessionStorage.setItem('dw-portal','1'); } catch(e){} document.documentElement.classList.add('magicret'); setTimeout(()=>go(), 450); }); } },
+    { label:'Not now', alt:true, fn:()=>{} } ]); }
+// arriving through a portal: pop out of the station entrance
+function portalArrive(){
+  const d=portalEnt ? portalEnt.doorPt : null; if (d){ player.pos.set(d[0], groundY(d[0],d[1]+0.4), d[1]+0.4); player.face=0; player.obj.rotation.y=0; player.obj.position.copy(player.pos); camTarget.copy(player.pos); updateCamera(1); }
+  const s0=player.obj.scale.clone(); player.obj.scale.multiplyScalar(0.05);
+  setTimeout(()=>document.documentElement.classList.remove('magicret'), 200);
+  timeline(0.6, t=>{ const k=t/0.6, e=k<1 ? 1+Math.sin(k*Math.PI)*0.25 : 1; player.obj.scale.copy(s0).multiplyScalar(Math.max(0.05,k*e)); }, ()=>{ player.obj.scale.copy(s0); playerJelly.v=4; });
+  setTimeout(()=>{ sparkBurst(player.pos.clone().add(new THREE.Vector3(0,1,0)), 20, 4); Snd.pop(); }, 250); }
+buildPortalStation();
 // Preset islands didn't plan a spot for the tower: find a dry, fairly flat, empty spot near the plaza
 function findTowerSpot(ignoreTrees){
   if (LAY.places.tower) return LAY.places.tower.slice();
@@ -1636,7 +1763,7 @@ function favorsHTML(){
 /* ---------- Wizard map modes: move a building, shape the land ---------- */
 let magicMode=null;   // { kind:'move'|'land', ... }
 const MOVABLE = () => [['home','Your house',MAGIC.moveHome], ['shop','Pemberton\'s shop',MAGIC.moveOther], ['museum','Museum',MAGIC.moveOther], ['aquarium','Tidepool Aquarium Supply',MAGIC.moveOther], ['garden','Bug & Bloom',MAGIC.moveOther], ...(PLACES.tower?[['tower','Wizard tower',MAGIC.moveOther]]:[]), ...(PLACES.hall?[['hall','Town hall',MAGIC.moveOther]]:[]), ...residents.map(r=>[r.spec.id, r.spec.name+'\'s house', MAGIC.moveOther])];
-const FOOTR = { home:6, shop:4.5, museum:7.5, aquarium:6, garden:6.5, tower:3.5, hall:HALL_FOOT };
+const FOOTR = { home:6, shop:4.5, museum:7.5, aquarium:6, garden:6.5, tower:3.5, hall:HALL_FOOT, portal:PORT_FOOT };
 const footOf = k => FOOTR[k] || 4.2;
 function openMoveList(){
   let h='';
@@ -1895,6 +2022,7 @@ function magicPan(dx,dy){ const M=magicMode; const k=M.dist/innerHeight*1.5; M.c
   if (M.kind==='land'){ const ci=Math.floor(M.camT.x/TC), cj=Math.floor(M.camT.z/TC); if (!M.gridAt || Math.abs(ci-M.gridAt[0])>3 || Math.abs(cj-M.gridAt[1])>3) drawGrid(); } }
 function magicTap(cx,cy){ const g=groundAtScreen(cx,cy); if(!g) return; if (magicMode.kind==='move'){ magicPlace(g.x,g.z); magicMode.camT.set(g.x, groundY(g.x,g.z), g.z); } else landTap(g.x,g.z); }
 // after the wizard's spell the page reloads behind a lilac shimmer: this is where you were and what changed
+const PORTAL_RET = (()=>{ try { const v=sessionStorage.getItem('dw-portal'); sessionStorage.removeItem('dw-portal'); return !!v; } catch(e){ return false; } })();
 const MAGIC_RET = (()=>{ try { const v=sessionStorage.getItem('dw-magic'); sessionStorage.removeItem('dw-magic'); const o=v&&JSON.parse(v); return o&&o.at?o:null; } catch(e){ return null; } })();
 function magicArrive(R){
   if (Number.isFinite(R.px) && walkable(R.px,R.pz) && !blocked(R.px,R.pz,0.35)){ player.pos.set(R.px, groundY(R.px,R.pz), R.pz); player.face=R.face||0; player.obj.rotation.y=player.face; player.obj.position.copy(player.pos); }
@@ -1913,7 +2041,7 @@ const CLASSIC_LAMPS = [[3,-1.5],[-7,4],[6,-4],[6,6],[-9,-6],[DOCK.x0-1.5,DOCK.z-
 function lampSpots(paths){ const L=[]; for(const p of paths){ let acc=5; for(let i=0;i<p.length-1;i++){ const [ax,az]=p[i], [bx,bz]=p[i+1], len=Math.hypot(bx-ax,bz-az); for(let d=0; d<len; d+=0.5){ acc+=0.5; if(acc<11) continue; const x=ax+(bx-ax)*d/len, z=az+(bz-az)*d/len, nx=-(bz-az)/len, nz=(bx-ax)/len;
     const lx=x+nx*1.3, lz=z+nz*1.3; if(L.some(q=>Math.hypot(q[0]-lx,q[1]-lz)<7)) continue; L.push([lx,lz]); acc=0; } } } return L; }
 const lampOK = (x,z) => walkable(x,z) && !onBridge(x,z) && !(LAYOUT_ID!=='classic' && (inRects(x,z,0.8)||inLotZone(x,z,0.5)));
-const PLAYER_ALTERED = MOVED || TERRA_ANY || !!PLACES.tower;
+const PLAYER_ALTERED = MOVED || TERRA_ANY || !!PLACES.tower || !!PLACES.portal;
 const refLampSpots = () => (LAYOUT_ID==='classic' ? CLASSIC_LAMPS : lampSpots(PATHS_V4)).filter(([x,z])=>lampOK(x,z));
 if ((!S.refLamps || S.refLamps.id!==LAYOUT_ID) && !PLAYER_ALTERED) S.refLamps = { id:LAYOUT_ID, pts:refLampSpots().map(q=>[+q[0].toFixed(2),+q[1].toFixed(2)]) };
 const REF_LAMPS = S.refLamps && S.refLamps.id===LAYOUT_ID ? S.refLamps.pts : refLampSpots();
@@ -1930,11 +2058,11 @@ const changedSpot = p => { const [x,z]=p;
   if (LAY.gen && (!walkable(x,z) || hillSlope(x,z)>1.5 || rawHeight(x,z)<0.2)) return true;   // new islands: only sensible ground
   if (FALLS.length && nearFall(x,z,0.5) && (nearFall(x,z,-5.5) || hillSlope(x,z)>1.5 || inFallPool(x,z) || !walkable(x,z))) return true;
   if (TERRA_ANY){ for (const [ox,oz] of [[0,0],[TC,0],[-TC,0],[0,TC],[0,-TC]]) if (terraAt(x+ox,z+oz)){ if (!walkable(x,z) || hillSlope(x,z)>1.5 || terraWet(x,z)>0) return true; break; } }
-  if (MOVED || PLACES.tower || LAY.gen || REROUTED || PLACES.hall){ if (visPathDist(x,z)<2.0) return true;
+  if (MOVED || PLACES.tower || LAY.gen || REROUTED || PLACES.hall || PLACES.portal){ if (visPathDist(x,z)<2.0) return true;
     for (const k in PLACES){ if (k==='plaza'||k==='board') continue; if (!LAY.gen && PLACES0[k] && PLACES0[k][0]===PLACES[k][0] && PLACES0[k][1]===PLACES[k][1]) continue; const d=door(k, doorOff(k)); if (Math.hypot(x-d[0],z-d[1])<2.6) return true; } }
   return false; };
 const clearForNew = p => !!inRects(p[0],p[1],2.4) || newPathDist(p[0],p[1])<2.3 || inLotZone(p[0],p[1],1.4) || ['museum','aquarium','garden'].some(k=>Math.hypot(p[0]-PLACES[k][0], p[1]-PLACES[k][1]-(k==='museum'?6:4))<3.2)
-  || ((ALTERED || REROUTED || !!PLACES.hall) && changedSpot(p)) || keptOut(p[0],p[1]);
+  || ((ALTERED || REROUTED || !!PLACES.hall || !!PLACES.portal) && changedSpot(p)) || keptOut(p[0],p[1]);
 { const r=mulberry32(S.seed); let idx=0; const add=(type,fruit,minH,maxH)=>{ const p=randLand(r,minH,maxH,2.8); if(!p) return; reserve(p[0],p[1],2.3); const key='n'+(idx++);
     if (typeof type==='function') type=type(p); if(S.cut[key]==='gone' || clearForNew(p)){ return; } trees.push(new Tree(key,p[0],p[1],type,fruit)); };
   if (!LAY.gen){
@@ -2166,6 +2294,7 @@ function updateSky(){
 const fadeEl=$('#fade');
 function fade(cb){ fadeEl.classList.add('show'); setTimeout(()=>{ cb(); setTimeout(()=>fadeEl.classList.remove('show'), 60); }, 260); }
 function enterRoom(id){
+  if (id==='portal') setTimeout(()=>refreshPortals(), 400);
   fade(()=>{ const R=ROOMS[id]; World.inside=id; camYaw=0; OUT.visible=false; for(const k in ROOMS) ROOMS[k].group.visible=(k===id);
     if (Fishing.state!=='idle') reel(); stopMove(); player.pos.set(R.entry[0],0,R.entry[1]); player.face=Math.PI; player.obj.rotation.y=Math.PI; camTarget.copy(player.pos); updateSky(); updateCamera(1);
     const res=residents.find(r=>r.spec.id===id); if (res && res.loc==='in' && !res.asleep){ const P=DIALOGUE[res.spec.personality]; setTimeout(()=>dialog(res.spec.name,res.spec.voice,[fill(P.home[Math.floor(Math.random()*P.home.length)],{c:res.spec.catch})]),350); } });
@@ -3500,8 +3629,8 @@ if (isNew && S.player) $('#inName').value=S.player;
 if (!isNew){ $('#newForm').classList.add('hide'); $('#backMsg').classList.remove('hide'); $('#backMsg').textContent='Welcome back to '+S.island+', '+S.player+'!'; $('#bStart').textContent='Continue'; }
 $('#loading').textContent='';
 $('#bStart').onclick=async()=>{
-  if (!S.look && MAGIC_RET && !isNew){ S.look=CH.lookCode(CH.defaultLook()); player.obj=swapLook(player.obj, buildPlayer({ look:S.look })); }
-  if (MAGIC_RET && !isNew){ $('#start').remove(); started=true; Snd.init(S.settings, World); updateHUD(); magicArrive(MAGIC_RET);
+  if (!S.look && (MAGIC_RET||PORTAL_RET) && !isNew){ S.look=CH.lookCode(CH.defaultLook()); player.obj=swapLook(player.obj, buildPlayer({ look:S.look })); }
+  if ((MAGIC_RET||PORTAL_RET) && !isNew){ $('#start').remove(); started=true; Snd.init(S.settings, World); updateHUD(); if (MAGIC_RET) magicArrive(MAGIC_RET); else portalArrive();
     const wake=()=>{ if (Snd.ctx && Snd.ctx.state==='suspended') Snd.ctx.resume(); }; addEventListener('pointerdown', wake, { once:true }); addEventListener('keydown', wake, { once:true }); return; }
   if (isNew){ S.player=($('#inName').value||'').trim()||'Sam'; S.island=($('#inIsle').value||'').trim()||'Pebblewick'; save(); }
   if (!S.look){ $('#start').style.visibility='hidden';
@@ -3514,7 +3643,7 @@ $('#bStart').onclick=async()=>{
   else if (S.migratedFrom1){ delete S.migratedFrom1; save(); setTimeout(()=>dialog(p.spec.name, p.spec.voice, [fill('{p}! Did you notice? The island got so much BIGGER overnight, {c}!',{c:p.spec.catch}), 'There\'s a river, a pond, and four new neighbors! And the stall sells tools now. You\'ll need them for bugs, fish and digging.', 'Your old furniture is safe. Anything that didn\'t fit went back in your bag.']), 700); }
   else toast('Welcome back, '+S.player+'!');
 };
-if (MAGIC_RET && !isNew) $('#bStart').onclick();
+if ((MAGIC_RET||PORTAL_RET) && !isNew) $('#bStart').onclick();
 /* ---------- Bicycle ---------- */
 const BIKE_COST=60000;
 let riding=false, bikeObj=null;
@@ -3813,4 +3942,4 @@ function setInventory(inv, seen, equip){ S.inv=inv; if(seen) S.seen=Object.assig
 if (VISIT) setTimeout(()=>toast(`Visiting ${BOOT.host.name}'s island${BOOT.host.island?' ('+BOOT.host.island+')':''} as a ${BOOT.role}.`), 1500);
 
 addEventListener('visibilitychange', ()=>{ if(document.hidden) save(); else if(Snd.ctx) Snd.ctx.resume(); });
-window.__game = { v1:{ scene, camera, OUT, updateSky, updateHUD, snowPass, SNOW_U, townNewDay, applyTown, talkHall, openHallPanel, buildPlaza, refreshStoreItems, buildStoreAll, buildShop, buildMuseumAll, spawnExhibits, exhibitSlots, mentorMoment, teachWoodworking, openCraft, doCook, nearStation, toggleSled, setSled, get sledding(){ return sledding; }, sledV, eatFood, Plant, fullBagCatch, KB, landSeaTap, terraLand, LAMPS:()=>LAMPS, hasUpstairs, ShopItem, Stairs, get exhibits(){ return exhibits; }, KEEPOUT, dayKeyOf, World, startPlacing, checkPlace, get placing(){ return placing; }, FX, homeStock, buyHome, draftUnowned, get homeRack(){ return homeRack; }, openShop, openBuild:(o)=>openBuild(o), closeBuild, get buildMode(){ return buildMode; }, ents, Tree, Stump, Weed, Bug, bugs, player, interact, layoutBar, pickNote, itemToast, reel, Fishing, fishes, relayout, enterRoom:(id)=>enterRoom(id), trees }, get S(){ return S; }, dbg:{ showChoices:(t,c)=>showChoices(t,c), dialog:(...a)=>dialog(...a), setRiding:(v)=>setRiding(v), enterRoom:(id)=>enterRoom(id), openBuild:()=>openBuild(), rooms:()=>Object.keys(ROOMS), get yaw(){ return camYaw; }, set yaw(v){ camYaw=v; }, get riding(){ return riding; }, get snow(){ return SNOW_U.value; }, setWeather:(w)=>{ weatherOverride=w; World.weather=w; snowT=0; }, get dlg(){ return !!dlgState; } }, walkable, blocked, groundY, launchRag, ragdolls, swing, meBody, net:{ bonked, visibleRemotes:()=>[...remotes.values()].filter(r=>r.obj.visible).map(r=>[r.name,+r.pos.x.toFixed(1),+r.pos.z.toFixed(1)]), remoteUpsert, remotePos, remoteLeave, remoteEmote, playerState, setInventory, toast:(m)=>toast(m), updateHUD:()=>updateHUD(), get started(){ return started; } }, ITEMS, itemThumb:(id)=>thumb(id), layoutInfo:()=>({ id:LAYOUT_ID, PLACES, PATHS, LOT, rects:RECTS.map(r=>r.slice(0,4)), lot:lotRect() }), terrainH:(x,z)=>rawHeight(x,z), terrainSlope:(x,z)=>hillSlope(x,z), interact, spawnBug:(id,x,z)=>new Bug(id,x,z), tapOdds:()=>Object.fromEntries(Object.keys(TAP_BASE).map(k=>[k, +tapChance({rarity:k}).toFixed(2)])), placingObj:()=>placing&&placing.m, toScreen:v=>{ const p=v.clone().project(camera); return [(p.x*0.5+0.5)*innerWidth, (-p.y*0.5+0.5)*innerHeight]; }, rebuildHome:()=>{ buildPlayerHouse(); rebuildHomeRoom(); }, openBuild, closeBuild, get buildMode(){ return buildMode; }, talkShop, openDonate, talkCurator, spawnMossby, onFelled, findPath, startPlacing, LOT, RECTS, shopEnts, museumEnt, houseEnt:()=>houseEnt, Time, player, ents, ITEMS, residents, World, ROOMS, goTo, handleTap, doAction, updateSky, rollDay, spawnDaily, castAt, Fishing, fishes, bugs, openBag, openBook, openShop, openBoard, openMenu, openCraft, doCraft, WOODWORK, enterRoom, exitRoom, equip, startLayout, endLayout, trees, applyControls, magic:{ startMagic, endMagic, landTap, magicPlace, castMagic, get mode(){ return magicMode; }, raiseTower, talkWizard, drinkPotion, potionOn, luckW, rollFavors, Q, favorChoices, findTowerSpot, get tower(){ return towerEnt; }, PLACES, TERRA, FALLS } };
+window.__game = { v1:{ scene, camera, OUT, updateSky, updateHUD, snowPass, SNOW_U, townNewDay, applyTown, talkHall, openHallPanel, buildPlaza, refreshStoreItems, buildStoreAll, buildShop, buildMuseumAll, spawnExhibits, exhibitSlots, mentorMoment, teachWoodworking, openCraft, doCook, nearStation, toggleSled, setSled, get sledding(){ return sledding; }, sledV, eatFood, Plant, fullBagCatch, KB, landSeaTap, terraLand, LAMPS:()=>LAMPS, hasUpstairs, ShopItem, Stairs, get exhibits(){ return exhibits; }, KEEPOUT, dayKeyOf, World, startPlacing, checkPlace, get placing(){ return placing; }, FX, homeStock, buyHome, draftUnowned, get homeRack(){ return homeRack; }, openShop, openBuild:(o)=>openBuild(o), closeBuild, get buildMode(){ return buildMode; }, ents, Tree, Stump, Weed, Bug, bugs, player, interact, layoutBar, pickNote, itemToast, reel, Fishing, fishes, relayout, enterRoom:(id)=>enterRoom(id), trees }, get S(){ return S; }, dbg:{ showChoices:(t,c)=>showChoices(t,c), dialog:(...a)=>dialog(...a), setRiding:(v)=>setRiding(v), enterRoom:(id)=>enterRoom(id), openBuild:()=>openBuild(), rooms:()=>Object.keys(ROOMS), get yaw(){ return camYaw; }, set yaw(v){ camYaw=v; }, get riding(){ return riding; }, get snow(){ return SNOW_U.value; }, setWeather:(w)=>{ weatherOverride=w; World.weather=w; snowT=0; }, get dlg(){ return !!dlgState; } }, walkable, blocked, groundY, launchRag, ragdolls, swing, meBody, refreshPortals, portalArches, get portalEnt(){ return portalEnt; }, enterRoom, PLACES, net:{ bonked, visibleRemotes:()=>[...remotes.values()].filter(r=>r.obj.visible).map(r=>[r.name,+r.pos.x.toFixed(1),+r.pos.z.toFixed(1)]), remoteUpsert, remotePos, remoteLeave, remoteEmote, playerState, setInventory, toast:(m)=>toast(m), updateHUD:()=>updateHUD(), get started(){ return started; } }, ITEMS, itemThumb:(id)=>thumb(id), layoutInfo:()=>({ id:LAYOUT_ID, PLACES, PATHS, LOT, rects:RECTS.map(r=>r.slice(0,4)), lot:lotRect() }), terrainH:(x,z)=>rawHeight(x,z), terrainSlope:(x,z)=>hillSlope(x,z), interact, spawnBug:(id,x,z)=>new Bug(id,x,z), tapOdds:()=>Object.fromEntries(Object.keys(TAP_BASE).map(k=>[k, +tapChance({rarity:k}).toFixed(2)])), placingObj:()=>placing&&placing.m, toScreen:v=>{ const p=v.clone().project(camera); return [(p.x*0.5+0.5)*innerWidth, (-p.y*0.5+0.5)*innerHeight]; }, rebuildHome:()=>{ buildPlayerHouse(); rebuildHomeRoom(); }, openBuild, closeBuild, get buildMode(){ return buildMode; }, talkShop, openDonate, talkCurator, spawnMossby, onFelled, findPath, startPlacing, LOT, RECTS, shopEnts, museumEnt, houseEnt:()=>houseEnt, Time, player, ents, ITEMS, residents, World, ROOMS, goTo, handleTap, doAction, updateSky, rollDay, spawnDaily, castAt, Fishing, fishes, bugs, openBag, openBook, openShop, openBoard, openMenu, openCraft, doCraft, WOODWORK, enterRoom, exitRoom, equip, startLayout, endLayout, trees, applyControls, magic:{ startMagic, endMagic, landTap, magicPlace, castMagic, get mode(){ return magicMode; }, raiseTower, talkWizard, drinkPotion, potionOn, luckW, rollFavors, Q, favorChoices, findTowerSpot, get tower(){ return towerEnt; }, PLACES, TERRA, FALLS } };

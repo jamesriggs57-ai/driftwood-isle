@@ -183,7 +183,7 @@ async function start() {
     if (visitId) {
       sessionStorage.removeItem('dw-visit');
       const v = await api('/api/visit/' + visitId, { method: 'POST', body: { pass: sessionStorage.getItem('dw-pass-' + visitId) || '' } });
-      if (!v.ok) await info('Could not visit', v.error || 'Try again later.');
+      if (!v.ok) { document.documentElement.classList.remove('magicret'); await info('Could not visit', v.error || 'Try again later.'); }
       else {
         sessionStorage.setItem('dw-pass-' + visitId, v.pass);
         const own = data; if (!own.player) own.player = me.user.displayName;

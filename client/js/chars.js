@@ -321,7 +321,8 @@ function dressUp(body, head, acc, accC){
 function mergeRig(g, rig){
   const rigSet=new Set(rig), m4=new THREE.Matrix4();
   for (const node of rig){ node.updateMatrixWorld(true); const inv=node.matrixWorld.clone().invert(), groups=new Map();
-    node.traverse(o=>{ if (!o.isMesh || o===node || o.children.length) return;   // meshes carrying decals or parts stay whole let p=o.parent; while (p && !rigSet.has(p)) p=p.parent; if (p!==node) return;
+    node.traverse(o=>{ if (!o.isMesh || o===node || o.children.length) return;   // meshes carrying decals or parts stay whole
+      let p=o.parent; while (p && !rigSet.has(p)) p=p.parent; if (p!==node) return;
       const geo=o.geometry, names=Object.keys(geo.attributes).filter(n=>n!=='uv'||o.material.map||o.material.bumpMap).sort().join(',');
       const k=o.material.uuid+'|'+names+'|'+o.renderOrder+'|'+o.castShadow; if (!groups.has(k)) groups.set(k,{ list:[], o }); groups.get(k).list.push(o); });
     for (const G of groups.values()){ if (G.list.length<2) continue; const names=Object.keys(G.o.geometry.attributes).filter(n=>n!=='uv'||G.o.material.map||G.o.material.bumpMap);

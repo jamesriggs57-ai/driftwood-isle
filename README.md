@@ -138,3 +138,11 @@ Code: `client/js/look.js` (materials and painted textures), `client/js/furn.js` 
 
 Holding an axe or shovel, press Action facing an islander (or tap them) and they go flying: launched up and away with a spin, they fall, bounce and skid, roll onto their back, front or side, and lie there with stars over their head before springing back up with a short line ("Hey!", "Rude!", "Again!"). Arms, legs and head flop on loose springs driven by the spin. An islander who flies into another knocks that one over too. Shopkeepers and Wendell hop back to their spot afterward; residents carry on from where they land. No effect on friendship or saves. Islanders mid-conversation can't be bonked. Net, rod and watering can still talk, so you don't have to put tools away to chat.
 Code: `npcBonkTarget`, `tryBonkNpc`, `launchRag`, `updateRag`, `endRag` in `main.js`. Friends still use the synced flop from v1.3.
+
+## v1.6: Swing is its own control; friends and visitors ragdoll too
+
+- **Two controls.** Use/Talk is E, Enter, clicking or tapping things, or the green Act button. Swing is Space or the orange Swing button (shown whenever you hold a tool; the key can be changed in Menu > Controls). Talking never bonks and swinging never talks.
+- **Swing anytime.** If something the tool works on is right in front (a tree to chop, a rock, a dig spot, a bug, a plant to water, water to fish in), the swing does that. Otherwise it plays on its own: the axe chops the air, the shovel digs a little hole that fills back in, the rod casts the bobber out and reels it back, the net sweeps, the can sprinkles. If a character is in front of you, the swing sends them flying.
+- **Friends and visitors ragdoll** with the same physics as islanders. The person who gets hit runs the tumble in their own game and sends their pose (`rg` rotation, `rs` lying still) with their position, so everyone sees the same thing. While you tumble you can't walk; you're back up in about 2 to 3 seconds.
+- **Fixed:** an islander tumbling into you no longer stops you from walking (tumbling islanders aren't solid until they get up), and islanders never knock you over.
+Code: `swing`, `airSwing`, `airCast`, `swingTarget`, `launchRag`, `updateRag`, `remoteRag`, `meBody` in `main.js`; `rg`/`rs` accepted in the server's `pos` message.

@@ -379,6 +379,7 @@ export class IslandRoom {
     switch (m.t) {
       case 'pos': {   // position, facing, moving; numbers only
         const st = { x: +m.x || 0, z: +m.z || 0, y: +m.y || 0, f: +m.f || 0, w: m.w ? 1 : 0, b: m.b ? 1 : 0, in: typeof m.in === 'string' ? m.in.slice(0, 20) : null, lk: typeof m.lk === 'string' && /^[a-z]{2,12}(\.\d{1,2}){6,7}$/.test(m.lk) ? m.lk : '' };
+        if (Array.isArray(m.rg) && m.rg.length === 4 && m.rg.every(v => Number.isFinite(+v))) { st.rg = m.rg.map(v => Math.max(-1, Math.min(1, +v))); st.rs = m.rs ? 1 : 0; }   // tumbling pose (v1.6)
         me.st = st; this.broadcast({ t: 'pos', id: me.id, ...st }, ws); break; }
       case 'emote': if (EMOTES.includes(m.e)) this.broadcast({ t: 'emote', id: me.id, e: m.e }); break;
       case 'bonk': {   // a playful knock-over: no effect on saves, just an animation for everyone in the room

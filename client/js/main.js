@@ -75,7 +75,7 @@ S.settings.controls = Object.assign({}, CTRL_DEFAULT, S.settings.controls||{});
 // On a computer you walk with the keyboard and drag to look around; clicking the ground no longer walks you there.
 if (!isTouchDevice) S.settings.controls.move='keys';
 // Keyboard shortcuts (Menu > Controls lets you change them)
-const KEY_DEFAULT = { act:'e', tool:'q', bike:'b', sled:'g', bag:'i', turnL:'z', turnR:'c' };
+const KEY_DEFAULT = { act:'e', swing:' ', tool:'q', bike:'b', sled:'g', bag:'i', turnL:'z', turnR:'c' };
 S.settings.keys = Object.assign({}, KEY_DEFAULT, S.settings.keys||{});
 const KB = () => S.settings.keys;
 if (S.settings.bright===undefined) S.settings.bright=1;
@@ -3040,7 +3040,7 @@ function openBoard(){
 
 /* Menu: settings, controls, testing tools */
 let menuOpen=false;
-const KEY_ROWS=[['act','Use / talk / pick up'],['tool','Switch tool'],['bike','Hop on the bike'],['sled','Ride the sled'],['bag','Open the bag'],['turnL','Turn the view left'],['turnR','Turn the view right']];
+const KEY_ROWS=[['act','Use / talk / pick up (Enter works too)'],['swing','Swing your tool'],['tool','Switch tool'],['bike','Hop on the bike'],['sled','Ride the sled'],['bag','Open the bag'],['turnL','Turn the view left'],['turnR','Turn the view right']];
 const keyName = k => k===' '?'Space' : k.length===1 ? k.toUpperCase() : k[0].toUpperCase()+k.slice(1);
 function openMenu(){
   const c=CT();
@@ -3135,8 +3135,9 @@ layoutBar();
 
 /* Tool selector */
 const toolBtn=$('#toolBtn'), toolPop=$('#toolPop');
+const swingBtn=$('#swingBtn'); swingBtn.addEventListener('click', e=>{ e.stopPropagation(); swing(); }); swingBtn.addEventListener('pointerdown', e=>e.stopPropagation());
 const HAND_SVG='<svg viewBox="0 0 32 32"><path d="M10 17V8a2 2 0 0 1 4 0v7V6a2 2 0 0 1 4 0v9V8a2 2 0 0 1 4 0v10c0 6-3 10-8 10s-7-3-9-7l-2-4a2 2 0 0 1 3-2l2 3z" fill="#f3c9a5" stroke="#8b6b50" stroke-width="1.8" stroke-linejoin="round"/></svg>';
-function updateToolBtn(){ toolBtn.innerHTML = S.equip&&hasTool(S.equip) ? `<img src="${toolThumb(S.equip,toolTier(S.equip))}">` : HAND_SVG; }
+function updateToolBtn(){ const on=S.equip&&hasTool(S.equip); toolBtn.innerHTML = on ? `<img src="${toolThumb(S.equip,toolTier(S.equip))}">` : HAND_SVG; swingBtn.classList.toggle('show', !!on); }
 function cycleTool(){ const owned=['',...Object.keys(TOOLS).filter(hasTool)]; const i=owned.indexOf(S.equip||''); equip(owned[(i+1)%owned.length]||null); Snd.click(); }
 toolBtn.addEventListener('click', e=>{ e.stopPropagation(); if(toolPop.classList.contains('show')){ toolPop.classList.remove('show'); return; }
   let h=`<button class="tp${!S.equip?' on':''}" data-t="">${HAND_SVG}<span>Hands</span></button>`;
@@ -3207,7 +3208,8 @@ addEventListener('keydown', e=>{ if(e.target.tagName==='INPUT'||e.target.tagName
   if (dlgState){ if (!e.repeat && dialogKey(k)) e.preventDefault(); return; }
   if (keyCapture){ e.preventDefault(); keyCapture(k); return; }
   keys[k]=true; if (e.repeat) return; const kb=KB();
-  if (k===' '||k===kb.act){ e.preventDefault(); doAction(); return; }
+  if (k===(kb.swing||' ')){ e.preventDefault(); swing(); return; }
+  if (k===kb.act||k==='enter'){ e.preventDefault(); doAction(); return; }
   if (scrim.classList.contains('show')){ if (k===kb.bag && !menuOpen) closePanel(); return; }
   if (k===kb.tool) cycleTool(); else if (k===kb.bike) toggleBike(); else if (k===kb.sled) toggleSled(); else if (k===kb.bag && !buildMode && !placing) openBag(); });
 let keyCapture=null;   // set while Menu > Controls waits for you to press a new key
@@ -3261,22 +3263,12 @@ function findPath(sx,sz,gx,gz,goalR,ent){
   const out=[]; let a=0; while (a<pts.length-1){ let b=pts.length-1; while (b>a+1 && !clear(pts[a],pts[b])) b--; out.push(pts[b]); a=b; }
   return out;
 }
-// tapping a friend while holding a tool bonks them (walks over first if they're a few steps away)
-function tapRemote(cx,cy){
-  if (!remotes.size || !S.equip || !BONK_TOOLS.includes(S.equip) || knockedDown()) return false;
-  let best=null, bd=60;
-  for (const r of remotes.values()){ if (!r.obj.visible) continue; const v=r.pos.clone(); v.y+=0.9; v.project(camera); const sx=(v.x*0.5+0.5)*innerWidth, sy=(-v.y*0.5+0.5)*innerHeight, d=Math.hypot(sx-cx, sy-cy); if (d<bd){ bd=d; best=r; } }
-  if (!best) return false; const d=Math.hypot(best.pos.x-player.pos.x, best.pos.z-player.pos.z);
-  if (d<2.3){ tryBonk(best); return true; }
-  if (!isTouchDevice || d>14) return false;
-  const back=player.pos.clone().sub(best.pos); back.y=0; back.setLength(1.3); goTo(best.pos.clone().add(back), null, ()=>tryBonk(best)); return true; }
 function handleTap(cx,cy){
   if (cine) return;
   if (magicMode){ magicTap(cx,cy); return; }
   if (buildMode) return;
   if (CatchMeter.bug){ resolveSwing(); return; }
   if (Fishing.state!=='idle'){ reel(); return; }
-  if (!placing && tapRemote(cx,cy)) return;
   const p=pickAt(cx,cy); if(!p) return;
   if (placing){ if (placing.dragged) return; const pt=p.ground||p.point||p.water; if(pt){ placing.m.position.set(pt.x,World.inside?0:groundY(pt.x,pt.z),pt.z); checkPlace(); } return; }
   // On a computer, clicking never walks you anywhere: click things that are close enough, or walk up with the keys.
@@ -3294,10 +3286,10 @@ function handleTap(cx,cy){
     goTo(sp, null, ()=>castAt(tgt)); marker.visible=false; }
 }
 function farClickHint(){}
-function interact(e, mode='tap'){ if(!ents.includes(e)) return; if (e.rag) return; if (isNpc(e) && S.equip && NPC_BONK_TOOLS.includes(S.equip) && hasTool(S.equip) && tryBonkNpc(e)) return; player.face=Math.atan2(e.pos.x-player.pos.x, e.pos.z-player.pos.z); if(!(e instanceof Bug)) player.act=0.35; hideHint(); e.act(mode); }
+function interact(e, mode='tap'){ if(!ents.includes(e)) return; if (e.rag) return; player.face=Math.atan2(e.pos.x-player.pos.x, e.pos.z-player.pos.z); if(!(e instanceof Bug)) player.act=0.35; hideHint(); e.act(mode); }
 function nearestEnt(){ let best=null, bd=1e9; for(const e of ents){ if(e.removed||!e.label()) continue; const d=Math.hypot(e.pos.x-player.pos.x,e.pos.z-player.pos.z); if(d<e.reach+0.3 && d<bd && entVisible(e)){ bd=d; best=e; } } return best; }
 function facingWater(){ if(World.inside) return null; for(const d of [2.5,3.5,4.5]){ const x=player.pos.x+Math.sin(player.face)*d, z=player.pos.z+Math.cos(player.face)*d; if(isFishWater(x,z)) return new THREE.Vector3(x,0,z); } return null; }
-function doAction(){ if(cine||dlgState||scrim.classList.contains('show')||placing||layoutMode||buildMode||magicMode) return; if(riding) setRiding(false); if (sledding){ setSled(false); return; } if(CatchMeter.bug){ resolveSwing(); return; } if(Fishing.state!=='idle'){ reel(); return; } if (knockedDown()) return; if (tryBonk()) return; if (tryBonkNpc()) return; const e=nearestEnt(); if(e){ stopMove(); interact(e,'manual'); return; } const w=facingWater(); if(w){ castAt(w); hideHint(); } }
+function doAction(){ if(cine||dlgState||scrim.classList.contains('show')||placing||layoutMode||buildMode||magicMode) return; if(riding) setRiding(false); if (sledding){ setSled(false); return; } if(CatchMeter.bug){ resolveSwing(); return; } if(Fishing.state!=='idle'){ reel(); return; } if (knockedDown()) return; const e=nearestEnt(); if(e){ stopMove(); interact(e,'manual'); return; } const w=facingWater(); if(w){ castAt(w); hideHint(); } }
 $('#act').addEventListener('click', e=>{ e.stopPropagation(); if(layoutMode) return; doAction(); });
 let hintHidden=false; function hideHint(){ if(hintHidden) return; hintHidden=true; $('#hint').style.opacity=0; }
 
@@ -3314,7 +3306,8 @@ function applyControls(){
   const [ax,ay]=actCenter(); actBtn.style.left=(ax-48)+'px'; actBtn.style.top=(ay-48)+'px'; actBtn.style.right='auto'; actBtn.style.bottom='auto';
   toolBtn.style.left=(clamp(ax-48-62, 8, innerWidth-60))+'px'; toolBtn.style.top=(ay-48-34)+'px';
   if (ay-48-34 < 120){ toolBtn.style.top=(ay+52)+'px'; }
-  $('#hint').textContent = c.move==='keys' ? `WASD to walk, drag to look around. ${KB().act.toUpperCase()} or Space to act.` : c.move==='joystick' ? (c.tapWalk?'Use the joystick or tap to walk. Tap things to interact.':'Use the joystick to walk. Tap things to interact.') : 'Tap to walk, hold to keep walking. Tap things to interact.';
+  swingBtn.style.left=(clamp(ax-36, 8, innerWidth-80))+'px'; swingBtn.style.top=(ay-48-84)+'px'; if (ay-48-84 < 120) swingBtn.style.top=(ay+56)+'px';
+  $('#hint').textContent = c.move==='keys' ? `WASD to walk, drag to look around. ${KB().act.toUpperCase()} to use or talk, ${keyName(KB().swing||' ')} to swing.` : c.move==='joystick' ? (c.tapWalk?'Use the joystick or tap to walk. Tap things to interact.':'Use the joystick to walk. Tap things to interact.') : 'Tap to walk, hold to keep walking. Tap things to interact.';
   if (!on) return;
   const s=c.size;
   if (c.floating && !layoutMode){ Object.assign(joyZone.style,{ left:'0', top:'45%', width:'50%', height:'55%' }); joyBase.style.opacity = joy.active?c.opacity:0; }
@@ -3469,7 +3462,7 @@ function updateActButton(){
   const nearHome = World.inside==='home' || World.inside==='home2' || (!World.inside && Math.hypot(player.pos.x-LOT.x, player.pos.z-LOT.z)<12);
   if (nearHome!==updateActButton.nh){ updateActButton.nh=nearHome; $('#bBuild').style.display=nearHome?'':'none'; }
   if (layoutMode) return;
-  let lab=''; if(!dlgState && !placing && !buildMode && !scrim.classList.contains('show')){ if(CatchMeter.bug) lab='Swing!'; else if(Fishing.state!=='idle') lab='Reel'; else if (bonkTarget() || npcBonkTarget()) lab='Bonk'; else { const e=nearestEnt(); if(e) lab=e.label(); else if(facingWater()) lab='Fish'; } }
+  let lab=''; if(!dlgState && !placing && !buildMode && !scrim.classList.contains('show')){ if(CatchMeter.bug) lab='Swing!'; else if(Fishing.state!=='idle') lab='Reel';  else { const e=nearestEnt(); if(e) lab=e.label(); else if(facingWater()) lab='Fish'; } }
   if(lab!==actLabel){ actLabel=lab; if(lab){ actBtn.textContent=lab; actBtn.classList.add('show'); } else actBtn.classList.remove('show'); }
 }
 
@@ -3480,13 +3473,13 @@ function frame(){
   secT+=dt; if(secT>1){ secT=0; if(rollDay()){ spawnDaily(); ensureFavors(); refreshStoreItems(); applyTown(); toast('A new day on '+(S.island||'the island')+'!'); } refreshStands(); setSledBtn(); updateSky(); updateHUD(); updatePotionHUD(); }
   saveT+=dt; if(saveT>15){ saveT=0; save(); }
   updateRemotes(dt,t); updateSnow(dt);
-  if (started){ updateHold(dt); movePlayer(dt,t); updateBugs(dt); updateFishing(dt,t); updateCatchMeter(dt); tickDialog(dt); updateActButton(); updateCutaway(); }
+  if (started){ updateHold(dt); if (meBody.rag) updateRag(meBody,dt,t); else movePlayer(dt,t); bonkCool=Math.max(0,bonkCool-dt); updateBugs(dt); updateFishing(dt,t); updateCatchMeter(dt); tickDialog(dt); updateActButton(); updateCutaway(); }
   for(const e of ents.slice()){ if (e.removed) continue; if (e.rag){ updateRag(e,dt,t); continue; } if (e instanceof Resident || Math.abs(e.pos.x-player.pos.x)<40) e.update(dt,t); }
   if (!World.inside){ updateWater(t); updateAmbient(dt,t); updateFalls(dt,t); foam.scale.setScalar(1+Math.sin(t*0.8)*0.006);
     for(const c of clouds){ c.position.x+=c.userData.v*dt; if(c.position.x>150) c.position.x=-150; }
     const lnOn=activeEvents().some(e=>e.id==='lantern-night');
     for(const l of lanterns){ l.visible=lnOn; if(lnOn){ const u=l.userData; u.y+=dt*u.s; if(u.y>18){ u.y=0; u.a=Math.random()*TAU; } l.position.set(Math.cos(u.a+t*0.01)*u.d, 1+u.y, Math.sin(u.a+t*0.01)*u.d); l.children[1].material.opacity=Math.min(1,u.y/2)*(1-u.y/18)*0.9; } } }
-  updatePrecip(dt,t); updateParticles(dt); updateFX(dt); updateFlops(dt,t); updateCamera(dt);
+  updatePrecip(dt,t); updateParticles(dt); updateFX(dt); updateCamera(dt);
   renderer.render(scene,camera); requestAnimationFrame(frame);
 }
 updateSky(); updateHUD(); camTarget.copy(player.pos); updateCamera(1); updateHeld(); updateToolBtn(); applyControls();
@@ -3600,9 +3593,9 @@ function remoteUpsert(id, name, st){
   if (st) remotePos(id, st);
   return r;
 }
-function remotePos(id, st){ const r=remotes.get(id); if(!r) return; if (st.lk && st.lk!==r.lk){ r.lk=st.lk; r.obj=swapLook(r.obj, buildPlayer({ look:st.lk })); r.jel={}; } r.tgt.set(st.x, st.y||0, st.z); r.f=st.f||0; r.w=st.w; r.in=st.in||null;
+function remotePos(id, st){ const r=remotes.get(id); if(!r) return; if (st.lk && st.lk!==r.lk){ r.lk=st.lk; r.obj=swapLook(r.obj, buildPlayer({ look:st.lk })); r.jel={}; } r.tgt.set(st.x, st.y||0, st.z); r.f=st.f||0; r.w=st.w; r.in=st.in||null; r.rg=Array.isArray(st.rg)&&st.rg.length===4?st.rg:null; r.rs=st.rs?1:0;
   const wantBike=!!st.b; if(wantBike!==!!r.bike){ const u=r.obj.userData; if(wantBike){ r.bike=buildBike(0x5a9ad8); r.obj.add(r.bike); if(u.body) u.body.position.y=0.42; } else { r.obj.remove(r.bike); r.bike=null; if(u.body) u.body.position.y=0; } } if(!r.seen){ r.pos.copy(r.tgt); r.seen=true; } }
-function remoteLeave(id){ const r=remotes.get(id); if(!r) return; scene.remove(r.obj); remotes.delete(id); const f=flops.get(id); if (f){ scene.remove(f.stars); flops.delete(id); } }
+function remoteLeave(id){ const r=remotes.get(id); if(!r) return; scene.remove(r.obj); remotes.delete(id); if (r.rl && r.rl.stars) scene.remove(r.rl.stars); }
 function remoteEmote(id, e){ const txt=EMOTE_TEXT[e]; if(!txt) return; const pos = id==='me' ? player.pos : remotes.get(id)?.pos; if(!pos) return; const v=pos.clone(); v.y+=0.6; floatText(txt, v); if(id!=='me') Snd.pop(); }
 // Jelly feel: bodies squash and stretch on a little spring, and friends bump each other apart.
 /* Jelly feel (v1.1): every critter is a soft plush on springs.
@@ -3651,170 +3644,173 @@ function updateRemotes(dt,t){
   if (started && !buildMode) bumpFriends(dt);
   jelly(player.obj, playerJelly, dt, player.speedFrac>0.05, t, player.speedFrac*(riding?1.6:1));
   for (const r of remotes.values()){ r.jel=r.jel||{}; jelly(r.obj, r.jel, dt, !!r.w, t);
-    r.pos.lerp(r.tgt, Math.min(1, dt*8)); r.obj.position.copy(r.pos);
+    r.pos.lerp(r.tgt, Math.min(1, dt*(r.rg?14:8))); r.obj.position.copy(r.pos);
+    r.obj.visible = r.seen && (r.in||null)===(World.inside||null);
+    if (remoteRag(r, dt, t)) continue;
     let d=r.f-r.obj.rotation.y; d=Math.atan2(Math.sin(d),Math.cos(d)); r.obj.rotation.y+=d*Math.min(1,dt*10);
     r.obj.visible = r.seen && (r.in||null)===(World.inside||null);
     const u=r.obj.userData; if(r.bike){ if(r.w) for(const w of r.bike.userData.wheels) w.rotation.x+=dt*30; if(u.legs){ u.legs[0].rotation.x=-0.9+Math.sin(t*9)*0.5*r.w; u.legs[1].rotation.x=-0.9-Math.sin(t*9)*0.5*r.w; } if(u.arms){ u.arms[0].rotation.x=-0.9; u.arms[1].rotation.x=-0.9; } continue; }
     if(u.legs){ const ph=t*11, a=r.w?1:0; u.legs[0].rotation.x=Math.sin(ph)*0.7*a; u.legs[1].rotation.x=-Math.sin(ph)*0.7*a; if(u.arms){ u.arms[0].rotation.x=-Math.sin(ph)*0.6*a; u.arms[1].rotation.x=Math.sin(ph)*0.6*a; } }
   }
 }
-/* ---------- Bonk (v1.3): in multiplayer, swing a tool at a friend and they flop over like a jelly toy ----------
-   No damage and nothing lost: they tip over, wobble on the ground with stars over their head, and spring back up.
-   The swinger's game shows it right away; the server passes it on to the friend and anyone else on the island. */
-const flops=new Map();   // 'me' or a remote id -> flop state
-const BONK_TOOLS=['axe','shovel','net','rod','can'];
+/* ---------- Swing and ragdolls (v1.6) ----------
+   Swing (Space, or the Swing button) is its own control, separate from Use/Talk (E, Enter, click, the Act button).
+   A swing always plays: the axe chops the air, the shovel digs a little hole anywhere, the rod casts and reels back,
+   the net sweeps, the can sprinkles. If it would hit something the tool works on (a tree, a rock, a bug, a plant, water),
+   it does that. If a character is in front of you (an islander, a friend, a visitor) it sends them flying instead.
+   Ragdoll: the body is launched up and away with a spin, falls, bounces, skids, rolls flat, lies there seeing stars,
+   then springs back up. Arms, legs and head flop on loose springs. Your own character uses the same physics when a
+   friend hits you, and your game sends the pose to everyone else, so they see the same tumble. */
+const ragdolls=new Set();
+const meBody={ pos:player.pos, get obj(){ return player.obj; }, jel:playerJelly, me:true, rag:null };
+const isNpc = e => (e instanceof Resident || e instanceof Keeper) && !e.removed;
+const knockedDown = () => !!meBody.rag;
 let bonkCool=0;
-function bonkTarget(){
-  if (!remotes.size || !S.equip || !BONK_TOOLS.includes(S.equip) || !hasTool(S.equip)) return null;
-  let best=null, bd=2.1;
-  for (const r of remotes.values()){ if (!r.obj.visible || flops.has(r.id)) continue; const dx=r.pos.x-player.pos.x, dz=r.pos.z-player.pos.z, d=Math.hypot(dx,dz); if (d>=bd) continue;
-    let a=Math.atan2(dx,dz)-player.face; a=Math.atan2(Math.sin(a),Math.cos(a)); if (Math.abs(a)>1.25 && d>0.9) continue; best=r; bd=d; }
+function npcInSpace(e){ return e.obj.visible!==false && e.obj.parent && (e.pos.x>500)===!!World.inside && !(e instanceof Resident && (e.lying || (World.inside ? e.loc!=='in' : e.loc!=='out'))); }
+// the character in front of you, close enough to hit: { npc } or { remote }
+function swingTarget(){
+  let best=null, bd=2.2;
+  const look=(px,pz,v)=>{ const dx=px-player.pos.x, dz=pz-player.pos.z, d=Math.hypot(dx,dz); if (d>=bd) return;
+    let a=Math.atan2(dx,dz)-player.face; a=Math.atan2(Math.sin(a),Math.cos(a)); if (Math.abs(a)>1.15 && d>0.9) return; best=v; bd=d; };
+  for (const e of ents) if (isNpc(e) && !e.rag && !e.talking && npcInSpace(e)) look(e.pos.x, e.pos.z, { npc:e });
+  for (const r of remotes.values()) if (r.obj.visible && !r.rg) look(r.pos.x, r.pos.z, { remote:r });
   return best; }
-function tryBonk(r){
-  r=r||bonkTarget(); if (!r || bonkCool>0 || flops.has('me')) return false;
-  const dx=r.pos.x-player.pos.x, dz=r.pos.z-player.pos.z, L=Math.hypot(dx,dz)||1; if (L>2.6 || flops.has(r.id)) return false;
-  bonkCool=0.6; stopMove();
-  player.face=Math.atan2(dx,dz); player.act=0.4; Snd.swoosh();
-  setTimeout(()=>{ startFlop(r.id, dx/L, dz/L); if (BOOT.sendLive) BOOT.sendLive({ t:'bonk', to:r.id, dx:+(dx/L).toFixed(3), dz:+(dz/L).toFixed(3) }); }, 120);
-  return true; }
+const TOOL_VERBS = { axe:['Chop','Hit'], shovel:['Dig','Dig up','Hit'], net:['Catch','Swing!'], can:['Water'] };
+function swing(){
+  if (cine||dlgState||scrim.classList.contains('show')||placing||layoutMode||buildMode||magicMode||meBody.rag||bonkCool>0) return;
+  if (CatchMeter.bug){ resolveSwing(); return; }
+  if (Fishing.state!=='idle'){ reel(); return; }
+  if (riding) setRiding(false); if (sledding){ setSled(false); return; }
+  const tool = S.equip && hasTool(S.equip) ? S.equip : null; hideHint();
+  const tg=swingTarget();
+  if (tg){ const p=tg.npc ? tg.npc.pos : tg.remote.pos, dx=p.x-player.pos.x, dz=p.z-player.pos.z, L=Math.hypot(dx,dz)||1;
+    stopMove(); player.face=Math.atan2(dx,dz); player.obj.rotation.y=player.face; player.act=0.4; bonkCool=0.5; Snd.swoosh();
+    setTimeout(()=>{ if (tg.npc){ const e=tg.npc; if (!e.removed && !e.rag && npcInSpace(e) && Math.hypot(e.pos.x-player.pos.x, e.pos.z-player.pos.z)<3.2) launchRag(e, dx/L, dz/L, tool?1:0.7); }
+      else { const r=tg.remote; Snd.boing(); puff(r.pos.clone().add(new THREE.Vector3(0,1.4,0)), 0xffffff, 10, 0.6, 2.4, 0.8, 0.5); floatText('Bonk!', r.pos); if (BOOT.sendLive) BOOT.sendLive({ t:'bonk', to:r.id, dx:+(dx/L).toFixed(3), dz:+(dz/L).toFixed(3) }); } }, 120);
+    return; }
+  // something the tool works on, right in front: use it as usual
+  if (tool==='rod'){ if (facingWater()){ doAction(); return; } }
+  else if (tool){ const e=nearestEnt(); if (e && (TOOL_VERBS[tool]||[]).includes(e.label())){ let a=Math.atan2(e.pos.x-player.pos.x, e.pos.z-player.pos.z)-player.face; a=Math.atan2(Math.sin(a),Math.cos(a)); if (Math.abs(a)<1.4 || Math.hypot(e.pos.x-player.pos.x,e.pos.z-player.pos.z)<1.1){ interact(e,'manual'); return; } } }
+  airSwing(tool); }
+// a swing at nothing: a little animation, then back to normal
+function airSwing(tool){
+  stopMove(); player.act=0.4; bonkCool=0.35; const f=player.face, front=new THREE.Vector3(player.pos.x+Math.sin(f)*1.1, 0, player.pos.z+Math.cos(f)*1.1); front.y=groundY(front.x,front.z);
+  if (!tool){ Snd.swoosh(); return; }
+  if (tool==='axe'){ Snd.swoosh(); setTimeout(()=>puff(front.clone().setY(front.y+0.9), 0xffffff, 4, 0.3, 1.2, 0.6, 0.3), 150); }
+  else if (tool==='shovel'){ Snd.dig(); if (!World.inside && walkable(front.x,front.z) && rawHeight(front.x,front.z)>SAND_H-0.3){ FX.hole(front.clone(), 0.32, 1.6); puff(front.clone().setY(front.y+0.2), 0xb08a5a, 7, 0.5, 2.2, 0.9, 0.5); } else puff(front.clone().setY(front.y+0.2), 0xd8c8a8, 4, 0.3, 1.2, 0.6, 0.3); }
+  else if (tool==='net'){ Snd.swoosh(); }
+  else if (tool==='can'){ Snd.pop(); puff(front.clone().setY(front.y+0.3), 0x8ac8f0, 9, 0.35, 1.6, 0.8, 0.45); }
+  else if (tool==='rod'){ Snd.swoosh(); airCast(); } }
+// cast the line at nothing: the bobber arcs out, lands, and reels straight back
+function airCast(){ const f=player.face, b=new THREE.Mesh(G.sph(0.11,10,8), M(0xe8503a)), line=new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(),new THREE.Vector3()]), new THREE.LineBasicMaterial({ color:0xf4f0e8 }));
+  scene.add(b); scene.add(line); const d=3.6, to=new THREE.Vector3(player.pos.x+Math.sin(f)*d, 0, player.pos.z+Math.cos(f)*d); to.y=groundY(to.x,to.z)+0.08;
+  timeline(1.3, t=>{ const tip=player.pos.clone().add(new THREE.Vector3(Math.sin(f)*0.7, 1.5, Math.cos(f)*0.7)); let k;
+      if (t<0.45){ k=t/0.45; b.position.lerpVectors(tip, to, k); b.position.y+=Math.sin(k*Math.PI)*1.6; } else if (t<0.8){ b.position.copy(to); if (t-0.45<0.02) Snd.thunk(); } else { k=(t-0.8)/0.5; b.position.lerpVectors(to, tip, k*k); b.position.y+=Math.sin(k*Math.PI)*0.4; }
+      line.geometry.setFromPoints([tip, b.position.clone()]); },
+    ()=>{ scene.remove(b); scene.remove(line); line.geometry.dispose(); }); }
+
 let _starTex=null;
 function starTex(){ if (_starTex) return _starTex; const cv=document.createElement('canvas'); cv.width=cv.height=64; const x=cv.getContext('2d'); x.translate(32,32); x.beginPath();
   for (let i=0;i<10;i++){ const r=i%2?11:28, a=i/10*TAU-Math.PI/2; x.lineTo(Math.cos(a)*r, Math.sin(a)*r); } x.closePath(); x.fillStyle='#ffd24a'; x.fill(); x.lineWidth=4; x.strokeStyle='#e8952a'; x.lineJoin='round'; x.stroke();
   return _starTex=new THREE.CanvasTexture(cv); }
-function startFlop(who, dx, dz){
-  const isMe = who==='me', r = isMe ? null : remotes.get(who); if (!isMe && !r) return;
-  const obj = isMe ? player.obj : r.obj; obj.rotation.order='YXZ';
-  if (isMe){ if (riding) setRiding(false); if (sledding) setSled(false); if (Fishing.state!=='idle') reel(); if (CatchMeter.bug) endCatchMeter(); stopMove(); }
-  const pos = isMe ? player.pos : r.pos; const head=pos.clone().add(new THREE.Vector3(0,1.6,0));
-  Snd.boing(); puff(head.clone(), 0xffffff, 8, 0.6, 2.2, 0.8, 0.5); floatText(['Bonk!','Boing!','Plop!','Whump!'][Math.floor(Math.random()*4)], pos);
-  const stars=new THREE.Group(); for (let i=0;i<3;i++){ const sp=new THREE.Sprite(new THREE.SpriteMaterial({ map:starTex(), transparent:true, depthWrite:false })); sp.scale.setScalar(0.42); sp.userData.a=i/3*TAU; stars.add(sp); } stars.visible=false; scene.add(stars);
-  const old=flops.get(who); if (old) scene.remove(old.stars);
-  flops.set(who, { obj, dx, dz, t:0, ang:0, vel:6.5, slide:isMe?1.4:0, off:new THREE.Vector3(), stars, jel: isMe ? playerJelly : (r.jel=r.jel||{}) });
-}
-// remote or own player got bonked by someone (from the live room)
-function bonked(to, from, dx, dz){ startFlop(to, dx, dz); if (to==='me'){ const r=remotes.get(from); if (r) toast(`${r.name} bonked you!`); } }
-function updateFlops(dt,t){
-  bonkCool=Math.max(0,bonkCool-dt);
-  for (const [who,f] of flops){ f.t+=dt; const o=f.obj, u=o.userData, isMe=who==='me';
-    // a springy tip: over past flat with a bounce, wobble on the ground, then spring back up and overshoot a little
-    const target = f.t<1.5 ? 1.42 : 0, k = f.t<1.5 ? 70 : 55, damp = f.t<1.5 ? 7 : 6.5;
-    f.vel += ((target-f.ang)*k - f.vel*damp)*dt; f.ang += f.vel*dt;
-    if (f.t<1.5 && f.ang>1.42 && f.vel>0){ f.vel*=-0.45; if (!f.landed){ f.landed=true; Snd.thunk(); puff(o.position.clone().add(new THREE.Vector3(f.dx*1.1,0.2,f.dz*1.1)), 0xd8c8a8, 7, 0.7, 1.4, 0.8, 0.5); f.jel.v=(f.jel.v||0)-4; } }
-    // tip away from the hit: work out the fall direction in the character's own frame
-    const yaw=o.rotation.y, lx=f.dx*Math.cos(yaw)-f.dz*Math.sin(yaw), lz=f.dx*Math.sin(yaw)+f.dz*Math.cos(yaw);
-    o.rotation.x = lz*f.ang; o.rotation.z = -lx*f.ang;
-    if (u.arms && f.t<1.6) u.arms.forEach((a,i)=>{ a.rotation.x=Math.sin(t*18+i*2)*0.9; a.rotation.z=(i?-1:1)*(0.6+Math.sin(t*13+i)*0.3); });
-    if (u.legs && f.t<1.6) u.legs.forEach((l,i)=>{ l.rotation.x=Math.sin(t*16+i*3)*0.8; });
-    if (u.body && f.t>1.5 && f.t<1.6) f.jel.v=(f.jel.v||0)+3;   // pop back up with a stretch
-    // knocked back a little (our own player really moves; on the swinger's screen the friend slides until their own update arrives)
-    if (f.t<0.35){ const step=dt*4.2*(1-f.t/0.35);
-      if (isMe){ const nx=player.pos.x+f.dx*step, nz=player.pos.z+f.dz*step; if (walkable(nx,nz) && !blocked(nx,nz,0.35)){ player.pos.x=nx; player.pos.z=nz; player.pos.y=groundY(nx,nz); o.position.copy(player.pos); } }
-      else { f.off.x+=f.dx*step; f.off.z+=f.dz*step; } }
-    if (!isMe){ f.off.multiplyScalar(Math.exp(-dt*0.8)); o.position.add(f.off); }
-    // stars circle the head while they're down
-    f.stars.visible = f.t>0.3 && f.t<1.6 && o.visible; if (f.stars.visible){ const hp=o.position.clone(); hp.y+=0.55; hp.x+=f.dx*1.1; hp.z+=f.dz*1.1; f.stars.position.copy(hp); f.stars.children.forEach(sp=>{ const a=sp.userData.a+t*5; sp.position.set(Math.cos(a)*0.45, Math.sin(t*7+sp.userData.a)*0.08, Math.sin(a)*0.45); }); }
-    if (f.t>2.6 && Math.abs(f.ang)<0.02 && Math.abs(f.vel)<0.1){ o.rotation.x=0; o.rotation.z=0; if (u.arms) u.arms.forEach(a=>{ a.rotation.z=0; }); scene.remove(f.stars); flops.delete(who); }
-  } }
-const knockedDown = () => flops.has('me') && flops.get('me').t<1.9;
-/* ---------- Ragdoll (v1.5): bonk an islander with an axe or shovel and they go flying ----------
-   Each islander becomes a tumbling plush body for a few seconds: launched up and away with a spin, gravity pulls it
-   down, it bounces and skids on the ground, rolls to a stop, and its arms, legs and head flop around on loose
-   springs driven by how fast it's spinning. If it flies into another islander, that one goes down too.
-   Then it lies there seeing stars, springs back to its feet, and shopkeepers hop back to their spot. */
-const NPC_BONK_TOOLS=['axe','shovel'];
-const ragdolls=new Set();
-const isNpc = e => (e instanceof Resident || e instanceof Keeper) && !e.removed;
-function npcInSpace(e){ return e.obj.visible!==false && e.obj.parent && (e.pos.x>500)===!!World.inside && !(e instanceof Resident && (e.lying || (World.inside ? e.loc!=='in' : e.loc!=='out'))); }
-function npcBonkTarget(){
-  if (!S.equip || !NPC_BONK_TOOLS.includes(S.equip) || !hasTool(S.equip)) return null;
-  let best=null, bd=2.2;
-  for (const e of ents){ if (!isNpc(e) || e.rag || !npcInSpace(e)) continue; const dx=e.pos.x-player.pos.x, dz=e.pos.z-player.pos.z, d=Math.hypot(dx,dz); if (d>=bd) continue;
-    let a=Math.atan2(dx,dz)-player.face; a=Math.atan2(Math.sin(a),Math.cos(a)); if (Math.abs(a)>1.2 && d>1.0) continue; best=e; bd=d; }
-  return best; }
-function tryBonkNpc(e){
-  e=e||npcBonkTarget(); if (!e || bonkCool>0 || e.rag || flops.has('me')) return false;
-  const dx=e.pos.x-player.pos.x, dz=e.pos.z-player.pos.z, L=Math.hypot(dx,dz)||1; if (L>2.8) return false;
-  bonkCool=0.5; stopMove(); player.face=Math.atan2(dx,dz); player.act=0.4; Snd.swoosh();
-  setTimeout(()=>{ if (!e.removed && npcInSpace(e) && Math.hypot(e.pos.x-player.pos.x, e.pos.z-player.pos.z)<3.2) launchRag(e, dx/L, dz/L, 1); }, 120); return true; }
+function starRing(){ const g=new THREE.Group(); for (let i=0;i<3;i++){ const sp=new THREE.Sprite(new THREE.SpriteMaterial({ map:starTex(), transparent:true, depthWrite:false })); sp.scale.setScalar(0.4); sp.userData.a=i/3*TAU; g.add(sp); } scene.add(g); return g; }
+function spinStars(g, at, t){ g.position.copy(at); g.children.forEach(sp=>{ const a=sp.userData.a+t*5; sp.position.set(Math.cos(a)*0.42, Math.sin(t*7+sp.userData.a)*0.08, Math.sin(a)*0.42); }); }
+// a friend hit me (from the live room)
+function bonked(to, from, dx, dz){
+  if (to==='me'){ launchRag(meBody, dx, dz, 1); const r=remotes.get(from); if (r) toast(`${r.name} bonked you!`); }
+  else { const r=remotes.get(to); if (r){ Snd.boing(); puff(r.pos.clone().add(new THREE.Vector3(0,1.4,0)), 0xffffff, 8, 0.6, 2.2, 0.8, 0.5); } } }
 function launchRag(e, dx, dz, power){
-  if (e.rag || e.removed) return;
-  if (e.talking) return;
-  const o=e.obj, u=o.userData, h=0.7;
-  const yaw=o.rotation.y; o.rotation.set(0,yaw,0);
+  if (e.rag || e.removed || e.talking) return;
+  e.jel=e.jel||{};
+  const o=e.obj, u=o.userData, h=0.7, yaw=e.me ? player.face : o.rotation.y; o.rotation.set(0,yaw,0);
+  if (e.me){ if (riding) setRiding(false); if (sledding) setSled(false); if (Fishing.state!=='idle') reel(); if (CatchMeter.bug) endCatchMeter(); stopMove(); }
   const side=new THREE.Vector3(dz,0,-dx).normalize();     // tumble axis: head goes the way it was hit
-  e.rag={ t:0, home: e instanceof Resident ? null : e.pos.clone(), yaw, h,
+  e.rag={ t:0, home: e instanceof Keeper ? e.pos.clone() : null, h, solid:e.solid,
     c:new THREE.Vector3(e.pos.x, e.pos.y+h, e.pos.z),                                   // centre of the body
     v:new THREE.Vector3(dx*(5+Math.random()*1.5)*power, (4.5+Math.random()*1.5)*power, dz*(5+Math.random()*1.5)*power),
     w:side.multiplyScalar(-(9+Math.random()*4)*power).add(new THREE.Vector3(0,(Math.random()-0.5)*8,0)),
-    q:new THREE.Quaternion().setFromEuler(new THREE.Euler(0,yaw,0)), rest:0, up:-1, bounces:0,
+    q:new THREE.Quaternion().setFromEuler(new THREE.Euler(0,yaw,0)), rest:0, up:-1,
     limbs:(u.arms||[]).concat(u.legs||[]).map(()=>({ x:0, vx:0, z:0, vz:0 })), headV:0, headZ:0, stars:null, hit:new Set([e]) };
+  if (!e.me) e.solid=false;   // a tumbling islander never blocks anyone (v1.5 bug: you couldn't walk while one lay against you)
   ragdolls.add(e);
   Snd.boing(); puff(e.rag.c.clone().add(new THREE.Vector3(0,0.6,0)), 0xffffff, 10, 0.6, 2.4, 0.8, 0.5);
   floatText(['Bonk!','Boing!','Whee!','Oof!','Wahh!'][Math.floor(Math.random()*5)], e.pos);
 }
+// arms, legs and head on loose springs: wild while spinning, splayed out while lying still
+function ragLimbs(u, L, spin, resting, t, dt){
+  const parts=(u.arms||[]).concat(u.legs||[]), na=(u.arms||[]).length;
+  parts.forEach((p,i)=>{ const S2=L.limbs[i]||(L.limbs[i]={ x:0, vx:0, z:0, vz:0 }), arm=i<na, sgn=i%2?-1:1;
+    const tx = resting ? (arm?-0.3:0.25*sgn) : Math.sin(t*(13+i*2)+i)*0.25*spin/6 + (arm?-1.2:0.6)*Math.min(1,spin/8);
+    const tz = resting ? sgn*(arm?1.25:0.35) : sgn*(arm?0.6:0.25) + Math.cos(t*(11+i*3))*0.35*Math.min(1,spin/6);
+    S2.vx+=((tx-S2.x)*60-S2.vx*6)*dt; S2.x+=S2.vx*dt; S2.vz+=((tz-S2.z)*60-S2.vz*6)*dt; S2.z+=S2.vz*dt; p.rotation.x=S2.x; p.rotation.z=S2.z; });
+  if (u.head){ L.headV+=((Math.sin(t*9)*0.25*Math.min(1,spin/5)-L.headZ)*50-L.headV*5)*dt; L.headZ+=L.headV*dt; u.head.rotation.z=L.headZ; } }
+function resetLimbs(u){ (u.arms||[]).forEach(a=>{ a.rotation.x=0; a.rotation.z=0; }); (u.legs||[]).forEach(l=>{ l.rotation.x=0; l.rotation.z=0; }); if (u.head) u.head.rotation.z=0; }
 const _q=new THREE.Quaternion(), _v=new THREE.Vector3(), UPV=new THREE.Vector3(0,1,0);
 function updateRag(e, dt, t){
   const R=e.rag, o=e.obj, u=o.userData; R.t+=dt;
   const up=_v.copy(UPV).applyQuaternion(R.q), upright=Math.abs(up.y);
   const reach = R.h*upright + 0.42*(1-upright);              // how far the body's centre sits above the ground in this pose
   if (R.up<0){
-    // free body: gravity, air drag, spin
     R.v.y-=20*dt; const nx=R.c.x+R.v.x*dt, nz=R.c.z+R.v.z*dt;
     if (!walkable(nx,nz) || blocked(nx,nz,0.35,e)){ R.v.x*=-0.45; R.v.z*=-0.45; R.w.multiplyScalar(-0.6); if (Math.abs(R.v.x)+Math.abs(R.v.z)>1.5) Snd.thunk(); }
     else { R.c.x=nx; R.c.z=nz; }
     R.c.y+=R.v.y*dt; const gy=groundY(R.c.x,R.c.z)+reach, grounded=R.c.y<=gy+0.02;
     if (R.c.y<gy){ R.c.y=gy;
-      if (R.v.y<-3){ R.v.y*=-0.38; R.bounces++; R.w.multiplyScalar(0.7); R.w.x+=(Math.random()-0.5)*4; R.w.z+=(Math.random()-0.5)*4; Snd.thunk(); puff(R.c.clone().setY(gy-reach+0.15), 0xd8c8a8, 6, 0.5, 1.4, 0.8, 0.4); (e.jel=e.jel||{}).v=-3; }
+      if (R.v.y<-3){ R.v.y*=-0.38; R.w.multiplyScalar(0.7); R.w.x+=(Math.random()-0.5)*4; R.w.z+=(Math.random()-0.5)*4; Snd.thunk(); puff(R.c.clone().setY(gy-reach+0.15), 0xd8c8a8, 6, 0.5, 1.4, 0.8, 0.4); e.jel.v=-3; }
       else R.v.y=0; }
     if (grounded){ const f=Math.exp(-dt*5); R.v.x*=f; R.v.z*=f; R.w.multiplyScalar(Math.exp(-dt*4));
-      // roll toward lying flat: pull the "up" axis down toward the ground so it ends on its back, front or side
+      // roll onto the back, front or side
       if (upright>0.25){ const lay=new THREE.Vector3().crossVectors(up, UPV); if (lay.lengthSq()<0.04) lay.set(1,0,0).applyQuaternion(R.q).setY(0); lay.normalize(); R.w.addScaledVector(lay, -Math.sign(up.y||1)*dt*34*upright); } }
     else R.w.multiplyScalar(Math.exp(-dt*0.4));
     const wl=R.w.length(); if (wl>1e-4){ _q.setFromAxisAngle(_v.copy(R.w).divideScalar(wl), wl*dt); R.q.premultiply(_q).normalize(); }
-    // knock over anyone it flies into
+    // knock over islanders it flies into (never you: you can always keep walking)
     const sp=Math.hypot(R.v.x,R.v.z);
-    if (sp>2.2) for (const o2 of ents){ if (!isNpc(o2) || o2.rag || R.hit.has(o2) || !npcInSpace(o2)) continue; const d=Math.hypot(o2.pos.x-R.c.x, o2.pos.z-R.c.z); if (d<0.9){ R.hit.add(o2); launchRag(o2, R.v.x/sp, R.v.z/sp, Math.min(1, sp/6)); R.v.multiplyScalar(0.5); } }
-    if (grounded && sp<0.4 && R.w.length()<1.2 && R.t>0.6){ R.rest+=dt; if (R.rest>1.8){ R.up=0; R.q0=R.q.clone(); R.c0=R.c.clone(); R.q1=new THREE.Quaternion().setFromEuler(new THREE.Euler(0,Math.atan2(player.pos.x-R.c.x, player.pos.z-R.c.z),0)); } }
+    if (sp>2.2) for (const o2 of ents){ if (!isNpc(o2) || o2.rag || o2.talking || R.hit.has(o2) || !npcInSpace(o2)) continue; const d=Math.hypot(o2.pos.x-R.c.x, o2.pos.z-R.c.z); if (d<0.9){ R.hit.add(o2); launchRag(o2, R.v.x/sp, R.v.z/sp, Math.min(1, sp/6)); R.v.multiplyScalar(0.5); } }
+    if (grounded && sp<0.4 && R.w.length()<1.2 && R.t>0.6){ R.rest+=dt; if (R.rest>(e.me?1.2:1.8)){ R.up=0; R.q0=R.q.clone(); R.c0=R.c.clone();
+        const fy = e.me ? new THREE.Euler().setFromQuaternion(R.q,'YXZ').y : Math.atan2(player.pos.x-R.c.x, player.pos.z-R.c.z); R.q1=new THREE.Quaternion().setFromEuler(new THREE.Euler(0,fy,0)); } }
     else R.rest=Math.max(0,R.rest-dt);
   } else {
-    // spring back up, facing whoever bonked them
     R.up+=dt; const k=Math.min(1,R.up/0.45), e2=1-Math.pow(1-k,3);
     R.q.slerpQuaternions(R.q0, R.q1, e2); R.c.y=lerp(R.c0.y, groundY(R.c.x,R.c.z)+R.h, e2)+Math.sin(k*Math.PI)*0.5;
     if (k>=1){ endRag(e); return; } }
-  e.pos.x=R.c.x; e.pos.z=R.c.z; e.pos.y=groundY(R.c.x,R.c.z);   // so collisions and tapping follow the body
-  // place the model: its origin is at the feet, so offset from the body centre along the body's up axis
+  e.pos.x=R.c.x; e.pos.z=R.c.z; e.pos.y=groundY(R.c.x,R.c.z);
   o.quaternion.copy(R.q); o.position.copy(R.c).addScaledVector(_v.copy(UPV).applyQuaternion(R.q), -R.h);
-  // floppy limbs and head: loose springs pushed around by the spin
-  const spin=Math.min(14,R.w.length()), resting=R.up<0 && R.rest>0.2;
-  const parts=(u.arms||[]).concat(u.legs||[]);
-  parts.forEach((p,i)=>{ const L=R.limbs[i], arm=i<(u.arms||[]).length, sgn=i%2?-1:1;
-    const tx = resting ? (arm?-0.3:0.25*sgn) : Math.sin(t*(13+i*2)+i)*0.25*spin/6 + (arm?-1.2:0.6)*Math.min(1,spin/8);
-    const tz = resting ? sgn*(arm?1.25:0.35) : sgn*(arm?0.6:0.25) + Math.cos(t*(11+i*3))*0.35*Math.min(1,spin/6);
-    L.vx+=((tx-L.x)*60-L.vx*6)*dt; L.x+=L.vx*dt; L.vz+=((tz-L.z)*60-L.vz*6)*dt; L.z+=L.vz*dt; p.rotation.x=L.x; p.rotation.z=L.z; });
-  if (u.head){ R.headV+=((Math.sin(t*9)*0.25*Math.min(1,spin/5)-R.headZ)*50-R.headV*5)*dt; R.headZ+=R.headV*dt; u.head.rotation.z=R.headZ; }
-  // dizzy stars while lying there
-  const showStars = R.up<0 && R.rest>0.15;
-  if (showStars && !R.stars){ R.stars=new THREE.Group(); for (let i=0;i<3;i++){ const sp=new THREE.Sprite(new THREE.SpriteMaterial({ map:starTex(), transparent:true, depthWrite:false })); sp.scale.setScalar(0.4); sp.userData.a=i/3*TAU; R.stars.add(sp); } scene.add(R.stars); }
-  if (R.stars){ R.stars.visible=showStars; const hp=_v.copy(UPV).applyQuaternion(R.q).multiplyScalar(0.75).add(R.c); hp.y+=0.45; R.stars.position.copy(hp); R.stars.children.forEach(sp=>{ const a=sp.userData.a+t*5; sp.position.set(Math.cos(a)*0.42, Math.sin(t*7+sp.userData.a)*0.08, Math.sin(a)*0.42); }); }
+  R.spin=Math.min(14,R.w.length()); R.resting=R.up<0 && R.rest>0.15;
+  ragLimbs(u, R, R.spin, R.up<0 && R.rest>0.2, t, dt);
+  if (R.resting && !R.stars) R.stars=starRing();
+  if (R.stars){ R.stars.visible=R.resting && o.visible; spinStars(R.stars, _v.copy(UPV).applyQuaternion(R.q).multiplyScalar(0.75).add(R.c).add(new THREE.Vector3(0,0.45,0)), t); }
 }
 function endRag(e){
   const R=e.rag, o=e.obj, u=o.userData; if (R.stars) scene.remove(R.stars);
   const yaw=new THREE.Euler().setFromQuaternion(R.q,'YXZ').y; o.rotation.set(0,yaw,0); e.face=yaw;
-  e.pos.set(R.c.x, groundY(R.c.x,R.c.z), R.c.z); o.position.copy(e.pos);
-  (u.arms||[]).forEach(a=>{ a.rotation.x=0; a.rotation.z=0; }); (u.legs||[]).forEach(l=>{ l.rotation.x=0; l.rotation.z=0; }); if (u.head) u.head.rotation.z=0;
-  (e.jel=e.jel||{}).v=4; Snd.pop();
+  e.pos.set(R.c.x, groundY(R.c.x,R.c.z), R.c.z); o.position.copy(e.pos); resetLimbs(u);
+  e.jel.v=4; Snd.pop(); e.rag=null; ragdolls.delete(e);
+  if (e.me){ player.face=yaw; return; }
+  e.solid=R.solid;
   floatText(['Hey!','Rude!','Again!','Wheee...','Oof.','Hmph!','Dizzy...'][Math.floor(Math.random()*7)], e.pos);
-  e.rag=null; ragdolls.delete(e);
   if (e instanceof Resident){ e.state='idle'; e.timer=1.5; }
   // shopkeepers and Wendell hop back to their spot
   if (R.home && R.home.distanceTo(e.pos)>0.2){ const from=e.pos.clone(), to=R.home.clone(), n=Math.max(1,Math.round(from.distanceTo(to)/1.2));
     timeline(0.32*n, tt=>{ const k=tt/(0.32*n); e.pos.lerpVectors(from,to,k); e.pos.y=groundY(e.pos.x,e.pos.z)+Math.abs(Math.sin(k*n*Math.PI))*0.4; e.obj.position.copy(e.pos); }, ()=>{ e.pos.copy(to); e.obj.position.copy(to); }); }
 }
-
-const playerState = () => ({ lk:S.look||'', b:riding?1:0, x:+player.pos.x.toFixed(2), z:+player.pos.z.toFixed(2), y:+player.pos.y.toFixed(2), f:+player.face.toFixed(2), w:player.speedFrac>0.05?1:0, in:World.inside||null });
+// a friend's tumble, drawn from the pose their game sends: rotation (rg), lying still (rs)
+function remoteRag(r, dt, t){
+  const u=r.obj.userData;
+  if (r.rg){ const q=new THREE.Quaternion(r.rg[0],r.rg[1],r.rg[2],r.rg[3]).normalize(); if (!r.rl){ r.rl={ limbs:[], headV:0, headZ:0, q:q.clone() }; r.obj.quaternion.copy(q); }
+    const prev=r.rl.q.clone(); r.obj.quaternion.slerp(q, Math.min(1,dt*12)); r.rl.q.copy(r.obj.quaternion);
+    const spin=Math.min(14, 2*Math.acos(Math.min(1,Math.abs(prev.dot(r.rl.q))))/Math.max(dt,1e-3));
+    ragLimbs(u, r.rl, Math.max(spin, r.rs?0:3), !!r.rs, t, dt);
+    if (r.rs && !r.rl.stars) r.rl.stars=starRing(); if (r.rl.stars){ r.rl.stars.visible=!!r.rs && r.obj.visible; spinStars(r.rl.stars, _v.copy(UPV).applyQuaternion(r.obj.quaternion).multiplyScalar(0.75).add(r.obj.position).add(new THREE.Vector3(0,0.95,0)), t); }
+    return true; }
+  if (r.rl){ if (r.rl.stars) scene.remove(r.rl.stars); r.rl=null; r.obj.rotation.set(0,r.f,0); resetLimbs(u); r.jel.v=4; }
+  return false; }
+const playerState = () => { const R=meBody.rag, P = R ? player.obj.position : player.pos;
+  const st={ lk:S.look||'', b:riding?1:0, x:+P.x.toFixed(2), z:+P.z.toFixed(2), y:+P.y.toFixed(2), f:+player.face.toFixed(2), w:player.speedFrac>0.05?1:0, in:World.inside||null };
+  if (R){ const q=player.obj.quaternion; st.rg=[+q.x.toFixed(3),+q.y.toFixed(3),+q.z.toFixed(3),+q.w.toFixed(3)]; st.rs=R.resting?1:0; }
+  return st; };
 // The server changed our bag (gift, mail or trade): take its copy
 function setInventory(inv, seen, equip){ S.inv=inv; if(seen) S.seen=Object.assign(S.seen||{}, seen); if(equip!==undefined){ S.equip=equip; } try{ updateHeld(); updateToolBtn(); }catch(e){} updateHUD(); }
 if (VISIT) setTimeout(()=>toast(`Visiting ${BOOT.host.name}'s island${BOOT.host.island?' ('+BOOT.host.island+')':''} as a ${BOOT.role}.`), 1500);
 
 addEventListener('visibilitychange', ()=>{ if(document.hidden) save(); else if(Snd.ctx) Snd.ctx.resume(); });
-window.__game = { v1:{ scene, camera, OUT, updateSky, updateHUD, snowPass, SNOW_U, townNewDay, applyTown, talkHall, openHallPanel, buildPlaza, refreshStoreItems, buildStoreAll, buildShop, buildMuseumAll, spawnExhibits, exhibitSlots, mentorMoment, teachWoodworking, openCraft, doCook, nearStation, toggleSled, setSled, get sledding(){ return sledding; }, sledV, eatFood, Plant, fullBagCatch, KB, landSeaTap, terraLand, LAMPS:()=>LAMPS, hasUpstairs, ShopItem, Stairs, get exhibits(){ return exhibits; }, KEEPOUT, dayKeyOf, World, startPlacing, checkPlace, get placing(){ return placing; }, FX, homeStock, buyHome, draftUnowned, get homeRack(){ return homeRack; }, openShop, openBuild:(o)=>openBuild(o), closeBuild, get buildMode(){ return buildMode; }, ents, Tree, Stump, Weed, Bug, bugs, player, interact, layoutBar, pickNote, itemToast, reel, Fishing, fishes, relayout, enterRoom:(id)=>enterRoom(id), trees }, get S(){ return S; }, dbg:{ showChoices:(t,c)=>showChoices(t,c), dialog:(...a)=>dialog(...a), setRiding:(v)=>setRiding(v), enterRoom:(id)=>enterRoom(id), openBuild:()=>openBuild(), rooms:()=>Object.keys(ROOMS), get yaw(){ return camYaw; }, set yaw(v){ camYaw=v; }, get riding(){ return riding; }, get snow(){ return SNOW_U.value; }, setWeather:(w)=>{ weatherOverride=w; World.weather=w; snowT=0; }, get dlg(){ return !!dlgState; } }, walkable, blocked, groundY, launchRag, ragdolls, net:{ bonked, tryBonk, startFlop, get flops(){ return flops; }, visibleRemotes:()=>[...remotes.values()].filter(r=>r.obj.visible).map(r=>[r.name,+r.pos.x.toFixed(1),+r.pos.z.toFixed(1)]), remoteUpsert, remotePos, remoteLeave, remoteEmote, playerState, setInventory, toast:(m)=>toast(m), updateHUD:()=>updateHUD(), get started(){ return started; } }, ITEMS, itemThumb:(id)=>thumb(id), layoutInfo:()=>({ id:LAYOUT_ID, PLACES, PATHS, LOT, rects:RECTS.map(r=>r.slice(0,4)), lot:lotRect() }), terrainH:(x,z)=>rawHeight(x,z), terrainSlope:(x,z)=>hillSlope(x,z), interact, spawnBug:(id,x,z)=>new Bug(id,x,z), tapOdds:()=>Object.fromEntries(Object.keys(TAP_BASE).map(k=>[k, +tapChance({rarity:k}).toFixed(2)])), placingObj:()=>placing&&placing.m, toScreen:v=>{ const p=v.clone().project(camera); return [(p.x*0.5+0.5)*innerWidth, (-p.y*0.5+0.5)*innerHeight]; }, rebuildHome:()=>{ buildPlayerHouse(); rebuildHomeRoom(); }, openBuild, closeBuild, get buildMode(){ return buildMode; }, talkShop, openDonate, talkCurator, spawnMossby, onFelled, findPath, startPlacing, LOT, RECTS, shopEnts, museumEnt, houseEnt:()=>houseEnt, Time, player, ents, ITEMS, residents, World, ROOMS, goTo, handleTap, doAction, updateSky, rollDay, spawnDaily, castAt, Fishing, fishes, bugs, openBag, openBook, openShop, openBoard, openMenu, openCraft, doCraft, WOODWORK, enterRoom, exitRoom, equip, startLayout, endLayout, trees, applyControls, magic:{ startMagic, endMagic, landTap, magicPlace, castMagic, get mode(){ return magicMode; }, raiseTower, talkWizard, drinkPotion, potionOn, luckW, rollFavors, Q, favorChoices, findTowerSpot, get tower(){ return towerEnt; }, PLACES, TERRA, FALLS } };
+window.__game = { v1:{ scene, camera, OUT, updateSky, updateHUD, snowPass, SNOW_U, townNewDay, applyTown, talkHall, openHallPanel, buildPlaza, refreshStoreItems, buildStoreAll, buildShop, buildMuseumAll, spawnExhibits, exhibitSlots, mentorMoment, teachWoodworking, openCraft, doCook, nearStation, toggleSled, setSled, get sledding(){ return sledding; }, sledV, eatFood, Plant, fullBagCatch, KB, landSeaTap, terraLand, LAMPS:()=>LAMPS, hasUpstairs, ShopItem, Stairs, get exhibits(){ return exhibits; }, KEEPOUT, dayKeyOf, World, startPlacing, checkPlace, get placing(){ return placing; }, FX, homeStock, buyHome, draftUnowned, get homeRack(){ return homeRack; }, openShop, openBuild:(o)=>openBuild(o), closeBuild, get buildMode(){ return buildMode; }, ents, Tree, Stump, Weed, Bug, bugs, player, interact, layoutBar, pickNote, itemToast, reel, Fishing, fishes, relayout, enterRoom:(id)=>enterRoom(id), trees }, get S(){ return S; }, dbg:{ showChoices:(t,c)=>showChoices(t,c), dialog:(...a)=>dialog(...a), setRiding:(v)=>setRiding(v), enterRoom:(id)=>enterRoom(id), openBuild:()=>openBuild(), rooms:()=>Object.keys(ROOMS), get yaw(){ return camYaw; }, set yaw(v){ camYaw=v; }, get riding(){ return riding; }, get snow(){ return SNOW_U.value; }, setWeather:(w)=>{ weatherOverride=w; World.weather=w; snowT=0; }, get dlg(){ return !!dlgState; } }, walkable, blocked, groundY, launchRag, ragdolls, swing, meBody, net:{ bonked, visibleRemotes:()=>[...remotes.values()].filter(r=>r.obj.visible).map(r=>[r.name,+r.pos.x.toFixed(1),+r.pos.z.toFixed(1)]), remoteUpsert, remotePos, remoteLeave, remoteEmote, playerState, setInventory, toast:(m)=>toast(m), updateHUD:()=>updateHUD(), get started(){ return started; } }, ITEMS, itemThumb:(id)=>thumb(id), layoutInfo:()=>({ id:LAYOUT_ID, PLACES, PATHS, LOT, rects:RECTS.map(r=>r.slice(0,4)), lot:lotRect() }), terrainH:(x,z)=>rawHeight(x,z), terrainSlope:(x,z)=>hillSlope(x,z), interact, spawnBug:(id,x,z)=>new Bug(id,x,z), tapOdds:()=>Object.fromEntries(Object.keys(TAP_BASE).map(k=>[k, +tapChance({rarity:k}).toFixed(2)])), placingObj:()=>placing&&placing.m, toScreen:v=>{ const p=v.clone().project(camera); return [(p.x*0.5+0.5)*innerWidth, (-p.y*0.5+0.5)*innerHeight]; }, rebuildHome:()=>{ buildPlayerHouse(); rebuildHomeRoom(); }, openBuild, closeBuild, get buildMode(){ return buildMode; }, talkShop, openDonate, talkCurator, spawnMossby, onFelled, findPath, startPlacing, LOT, RECTS, shopEnts, museumEnt, houseEnt:()=>houseEnt, Time, player, ents, ITEMS, residents, World, ROOMS, goTo, handleTap, doAction, updateSky, rollDay, spawnDaily, castAt, Fishing, fishes, bugs, openBag, openBook, openShop, openBoard, openMenu, openCraft, doCraft, WOODWORK, enterRoom, exitRoom, equip, startLayout, endLayout, trees, applyControls, magic:{ startMagic, endMagic, landTap, magicPlace, castMagic, get mode(){ return magicMode; }, raiseTower, talkWizard, drinkPotion, potionOn, luckW, rollFavors, Q, favorChoices, findTowerSpot, get tower(){ return towerEnt; }, PLACES, TERRA, FALLS } };

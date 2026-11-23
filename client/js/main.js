@@ -3294,10 +3294,10 @@ function handleTap(cx,cy){
     goTo(sp, null, ()=>castAt(tgt)); marker.visible=false; }
 }
 function farClickHint(){}
-function interact(e, mode='tap'){ if(!ents.includes(e)) return; player.face=Math.atan2(e.pos.x-player.pos.x, e.pos.z-player.pos.z); if(!(e instanceof Bug)) player.act=0.35; hideHint(); e.act(mode); }
+function interact(e, mode='tap'){ if(!ents.includes(e)) return; if (e.rag) return; if (isNpc(e) && S.equip && NPC_BONK_TOOLS.includes(S.equip) && hasTool(S.equip) && tryBonkNpc(e)) return; player.face=Math.atan2(e.pos.x-player.pos.x, e.pos.z-player.pos.z); if(!(e instanceof Bug)) player.act=0.35; hideHint(); e.act(mode); }
 function nearestEnt(){ let best=null, bd=1e9; for(const e of ents){ if(e.removed||!e.label()) continue; const d=Math.hypot(e.pos.x-player.pos.x,e.pos.z-player.pos.z); if(d<e.reach+0.3 && d<bd && entVisible(e)){ bd=d; best=e; } } return best; }
 function facingWater(){ if(World.inside) return null; for(const d of [2.5,3.5,4.5]){ const x=player.pos.x+Math.sin(player.face)*d, z=player.pos.z+Math.cos(player.face)*d; if(isFishWater(x,z)) return new THREE.Vector3(x,0,z); } return null; }
-function doAction(){ if(cine||dlgState||scrim.classList.contains('show')||placing||layoutMode||buildMode||magicMode) return; if(riding) setRiding(false); if (sledding){ setSled(false); return; } if(CatchMeter.bug){ resolveSwing(); return; } if(Fishing.state!=='idle'){ reel(); return; } if (knockedDown()) return; if (tryBonk()) return; const e=nearestEnt(); if(e){ stopMove(); interact(e,'manual'); return; } const w=facingWater(); if(w){ castAt(w); hideHint(); } }
+function doAction(){ if(cine||dlgState||scrim.classList.contains('show')||placing||layoutMode||buildMode||magicMode) return; if(riding) setRiding(false); if (sledding){ setSled(false); return; } if(CatchMeter.bug){ resolveSwing(); return; } if(Fishing.state!=='idle'){ reel(); return; } if (knockedDown()) return; if (tryBonk()) return; if (tryBonkNpc()) return; const e=nearestEnt(); if(e){ stopMove(); interact(e,'manual'); return; } const w=facingWater(); if(w){ castAt(w); hideHint(); } }
 $('#act').addEventListener('click', e=>{ e.stopPropagation(); if(layoutMode) return; doAction(); });
 let hintHidden=false; function hideHint(){ if(hintHidden) return; hintHidden=true; $('#hint').style.opacity=0; }
 
@@ -3469,7 +3469,7 @@ function updateActButton(){
   const nearHome = World.inside==='home' || World.inside==='home2' || (!World.inside && Math.hypot(player.pos.x-LOT.x, player.pos.z-LOT.z)<12);
   if (nearHome!==updateActButton.nh){ updateActButton.nh=nearHome; $('#bBuild').style.display=nearHome?'':'none'; }
   if (layoutMode) return;
-  let lab=''; if(!dlgState && !placing && !buildMode && !scrim.classList.contains('show')){ if(CatchMeter.bug) lab='Swing!'; else if(Fishing.state!=='idle') lab='Reel'; else if (bonkTarget()) lab='Bonk'; else { const e=nearestEnt(); if(e) lab=e.label(); else if(facingWater()) lab='Fish'; } }
+  let lab=''; if(!dlgState && !placing && !buildMode && !scrim.classList.contains('show')){ if(CatchMeter.bug) lab='Swing!'; else if(Fishing.state!=='idle') lab='Reel'; else if (bonkTarget() || npcBonkTarget()) lab='Bonk'; else { const e=nearestEnt(); if(e) lab=e.label(); else if(facingWater()) lab='Fish'; } }
   if(lab!==actLabel){ actLabel=lab; if(lab){ actBtn.textContent=lab; actBtn.classList.add('show'); } else actBtn.classList.remove('show'); }
 }
 
@@ -3481,7 +3481,7 @@ function frame(){
   saveT+=dt; if(saveT>15){ saveT=0; save(); }
   updateRemotes(dt,t); updateSnow(dt);
   if (started){ updateHold(dt); movePlayer(dt,t); updateBugs(dt); updateFishing(dt,t); updateCatchMeter(dt); tickDialog(dt); updateActButton(); updateCutaway(); }
-  for(const e of ents.slice()){ if (e.removed) continue; if (e instanceof Resident || Math.abs(e.pos.x-player.pos.x)<40) e.update(dt,t); }
+  for(const e of ents.slice()){ if (e.removed) continue; if (e.rag){ updateRag(e,dt,t); continue; } if (e instanceof Resident || Math.abs(e.pos.x-player.pos.x)<40) e.update(dt,t); }
   if (!World.inside){ updateWater(t); updateAmbient(dt,t); updateFalls(dt,t); foam.scale.setScalar(1+Math.sin(t*0.8)*0.006);
     for(const c of clouds){ c.position.x+=c.userData.v*dt; if(c.position.x>150) c.position.x=-150; }
     const lnOn=activeEvents().some(e=>e.id==='lantern-night');
@@ -3716,10 +3716,105 @@ function updateFlops(dt,t){
     if (f.t>2.6 && Math.abs(f.ang)<0.02 && Math.abs(f.vel)<0.1){ o.rotation.x=0; o.rotation.z=0; if (u.arms) u.arms.forEach(a=>{ a.rotation.z=0; }); scene.remove(f.stars); flops.delete(who); }
   } }
 const knockedDown = () => flops.has('me') && flops.get('me').t<1.9;
+/* ---------- Ragdoll (v1.5): bonk an islander with an axe or shovel and they go flying ----------
+   Each islander becomes a tumbling plush body for a few seconds: launched up and away with a spin, gravity pulls it
+   down, it bounces and skids on the ground, rolls to a stop, and its arms, legs and head flop around on loose
+   springs driven by how fast it's spinning. If it flies into another islander, that one goes down too.
+   Then it lies there seeing stars, springs back to its feet, and shopkeepers hop back to their spot. */
+const NPC_BONK_TOOLS=['axe','shovel'];
+const ragdolls=new Set();
+const isNpc = e => (e instanceof Resident || e instanceof Keeper) && !e.removed;
+function npcInSpace(e){ return e.obj.visible!==false && e.obj.parent && (e.pos.x>500)===!!World.inside && !(e instanceof Resident && (e.lying || (World.inside ? e.loc!=='in' : e.loc!=='out'))); }
+function npcBonkTarget(){
+  if (!S.equip || !NPC_BONK_TOOLS.includes(S.equip) || !hasTool(S.equip)) return null;
+  let best=null, bd=2.2;
+  for (const e of ents){ if (!isNpc(e) || e.rag || !npcInSpace(e)) continue; const dx=e.pos.x-player.pos.x, dz=e.pos.z-player.pos.z, d=Math.hypot(dx,dz); if (d>=bd) continue;
+    let a=Math.atan2(dx,dz)-player.face; a=Math.atan2(Math.sin(a),Math.cos(a)); if (Math.abs(a)>1.2 && d>1.0) continue; best=e; bd=d; }
+  return best; }
+function tryBonkNpc(e){
+  e=e||npcBonkTarget(); if (!e || bonkCool>0 || e.rag || flops.has('me')) return false;
+  const dx=e.pos.x-player.pos.x, dz=e.pos.z-player.pos.z, L=Math.hypot(dx,dz)||1; if (L>2.8) return false;
+  bonkCool=0.5; stopMove(); player.face=Math.atan2(dx,dz); player.act=0.4; Snd.swoosh();
+  setTimeout(()=>{ if (!e.removed && npcInSpace(e) && Math.hypot(e.pos.x-player.pos.x, e.pos.z-player.pos.z)<3.2) launchRag(e, dx/L, dz/L, 1); }, 120); return true; }
+function launchRag(e, dx, dz, power){
+  if (e.rag || e.removed) return;
+  if (e.talking) return;
+  const o=e.obj, u=o.userData, h=0.7;
+  const yaw=o.rotation.y; o.rotation.set(0,yaw,0);
+  const side=new THREE.Vector3(dz,0,-dx).normalize();     // tumble axis: head goes the way it was hit
+  e.rag={ t:0, home: e instanceof Resident ? null : e.pos.clone(), yaw, h,
+    c:new THREE.Vector3(e.pos.x, e.pos.y+h, e.pos.z),                                   // centre of the body
+    v:new THREE.Vector3(dx*(5+Math.random()*1.5)*power, (4.5+Math.random()*1.5)*power, dz*(5+Math.random()*1.5)*power),
+    w:side.multiplyScalar(-(9+Math.random()*4)*power).add(new THREE.Vector3(0,(Math.random()-0.5)*8,0)),
+    q:new THREE.Quaternion().setFromEuler(new THREE.Euler(0,yaw,0)), rest:0, up:-1, bounces:0,
+    limbs:(u.arms||[]).concat(u.legs||[]).map(()=>({ x:0, vx:0, z:0, vz:0 })), headV:0, headZ:0, stars:null, hit:new Set([e]) };
+  ragdolls.add(e);
+  Snd.boing(); puff(e.rag.c.clone().add(new THREE.Vector3(0,0.6,0)), 0xffffff, 10, 0.6, 2.4, 0.8, 0.5);
+  floatText(['Bonk!','Boing!','Whee!','Oof!','Wahh!'][Math.floor(Math.random()*5)], e.pos);
+}
+const _q=new THREE.Quaternion(), _v=new THREE.Vector3(), UPV=new THREE.Vector3(0,1,0);
+function updateRag(e, dt, t){
+  const R=e.rag, o=e.obj, u=o.userData; R.t+=dt;
+  const up=_v.copy(UPV).applyQuaternion(R.q), upright=Math.abs(up.y);
+  const reach = R.h*upright + 0.42*(1-upright);              // how far the body's centre sits above the ground in this pose
+  if (R.up<0){
+    // free body: gravity, air drag, spin
+    R.v.y-=20*dt; const nx=R.c.x+R.v.x*dt, nz=R.c.z+R.v.z*dt;
+    if (!walkable(nx,nz) || blocked(nx,nz,0.35,e)){ R.v.x*=-0.45; R.v.z*=-0.45; R.w.multiplyScalar(-0.6); if (Math.abs(R.v.x)+Math.abs(R.v.z)>1.5) Snd.thunk(); }
+    else { R.c.x=nx; R.c.z=nz; }
+    R.c.y+=R.v.y*dt; const gy=groundY(R.c.x,R.c.z)+reach, grounded=R.c.y<=gy+0.02;
+    if (R.c.y<gy){ R.c.y=gy;
+      if (R.v.y<-3){ R.v.y*=-0.38; R.bounces++; R.w.multiplyScalar(0.7); R.w.x+=(Math.random()-0.5)*4; R.w.z+=(Math.random()-0.5)*4; Snd.thunk(); puff(R.c.clone().setY(gy-reach+0.15), 0xd8c8a8, 6, 0.5, 1.4, 0.8, 0.4); (e.jel=e.jel||{}).v=-3; }
+      else R.v.y=0; }
+    if (grounded){ const f=Math.exp(-dt*5); R.v.x*=f; R.v.z*=f; R.w.multiplyScalar(Math.exp(-dt*4));
+      // roll toward lying flat: pull the "up" axis down toward the ground so it ends on its back, front or side
+      if (upright>0.25){ const lay=new THREE.Vector3().crossVectors(up, UPV); if (lay.lengthSq()<0.04) lay.set(1,0,0).applyQuaternion(R.q).setY(0); lay.normalize(); R.w.addScaledVector(lay, -Math.sign(up.y||1)*dt*34*upright); } }
+    else R.w.multiplyScalar(Math.exp(-dt*0.4));
+    const wl=R.w.length(); if (wl>1e-4){ _q.setFromAxisAngle(_v.copy(R.w).divideScalar(wl), wl*dt); R.q.premultiply(_q).normalize(); }
+    // knock over anyone it flies into
+    const sp=Math.hypot(R.v.x,R.v.z);
+    if (sp>2.2) for (const o2 of ents){ if (!isNpc(o2) || o2.rag || R.hit.has(o2) || !npcInSpace(o2)) continue; const d=Math.hypot(o2.pos.x-R.c.x, o2.pos.z-R.c.z); if (d<0.9){ R.hit.add(o2); launchRag(o2, R.v.x/sp, R.v.z/sp, Math.min(1, sp/6)); R.v.multiplyScalar(0.5); } }
+    if (grounded && sp<0.4 && R.w.length()<1.2 && R.t>0.6){ R.rest+=dt; if (R.rest>1.8){ R.up=0; R.q0=R.q.clone(); R.c0=R.c.clone(); R.q1=new THREE.Quaternion().setFromEuler(new THREE.Euler(0,Math.atan2(player.pos.x-R.c.x, player.pos.z-R.c.z),0)); } }
+    else R.rest=Math.max(0,R.rest-dt);
+  } else {
+    // spring back up, facing whoever bonked them
+    R.up+=dt; const k=Math.min(1,R.up/0.45), e2=1-Math.pow(1-k,3);
+    R.q.slerpQuaternions(R.q0, R.q1, e2); R.c.y=lerp(R.c0.y, groundY(R.c.x,R.c.z)+R.h, e2)+Math.sin(k*Math.PI)*0.5;
+    if (k>=1){ endRag(e); return; } }
+  e.pos.x=R.c.x; e.pos.z=R.c.z; e.pos.y=groundY(R.c.x,R.c.z);   // so collisions and tapping follow the body
+  // place the model: its origin is at the feet, so offset from the body centre along the body's up axis
+  o.quaternion.copy(R.q); o.position.copy(R.c).addScaledVector(_v.copy(UPV).applyQuaternion(R.q), -R.h);
+  // floppy limbs and head: loose springs pushed around by the spin
+  const spin=Math.min(14,R.w.length()), resting=R.up<0 && R.rest>0.2;
+  const parts=(u.arms||[]).concat(u.legs||[]);
+  parts.forEach((p,i)=>{ const L=R.limbs[i], arm=i<(u.arms||[]).length, sgn=i%2?-1:1;
+    const tx = resting ? (arm?-0.3:0.25*sgn) : Math.sin(t*(13+i*2)+i)*0.25*spin/6 + (arm?-1.2:0.6)*Math.min(1,spin/8);
+    const tz = resting ? sgn*(arm?1.25:0.35) : sgn*(arm?0.6:0.25) + Math.cos(t*(11+i*3))*0.35*Math.min(1,spin/6);
+    L.vx+=((tx-L.x)*60-L.vx*6)*dt; L.x+=L.vx*dt; L.vz+=((tz-L.z)*60-L.vz*6)*dt; L.z+=L.vz*dt; p.rotation.x=L.x; p.rotation.z=L.z; });
+  if (u.head){ R.headV+=((Math.sin(t*9)*0.25*Math.min(1,spin/5)-R.headZ)*50-R.headV*5)*dt; R.headZ+=R.headV*dt; u.head.rotation.z=R.headZ; }
+  // dizzy stars while lying there
+  const showStars = R.up<0 && R.rest>0.15;
+  if (showStars && !R.stars){ R.stars=new THREE.Group(); for (let i=0;i<3;i++){ const sp=new THREE.Sprite(new THREE.SpriteMaterial({ map:starTex(), transparent:true, depthWrite:false })); sp.scale.setScalar(0.4); sp.userData.a=i/3*TAU; R.stars.add(sp); } scene.add(R.stars); }
+  if (R.stars){ R.stars.visible=showStars; const hp=_v.copy(UPV).applyQuaternion(R.q).multiplyScalar(0.75).add(R.c); hp.y+=0.45; R.stars.position.copy(hp); R.stars.children.forEach(sp=>{ const a=sp.userData.a+t*5; sp.position.set(Math.cos(a)*0.42, Math.sin(t*7+sp.userData.a)*0.08, Math.sin(a)*0.42); }); }
+}
+function endRag(e){
+  const R=e.rag, o=e.obj, u=o.userData; if (R.stars) scene.remove(R.stars);
+  const yaw=new THREE.Euler().setFromQuaternion(R.q,'YXZ').y; o.rotation.set(0,yaw,0); e.face=yaw;
+  e.pos.set(R.c.x, groundY(R.c.x,R.c.z), R.c.z); o.position.copy(e.pos);
+  (u.arms||[]).forEach(a=>{ a.rotation.x=0; a.rotation.z=0; }); (u.legs||[]).forEach(l=>{ l.rotation.x=0; l.rotation.z=0; }); if (u.head) u.head.rotation.z=0;
+  (e.jel=e.jel||{}).v=4; Snd.pop();
+  floatText(['Hey!','Rude!','Again!','Wheee...','Oof.','Hmph!','Dizzy...'][Math.floor(Math.random()*7)], e.pos);
+  e.rag=null; ragdolls.delete(e);
+  if (e instanceof Resident){ e.state='idle'; e.timer=1.5; }
+  // shopkeepers and Wendell hop back to their spot
+  if (R.home && R.home.distanceTo(e.pos)>0.2){ const from=e.pos.clone(), to=R.home.clone(), n=Math.max(1,Math.round(from.distanceTo(to)/1.2));
+    timeline(0.32*n, tt=>{ const k=tt/(0.32*n); e.pos.lerpVectors(from,to,k); e.pos.y=groundY(e.pos.x,e.pos.z)+Math.abs(Math.sin(k*n*Math.PI))*0.4; e.obj.position.copy(e.pos); }, ()=>{ e.pos.copy(to); e.obj.position.copy(to); }); }
+}
+
 const playerState = () => ({ lk:S.look||'', b:riding?1:0, x:+player.pos.x.toFixed(2), z:+player.pos.z.toFixed(2), y:+player.pos.y.toFixed(2), f:+player.face.toFixed(2), w:player.speedFrac>0.05?1:0, in:World.inside||null });
 // The server changed our bag (gift, mail or trade): take its copy
 function setInventory(inv, seen, equip){ S.inv=inv; if(seen) S.seen=Object.assign(S.seen||{}, seen); if(equip!==undefined){ S.equip=equip; } try{ updateHeld(); updateToolBtn(); }catch(e){} updateHUD(); }
 if (VISIT) setTimeout(()=>toast(`Visiting ${BOOT.host.name}'s island${BOOT.host.island?' ('+BOOT.host.island+')':''} as a ${BOOT.role}.`), 1500);
 
 addEventListener('visibilitychange', ()=>{ if(document.hidden) save(); else if(Snd.ctx) Snd.ctx.resume(); });
-window.__game = { v1:{ scene, camera, OUT, updateSky, updateHUD, snowPass, SNOW_U, townNewDay, applyTown, talkHall, openHallPanel, buildPlaza, refreshStoreItems, buildStoreAll, buildShop, buildMuseumAll, spawnExhibits, exhibitSlots, mentorMoment, teachWoodworking, openCraft, doCook, nearStation, toggleSled, setSled, get sledding(){ return sledding; }, sledV, eatFood, Plant, fullBagCatch, KB, landSeaTap, terraLand, LAMPS:()=>LAMPS, hasUpstairs, ShopItem, Stairs, get exhibits(){ return exhibits; }, KEEPOUT, dayKeyOf, World, startPlacing, checkPlace, get placing(){ return placing; }, FX, homeStock, buyHome, draftUnowned, get homeRack(){ return homeRack; }, openShop, openBuild:(o)=>openBuild(o), closeBuild, get buildMode(){ return buildMode; }, ents, Tree, Stump, Weed, Bug, bugs, player, interact, layoutBar, pickNote, itemToast, reel, Fishing, fishes, relayout, enterRoom:(id)=>enterRoom(id), trees }, get S(){ return S; }, dbg:{ showChoices:(t,c)=>showChoices(t,c), dialog:(...a)=>dialog(...a), setRiding:(v)=>setRiding(v), enterRoom:(id)=>enterRoom(id), openBuild:()=>openBuild(), rooms:()=>Object.keys(ROOMS), get yaw(){ return camYaw; }, set yaw(v){ camYaw=v; }, get riding(){ return riding; }, get snow(){ return SNOW_U.value; }, setWeather:(w)=>{ weatherOverride=w; World.weather=w; snowT=0; }, get dlg(){ return !!dlgState; } }, net:{ bonked, tryBonk, startFlop, get flops(){ return flops; }, visibleRemotes:()=>[...remotes.values()].filter(r=>r.obj.visible).map(r=>[r.name,+r.pos.x.toFixed(1),+r.pos.z.toFixed(1)]), remoteUpsert, remotePos, remoteLeave, remoteEmote, playerState, setInventory, toast:(m)=>toast(m), updateHUD:()=>updateHUD(), get started(){ return started; } }, ITEMS, itemThumb:(id)=>thumb(id), layoutInfo:()=>({ id:LAYOUT_ID, PLACES, PATHS, LOT, rects:RECTS.map(r=>r.slice(0,4)), lot:lotRect() }), terrainH:(x,z)=>rawHeight(x,z), terrainSlope:(x,z)=>hillSlope(x,z), interact, spawnBug:(id,x,z)=>new Bug(id,x,z), tapOdds:()=>Object.fromEntries(Object.keys(TAP_BASE).map(k=>[k, +tapChance({rarity:k}).toFixed(2)])), placingObj:()=>placing&&placing.m, toScreen:v=>{ const p=v.clone().project(camera); return [(p.x*0.5+0.5)*innerWidth, (-p.y*0.5+0.5)*innerHeight]; }, rebuildHome:()=>{ buildPlayerHouse(); rebuildHomeRoom(); }, openBuild, closeBuild, get buildMode(){ return buildMode; }, talkShop, openDonate, talkCurator, spawnMossby, onFelled, findPath, startPlacing, LOT, RECTS, shopEnts, museumEnt, houseEnt:()=>houseEnt, Time, player, ents, ITEMS, residents, World, ROOMS, goTo, handleTap, doAction, updateSky, rollDay, spawnDaily, castAt, Fishing, fishes, bugs, openBag, openBook, openShop, openBoard, openMenu, openCraft, doCraft, WOODWORK, enterRoom, exitRoom, equip, startLayout, endLayout, trees, applyControls, magic:{ startMagic, endMagic, landTap, magicPlace, castMagic, get mode(){ return magicMode; }, raiseTower, talkWizard, drinkPotion, potionOn, luckW, rollFavors, Q, favorChoices, findTowerSpot, get tower(){ return towerEnt; }, PLACES, TERRA, FALLS } };
+window.__game = { v1:{ scene, camera, OUT, updateSky, updateHUD, snowPass, SNOW_U, townNewDay, applyTown, talkHall, openHallPanel, buildPlaza, refreshStoreItems, buildStoreAll, buildShop, buildMuseumAll, spawnExhibits, exhibitSlots, mentorMoment, teachWoodworking, openCraft, doCook, nearStation, toggleSled, setSled, get sledding(){ return sledding; }, sledV, eatFood, Plant, fullBagCatch, KB, landSeaTap, terraLand, LAMPS:()=>LAMPS, hasUpstairs, ShopItem, Stairs, get exhibits(){ return exhibits; }, KEEPOUT, dayKeyOf, World, startPlacing, checkPlace, get placing(){ return placing; }, FX, homeStock, buyHome, draftUnowned, get homeRack(){ return homeRack; }, openShop, openBuild:(o)=>openBuild(o), closeBuild, get buildMode(){ return buildMode; }, ents, Tree, Stump, Weed, Bug, bugs, player, interact, layoutBar, pickNote, itemToast, reel, Fishing, fishes, relayout, enterRoom:(id)=>enterRoom(id), trees }, get S(){ return S; }, dbg:{ showChoices:(t,c)=>showChoices(t,c), dialog:(...a)=>dialog(...a), setRiding:(v)=>setRiding(v), enterRoom:(id)=>enterRoom(id), openBuild:()=>openBuild(), rooms:()=>Object.keys(ROOMS), get yaw(){ return camYaw; }, set yaw(v){ camYaw=v; }, get riding(){ return riding; }, get snow(){ return SNOW_U.value; }, setWeather:(w)=>{ weatherOverride=w; World.weather=w; snowT=0; }, get dlg(){ return !!dlgState; } }, walkable, blocked, groundY, launchRag, ragdolls, net:{ bonked, tryBonk, startFlop, get flops(){ return flops; }, visibleRemotes:()=>[...remotes.values()].filter(r=>r.obj.visible).map(r=>[r.name,+r.pos.x.toFixed(1),+r.pos.z.toFixed(1)]), remoteUpsert, remotePos, remoteLeave, remoteEmote, playerState, setInventory, toast:(m)=>toast(m), updateHUD:()=>updateHUD(), get started(){ return started; } }, ITEMS, itemThumb:(id)=>thumb(id), layoutInfo:()=>({ id:LAYOUT_ID, PLACES, PATHS, LOT, rects:RECTS.map(r=>r.slice(0,4)), lot:lotRect() }), terrainH:(x,z)=>rawHeight(x,z), terrainSlope:(x,z)=>hillSlope(x,z), interact, spawnBug:(id,x,z)=>new Bug(id,x,z), tapOdds:()=>Object.fromEntries(Object.keys(TAP_BASE).map(k=>[k, +tapChance({rarity:k}).toFixed(2)])), placingObj:()=>placing&&placing.m, toScreen:v=>{ const p=v.clone().project(camera); return [(p.x*0.5+0.5)*innerWidth, (-p.y*0.5+0.5)*innerHeight]; }, rebuildHome:()=>{ buildPlayerHouse(); rebuildHomeRoom(); }, openBuild, closeBuild, get buildMode(){ return buildMode; }, talkShop, openDonate, talkCurator, spawnMossby, onFelled, findPath, startPlacing, LOT, RECTS, shopEnts, museumEnt, houseEnt:()=>houseEnt, Time, player, ents, ITEMS, residents, World, ROOMS, goTo, handleTap, doAction, updateSky, rollDay, spawnDaily, castAt, Fishing, fishes, bugs, openBag, openBook, openShop, openBoard, openMenu, openCraft, doCraft, WOODWORK, enterRoom, exitRoom, equip, startLayout, endLayout, trees, applyControls, magic:{ startMagic, endMagic, landTap, magicPlace, castMagic, get mode(){ return magicMode; }, raiseTower, talkWizard, drinkPotion, potionOn, luckW, rollFavors, Q, favorChoices, findTowerSpot, get tower(){ return towerEnt; }, PLACES, TERRA, FALLS } };

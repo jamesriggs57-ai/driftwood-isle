@@ -133,3 +133,8 @@ Code: `client/js/look.js` (materials and painted textures), `client/js/furn.js` 
 - Tap-to-catch bugs: about 60% for common bugs down to under 30% for legendary ones, and a bug can notice you walking up. The timing swing is unchanged.
 - Marlo and Sprig stand beside their market stands on the road side and tidy them now and then, so you can see them.
 - Anonymous museum donations are now clams (300 to 800) that Professor Thistle passes on to you, not fish or bugs. Critters donated anonymously before v1.3 stay on display.
+
+## v1.5: bonk islanders (ragdoll)
+
+Holding an axe or shovel, press Action facing an islander (or tap them) and they go flying: launched up and away with a spin, they fall, bounce and skid, roll onto their back, front or side, and lie there with stars over their head before springing back up with a short line ("Hey!", "Rude!", "Again!"). Arms, legs and head flop on loose springs driven by the spin. An islander who flies into another knocks that one over too. Shopkeepers and Wendell hop back to their spot afterward; residents carry on from where they land. No effect on friendship or saves. Islanders mid-conversation can't be bonked. Net, rod and watering can still talk, so you don't have to put tools away to chat.
+Code: `npcBonkTarget`, `tryBonkNpc`, `launchRag`, `updateRag`, `endRag` in `main.js`. Friends still use the synced flop from v1.3.

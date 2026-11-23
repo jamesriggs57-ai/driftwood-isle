@@ -120,7 +120,7 @@ async function passFor(env, token, ownerId) {
 const worldOf = d => Object.fromEntries(WORLD_KEYS.filter(k => d[k] !== undefined).map(k => [k, d[k]]));
 
 /* ---------- routes ---------- */
-async function api(req, env, url) {
+async function api(req, env, url, base) {
   const p = url.pathname, M = req.method;
   let m;
 
@@ -141,7 +141,7 @@ async function api(req, env, url) {
     await env.DB.batch([...clearCodes(env, email),
       env.DB.prepare('INSERT INTO login_tokens (token, email, name, display_name, expires) VALUES (?, ?, ?, ?, ?)').bind(token, email, name, display, exp),
       env.DB.prepare('INSERT INTO login_tokens (token, email, name, display_name, expires) VALUES (?, ?, ?, ?, ?)').bind(await codeKey(email, code), email, name, display, exp)]);
-    const link = `${url.origin}/api/auth/verify?t=${token}`;
+    const link = `${url.origin}${base}/api/auth/verify?t=${token}`;
     if (env.RESEND_API_KEY) { if (!(await sendLoginEmail(env, email, code, link))) return err(502, 'Could not send the email. Try again in a minute.'); return json({ sent: true, isNew: !existing }); }
     if (env.DEV_LOGIN === '1') return json({ sent: false, isNew: !existing, devLink: link, devCode: code });
     return err(500, 'Email sending is not set up on this server.');
@@ -170,7 +170,7 @@ async function api(req, env, url) {
     if (!row || row.used || row.expires < Date.now()) return new Response('This sign-in link has expired or was already used. Go back to the game and ask for a new one.', { status: 400 });
     await env.DB.prepare('UPDATE login_tokens SET used = 1 WHERE token = ?').bind(t).run();
     await env.DB.batch(clearCodes(env, row.email));
-    return new Response(null, { status: 302, headers: { location: '/#signedin', 'set-cookie': await startSession(env, row) } });
+    return new Response(null, { status: 302, headers: { location: base + '/#signedin', 'set-cookie': await startSession(env, row) } });
   }
   if (p === '/api/auth/logout' && M === 'POST') {
     const sid = cookie(req, 'dw_sess'); if (sid) await env.DB.prepare('DELETE FROM sessions WHERE id = ?').bind(sid).run();
@@ -198,6 +198,7 @@ async function api(req, env, url) {
       env.DB.prepare('DELETE FROM invites WHERE owner_id = ?').bind(me.id),
       env.DB.prepare('DELETE FROM visit_passes WHERE owner_id = ? OR friend_id = ?').bind(me.id, me.id),
       env.DB.prepare('DELETE FROM mail WHERE to_id = ? OR from_id = ?').bind(me.id, me.id),
+      env.DB.prepare('DELETE FROM game_saves WHERE user_id = ?').bind(me.id),
       env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(me.id),
       env.DB.prepare('DELETE FROM login_tokens WHERE email = ?').bind(me.email),
       env.DB.prepare('DELETE FROM users WHERE id = ?').bind(me.id),
@@ -227,7 +228,7 @@ async function api(req, env, url) {
     if (!(await loadSave(env, me.id))) return err(400, 'Save your island first.');
     const code = shortCode();
     await env.DB.prepare('INSERT INTO invites (code, owner_id, role, standing, created, expires) VALUES (?, ?, ?, ?, ?, ?)').bind(code, me.id, role, b.standing ? 1 : 0, Date.now(), Date.now() + 14 * DAY).run();
-    return json({ code, url: `${url.origin}/#invite=${code}`, role, standing: !!b.standing });
+    return json({ code, url: `${url.origin}${base}/#invite=${code}`, role, standing: !!b.standing });
   }
   if ((m = p.match(/^\/api\/invites\/([a-z0-9]{6,16})\/accept$/)) && M === 'POST') {
     const inv = await env.DB.prepare('SELECT * FROM invites WHERE code = ?').bind(m[1]).first();
@@ -342,11 +343,18 @@ async function api(req, env, url) {
   return err(404, 'Not found');
 }
 
+// The game runs at vinatix.com/driftwood/ (a Workers route sends that path here) and still works at the
+// root of any address this Worker is on. Requests under /driftwood have the prefix taken off, and `base`
+// puts it back into links the server hands out (invites, sign-in links).
+const BASE = '/driftwood';
 export default {
   async fetch(req, env) {
     const url = new URL(req.url);
+    let base = '';
+    if (url.pathname === BASE) return Response.redirect(url.origin + BASE + '/' + url.search, 301);
+    if (url.pathname.startsWith(BASE + '/')) { base = BASE; url.pathname = url.pathname.slice(BASE.length); req = new Request(url, req); }
     if (url.pathname.startsWith('/api/')) {
-      try { return await api(req, env, url); }
+      try { return await api(req, env, url, base); }
       catch (e) { console.error(e); return err(500, 'Server error'); }
     }
     return env.ASSETS.fetch(req);

@@ -84,7 +84,7 @@ export function signUpScreen(opts = {}) {
     $e('#suBack').onclick = () => res(null);
     const send = async msg => {
       msg.textContent = 'Sending...';
-      const r = await api('/api/auth/start', { method: 'POST', body: { email: $e('#suEmail').value, name: signIn ? '' : $e('#suName').value, displayName: signIn ? '' : $e('#suDisp').value } });
+      const r = await api('api/auth/start', { method: 'POST', body: { email: $e('#suEmail').value, name: signIn ? '' : $e('#suName').value, displayName: signIn ? '' : $e('#suDisp').value } });
       if (!r.ok) { msg.textContent = r.error || 'Something went wrong.'; return false; }
       email = $e('#suEmail').value.trim();
       $e('#suStep1').style.display = 'none'; $e('#suStep2').style.display = ''; $e('#suTo').textContent = email;
@@ -98,7 +98,7 @@ export function signUpScreen(opts = {}) {
       const code = $e('#suCode').value.replace(/\D/g, ''), msg = $e('#suMsg2');
       if (code.length !== 6) { msg.textContent = 'The code has 6 digits.'; return; }
       if (busy) return; busy = true; msg.textContent = 'Signing in...';
-      const r = await api('/api/auth/code', { method: 'POST', body: { email, code } }); busy = false;
+      const r = await api('api/auth/code', { method: 'POST', body: { email, code } }); busy = false;
       if (!r.ok) { msg.textContent = r.error || 'Something went wrong.'; return; }
       res(true);
     };
@@ -111,7 +111,7 @@ export function signUpScreen(opts = {}) {
 /* ---------- start ---------- */
 async function start() {
   const B = { mode: 'guest', online: false };
-  const t = await api('/api/time');
+  const t = await api('api/time');
   if (t.ok && t.now) { B.online = true; Time.serverMs = t.now - Date.now(); }
 
   // links people arrive on
@@ -119,13 +119,13 @@ async function start() {
   if (h.startsWith('#invite=')) sessionStorage.setItem('dw-invite', h.slice(8));
   if (h.startsWith('#invite=') || h === '#signedin') history.replaceState(null, '', location.pathname);
 
-  const me = B.online ? await api('/api/me') : { ok: false };
+  const me = B.online ? await api('api/me') : { ok: false };
   const local = (() => { try { return JSON.parse(localStorage.getItem(SAVE_KEY)); } catch { return null; } })();
 
   // Invite link
   const code = sessionStorage.getItem('dw-invite');
   if (code && B.online) {
-    const inv = await api('/api/invites/' + code);
+    const inv = await api('api/invites/' + code);
     if (!inv.ok || !inv.valid) { sessionStorage.removeItem('dw-invite'); await info('Invite', inv.error || 'This invite was already used or has expired. Ask your friend for a new one.'); }
     else if (!me.ok) {
       const el = screen(`<h2 style="margin:0 0 6px">${esc(inv.owner)} invited you!</h2><div style="margin-bottom:10px">${inviteText(inv)}</div><div class="muted">You need an account to visit friends.</div>
@@ -139,7 +139,7 @@ async function start() {
       const choice = await new Promise(r => { el.querySelector('#go').onclick = () => r('go'); el.querySelector('#no').onclick = () => r('no'); });
       sessionStorage.removeItem('dw-invite');
       if (choice === 'go') {
-        const a = await api(`/api/invites/${code}/accept`, { method: 'POST' });
+        const a = await api(`api/invites/${code}/accept`, { method: 'POST' });
         if (!a.ok) await info('Invite', a.error || 'Could not accept the invite.');
         else { const el2 = screen(`<h2 style="margin:0 0 6px">You're friends now</h2><div style="margin-bottom:12px">Visit ${esc(inv.owner)} now, or any time from Friends.</div><button class="btn" id="v">Visit now</button> <button class="btn alt" id="h">Go to my island</button>`);
           const c2 = await new Promise(r => { el2.querySelector('#v').onclick = () => r('v'); el2.querySelector('#h').onclick = () => r('h'); });
@@ -150,7 +150,7 @@ async function start() {
 
   if (me.ok) {
     B.mode = 'account'; B.user = me.user;
-    const mine = await api('/api/save');
+    const mine = await api('api/save');
     let data = mine.data, version = mine.version || 0;
     // Menu > Start a new island: make a new one in the island maker and replace the saved island right away
     if (data && sessionStorage.getItem('dw-newisland')) {
@@ -158,7 +158,7 @@ async function start() {
       const made = await islandMaker('Make a new island', { cancel: true });
       if (made) {
         const fresh = { v: 2, ...made, player: '', island: '', clams: 1000, inv: [] };
-        const r = await api('/api/save', { method: 'PUT', body: { data: fresh, baseVersion: version } });
+        const r = await api('api/save', { method: 'PUT', body: { data: fresh, baseVersion: version } });
         if (r.ok) { data = fresh; version = r.version; B.prefillName = me.user.displayName; try { localStorage.removeItem('driftwood-cloud-cache-' + me.user.id); } catch {} }
         else await info('Could not start over', r.error || 'Your old island is still saved. Try again in a moment.');
       }
@@ -170,19 +170,19 @@ async function start() {
           <div class="notice" style="margin-bottom:12px"><b>Start from scratch</b><br><span class="muted">Make a brand new island: pick the terrain and how the town is laid out. New islands are twice as big. Everything you built, bought and found as a guest stays behind.</span></div>
           <button class="btn" id="y">Keep ${esc(local.island)}</button> <button class="btn alt" id="n">Start from scratch</button>`);
         const c = await new Promise(r => { el.querySelector('#y').onclick = () => r('y'); el.querySelector('#n').onclick = () => r('n'); });
-        if (c === 'y') { const r = await api('/api/save/import', { method: 'POST', body: { data: local } });
+        if (c === 'y') { const r = await api('api/save/import', { method: 'POST', body: { data: local } });
           if (r.ok) { data = r.data; version = r.version; localStorage.setItem(SAVE_KEY + '-moved', JSON.stringify(local)); localStorage.removeItem(SAVE_KEY); }
           else await info('Could not move it', r.error || 'Try again later.'); }
       }
       if (!data) { const made = await islandMaker('Welcome, ' + me.user.displayName + '!'); data = { v: 2, ...made, player: '' }; version = 0; B.prefillName = me.user.displayName;
         // going straight to a friend's island: create your save now so gifts and trades have somewhere to land
-        if (sessionStorage.getItem('dw-visit')) { data = { v: 2, ...made, player: me.user.displayName, island: '', clams: 1000, inv: [] }; const r = await api('/api/save', { method: 'PUT', body: { data, baseVersion: 0 } }); if (r.ok) version = r.version; } }
+        if (sessionStorage.getItem('dw-visit')) { data = { v: 2, ...made, player: me.user.displayName, island: '', clams: 1000, inv: [] }; const r = await api('api/save', { method: 'PUT', body: { data, baseVersion: 0 } }); if (r.ok) version = r.version; } }
     }
     // Visiting a friend?
     const visitId = sessionStorage.getItem('dw-visit');
     if (visitId) {
       sessionStorage.removeItem('dw-visit');
-      const v = await api('/api/visit/' + visitId, { method: 'POST', body: { pass: sessionStorage.getItem('dw-pass-' + visitId) || '' } });
+      const v = await api('api/visit/' + visitId, { method: 'POST', body: { pass: sessionStorage.getItem('dw-pass-' + visitId) || '' } });
       if (!v.ok) { document.documentElement.classList.remove('magicret'); await info('Could not visit', v.error || 'Try again later.'); }
       else {
         sessionStorage.setItem('dw-pass-' + visitId, v.pass);

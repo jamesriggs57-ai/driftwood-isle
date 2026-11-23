@@ -2,11 +2,20 @@ name = "driftwood-isle"
 main = "src/index.js"
 compatibility_date = "2025-09-01"
 
+# Where the game is reachable. Deploying replaces any routes set in the dashboard, so every one is listed here.
+# - vinatix.com/driftwood*: the game's home on the Vinatix site. A route wins over a custom domain on the same host.
+# - vinatix.com: TEMPORARY. Keeps the game at the root until the Vinatix hub takes over the domain.
+#   At cutover: delete this line and deploy, then deploy the hub with vinatix.com as its custom domain.
+routes = [
+  { pattern = "vinatix.com/driftwood*", zone_name = "vinatix.com" },
+  { pattern = "vinatix.com", custom_domain = true },
+]
+
 # The game files are served as static assets; /api/* goes to the Worker.
 [assets]
 directory = "../client"
 binding = "ASSETS"
-run_worker_first = ["/api/*"]
+run_worker_first = ["/api/*", "/driftwood", "/driftwood/*"]
 
 [[d1_databases]]
 binding = "DB"

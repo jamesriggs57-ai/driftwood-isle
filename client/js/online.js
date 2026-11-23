@@ -56,11 +56,11 @@ async function doFlush() {
     const S = G().S;
     if (B.mode === 'account') {
       for (let tries = 0; tries < 3; tries++) {
-        const r = await api('/api/save', { method: 'PUT', body: { data: S, baseVersion: ownVer } });
+        const r = await api('api/save', { method: 'PUT', body: { data: S, baseVersion: ownVer } });
         if (r.ok) { ownVer = r.version; base = snap(S); return true; }
         if (r.status !== 409) return false;
         // someone (a resident, or you on another device) saved in between: merge the island and try again
-        const cur = await api('/api/save'); if (!cur.ok || !cur.data) return false;
+        const cur = await api('api/save'); if (!cur.ok || !cur.data) return false;
         const m = mergeWorld(S, cur.data); ownVer = cur.version;
         if (m.took) banner(`Your island was changed by a resident${m.clash ? ' (some of your last changes were replaced)' : ''}. Reload to see it.`, 'Reload', async () => { await flush(); location.reload(); });
       }
@@ -69,13 +69,13 @@ async function doFlush() {
     // visiting: your bag/clams go to your own save; island changes (residents only) go to the host
     const mine = { ...B.own, ...pick(S, PLAYER_KEYS) }; mine.visits = { ...(B.own.visits || {}), [B.host.id]: { day: S.day } };
     let ok = true;
-    const r = await api('/api/save', { method: 'PUT', body: { data: mine, baseVersion: ownVer } });
+    const r = await api('api/save', { method: 'PUT', body: { data: mine, baseVersion: ownVer } });
     if (r.ok) { ownVer = r.version; B.own = mine; } else { ok = false; if (r.status === 409) conflict('Your own island was changed somewhere else.'); }
     if (B.role === 'resident') {
       for (let tries = 0; tries < 3; tries++) {
         const w = worldForPush(S), ws = JSON.stringify(w);
         if (ws === lastWorld) break;
-        const r2 = await api(`/api/visit/${B.host.id}/world`, { method: 'PUT', body: { pass: B.pass, world: w, baseVersion: hostVer } });
+        const r2 = await api(`api/visit/${B.host.id}/world`, { method: 'PUT', body: { pass: B.pass, world: w, baseVersion: hostVer } });
         if (r2.ok) { hostVer = r2.version; lastWorld = ws; base = snap(w); send({ t: 'world', v: hostVer }); break; }
         if (r2.status === 409 && r2.world) { const m = mergeWorld(S, r2.world); hostVer = r2.version; lastWorld = JSON.stringify(worldForPush(r2.world));
           if (m.took) banner(`${B.host.name}'s island changed while you were here. Reload to see it.`, 'Reload', async () => { await flush(); location.reload(); }); continue; }
@@ -96,7 +96,7 @@ const liveOwner = () => B.mode === 'visit' ? B.host.id : B.mode === 'account' ? 
 function connect() {
   const owner = liveOwner(); if (!owner) return;
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  ws = new WebSocket(`${proto}//${location.host}/api/live/${owner}` + (B.mode === 'visit' ? `?pass=${encodeURIComponent(B.pass)}` : ''));
+  ws = new WebSocket(`${proto}//${location.host}${new URL('api/live/', location.href).pathname}${owner}` + (B.mode === 'visit' ? `?pass=${encodeURIComponent(B.pass)}` : ''));
   ws.onopen = () => { wsTries = 0; lastPos = ''; };
   ws.onmessage = ev => { let m; try { m = JSON.parse(ev.data); } catch { return; } onLive(m); };
   ws.onclose = ev => { for (const id of peers.keys()) G().net.remoteLeave(id); peers.clear(); renderHere(); ws = null;
@@ -165,13 +165,13 @@ async function renderPanel() {
         <button class="btn alt" id="logout">Sign out</button>
         <div style="margin-top:18px"><button class="btn sm alt" id="delAcct">Delete my account</button></div>`;
       $('#delAcct').onclick = async () => { const t = window.prompt ? window.prompt('This deletes your island, friends and mail for good. Type DELETE to confirm.') : null; if (t !== 'DELETE') return;
-        const r = await api('/api/me', { method: 'DELETE', body: { confirm: 'DELETE' } }); if (r.ok) { blocked = true; location.href = location.pathname; } else G().net.toast(r.error || 'Could not delete.'); };
-      $('#logout').onclick = async () => { await flush(); await api('/api/auth/logout', { method: 'POST' }); location.href = location.pathname; };
+        const r = await api('api/me', { method: 'DELETE', body: { confirm: 'DELETE' } }); if (r.ok) { blocked = true; location.href = location.pathname; } else G().net.toast(r.error || 'Could not delete.'); };
+      $('#logout').onclick = async () => { await flush(); await api('api/auth/logout', { method: 'POST' }); location.href = location.pathname; };
     }
   }
   if (panelTab === 'friends') {
     body.innerHTML = '<div class="muted">Loading...</div>';
-    const f = await api('/api/friends'); if (panelTab !== 'friends') return;
+    const f = await api('api/friends'); if (panelTab !== 'friends') return;
     const canInvite = B.mode === 'account';
     body.innerHTML = `${canInvite ? `<div class="notice"><b>Invite a friend</b><br><span class="muted">Only people you send a link to can visit. There's no way for strangers to find your island.</span>
         <label class="f">They can <select id="invRole"><option value="visitor">Visit (look, pick fruit, shop)</option><option value="resident">Live here (change anything, like you)</option></select></label>
@@ -185,22 +185,22 @@ async function renderPanel() {
     const role = $('#invRole'); if (role) role.onchange = () => $('#resWarn').style.display = role.value === 'resident' ? '' : 'none';
     const mk = $('#mkInv'); if (mk) mk.onclick = async () => {
       if (role.value === 'resident' && !confirmBox('Residents can change or ruin your island. Only invite people you know in real life and trust. Make a resident invite?')) return;
-      const r = await api('/api/invites', { method: 'POST', body: { role: role.value, standing: $('#invStand').value === '1' } });
+      const r = await api('api/invites', { method: 'POST', body: { role: role.value, standing: $('#invStand').value === '1' } });
       if (!r.ok) { $('#invOut').textContent = r.error || 'Could not make an invite. Try again.'; return; }
       $('#invOut').innerHTML = `<div class="copyRow"><input readonly value="${esc(r.url)}"><button class="btn sm" id="cp">Copy</button></div><div class="muted">Works once, for one person, for 14 days.</div>`;
       $('#cp').onclick = async () => { try { await navigator.clipboard.writeText(r.url); $('#cp').textContent = 'Copied'; } catch { $('#invOut input').select(); } };
     };
     body.querySelectorAll('[data-visit]').forEach(b => b.onclick = async () => { await flush(); sessionStorage.setItem('dw-visit', b.dataset.visit); location.reload(); });
     body.querySelectorAll('[data-gift]').forEach(b => b.onclick = () => pickGift(b.dataset.gift, b.dataset.name, false));
-    body.querySelectorAll('[data-leave]').forEach(b => b.onclick = async () => { if (!confirmBox('Remove this island from your list? You would need a new invite to visit again.')) return; await api(`/api/links/${b.dataset.leave}/${B.user.id}`, { method: 'DELETE' }); renderPanel(); });
-    body.querySelectorAll('[data-revoke]').forEach(b => b.onclick = async () => { if (!confirmBox('Stop this friend from visiting your island?')) return; await api(`/api/links/${B.user.id}/${b.dataset.revoke}`, { method: 'DELETE' }); renderPanel(); });
+    body.querySelectorAll('[data-leave]').forEach(b => b.onclick = async () => { if (!confirmBox('Remove this island from your list? You would need a new invite to visit again.')) return; await api(`api/links/${b.dataset.leave}/${B.user.id}`, { method: 'DELETE' }); renderPanel(); });
+    body.querySelectorAll('[data-revoke]').forEach(b => b.onclick = async () => { if (!confirmBox('Stop this friend from visiting your island?')) return; await api(`api/links/${B.user.id}/${b.dataset.revoke}`, { method: 'DELETE' }); renderPanel(); });
     body.querySelectorAll('[data-role]').forEach(b => b.onclick = async () => { const to = b.dataset.r === 'resident' ? 'visitor' : 'resident';
       if (to === 'resident' && !confirmBox('Residents can change or ruin your island. Only do this for people you know in real life and trust.')) return;
-      await api(`/api/links/${B.user.id}/${b.dataset.role}`, { method: 'PATCH', body: { role: to, standing: b.dataset.s === '1' } }); renderPanel(); });
+      await api(`api/links/${B.user.id}/${b.dataset.role}`, { method: 'PATCH', body: { role: to, standing: b.dataset.s === '1' } }); renderPanel(); });
   }
   if (panelTab === 'mail') {
     body.innerHTML = '<div class="muted">Loading...</div>';
-    const r = await api('/api/mail'); if (panelTab !== 'mail') return;
+    const r = await api('api/mail'); if (panelTab !== 'mail') return;
     const list = r.mail || [];
     body.innerHTML = `<div class="muted" style="margin-bottom:8px">Gifts from friends land here. Only items can be sent, never clams.</div>` + (list.length ? list.map(m => `<div class="row"><span class="it"><img src="${G().itemThumb(m.item.id)}"><span><b>${esc(G().ITEMS[m.item.id]?.name || m.item.id)}</b><br><span class="muted">from ${esc(m.from)}</span></span></span><button class="btn sm" data-claim="${m.id}">Take</button></div>`).join('') : '<div class="muted">Your mailbox is empty.</div>');
     body.querySelectorAll('[data-claim]').forEach(b => b.onclick = async () => { b.disabled = true; const ok = await claim(+b.dataset.claim); if (ok) renderPanel(); else b.disabled = false; });
@@ -247,20 +247,20 @@ function pickGift(toId, toName, direct) {
   body.querySelectorAll('[data-s]').forEach(el => el.onclick = async () => {
     const i = +el.dataset.s, it = S.inv[i]; if (!it) return;
     await flush();
-    const r = await api('/api/mail', { method: 'POST', body: { to: toId, slot: i, id: it.id, direct, baseVersion: ownVer } });
+    const r = await api('api/mail', { method: 'POST', body: { to: toId, slot: i, id: it.id, direct, baseVersion: ownVer } });
     if (!r.ok) { G().net.toast(r.error === 'conflict' ? 'Your bag changed. Try again.' : (r.error || 'Could not send.')); return; }
     applyServerBag(r); G().net.toast(`Sent ${ITEMS[it.id].name} to ${toName}.`); if (direct) send({ t: 'gift', to: toId }); renderPanel();
   });
 }
 async function claim(id) {
   await flush();
-  const r = await api(`/api/mail/${id}/claim`, { method: 'POST', body: { baseVersion: ownVer } });
+  const r = await api(`api/mail/${id}/claim`, { method: 'POST', body: { baseVersion: ownVer } });
   if (!r.ok) { G().net.toast(r.error === 'full' ? 'Your bag is full. Make room first.' : r.error === 'conflict' ? 'Your bag changed. Try again.' : (r.error || 'Could not open it.')); return false; }
   applyServerBag(r); G().net.toast(`You got ${G().ITEMS[r.item.id]?.name || 'a gift'}!`); return true;
 }
 // Someone handed us something in person: take it right away if there's room
 async function openMail(directOnly, fromName) {
-  const r = await api('/api/mail'); const list = (r.mail || []).filter(m => !directOnly || m.direct);
+  const r = await api('api/mail'); const list = (r.mail || []).filter(m => !directOnly || m.direct);
   for (const m of list) { const ok = await claim(m.id); if (!ok) { G().net.toast(`${fromName || 'A friend'} sent you something. It's in your mailbox.`); break; } }
 }
 
@@ -283,15 +283,15 @@ export function afterGame() {
     setTimeout(() => banner('Guest island: saved in this browser only, and it can be lost.' + (B.online ? ' Make an account to keep it safe.' : ''), B.online ? 'Make account' : null, () => { $('#netBanner').style.display = 'none'; openPanel('island'); }), 4000); }
   // the Portal Station (main.js) uses these to list islands, travel, and open the invite panel
   B.portal = { online: online(),
-    list: () => api('/api/friends'),
+    list: () => api('api/friends'),
     visit: async id => { await flush(); sessionStorage.setItem('dw-visit', id); location.reload(); },
     home: async () => { await flush(); location.href = location.pathname; },
     invite: () => openPanel('friends'), friends: () => openPanel('friends'), account: () => openPanel('island') };
   if (online()) {
-    api('/api/me').then(r => { if (r.ok) myId = r.user.id; });
+    api('api/me').then(r => { if (r.ok) myId = r.user.id; });
     connect(); posTimer = setInterval(tickPos, 200);
     // mail check
-    setTimeout(async () => { const r = await api('/api/mail'); const n = (r.mail || []).length; if (n) G().net.toast(`You have ${n} gift${n > 1 ? 's' : ''} in your mailbox.`); }, 6000);
+    setTimeout(async () => { const r = await api('api/mail'); const n = (r.mail || []).length; if (n) G().net.toast(`You have ${n} gift${n > 1 ? 's' : ''} in your mailbox.`); }, 6000);
     addEventListener('pagehide', () => { flush(); });
     document.addEventListener('visibilitychange', () => { if (document.hidden) flush(); });
   }

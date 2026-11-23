@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { TAU, mulberry32 } from './util.js';
 import { BUILD } from './content.js';
 import { asChar, M, MF, mk, G, outline, windowMat, glowMat, addGlow, FURN_BUILDERS, buildItemModel, buildAnimal } from './models.js';
-import { cottageRoof, mergeStatic } from './cottage.js';
+import { cottageRoof, mergeStatic, tbox, tmat, door1, wallLantern, scallopAwning, bunting, barrel1, sack, pot, ivy } from './cottage.js';
 
 /* ---------- Canvas textures (cached by kind + color) ---------- */
 const TEX = new Map();
@@ -317,14 +317,24 @@ function signBoard(text, bg='#fff1d6', fg='#5b4336', w=2.4){
 export function buildShopBuilding(kind, tier=0){
   const g=new THREE.Group(); const W=5.2, D=4.2, F=0.3;
   if (kind==='aquarium'){
-    const H=2.6; const wall=texBox('siding',0x8ad0d8,W,H,D); wall.position.set(0,F+H/2,0); g.add(wall); wall.castShadow=wall.receiveShadow=true;
-    mk(G.box(W+0.3,F,D+0.3), M(0xd8d0c0), 0,F/2,0,g); const rg=new THREE.Group(); g.add(rg); roofOn(rg,'gable',W,D,F+H,0x2f6ab0,0xffffff,'siding',0x8ad0d8);
+    const H=2.6; const wall=tbox('board',0x8ad0d8,W,H,D,0.9); wall.position.set(0,F+H/2,0); g.add(wall);
+    const base=tbox('stone',0xb0aaa0,W+0.3,F+0.6,D+0.3,0.8); base.position.y=(F-0.6)/2; g.add(base);
+    for (const x of [-W/2,W/2]) for (const z of [-D/2,D/2]) mk(G.box(0.18,H,0.18), M(0xffffff), x,F+H/2,z,g);
+    mk(G.box(W+0.12,0.14,D+0.12), M(0xffffff), 0,F+H,0,g);
+    const rise=cottageRoof(g, { style:'gable', ridgeZ:true, L:D, S:W, y:F+H, c:0x2f6ab0, trim:0xffffff, gableMat:tmat('board',0x8ad0d8,1,1), gableWin:'back', seed:21 });
+    // rope along the eave, a round blue door, a life ring and floats, fish crates
+    for (const z of [D/2+0.1]){ const rp=mk(G.cyl(0.04,0.04,W+0.2,6), M(0xd8c8a0), 0,F+H-0.08,z,g); rp.rotation.z=Math.PI/2; for (let i=0;i<7;i++) mk(G.sph(0.06,8,6), M(0xc8b890), -W/2+0.1+i*(W-0.2)/6,F+H-0.08,z,g); }
+    door1(g, 0, F, D/2+0.02, { type:'round', color:0x2f6ab0, hood:'none' });
+    const lr=new THREE.Group(); lr.position.set(W/2+0.03,F+1.5,0.4); lr.rotation.y=Math.PI/2; g.add(lr); mk(G.tor(0.32,0.08,8,18), M(0xe2483d), 0,0,0,lr); for (let k=0;k<4;k++){ const a=k*Math.PI/2+Math.PI/4; mk(G.box(0.12,0.17,0.17), M(0xffffff), Math.cos(a)*0.32,Math.sin(a)*0.32,0,lr).rotation.z=a; }
+    for (let k=0;k<3;k++){ mk(G.cyl(0.008,0.008,0.4,4), M(0xd8c8a0), -W/2-0.05, F+H-0.3-k*0.05, D/2-0.4-k*0.35, g); mk(G.sph(0.12,10,8), M(k%2?0xffffff:0xe2483d), -W/2-0.08, F+H-0.55-k*0.1, D/2-0.4-k*0.35, g); }
+    barrel1(g, W/2+0.5, D/2+0.2, 0x6a8aa0); const cr=new THREE.Group(); cr.position.set(-W/2-0.45,0,D/2+0.35); g.add(cr); FURN_BUILDERS.crate(cr);
+    wallLantern(g, 0.85, F+1.75, D/2+0.02); wallLantern(g, -0.85, F+1.75, D/2+0.02);
     for (const s of [-1,1]){ const pw=new THREE.Group(); pw.position.set(s*1.55,F+1.4,D/2+0.03); g.add(pw); mk(G.tor(0.36,0.08,8,20),M(0xd8a040,{metalness:0.6,roughness:0.3}),0,0,0,pw); mk(G.cyl(0.36,0.36,0.04,20),windowMat,0,0,0,pw).rotation.x=Math.PI/2; }
-    const sign=signBoard('Tidepool','#2f6ab0','#ffffff',2.6); sign.position.set(0,F+H+0.45,D/2+0.3); g.add(sign);
-    const fish=new THREE.Group(); fish.position.set(0,F+H+1.6,0.8); g.add(fish); const fb=mk(G.sph(0.5,16,12),M(0xf2894a),0,0,0,fish); fb.scale.set(1.5,0.8,0.4); const ft=mk(G.cone(0.4,0.5,4),M(0xf2894a),-0.9,0,0,fish); ft.rotation.z=Math.PI/2; mk(G.sph(0.08,8,6),M(0x222222),0.45,0.12,0.18,fish); g.userData.spin=fish;
+    const sign=signBoard('Tidepool','#2f6ab0','#ffffff',2.6); sign.position.set(0,F+H+0.6,D/2+0.14); g.add(sign);
+    const fish=new THREE.Group(); fish.position.set(0,F+H+rise+0.45,0.4); g.add(fish); const fb=mk(G.sph(0.5,16,12),M(0xf2894a),0,0,0,fish); fb.scale.set(1.5,0.8,0.4); const ft=mk(G.cone(0.4,0.5,4),M(0xf2894a),-0.9,0,0,fish); ft.rotation.z=Math.PI/2; mk(G.sph(0.08,8,6),M(0x222222),0.45,0.12,0.18,fish); g.userData.spin=fish;
     for (const s of [-1,1]){ mk(G.cyl(0.08,0.08,0.9,8),M(0x8b5e3a),s*1.6,0.45,D/2+1.4,g); } const rope=mk(G.cyl(0.03,0.03,3.2,6),M(0xd8c8a0),0,0.75,D/2+1.4,g); rope.rotation.z=Math.PI/2;
-    if (tier>=1){ for(let i=0;i<6;i++){ const s=mk(G.box(0.55,0.05,1.0),M(i%2?0xffffff:0x2f8ac0),-1.38+i*0.55,F+2.3,D/2+0.45,g); s.rotation.x=0.35; } }
-    if (tier>=2){ const wg=texBox('siding',0x8ad0d8,2.4,2.2,3.2); wg.position.set(W/2+1.2,F+1.1,-0.3); g.add(wg); const r2=new THREE.Group(); r2.position.set(W/2+1.2,0,-0.3); g.add(r2); roofOn(r2,'shed',2.4,3.2,F+2.2,0x2f6ab0,0xffffff,'siding',0x8ad0d8); const tk=mk(G.box(1.6,1.0,0.06),M(0x9ad8e8,{transparent:true,opacity:0.7,roughness:0.1}),W/2+1.2,F+1.2,1.32,g); }
+    if (tier>=1){ scallopAwning(g, -1.55, F+2.3, D/2+0.04, 1.2, 0.7, 0x2f8ac0, 0xffffff); scallopAwning(g, 1.55, F+2.3, D/2+0.04, 1.2, 0.7, 0x2f8ac0, 0xffffff); bunting(g, -W/2, W/2, F+H+0.02, D/2+0.55, 0.3, [0x2f8ac0,0xffffff,0xe2483d,0xffd04d]); }
+    if (tier>=2){ const wg=tbox('board',0x8ad0d8,2.4,2.2,3.2,0.9); wg.position.set(W/2+1.2,F+1.1,-0.3); g.add(wg); const r2=new THREE.Group(); r2.position.set(W/2+1.2,0,-0.3); g.add(r2); roofOn(r2,'shed',2.4,3.2,F+2.2,0x2f6ab0,0xffffff,'siding',0x8ad0d8); const tk=mk(G.box(1.6,1.0,0.06),M(0x9ad8e8,{transparent:true,opacity:0.7,roughness:0.1}),W/2+1.2,F+1.2,1.32,g); }
     if (tier>=3){ const tw=new THREE.Group(); tw.position.set(-W/2+0.6,0,-D/2+0.6); g.add(tw); const c=texBox('siding',0xffffff,1.2,6.4,1.2); c.position.y=3.2; tw.add(c); for(let k=0;k<3;k++) mk(G.box(1.24,0.4,1.24),M(0xe2483d),0,1.2+k*1.8,0,tw); mk(G.cyl(0.5,0.5,0.7,10),glowMat(0xfff0b0),0,6.8,0,tw); mk(G.cone(0.7,0.6,10),M(0xe2483d),0,7.45,0,tw); addGlow(tw,6.8,4.5); }
   } else if (kind==='garden'){
     const H=2.4; const frame=M(0xf2ead8), glass=new THREE.MeshStandardMaterial({ color:0xc8f0d8, transparent:true, opacity:0.42, roughness:0.08, metalness:0.1, depthWrite:false });
@@ -339,10 +349,18 @@ export function buildShopBuilding(kind, tier=0){
     const dr=mk(G.box(1.0,1.9,0.08),frame,0,F+0.95,D/2+0.02,g); mk(G.box(0.8,1.7,0.04),glass,0,F+0.95,D/2+0.06,g);
     const sign=signBoard('Bug & Bloom','#7cb85a','#ffffff',2.6); sign.position.set(0,F+H+0.35,D/2+0.25); g.add(sign);
     const fc=[0xff7f7f,0xffd04d,0xc7a0ff,0xffffff]; for (const s of [-1,1]){ mk(G.box(1.2,0.35,0.45),M(0x8b5e3a),s*1.8,0.18,D/2+0.6,g); for(let k=0;k<5;k++) mk(G.ico(0.1,1),M(fc[k%4]),s*1.8-0.45+k*0.22,0.46,D/2+0.6,g); }
+    // v1.9: iron cresting on the ridge, finials, an arched transom over the door, hanging baskets, pots and ivy on the brick
+    { const iron=M(0x2f3a34); for (let i=0;i<=14;i++){ const x=-W/2+i*W/14; mk(G.cyl(0.015,0.015,0.24,4), iron, x,F+H+rise+0.18,0,g); if (i%2===0) mk(G.sph(0.04,6,5), iron, x,F+H+rise+0.32,0,g); }
+      mk(G.box(W,0.03,0.03), iron, 0,F+H+rise+0.2,0,g); for (const e of [-1,1]){ mk(G.sph(0.08,8,6), M(0xf2ead8), e*(W/2+0.1),F+H+rise+0.12,0,g); mk(G.cone(0.05,0.3,6), M(0xf2ead8), e*(W/2+0.1),F+H+rise+0.32,0,g); }
+      const tr=mk(new THREE.CylinderGeometry(0.5,0.5,0.08,16,1,false,0,Math.PI), frame, 0,F+1.9,D/2+0.02,g); tr.rotation.set(Math.PI/2,0,Math.PI/2,'ZXY'); const tg=mk(new THREE.CircleGeometry(0.42,16,0,Math.PI), glass, 0,F+1.9,D/2+0.07,g); tg.castShadow=false;
+      for (const e of [-1,1]){ const hb=new THREE.Group(); hb.position.set(e*(W/2+0.05),F+H-0.1,D/2+0.05); g.add(hb); mk(G.cyl(0.008,0.008,0.4,4), iron, 0,-0.2,0,hb); mk(G.sph(0.2,10,8,0,TAU,Math.PI/2,Math.PI/2), M(0x8b6a40), 0,-0.42,0,hb); mk(G.ico(0.2,1), M(0x5fae43), 0,-0.38,0,hb); for (let k=0;k<4;k++) mk(G.ico(0.06,1), M([0xff7f9f,0xffffff,0xc7a0ff,0xffd04d][k]), Math.cos(k*1.6)*0.17,-0.36,Math.sin(k*1.6)*0.17,hb); }
+      for (const e of [-1,1]) pot(g, e*0.85, 0, D/2+0.3, 1.0, 0x5fae43, e<0?0xff7f7f:0xffd04d); pot(g, 2.4, 0, D/2+1.1, 0.8, 0x4f9a3a);
+      const iv=new THREE.Group(); iv.position.set(0,0,D/2+0.01); g.add(iv); ivy(iv, -W/2+0.5, 0.7, 0.9, 9); ivy(iv, W/2-0.5, 0.7, 0.9, 11); }
     if (tier>=1){ const arch=new THREE.Group(); arch.position.set(0,0,D/2+2.2); g.add(arch); FURN_BUILDERS.rosearch(arch); }
     if (tier>=2){ const wg=new THREE.Group(); wg.position.set(-W/2-1.3,0,0); g.add(wg); mk(G.box(2.4,F,3.2),M(0xb8a88a),0,F/2,0,wg); const gg=mk(G.box(2.3,2.0,3.1),glass,0,F+1.0,0,wg); gg.castShadow=false; for(const x of [-1.2,1.2]) for(const z of [-1.6,1.6]) mk(G.box(0.08,2.1,0.08),frame,x,F+1.05,z,wg); mk(G.box(2.5,0.1,3.3),frame,0,F+2.05,0,wg); for(let k=0;k<4;k++) mk(G.ico(0.3,1),M(0x4f9a3a),-0.6+(k%2)*1.2,F+0.6,-0.8+Math.floor(k/2)*1.6,wg); }
     if (tier>=3){ const dome=mk(G.sph(1.6,20,12,0,TAU,0,Math.PI/2),glass,W/2+1.6,F,0,g); dome.castShadow=false; mk(G.tor(1.6,0.06,6,24),frame,W/2+1.6,F+0.02,0,g).rotation.x=Math.PI/2; for(let k=0;k<6;k++){ const a=k/6*Math.PI; const rb=mk(G.tor(1.6,0.04,6,24,Math.PI),frame,W/2+1.6,F,0,g); rb.rotation.y=a; } mk(G.ico(0.7,1),M(0x3f8a3a),W/2+1.6,F+0.7,0,g); }
   }
+  mergeStatic(g, g.userData.spin?[g.userData.spin]:[]);
   g.userData.door=[0, D/2]; g.userData.rects=[[-W/2,-D/2,W/2,D/2]];
   if (kind==='aquarium' && tier>=2) g.userData.rects.push([W/2,-1.9,W/2+2.4,1.3]);
   if (kind==='garden' && tier>=2) g.userData.rects.push([-W/2-2.5,-1.6,-W/2,1.6]);

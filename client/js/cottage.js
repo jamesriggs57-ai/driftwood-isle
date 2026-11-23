@@ -45,7 +45,7 @@ export function tmat(kind, c, rx=1, ry=1, o){
   return MC.get(key);
 }
 // A box whose sides each repeat the texture by their own size
-function tbox(kind, c, W, H, D, tile=1.2){
+export function tbox(kind, c, W, H, D, tile=1.2){
   const fr=tmat(kind,c,W/tile,H/tile), sd=tmat(kind,c,D/tile,H/tile), tp=M(col(c,-0.08));
   const m=new THREE.Mesh(G.box(W,H,D), [sd,sd,tp,tp,fr,fr]); m.castShadow=m.receiveShadow=true; return m;
 }
@@ -121,7 +121,7 @@ export function cottageRoof(g, o){
       beam(face, -S/2*0.55,0.08, -0.05,cy, bm); beam(face, S/2*0.55,0.08, 0.05,cy, bm); }
     if (o.loft && e===fe){ const d=new THREE.Group(); d.position.set(0,gh*0.36,0.05); face.add(d); mk(G.box(0.9,0.85,0.06), M(0xfff6e6), 0,0,0,d); mk(G.box(0.74,0.7,0.06), M(0x8a5a3a), 0,0,0.03,d);
       for (const k of [-1,1]){ const x=mk(G.box(0.05,0.95,0.05), M(0xfff6e6), 0,0,0.07,d); x.rotation.z=k*0.82; } }
-    else if (o.gableWin && (e===fe || o.gableWin==='both')) window1(face, 0, gh*0.4, 0.03, { type:'round', size:0.75 });
+    else if (o.gableWin && (o.gableWin==='both' || (o.gableWin==='back' ? e!==fe : e===fe))) window1(face, 0, gh*0.4, 0.03, { type:'round', size:0.75 });
   }
   if (o.moss) mossRoof(grp, o, L, S, ridgeY, pitch, over, r);
   mergeStatic(grp);
@@ -174,7 +174,7 @@ export function window1(p, x, y, z, o={}){
     if (type==='tall'){ w=0.56*s; h=1.0*s; }
     mk(G.box(w+0.14,h+0.14,0.07), fr, 0,0,0,w0); mk(G.box(w,h,0.05), windowMat, 0,0,0.03,w0);
     mk(G.box(0.045,h,0.06),fr,0,0,0.05,w0); mk(G.box(w,0.045,0.06),fr,0,type==='tall'?h*0.18:0,0.05,w0);
-    if (type==='arched'){ const a=mk(G.cyl(w/2+0.07,w/2+0.07,0.07,16,1,false,0,Math.PI), fr, 0,h/2,0,w0); a.rotation.set(Math.PI/2,0,Math.PI/2); a.rotation.order='ZXY'; mk(new THREE.CircleGeometry(w/2,16,0,Math.PI), windowMat, 0,h/2,0.035,w0); }
+    if (type==='arched'){ const a=mk(new THREE.CylinderGeometry(w/2+0.07,w/2+0.07,0.07,16,1,false,0,Math.PI), fr, 0,h/2,0,w0); a.rotation.set(Math.PI/2,0,Math.PI/2); a.rotation.order='ZXY'; mk(new THREE.CircleGeometry(w/2,16,0,Math.PI), windowMat, 0,h/2,0.035,w0); }
     // sill and a little header
     mk(G.box(w+0.34,0.08,0.18), M(o.sill||col(o.frame||0xffffff,-0.12)), 0,-h/2-0.1,0.07,w0);
     if (type!=='arched') mk(G.box(w+0.3,0.1,0.12), M(o.header||col(o.frame||0xffffff,-0.12)), 0,h/2+0.11,0.04,w0);
@@ -194,8 +194,8 @@ export function door1(p, x, y, z, o={}){
   const d=new THREE.Group(); d.position.set(x,y,z); p.add(d); const dc=M(o.color||0x8a5a3a), dk=M(col(o.color||0x8a5a3a,-0.12)), fr=M(o.frame||0xffffff), iron=M(0x3a302a), knob=M(0xf3c35a,{metalness:0.6,roughness:0.3});
   const type=o.type||'round';
   if (type==='round'){
-    mk(G.box(1.08,1.45,0.08), fr, 0,0.72,0,d); const a=mk(G.cyl(0.54,0.54,0.08,18,1,false,0,Math.PI), fr, 0,1.45,0,d); a.rotation.set(Math.PI/2,0,Math.PI/2); a.rotation.order='ZXY';
-    mk(G.box(0.86,1.42,0.07), dc, 0,0.71,0.03,d); const b=mk(G.cyl(0.43,0.43,0.07,18,1,false,0,Math.PI), dc, 0,1.42,0.03,d); b.rotation.set(Math.PI/2,0,Math.PI/2); b.rotation.order='ZXY';
+    mk(G.box(1.08,1.45,0.08), fr, 0,0.72,0,d); const a=mk(new THREE.CylinderGeometry(0.54,0.54,0.08,18,1,false,0,Math.PI), fr, 0,1.45,0,d); a.rotation.set(Math.PI/2,0,Math.PI/2); a.rotation.order='ZXY';
+    mk(G.box(0.86,1.42,0.07), dc, 0,0.71,0.03,d); const b=mk(new THREE.CylinderGeometry(0.43,0.43,0.07,18,1,false,0,Math.PI), dc, 0,1.42,0.03,d); b.rotation.set(Math.PI/2,0,Math.PI/2); b.rotation.order='ZXY';
     for (const k of [-0.22,0,0.22]) mk(G.box(0.025,1.6,0.075), dk, k,0.82,0.035,d);
     for (const yy of [0.35,1.15]) mk(G.box(0.5,0.06,0.08), iron, -0.15,yy,0.06,d);
     mk(G.cyl(0.13,0.13,0.03,14), windowMat, 0,1.5,0.07,d).rotation.x=Math.PI/2; mk(G.tor(0.13,0.025,6,14), iron, 0,1.5,0.08,d).castShadow=false;
@@ -214,7 +214,7 @@ export function door1(p, x, y, z, o={}){
   if (o.hood==='gable'){ const hc=M(o.hoodC||0x8a5a3a); for (const s of [-1,1]){ const sl=mk(G.box(0.72,0.07,0.7), hc, s*0.32,2.12,0.3,d); sl.rotation.z=-s*0.6; }
     for (const s of [-1,1]){ const br=mk(G.box(0.07,0.42,0.07), M(0x6a4a30), s*0.5,1.86,0.34,d); br.rotation.x=-0.5; } }
   else if (o.hood==='awning'){ const aw=new THREE.Group(); aw.position.set(0,2.0,0.05); d.add(aw); const ac=[o.hoodC||0xe8604d, 0xfff4e4];
-    for (let i=0;i<6;i++){ const st=mk(G.box(0.22,0.05,0.6), M(ac[i%2]), -0.55+i*0.22,0,0.3,aw); st.rotation.x=0.45; mk(G.cyl(0.11,0.11,0.05,10,1,false,0,Math.PI), M(ac[i%2]), -0.55+i*0.22,-0.15,0.58,aw).rotation.set(Math.PI/2,Math.PI/2,0); } }
+    for (let i=0;i<6;i++){ const st=mk(G.box(0.22,0.05,0.6), M(ac[i%2]), -0.55+i*0.22,0,0.3,aw); st.rotation.x=0.45; mk(new THREE.CylinderGeometry(0.11,0.11,0.05,10,1,false,0,Math.PI), M(ac[i%2]), -0.55+i*0.22,-0.15,0.58,aw).rotation.set(Math.PI/2,0,-Math.PI/2,'ZXY'); } }
   return d;
 }
 
@@ -328,3 +328,39 @@ export function buildCottage(id, o={}){
   const mb=new THREE.Group(); mb.position.set(-W/2-0.45,0,D/2+1.0); FURN_BUILDERS.mailbox(mb); g.add(mb);
   g.userData.chimney=chim; g.userData.size={W, D}; return g;
 }
+
+/* ---------- Shop and stand pieces (v1.9 shops) ---------- */
+// Striped awning sloping out from a wall, with a scalloped valance. Local origin: wall top edge center, out = +z.
+export function scallopAwning(p, x, y, z, w, depth=0.9, c1=0xe8604d, c2=0xfff4e4, tilt=0.42){
+  const a=new THREE.Group(); a.position.set(x,y,z); p.add(a); const n=Math.max(3,Math.round(w/0.36)), sw=w/n, A=M(c1), B=M(c2);
+  const sl=new THREE.Group(); sl.rotation.x=tilt; a.add(sl);
+  for (let i=0;i<n;i++) mk(G.box(sw+0.005,0.05,depth), i%2?B:A, -w/2+sw*(i+0.5),0,depth/2,sl);
+  const ey=-Math.sin(tilt)*depth, ez=Math.cos(tilt)*depth;
+  mk(G.cyl(0.035,0.035,w+0.06,8), M(0x8b5e3a), 0,ey,ez,a).rotation.z=Math.PI/2;
+  for (let i=0;i<n;i++){ const sc=mk(new THREE.CylinderGeometry(sw/2,sw/2,0.04,12,1,false,0,Math.PI), i%2?B:A, -w/2+sw*(i+0.5), ey-0.01, ez+0.01, a); sc.rotation.set(Math.PI/2,0,-Math.PI/2); sc.rotation.order='ZXY'; sc.castShadow=false; }
+  for (const e of [-1,1]){ const arm=mk(G.cyl(0.02,0.02,depth*1.05,6), M(0x3a302a), e*(w/2-0.05), ey/2-0.15, ez/2, a); arm.rotation.x=Math.PI/2-tilt*0.2+0.35; }
+  return a;
+}
+// A string of little triangle flags hanging between two points
+export function bunting(p, x1, x2, y, z, sag=0.25, cols=[0xe8604d,0xffd04d,0x6a9ad8,0x7cb85a,0xc7a0ff]){
+  const n=Math.max(4,Math.round(Math.abs(x2-x1)/0.32)), rope=M(0xe8dcc0), tri=new THREE.Shape(); tri.moveTo(-0.11,0); tri.lineTo(0.11,0); tri.lineTo(0,-0.22); tri.lineTo(-0.11,0);
+  for (let i=0;i<n;i++){ const t0=i/n, t1=(i+1)/n, ya=y-Math.sin(t0*Math.PI)*sag, yb=y-Math.sin(t1*Math.PI)*sag, xa=x1+(x2-x1)*t0, xb=x1+(x2-x1)*t1;
+    const r=mk(G.cyl(0.012,0.012,Math.hypot(xb-xa,yb-ya),4), rope, (xa+xb)/2,(ya+yb)/2,z,p); r.rotation.z=Math.atan2(yb-ya,xb-xa)+Math.PI/2; r.castShadow=false;
+    if (i>0){ const f=mk(new THREE.ShapeGeometry(tri), M(cols[i%cols.length],{side:THREE.DoubleSide}), xa,ya,z,p); f.castShadow=false; } }
+}
+export function hangingSign(p, x, y, z, text, bg='#fff1d6', fg='#5b4336', ry=Math.PI/2){
+  const s=new THREE.Group(); s.position.set(x,y,z); p.add(s); const iron=M(0x3a302a);
+  mk(G.box(0.05,0.05,0.9), iron, 0,0.38,0.45,s); for (const zz of [0.2,0.75]) mk(G.cyl(0.01,0.01,0.12,4), iron, 0,0.3,zz,s);
+  const cv=document.createElement('canvas'); cv.width=256; cv.height=160; const x2=cv.getContext('2d'); x2.fillStyle=bg; x2.fillRect(0,0,256,160); x2.fillStyle=fg; x2.textAlign='center'; x2.textBaseline='middle';
+  x2.font='700 '+(text.length>2?54:96)+'px Fredoka, sans-serif'; x2.fillText(text,128,84);
+  const t=new THREE.CanvasTexture(cv); t.colorSpace=THREE.SRGBColorSpace; const sm=new THREE.MeshStandardMaterial({ map:t, roughness:0.8 }), fr=M(0x8b5e3a);
+  const b=new THREE.Group(); b.position.set(0,0,0.48); b.rotation.y=ry-Math.PI/2; s.add(b);
+  mk(G.box(0.08,0.5,0.76), fr, 0,0,0,b); const f1=mk(new THREE.PlaneGeometry(0.68,0.42), sm, 0.045,0,0,b); f1.rotation.y=Math.PI/2; const f2=mk(new THREE.PlaneGeometry(0.68,0.42), sm, -0.045,0,0,b); f2.rotation.y=-Math.PI/2;
+  return s;
+}
+export function sack(p, x, z, c=0xc8a878, label){ const s=new THREE.Group(); s.position.set(x,0,z); p.add(s); const m=mk(G.sph(0.24,12,10), M(c), 0,0.22,0,s); m.scale.set(1,1.1,0.85);
+  mk(G.cyl(0.08,0.12,0.12,8), M(col(c,-0.06)), 0,0.48,0,s); mk(G.tor(0.08,0.02,5,10), M(0x8b6a40), 0,0.46,0,s).rotation.x=Math.PI/2; if (label) mk(G.ico(0.08,1), M(label), 0,0.56,0,s); return s; }
+export function barrel1(p, x, z, c){ barrel(p, x, z, c); }
+export function flowerBed1(p, x, z, w, seed=5){ flowerBed(p, x, z, w, mulberry32(seed)); }
+export function pot(p, x, y, z, s=1, leaf=0x5fae43, bloom){ const g=new THREE.Group(); g.position.set(x,y,z); g.scale.setScalar(s); p.add(g); mk(G.cyl(0.18,0.14,0.28,10), M(0xd27a4f), 0,0.14,0,g); mk(G.tor(0.18,0.03,5,12), M(0xc0683c), 0,0.28,0,g).rotation.x=Math.PI/2;
+  mk(G.ico(0.24,1), M(leaf), 0,0.44,0,g); if (bloom) for (let k=0;k<3;k++) mk(G.ico(0.07,1), M(bloom), Math.cos(k*2.1)*0.14,0.56,Math.sin(k*2.1)*0.14,g); return g; }

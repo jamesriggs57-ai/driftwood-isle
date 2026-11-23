@@ -33,6 +33,7 @@ const own = () => B.mode === 'visit' ? B.own : null;
 
 export function setup(boot) {
   B = boot; B.flush = flush;   // the wizard's spells save and reload the island
+  B.sendLive = m => send(m);   // main.js sends bonks through the live room
   ownVer = B.mode === 'visit' ? B.ownVersion : (B.version || 0); hostVer = B.hostVersion || 0;
   if (B.mode === 'account') B.onSave = S => { cacheLocal(S); queue(); };
   if (B.mode === 'visit') { base = snap(B.save); lastWorld = JSON.stringify(worldForPush(B.save)); B.onSave = () => queue(); }
@@ -111,6 +112,7 @@ function onLive(m) {
     case 'leave': { const p = peers.get(m.id); peers.delete(m.id); net.remoteLeave(m.id); if (p) net.toast(`${p.name} left.`); if (trade && trade.with === m.id) trade = null; renderHere(); break; }
     case 'pos': { const p = peers.get(m.id); if (p) { p.st = m; net.remoteUpsert(m.id, p.name, m); } break; }
     case 'emote': net.remoteEmote(m.id === myId ? 'me' : m.id, m.e); break;
+    case 'bonk': if (m.id === myId) break; if (m.to === myId) net.bonked('me', m.id, +m.dx || 0, +m.dz || 0); else if (peers.has(m.to)) net.bonked(m.to, m.id, +m.dx || 0, +m.dz || 0); break;
     case 'world': banner(`${peers.get(m.id)?.name || 'Someone'} changed the island. Reload to see it.`, 'Reload', async () => { await flush(); location.reload(); }); break;
     case 'gift': openMail(true, m.name); break;
     case 'trade-ask': askTrade(m); break;

@@ -1,8 +1,37 @@
 // All sound is synthesized: hourly music, ambience and effects. No audio files.
 import { mulberry32, clamp, Time } from './util.js';
 
+
+/* The ten songs. root: MIDI note, scale: steps above the root, prog: chord roots (semitones) per bar,
+   voicing: chord tones, rest: chance of a gap, hold/trill: share of held and trilled notes, leap: how far the melody wanders. */
+const SONGS = [
+  { name:'Sea Glass', bpm:68, root:50, scale:[0,2,4,6,7,9,11], prog:[0,7,2,7], voicing:[0,7,16], bars:8, start:4, rest:0.55, hold:0.45, trill:0.12, leap:3,
+    drone:0.05, padVol:0.03, padType:'sine', padAtt:1.8, padCut:1200, melVol:0.075, melType:'sine', melDecay:1.1, bell:0.07, bellVol:0.05 },
+  { name:'Morning Paths', bpm:90, root:55, scale:[0,2,4,7,9], prog:[0,5,-3,-5], voicing:[0,4,7,11], bars:8, start:5, rest:0.45, hold:0.3, trill:0.08, leap:3,
+    drone:0, padVol:0.022, padType:'triangle', padAtt:0.9, padCut:1600, arp:[0,null,1,null,2,null,1,3], arpVol:0.045, melVol:0.08, melType:'triangle', melDecay:0.6, bell:0.03, bellVol:0.04 },
+  { name:'Kite Hill', bpm:98, root:48, scale:[0,2,4,7,9], prog:[0,7,9,5], voicing:[0,4,7,14], bars:8, start:6, rest:0.4, hold:0.25, trill:0.14, leap:4,
+    drone:0, padVol:0.024, padType:'triangle', padAtt:0.7, padCut:1800, arp:[0,2,1,3,0,2,1,null], arpVol:0.04, melVol:0.08, melType:'triangle', melDecay:0.5, bell:0.02, bellVol:0.035 },
+  { name:'Noon Shimmer', bpm:82, root:57, scale:[0,2,4,7,9,11], prog:[0,5,0,7], voicing:[0,4,11,14], bars:8, start:4, rest:0.5, hold:0.4, trill:0.1, leap:3,
+    drone:0.03, padVol:0.025, padType:'sine', padAtt:1.4, padCut:1500, trem:0.03, tremRate:6, melVol:0.07, melType:'sine', melDecay:0.9, bell:0.06, bellVol:0.045 },
+  { name:'Driftwood Afternoon', bpm:76, root:53, scale:[0,2,4,6,7,9,11], prog:[0,2,-3,-5], voicing:[0,7,16,19], bars:8, start:5, rest:0.5, hold:0.5, trill:0.08, leap:3,
+    drone:0.045, padVol:0.025, padType:'triangle', padAtt:1.5, padCut:1100, melVol:0.08, melType:'triangle', melDecay:0.8, bell:0.03, bellVol:0.04 },
+  { name:'Amber Hour', bpm:70, root:51, scale:[0,2,3,5,7,10], prog:[0,-4,-7,-2], voicing:[0,3,7,10], bars:8, start:5, rest:0.55, hold:0.45, trill:0.15, leap:2,
+    drone:0.04, padVol:0.028, padType:'sine', padAtt:1.8, padCut:1000, trem:0.025, tremRate:4, melVol:0.075, melType:'triangle', melDecay:1.0, bell:0.04, bellVol:0.04 },
+  { name:'Lantern Path', bpm:64, root:50, scale:[0,2,3,5,7,9,10], prog:[0,5,3,-2], voicing:[0,7,15], bars:8, start:4, rest:0.62, hold:0.5, trill:0.1, leap:2,
+    drone:0.05, padVol:0.026, padType:'sine', padAtt:2.2, padCut:900, melVol:0.07, melType:'sine', melDecay:1.3, bell:0.08, bellVol:0.05 },
+  { name:'Moth Lamp', bpm:58, root:52, scale:[0,3,5,7,10], prog:[0,-4,-2,-7], voicing:[0,7,10,15], bars:8, start:3, rest:0.68, hold:0.45, trill:0.25, leap:2,
+    drone:0.055, padVol:0.022, padType:'sine', padAtt:2.6, padCut:800, trem:0.02, tremRate:3, melVol:0.065, melType:'sine', melDecay:1.4, bell:0.04, bellVol:0.04 },
+  { name:'Deep Night Tide', bpm:50, root:45, scale:[0,2,3,7,8], prog:[0,-4,0,-5], voicing:[0,7,15], bars:8, start:3, rest:0.78, hold:0.6, trill:0.08, leap:2,
+    drone:0.065, padVol:0.024, padType:'sine', padAtt:3, padCut:700, melVol:0.06, melType:'sine', melDecay:1.6, bell:0.05, bellVol:0.045 },
+  { name:'Kettle Steam', bpm:78, root:53, scale:[0,2,4,5,7,9], prog:[0,-3,2,-5], voicing:[0,4,7,9], bars:8, start:5, rest:0.48, hold:0.3, trill:0.1, leap:3,
+    drone:0, padVol:0.022, padType:'triangle', padAtt:1.0, padCut:1300, arp:[0,null,2,null,1,null,3,null], arpVol:0.035, melVol:0.07, melType:'triangle', melDecay:0.7, bell:0.05, bellVol:0.04 },
+];
+// overall level, and a lift for the lighter daytime songs so every song sits at about the same loudness
+for (const S of SONGS){ const k=1.5*(S.arp?1.35:1); for (const key of ['drone','padVol','melVol','bellVol','arpVol','trem']) if (S[key]) S[key]*=k; }
+export const SONG_NAMES = SONGS.map(s=>s.name);
+
 export const Snd = {
-  ctx:null, master:null, mus:null, sfx:null, rainG:null, phrase:null, phraseHour:-1, step:0, nextT:0, world:null, settings:null,
+  ctx:null, master:null, mus:null, sfx:null, rainG:null, song:null, loop:0, step:0, nextT:0, world:null, settings:null,
   init(settings, world){
     if (this.ctx) return; this.settings=settings; this.world=world;
     try { this.ctx = new (window.AudioContext||window.webkitAudioContext)(); } catch(e){ return; }
@@ -58,31 +87,81 @@ export const Snd = {
   door(){ const t=this.t; this.tone(300,t,0.12,0.25,'triangle',null,220); this.burst(t+0.05,0.15,0.2,'lowpass',800); },
   click(){ this.tone(760,this.t,0.04,0.12,'sine'); },
   blip(p){ this.tone(p*(0.9+Math.random()*0.3),this.t,0.05,0.07,'triangle'); },
+  magic(){ const t=this.t; [0,4,7,11,14,19,23,26].forEach((st,i)=>{ const f=392*Math.pow(2,st/12); this.tone(f,t+i*0.07,0.9,0.09,'sine'); this.tone(f*2.01,t+i*0.07+0.03,0.4,0.03,'sine'); }); for(let i=0;i<10;i++) this.tone(i%2?1568:1760, t+0.65+i*0.06, 0.1, 0.035, 'sine'); },
+  rumble(){ const t=this.t; this.burst(t,2.2,0.45,'lowpass',140,0.7); this.burst(t+0.6,1.6,0.3,'lowpass',90,0.7); this.tone(55,t,2.2,0.18,'sine',null,40); },
+  boing(){ const t=this.t; this.tone(440,t,0.4,0.28,'sine',null,150); this.tone(300,t+0.06,0.32,0.14,'triangle',null,620); this.burst(t,0.08,0.18,'lowpass',700); },
   swoosh(){ this.burst(this.t,0.25,0.2,'bandpass',900,1.2); },
-  makePhrase(h, inside){
-    const r=mulberry32(h*7919+13+(inside?77:0)), night=(h>=20||h<5), eve=(h>=17&&h<20), morn=(h>=5&&h<10);
-    const scale = night ? [0,3,5,7,10] : [0,2,4,7,9];
-    const roots=[0,2,5,7,-3,-5]; const root=57+roots[h%roots.length]+(night?-2:0);
-    const prog = night ? [0,-4,-7,-2] : (eve ? [0,-3,5,-5] : [0,9,5,7]);
-    const mel=[]; let deg=2+Math.floor(r()*3);
-    for(let i=0;i<32;i++){ const rest = r() < (night?0.6:0.42) || (i%8===7); if(rest){mel.push(null);continue;} deg=clamp(deg+Math.round((r()-0.5)*3),0,9); mel.push(deg); }
-    const bpm = (night?64:(eve?76:(morn?86:96))) - (inside?8:0);
-    return {scale,root,prog,mel,bpm,night};
+  /* ---------- Music: ten ambient songs, one for each part of the day (and one for indoors) ----------
+     Each song is a few slow layers: a low drone, long pad chords that overlap, a sparse melody of held notes
+     with vibrato, little trills, glassy bells, soft plucks and tremolo tones. Phrases are regenerated from a
+     seed every loop, so a song drifts instead of repeating note for note. */
+  songFor(h, inside){
+    if (inside) return 9;
+    if (h>=5 && h<7) return 0; if (h<10 && h>=7) return 1; if (h<12 && h>=10) return 2; if (h<14 && h>=12) return 3;
+    if (h<17 && h>=14) return 4; if (h<19 && h>=17) return 5; if (h<21 && h>=19) return 6; if (h>=21) return 7; return 8;
   },
+  makeSong(idx, loop){
+    const S=SONGS[idx], r=mulberry32(idx*1013+loop*7919+5), steps=S.bars*8, mel=new Array(steps).fill(null);
+    let deg=S.start, i=0;
+    while (i<steps){
+      if (r()<S.rest){ i+=1+Math.floor(r()*3); continue; }
+      deg=clamp(deg+Math.round((r()-0.5)*S.leap),0,S.scale.length*2-1);
+      const roll=r(), kind = roll<S.trill ? 'trill' : roll<S.trill+S.hold ? 'hold' : 'note';
+      const len = kind==='hold' ? 4+Math.floor(r()*6) : kind==='trill' ? 2+Math.floor(r()*2) : 1+Math.floor(r()*2);
+      mel[i]={ deg, kind, len }; i+=len;
+    }
+    const bells=[]; for (let k=0;k<steps;k++) bells.push(r()<S.bell ? Math.floor(r()*S.scale.length) : null);
+    return { S, mel, bells, steps, idx };
+  },
+  hz(n){ return 440*Math.pow(2,(n-69)/12); },
+  noteOf(S, deg, oct=0){ const L=S.scale.length; return S.root+12*(1+oct)+S.scale[((deg%L)+L)%L]+12*Math.floor(deg/L); },
+  // a soft held tone: two slightly detuned oscillators through a lowpass, slow attack and release
+  pad(f, t, dur, vol, type='sine', att=1.2, rel=1.8, cut=1400){
+    const c=this.ctx, g=c.createGain(), lp=c.createBiquadFilter(); lp.type='lowpass'; lp.frequency.setValueAtTime(cut*0.6,t); lp.frequency.linearRampToValueAtTime(cut,t+att+dur*0.4);
+    g.gain.setValueAtTime(0.0001,t); g.gain.linearRampToValueAtTime(vol,t+att); g.gain.setValueAtTime(vol,t+Math.max(att,dur-rel)); g.gain.linearRampToValueAtTime(0.0001,t+dur+rel);
+    for (const d of [-4,4]){ const o=c.createOscillator(); o.type=type; o.frequency.value=f; o.detune.value=d; o.connect(lp); o.start(t); o.stop(t+dur+rel+0.1); }
+    lp.connect(g); g.connect(this.mus);
+  },
+  // a held melody note that swells in and wobbles a little (vibrato fades in)
+  held(f, t, dur, vol, type='triangle'){
+    const c=this.ctx, o=c.createOscillator(), g=c.createGain(), lfo=c.createOscillator(), lg=c.createGain();
+    o.type=type; o.frequency.value=f; lfo.frequency.value=4.6; lg.gain.setValueAtTime(0,t); lg.gain.linearRampToValueAtTime(f*0.006,t+dur*0.6); lfo.connect(lg); lg.connect(o.frequency);
+    g.gain.setValueAtTime(0.0001,t); g.gain.linearRampToValueAtTime(vol,t+0.18); g.gain.linearRampToValueAtTime(vol*0.7,t+dur*0.7); g.gain.linearRampToValueAtTime(0.0001,t+dur+0.6);
+    o.connect(g); g.connect(this.mus); o.start(t); lfo.start(t); o.stop(t+dur+0.7); lfo.stop(t+dur+0.7);
+  },
+  // a quick flutter between a note and the one above it
+  trill(n, n2, t, dur, vol){ const k=Math.max(4, Math.floor(dur/0.075)); for (let i=0;i<k;i++) this.tone(this.hz(i%2?n2:n), t+i*0.075, 0.12, vol*(1-i/k*0.5), 'sine', this.mus); },
+  // glassy bell: a sine plus an inharmonic partial, long ring
+  bell(f, t, vol){ this.tone(f,t,2.6,vol,'sine',this.mus); this.tone(f*2.76,t,0.9,vol*0.25,'sine',this.mus); this.tone(f*5.4,t,0.35,vol*0.08,'sine',this.mus); },
+  pluck(f, t, vol){ this.tone(f,t,0.7,vol,'triangle',this.mus); this.tone(f*2,t,0.25,vol*0.3,'sine',this.mus); },
+  // a held tone that pulses in volume
+  tremolo(f, t, dur, vol, rate){ const c=this.ctx, o=c.createOscillator(), g=c.createGain(), lfo=c.createOscillator(), lg=c.createGain(), base=c.createGain();
+    o.type='sine'; o.frequency.value=f; lfo.frequency.value=rate; lg.gain.value=0.5; base.gain.value=0.5; lfo.connect(lg); lg.connect(base.gain);
+    g.gain.setValueAtTime(0.0001,t); g.gain.linearRampToValueAtTime(vol,t+0.8); g.gain.linearRampToValueAtTime(0.0001,t+dur+1.2);
+    o.connect(base); base.connect(g); g.connect(this.mus); o.start(t); lfo.start(t); o.stop(t+dur+1.3); lfo.stop(t+dur+1.3); },
   tick(){
     if(!this.ctx || this.ctx.state!=='running') return;
-    const W=this.world, h=Math.floor(Time.hour()), key=h+(W.inside?100:0);
-    if(key!==this.phraseHour){ this.phrase=this.makePhrase(h, !!W.inside); this.phraseHour=key; }
-    const P=this.phrase, c=this.ctx;
-    while(this.nextT < c.currentTime+0.35){
-      const t=this.nextT, i=this.step%32, bar=Math.floor(i/8), chord=P.root+P.prog[bar];
-      const d=P.mel[i];
-      if(d!==null){ const n=P.root+12+P.scale[d%5]+12*Math.floor(d/5); const f=440*Math.pow(2,(n-69)/12);
-        this.tone(f,t,P.night?0.9:0.55,P.night?0.11:0.13,'sine',this.mus); this.tone(f*2,t,0.18,0.025,'sine',this.mus); }
-      if(i%8===0){ const f=440*Math.pow(2,(chord-12-69)/12); this.tone(f,t,1.6,0.16,'sine',this.mus);
-        [0,4,7].forEach((iv,k)=>{ const ff=440*Math.pow(2,(chord+iv+(P.night&&iv===4?-1:0)-69)/12); this.tone(ff,t+k*0.04,1.2,0.035,'triangle',this.mus); }); }
-      if(i%8===4 && !P.night){ const f=440*Math.pow(2,(chord-12+7-69)/12); this.tone(f,t,0.7,0.08,'sine',this.mus); }
-      this.nextT += 60/P.bpm/2; this.step++;
+    const W=this.world, c=this.ctx, want=this.songFor(Math.floor(Time.hour()), !!W.inside);
+    if (!this.song || want!==this.song.idx){ this.loop=0; this.song=this.makeSong(want, 0); this.step=0; this.nextT=Math.max(this.nextT, c.currentTime+0.6); }
+    while(this.nextT < c.currentTime+0.4){
+      let P=this.song; if (this.step>=P.steps){ this.step=0; this.loop++; P=this.song=this.makeSong(P.idx, this.loop); }
+      const S=P.S, t=this.nextT, i=this.step, sd=60/S.bpm/2, bar=Math.floor(i/8), chord=S.root+S.prog[bar%S.prog.length];
+      // drone: root and fifth, re-struck every 2 bars and overlapping, so it never stops
+      if (S.drone && i%16===0){ this.pad(this.hz(chord-12), t, sd*16, S.drone, 'sine', 2.5, 3, 500); this.pad(this.hz(chord-5), t+0.3, sd*16, S.drone*0.55, 'sine', 3, 3, 600); }
+      // pad chord every bar
+      if (i%8===0) S.voicing.forEach((iv,k)=>this.pad(this.hz(chord+iv), t+k*0.06, sd*8, S.padVol, S.padType, S.padAtt, 2.2, S.padCut));
+      // plucked arpeggio
+      if (S.arp && S.arp[i%S.arp.length]!==null){ const iv=S.voicing[S.arp[i%S.arp.length]%S.voicing.length]; this.pluck(this.hz(chord+12+iv), t, S.arpVol); }
+      // tremolo tone, held for a bar
+      if (S.trem && i%16===8) this.tremolo(this.hz(chord+12+S.voicing[1]), t, sd*8, S.trem, S.tremRate);
+      // melody
+      const m=P.mel[i];
+      if (m){ const n=this.noteOf(S,m.deg), f=this.hz(n);
+        if (m.kind==='hold') this.held(f, t, sd*m.len, S.melVol, S.melType);
+        else if (m.kind==='trill') this.trill(n, this.noteOf(S,m.deg+1), t, sd*m.len, S.melVol*0.55);
+        else { this.tone(f,t,S.melDecay,S.melVol,S.melType==='sine'?'sine':'triangle',this.mus); this.tone(f*2,t,0.18,S.melVol*0.2,'sine',this.mus); } }
+      const b=P.bells[i]; if (b!==null) this.bell(this.hz(this.noteOf(S,b,1)), t+sd*0.5, S.bellVol);
+      this.nextT += sd; this.step++;
     }
     const hr=Time.hour(), out=!W.inside;
     if(out && Math.random()<0.012 && hr>5.5 && hr<18.5 && W.weather==='sunny'){ const t=c.currentTime; const b=2400+Math.random()*1400; for(let k=0;k<2+(Math.random()*3|0);k++) this.tone(b,t+k*0.11,0.08,0.05,'sine',null,b*1.25); }

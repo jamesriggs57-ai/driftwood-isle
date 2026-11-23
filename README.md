@@ -117,3 +117,19 @@ Code: `client/js/look.js` (materials and painted textures), `client/js/furn.js` 
 **Animations** (`FX` in `main.js`): trees tip over away from you and land with a thump, digging and planting open a hole first, stumps wobble loose and pop out, pulled weeds come up with a tug, caught fish leap out of the water and you hold them up.
 
 **Phone fixes.** The top bar keeps Bike, Build (near home), Bag and More; Book, Craft, Sled, Friends and Menu are under More. Everyday pickups show as small notes under the clock (repeats count up: "Wood x3"); other messages are smaller and sit lower on phones. Page zoom, text selection and long-press menus are blocked. Turning the phone re-lays out the controls several times as the browser settles. Bugs on tree trunks stay on the side facing the camera. Weeds are bigger, scragglier clumps.
+
+## v1.3: wizard spells you can watch, ten songs, bonking friends, fewer tips
+
+**Wendell's spells.** Moving a building shows a see-through copy of the real building where it will go (trees and rocks it would replace disappear from the preview). Shaping land shows each planned square as it will look: raised blocks of grass and earth, the new lower level, water, sand. Pressing Cast first frames the whole plan and asks "Like that?". Then the spell plays on the island: Wendell pops in, sparkles swirl, the building squashes, stretches and lifts off as a glowing orb that arcs over and lands at the new spot with a bounce, or the land rises, sinks and fills with water square by square while the camera shakes. A lilac shimmer covers the reload, and you come back where you were, looking at the result, without the start screen. Code: `ghostOf`, `cellPreview`, `castMagic`, `spellMove`, `spellLand`, `magicExit`, `magicArrive`, `cine` in `main.js`; `#magicVeil` in `index.html`.
+
+**Music.** Ten ambient songs, one for each part of the day (dawn, morning, late morning, noon, afternoon, evening, dusk, night, deep night) plus one for indoors. Each is a few slow layers: a low drone, overlapping pad chords, sparse held melody notes with vibrato, trills, glassy bells, soft plucks and tremolo tones. Phrases are regenerated every loop so songs drift. Code: `SONGS` and `Snd.tick` in `audio.js`.
+
+**Bonk.** With friends on your island, swing a tool at one (Action button, or tap them while holding a tool) and they flop over like a jelly toy: tip past flat with a bounce, wobble with stars over their head, spring back up. No damage, nothing lost, a short cooldown. The server relays it to everyone in the room (`bonk` message, rate-limited). Code: `tryBonk`, `startFlop`, `updateFlops` in `main.js`.
+
+**Other changes.**
+- About 90% of the how-to tips are gone (looking at stumps and saplings, chopping, fishing and bug tips, first-time builder and placing tips, shop panel explanations, Wendell's instructions). Short feedback stays.
+- Dropped items look for open ground on the camera side and never land behind a tree, rock or building. Daily dig spots avoid those spots too.
+- Fish shadows turn into a pale glow at night instead of going darker. Fishing is easier again: fish notice the bobber from further away, bite more often, hesitate less, lose interest less, and the bite window is longer.
+- Tap-to-catch bugs: about 60% for common bugs down to under 30% for legendary ones, and a bug can notice you walking up. The timing swing is unchanged.
+- Marlo and Sprig stand beside their market stands on the road side and tidy them now and then, so you can see them.
+- Anonymous museum donations are now clams (300 to 800) that Professor Thistle passes on to you, not fish or bugs. Critters donated anonymously before v1.3 stay on display.

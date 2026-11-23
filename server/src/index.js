@@ -381,6 +381,11 @@ export class IslandRoom {
         const st = { x: +m.x || 0, z: +m.z || 0, y: +m.y || 0, f: +m.f || 0, w: m.w ? 1 : 0, b: m.b ? 1 : 0, in: typeof m.in === 'string' ? m.in.slice(0, 20) : null };
         me.st = st; this.broadcast({ t: 'pos', id: me.id, ...st }, ws); break; }
       case 'emote': if (EMOTES.includes(m.e)) this.broadcast({ t: 'emote', id: me.id, e: m.e }); break;
+      case 'bonk': {   // a playful knock-over: no effect on saves, just an animation for everyone in the room
+        const now = Date.now(); if (now - (me.bonkT || 0) < 400) return; me.bonkT = now;
+        const to = String(m.to); if (to === me.id || ![...this.peers.values()].some(p => p.id === to)) return;
+        const dx = Math.max(-1, Math.min(1, +m.dx || 0)), dz = Math.max(-1, Math.min(1, +m.dz || 0));
+        this.broadcast({ t: 'bonk', id: me.id, to, dx, dz }, ws); break; }
       case 'world': if (me.role === 'owner' || me.role === 'resident') this.broadcast({ t: 'world', id: me.id, v: m.v | 0 }, ws); break;   // "island changed, refresh when ready"
       case 'gift': this.sendTo(String(m.to), { t: 'gift', from: me.id, name: me.name }); break;      // the gift itself went through /api/mail
       case 'trade-ask': { const to = String(m.to); if (to === me.id || ![...this.peers.values()].some(p => p.id === to)) return;

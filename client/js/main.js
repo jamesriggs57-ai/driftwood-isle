@@ -748,7 +748,7 @@ class Weed extends Ent {
   act(){ const r=addItem('weed'); if(!r){ toast('Your bag is full.'); return; } Snd.rustle(); puff(this.pos.clone().add(new THREE.Vector3(0,0.3,0)),0x6a8a2a,8,0.5,2,0.8,0.5); puff(this.pos.clone().add(new THREE.Vector3(0,0.1,0)),0x6a5038,5,0.4,1.5,0.7,0.5); S.day.weeds[this.i].pulled=true; FX.yank(this.obj); this.remove(true); save(); itemToast('weed', r==='new','Pulled'); }
 }
 
-/* ---------- v1.8 harvesting ---------- */
+/* ---------- v1.9 harvesting ---------- */
 const cropWord = (C,n) => { const w=C.name.toLowerCase(); return n>1&&!/s$/.test(w)&&!C.herb ? (C.name==='Tomato'||C.name==='Potato'?w+'es':w+'s') : w; };
 const seedOf = rec => { const P=PLANTS[rec.sp]; return P.ptype==='crop' ? P.crop+'_seeds' : rec.sp+'_seeds'; };
 // would these all fit in the bag?
@@ -793,7 +793,7 @@ class Plant extends Ent {
 }
 
 /* =====================================================================
-   v1.8 GARDENS. Seeds go in on a grid (CELL squares). Planting next to a garden grows it; building one is free.
+   v1.9 GARDENS. Seeds go in on a grid (CELL squares). Planting next to a garden grows it; building one is free.
    A garden: { id, cells:['i,j'], gate:edgeKey, fence:style|null, fenced:[edgeKey], decor:{ sign, scarecrow, lanterns, arch } }
    Edge keys: 'i,j,E' is the side between squares (i,j) and (i+1,j); 'i,j,S' between (i,j) and (i,j+1).
    ===================================================================== */

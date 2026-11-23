@@ -157,7 +157,7 @@ Every island now has a Portal Station near the plaza: a round stone platform wit
 - **Invite booth** opens the invite panel (make a visitor or resident link). Visitors are told to make invites from their own island; guests are pointed to making an account.
 The old Friends button still works the same way. Code: `findPortalSpot`, `buildPortalStation`, `PortalArch`, `InviteBooth`, `refreshPortals`, `portalGo`, `portalArrive` in `main.js`; `B.portal` in `online.js`.
 
-## v1.8: gardens, planting in rows, island seeds, berries
+## v1.9: gardens, planting in rows, island seeds, berries
 
 **Island seeds.** Every island has 4 crops that grow wild there, picked at random from the island seed and weighted by terrain (`SEED_TERRAIN`, `islandSeedPool` in `content.js`; Village and the classic island count as flat, Highlands as hilly, made islands use their terrain). They cost 30 clams each and are always in stock: a "Grows wild here" section in Pemberton's Garden tab and at Sprig's (buy 1 or 10), and a seed bin next to the seed table in Pemberton's store. About 6 packets of them (2 to 4 seeds each) turn up in the grass every day and reset with the beach finds. Other seeds still rotate daily at the old prices. Crop seeds now stack to 99 and sell for 10.
 

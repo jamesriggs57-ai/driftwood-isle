@@ -71,18 +71,29 @@ const livesHere = id => S.town.res.includes(id);
 if (VISIT && S.day && S.day.vpicked) S.ground = S.ground.filter(g=>!(g.beach && S.day.vpicked.includes(Math.round(g.x*10)+','+Math.round(g.z*10))));
 if (LAY.homes) for (const R of RESIDENTS) if (LAY.homes[R.id]) R.home = LAY.homes[R.id];
 if (!S.nativeFruit || !ITEMS[S.nativeFruit]) S.nativeFruit = NATIVE_FRUITS[S.seed % NATIVE_FRUITS.length];
-const isTouchDevice = matchMedia('(pointer:coarse)').matches || 'ontouchstart' in window;
+const isTouchDevice = matchMedia('(pointer:coarse)').matches || matchMedia('(any-pointer:coarse)').matches || 'ontouchstart' in window || (navigator.maxTouchPoints||0)>0;
 const CTRL_DEFAULT = { move: isTouchDevice ? 'joystick' : 'keys', tapWalk:true, floating:false, size:130, opacity:0.45, jx:null, jy:null, ax:null, ay:null };
-S.settings.controls = Object.assign({}, CTRL_DEFAULT, S.settings.controls||{});
+// v1.11: control settings belong to the device, not the island save. The island save syncs between a player's phone and
+// computer, so a computer's "keys" used to follow them onto their phone and leave them with no joystick.
+const CTRL_KEY='driftwood-controls-v1';
+S.settings.controls = (()=>{
+  try { const v=JSON.parse(localStorage.getItem(CTRL_KEY)||'null'); if (v && typeof v==='object') return Object.assign({}, CTRL_DEFAULT, v); } catch(e){}
+  // First visit on this device: phones start with the joystick (bottom left). Keep size/visibility/positions from the save,
+  // and keep "tap to walk" only if it was picked (that option only exists on touch screens).
+  const old=S.settings.controls||{}; return Object.assign({}, CTRL_DEFAULT, old, { move: isTouchDevice && old.move==='tap' ? 'tap' : CTRL_DEFAULT.move });
+})();
 // On a computer you walk with the keyboard and drag to look around; clicking the ground no longer walks you there.
 if (!isTouchDevice) S.settings.controls.move='keys';
+else if (S.settings.controls.move!=='tap') S.settings.controls.move='joystick';
+function saveControls(){ try { localStorage.setItem(CTRL_KEY, JSON.stringify(S.settings.controls)); } catch(e){} }
+saveControls();
 // Keyboard shortcuts (Menu > Controls lets you change them)
 const KEY_DEFAULT = { act:'e', swing:' ', tool:'q', bike:'b', sled:'g', bag:'i', turnL:'z', turnR:'c' };
 S.settings.keys = Object.assign({}, KEY_DEFAULT, S.settings.keys||{});
 const KB = () => S.settings.keys;
 if (S.settings.bright===undefined) S.settings.bright=1;
 let saveOK=true;
-function save(){ if (BOOT.onSave){ BOOT.onSave(S); return; } try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch(e){ saveOK=false; } }
+function save(){ if (typeof saveControls==='function' && S.settings && S.settings.controls) saveControls(); if (BOOT.onSave){ BOOT.onSave(S); return; } try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch(e){ saveOK=false; } }
 
 /* ---------- Inventory ---------- */
 const slotsMax = () => S.pack>=0 ? BACKPACKS[S.pack].slots : BASE_SLOTS;

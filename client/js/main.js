@@ -568,7 +568,85 @@ function rayGround(ray){
 /* ---------- Water ---------- */
 const waterGeo = new THREE.PlaneGeometry(320, 320, 110, 110); waterGeo.rotateX(-Math.PI/2);
 const waterBase = waterGeo.attributes.position.array.slice();
-const waterMat = new THREE.MeshStandardMaterial({ color:0x4cc3d6, transparent:true, opacity:0.78, roughness:0.18, metalness:0.05, flatShading:true });
+const waterMat = new THREE.MeshStandardMaterial({ color:0x4cc3d6, transparent:true, opacity:0.78, roughness:0.32, metalness:0.05 });
+const poolWaterMat = waterMat.clone();   // waterfall pools keep the plain look (made before the shader below is attached)
+/* The water's look is painted in its shader, on top of the normal lit material (so sun, shadows and fog still apply):
+   - color and see-through amount follow the depth (clear turquoise over sand, deeper blue offshore), read from a
+     small depth map baked from the terrain when the island loads
+   - soft moving light patterns in the shallows, drifting glints offshore, and small ripples that catch the sun
+   - a foam line that laps at every shore, pond and riverbank
+   - the fish shadows. They used to be separate see-through meshes just under the surface; see-through objects are
+     drawn in order of distance to each object's center, and the water's center is the middle of the map, so the
+     water usually drew first and hid them (and otherwise covered them 78%). Drawing them in the water itself
+     means they always show. */
+const WATER_FISH_MAX = 12, WATER_D_RES = 256, WATER_D_MAX = 2.5;
+const waterDepthTex = (()=>{ const N=WATER_D_RES, d=new Uint8Array(N*N);
+  for (let j=0;j<N;j++) for (let i=0;i<N;i++){ const x=(i+0.5)/N*320-160, z=(j+0.5)/N*320-160; d[j*N+i]=clamp(Math.round((-0.02-rawHeight(x,z))/WATER_D_MAX*255),0,255); }
+  const t=new THREE.DataTexture(d,N,N,THREE.RedFormat,THREE.UnsignedByteType); t.magFilter=t.minFilter=THREE.LinearFilter; t.needsUpdate=true; return t; })();
+const WU = { uTime:{ value:0 }, uDepth:{ value:waterDepthTex }, uShallow:{ value:new THREE.Color(0x5edbd0) }, uDeep:{ value:new THREE.Color(0x2b92c4) },
+  uFish:{ value:Array.from({ length:WATER_FISH_MAX }, ()=>new THREE.Vector4()) }, uFishCol:{ value:new THREE.Color(0x10283a) }, uFishA:{ value:0.7 },
+  uSpark:{ value:1 }, uFoamA:{ value:0.8 }, uTint:{ value:new THREE.Vector3(1,1,1) } };
+const WATER_BASE = new THREE.Color(0x4cc3d6);   // the material's daytime color; updateSky tints it and the shader follows by this ratio
+waterMat.onBeforeCompile = sh => {
+  Object.assign(sh.uniforms, WU);
+  sh.vertexShader = 'varying vec3 vWPos;\n' + sh.vertexShader.replace('#include <project_vertex>', '#include <project_vertex>\n  vWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+  sh.fragmentShader = `varying vec3 vWPos;
+uniform float uTime, uFishA, uSpark, uFoamA; uniform sampler2D uDepth; uniform vec3 uShallow, uDeep, uFishCol, uTint; uniform vec4 uFish[${WATER_FISH_MAX}];
+float wHash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float wNoise(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.0-2.0*f);
+  return mix(mix(wHash(i), wHash(i+vec2(1,0)), f.x), mix(wHash(i+vec2(0,1)), wHash(i+vec2(1,1)), f.x), f.y); }
+// soft caustic net: two layers of warped cell edges drifting against each other
+float wCaust(vec2 p, float t){ float c=0.0;
+  for (int k=0;k<2;k++){ vec2 q = p*(1.0+float(k)*0.7) + vec2(t*0.11, -t*0.08)*(k==0?1.0:-1.3);
+    q += vec2(wNoise(q*0.9+t*0.2), wNoise(q*0.9-t*0.17+3.1))*1.4;
+    float v = sin(q.x*2.3)*sin(q.y*2.3); c += 1.0 - smoothstep(0.0, 0.18, abs(v)); }
+  return c*0.5; }
+float wFishShape(vec2 d, vec4 f){ // d: offset from the fish, f: x, z, heading, size
+  float s=max(f.w, 0.001); vec2 h=vec2(cos(f.z), sin(f.z)); vec2 q=vec2(dot(d,h), dot(d, vec2(-h.y, h.x)))/s;
+  q.y += sin(q.x*3.2 - uTime*7.0 + f.x) * 0.07 * clamp(0.6 - q.x, 0.0, 1.6);   // the tail sways
+  float wdt = 0.36 * (1.0 - 0.45*smoothstep(0.2, -0.8, q.x));   // rounder at the head, narrowing toward the tail
+  float body = 1.0 - smoothstep(0.6, 1.0, length(vec2(q.x/0.82, q.y/wdt)));
+  float tx = -0.66 - q.x;                                          // a fan-shaped tail fin joined to the body
+  float tail = (1.0 - smoothstep(-0.04, 0.06, abs(q.y) - (0.06 + tx*0.75))) * smoothstep(-0.06, 0.04, tx) * (1.0 - smoothstep(0.3, 0.42, tx));
+  return max(body, tail*0.9); }
+float wD, wFoam, wFish, wGlint; vec2 wN;
+` + sh.fragmentShader
+    .replace('#include <color_fragment>', `#include <color_fragment>
+  { vec2 w = vWPos.xz; float t = uTime;
+    wD = texture2D(uDepth, (w + 160.0)/320.0).r * ${WATER_D_MAX.toFixed(1)};
+    float deep = smoothstep(0.05, 1.6, wD);
+    // small ripples: the slope of two drifting noise layers bends the normal so the light moves across the water
+    vec2 r1 = w*1.1 + vec2(t*0.35, t*0.22); float e=0.15, n0 = wNoise(r1);
+    wN = vec2(wNoise(r1+vec2(e,0.0)) - n0, wNoise(r1+vec2(0.0,e)) - n0) * 1.1;
+    vec3 col = mix(uShallow, uDeep, deep) * uTint;   // follows the day/night/weather tint set on the material
+    // light patterns in the shallows
+    float ca = wCaust(w*0.42 + wN*0.6, t) * (1.0 - smoothstep(0.3, 1.5, wD));
+    col += vec3(0.85, 1.0, 0.95) * ca * 0.22 * uSpark;
+    // darker and lighter patches offshore so open water isn't one flat color
+    col *= 0.92 + 0.16*wNoise(w*0.08 + t*0.02);
+    // foam: a band that laps up and back at the shore, and a thin line that rolls in behind it
+    float lap = 0.24 + 0.1*sin(t*1.3 + wNoise(w*0.6)*5.0);   // shores drop off fast, so the band is set in depth, not distance
+    float roll = fract(t*0.22 + wNoise(w*0.35)*0.6), ringD = mix(0.9, 0.2, roll);
+    float edge = wNoise(w*3.0 + t*0.4);
+    wFoam = (1.0 - smoothstep(lap - 0.03, lap + 0.01, wD - edge*0.08)) + (1.0 - smoothstep(0.0, 0.035, abs(wD - ringD) - edge*0.02)) * roll * (1.0 - roll) * 2.2;
+    wFoam = clamp(wFoam, 0.0, 1.0) * step(0.001, wD) * uFoamA;
+    col = mix(col, vec3(1.0), wFoam);
+    // fish shadows (dark by day, a pale glow at night): slightly bent by the ripples, like they're under the surface
+    wFish = 0.0; vec2 wq = w + wN*0.12;
+    for (int i=0;i<${WATER_FISH_MAX};i++){ vec4 f = uFish[i]; if (f.w <= 0.0) continue; vec2 d = wq - f.xy; if (dot(d,d) > 6.0*f.w*f.w) continue; wFish = max(wFish, wFishShape(d, f)); }
+    // drifting glints on open water
+    float g = wNoise(w*4.5 + vec2(t*0.9, -t*0.6)) * wNoise(w*3.7 - vec2(t*0.7, t*0.8));
+    wGlint = smoothstep(0.7, 0.82, g) * deep * uSpark;
+    diffuseColor.rgb = col;
+    diffuseColor.a = mix(0.5, 0.93, deep) + wFoam*0.4 + ca*0.1; diffuseColor.a = clamp(max(diffuseColor.a, wFoam*0.95), 0.0, 1.0); }`)
+    .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+  normal = normalize(normal + (viewMatrix * vec4(wN.x, 0.0, wN.y, 0.0)).xyz * (1.0 - wFoam));`)
+    .replace('#include <opaque_fragment>', `outgoingLight += vec3(1.0, 0.98, 0.9) * wGlint * 0.3;
+  outgoingLight = mix(outgoingLight, uFishCol, wFish * uFishA);
+  diffuseColor.a = max(diffuseColor.a, wFish * uFishA);
+  #include <opaque_fragment>`);
+};
+waterMat.customProgramCacheKey = () => 'driftwood-water-v1';
 const water = new THREE.Mesh(waterGeo, waterMat); water.receiveShadow = true; OUT.add(water);
 // The deep sea plane sits below the lowest sea floor. (At -1.2 it was level with the pond bed, so the two fought
 // for the same pixels and the pond flickered.)
@@ -578,10 +656,6 @@ const deepSea = new THREE.Mesh(new THREE.PlaneGeometry(1200,1200), new THREE.Mes
 const waveAmp = new Float32Array(waterBase.length/3);
 for (let i=0;i<waveAmp.length;i++){ const x=waterBase[i*3], z=waterBase[i*3+2], t=Math.hypot(x,z)/islandRadius(LAY, Math.atan2(z,x)); waveAmp[i]=smooth(0.86,1.02,t); }
 function updateWater(t){ const a=waterGeo.attributes.position.array; for(let i=0,k=0;i<a.length;i+=3,k++){ const x=waterBase[i], z=waterBase[i+2], A=waveAmp[k]; a[i+1]=A>0.001 ? (Math.sin(x*0.25+t*0.9)*0.07+Math.cos(z*0.3+t*0.7)*0.06+Math.sin((x+z)*0.6+t*1.6)*0.025)*A-0.02 : -0.02; } waterGeo.attributes.position.needsUpdate=true; }
-const foam = (()=>{ const N=260, inner=[], outer=[]; for(let i=0;i<=N;i++){ const a=i/N*TAU; let r=35*SC; while(rawHeight(Math.cos(a)*r, Math.sin(a)*r)>0 && r<80*SC) r+=0.08; inner.push([Math.cos(a)*(r-0.5), Math.sin(a)*(r-0.5)]); outer.push([Math.cos(a)*(r+0.6), Math.sin(a)*(r+0.6)]); }
-  const p=[], idx=[]; for(let i=0;i<=N;i++){ p.push(inner[i][0],0.05,inner[i][1], outer[i][0],0.05,outer[i][1]); if(i<N){ const k=i*2; idx.push(k,k+1,k+2, k+1,k+3,k+2); } }
-  const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(p,3)); g.setIndex(idx);
-  const m=new THREE.Mesh(g,new THREE.MeshBasicMaterial({ color:0xffffff, transparent:true, opacity:0.55, depthWrite:false })); OUT.add(m); return m; })();
 
 /* ---------- Waterfalls ---------- */
 const fallFX=[];
@@ -590,7 +664,7 @@ const fallTex=(()=>{ const cv=document.createElement('canvas'); cv.width=64; cv.
   const t=new THREE.CanvasTexture(cv); t.wrapS=t.wrapT=THREE.RepeatWrapping; return t; })();
 for (const F of FALLS){
   const g=new THREE.Group(); g.position.set(F.sx,0,F.sz); g.rotation.y=Math.atan2(F.dx,F.dz); OUT.add(g);   // local +z points up the river toward the pool
-  const pm=waterMat.clone(); pm.flatShading=false; const pool=new THREE.Mesh(new THREE.CircleGeometry(1,40), pm); pool.rotation.x=-Math.PI/2; pool.scale.set(2.15,2.75,1); pool.position.set(0,F.top-0.14,4); g.add(pool);
+  const pm=poolWaterMat.clone(); pm.roughness=0.18; const pool=new THREE.Mesh(new THREE.CircleGeometry(1,40), pm); pool.rotation.x=-Math.PI/2; pool.scale.set(2.15,2.75,1); pool.position.set(0,F.top-0.14,4); g.add(pool);
   const rows=16, W=2.3, pos=[], uv=[], idx=[];
   for(let k=0;k<=rows;k++){ const t=k/rows, y=lerp(F.top-0.1,-0.2,t), u=1.5-0.95*Math.sqrt(t); for(const sx of [-1,1]){ pos.push(sx*W/2*(1+0.25*t), y, u); uv.push(sx<0?0:1, t*3); } if(k<rows){ const a=k*2; idx.push(a,a+1,a+2, a+1,a+3,a+2); } }
   const fg=new THREE.BufferGeometry(); fg.setAttribute('position',new THREE.Float32BufferAttribute(pos,3)); fg.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2)); fg.setIndex(idx); fg.computeVertexNormals();
@@ -1086,8 +1160,12 @@ const fishes=[];
 function fishPool(type){ const h=Time.hour(), m=Time.month(); return Object.values(ITEMS).filter(i=>i.kind==='fish' && i.where===type && inMonths(m,i.months) && inHours(h,i.hours)); }
 function waterSpot(){ for(let k=0;k<40;k++){ const a=Math.random()*TAU, d=4+Math.random()*12; const x=player.pos.x+Math.cos(a)*d, z=player.pos.z+Math.sin(a)*d; if(isFishWater(x,z) && rawHeight(x,z)<-0.45 && !onDock(x,z) && !onBridge(x,z)) return [x,z]; } return null; }
 function spawnFish(){ const p=waterSpot(); if(!p) return; const type=waterType(p[0],p[1]); const pool=fishPool(type).filter(allowedFind); if(!pool.length) return; const sp=weightedPick(Math.random, pool, i=>luckW(i,'fish'));
-  const m=new THREE.Mesh(shadowGeo, shadowMat); m.scale.set(SIZE_SCALE[sp.size]*1.6,0.05,SIZE_SCALE[sp.size]*0.8); m.position.set(p[0],-0.25,p[1]); OUT.add(m);
-  fishes.push({ id:sp.id, m, home:new THREE.Vector3(p[0],0,p[1]), ph:Math.random()*10, state:'swim', t:0, nib:0 }); }
+  const m=new THREE.Mesh(shadowGeo, shadowMat); m.scale.set(SIZE_SCALE[sp.size]*1.6,0.05,SIZE_SCALE[sp.size]*0.8); m.position.set(p[0],-0.25,p[1]); m.visible=false; OUT.add(m);   // the water shader draws the shadow (see Water)
+  fishes.push({ id:sp.id, m, size:SIZE_SCALE[sp.size]||0.85, age:0, home:new THREE.Vector3(p[0],0,p[1]), ph:Math.random()*10, state:'swim', t:0, nib:0 }); }
+// Hand the nearest fish to the water shader: position, heading, size. They fade in when they appear and out when they flee.
+function feedFishShadows(dt){ const U=WU.uFish.value, list=fishes.slice().sort((a,b)=>a.m.position.distanceToSquared(player.pos)-b.m.position.distanceToSquared(player.pos));
+  for (let i=0;i<WATER_FISH_MAX;i++){ const f=list[i]; if (!f || World.inside){ U[i].set(0,0,0,0); continue; } f.age+=dt;
+    const k=Math.min(1,f.age/1.2)*(f.state==='flee'?Math.max(0,1-f.t/1.1):1); U[i].set(f.m.position.x, f.m.position.z, -f.m.rotation.y, f.size*k); } }
 const Fishing = { state:'idle', pt:null, fish:null, t:0, dip:0 };
 const bobber = (()=>{ const g=new THREE.Group(); mk(G.sph(0.14,12,8,0,TAU,0,Math.PI/2), M(0xe2483d), 0,0,0,g); mk(G.sph(0.14,12,8,0,TAU,Math.PI/2,Math.PI/2), M(0xffffff), 0,0,0,g); g.visible=false; OUT.add(g); return g; })();
 const lineGeo=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(),new THREE.Vector3()]); const fishLine=new THREE.Line(lineGeo,new THREE.LineBasicMaterial({ color:0xffffff, transparent:true, opacity:0.7 })); fishLine.visible=false; OUT.add(fishLine);
@@ -1108,7 +1186,7 @@ function reel(){
   Fishing.state='idle'; Fishing.fish=null; bobber.visible=false; fishLine.visible=false; exclaim.visible=false; player.act=0.4;
 }
 function updateFishing(dt,t){
-  if (World.inside) return;
+  feedFishShadows(dt); if (World.inside) return;
   const near=fishes.filter(f=>f.m.position.distanceTo(player.pos)<22).length; if (near<3 && fishes.length<9 && Math.random()<dt*0.3) spawnFish();
   for (let i=fishes.length-1;i>=0;i--){ const f=fishes[i]; f.ph+=dt;
     if (f.state==='swim'){ if(f.m.position.distanceTo(player.pos)>45){ f.state='flee'; f.t=0.9; continue; } const x=f.home.x+Math.sin(f.ph*0.3)*1.8, z=f.home.z+Math.cos(f.ph*0.23)*1.8; if(isFishWater(x,z)){ const a=Math.atan2(z-f.m.position.z, x-f.m.position.x); f.m.position.x=x; f.m.position.z=z; f.m.rotation.y=-a; } }
@@ -2400,7 +2478,7 @@ const activeEvents = () => { const d=Time.now(), h=Time.hour(); return EVENTS.fi
 function updateSky(){
   const h=Time.hour(); const night = 1-smooth(5.2,7,h)+smooth(18.8,20.5,h); World.night=clamp(night,0,1);
   windowMat.emissiveIntensity = World.night*1.4;
-  shadowMat.color.setHex(0x163040).lerp(FISH_NIGHT, smooth(0.2,0.5,World.night)); shadowMat.opacity = 0.5 + World.night*0.12;
+  WU.uFishCol.value.setHex(0x10283a).lerp(FISH_NIGHT, smooth(0.2,0.5,World.night)); WU.uFishA.value = 0.7 - World.night*0.1;
   for(const m of glowMats) m.emissiveIntensity = 0.15 + World.night*1.6;
   for(const s of glowSprites) s.material.opacity = s.userData.night ? World.night*0.45 : (s.userData.event ? s.material.opacity : World.night*0.85);
   if (World.inside){
@@ -2418,9 +2496,9 @@ function updateSky(){
   sunDir.set(Math.cos(ang)*0.8, Math.max(0.35,Math.sin(ang))*0.95, -0.55).normalize();
   starMat.opacity = World.night*(1-dim); moon.visible = World.night>0.3 && dim<0.4; moon.material.opacity=World.night;
   moon.position.copy(camera.position).add(new THREE.Vector3(-160,140,-320));
-  waterMat.color.setHex(0x4cc3d6).lerp(_c1.setHex(0x3a64a8), World.night*0.5).lerp(_c2.setHex(0x7a9aa6), dim*0.5);
-  deepSea.material.color.setHex(0x2a8aa8).lerp(_c1.setHex(0x24427a), World.night*0.6);
-  foam.material.opacity=0.55-World.night*0.25;
+  waterMat.color.copy(WATER_BASE).lerp(_c1.setHex(0x3a64a8), World.night*0.5).lerp(_c2.setHex(0x7a9aa6), dim*0.5);
+  { const c=waterMat.color, b=WATER_BASE; WU.uTint.value.set(c.r/b.r, c.g/b.g, c.b/b.b); }
+  deepSea.material.color.setHex(0x2a8aa8).lerp(_c1.setHex(0x24427a), World.night*0.6); WU.uSpark.value=(1-World.night)*(1-dim*0.8); WU.uFoamA.value=0.8-World.night*0.3;
   renderer.toneMappingExposure = (1.15 + World.night*0.2) * (S.settings.bright||1);
   clouds.forEach(c=>c.children.forEach(s=>s.material.color.setHex(0xffffff).lerp(_c1.copy(bot),0.3+World.night*0.25).lerp(_c2.setHex(0x8a94a0),dim)));
 }
@@ -3843,7 +3921,7 @@ function frame(){
   updateRemotes(dt,t); updateSnow(dt);
   if (started){ updateHold(dt); if (meBody.rag) updateRag(meBody,dt,t); else movePlayer(dt,t); bonkCool=Math.max(0,bonkCool-dt); updateBugs(dt); updateFishing(dt,t); updateCatchMeter(dt); tickDialog(dt); updateActButton(); updateCutaway(); }
   for(const e of ents.slice()){ if (e.removed) continue; if (e.rag){ updateRag(e,dt,t); continue; } if (e instanceof Resident || Math.abs(e.pos.x-player.pos.x)<40) e.update(dt,t); }
-  if (!World.inside){ updateWater(t); updateAmbient(dt,t); updateFalls(dt,t); foam.scale.setScalar(1+Math.sin(t*0.8)*0.006);
+  WU.uTime.value=t; if (!World.inside){ updateWater(t); updateAmbient(dt,t); updateFalls(dt,t);
     for(const c of clouds){ c.position.x+=c.userData.v*dt; if(c.position.x>150) c.position.x=-150; }
     const lnOn=activeEvents().some(e=>e.id==='lantern-night');
     for(const l of lanterns){ l.visible=lnOn; if(lnOn){ const u=l.userData; u.y+=dt*u.s; if(u.y>18){ u.y=0; u.a=Math.random()*TAU; } l.position.set(Math.cos(u.a+t*0.01)*u.d, 1+u.y, Math.sin(u.a+t*0.01)*u.d); l.children[1].material.opacity=Math.min(1,u.y/2)*(1-u.y/18)*0.9; } } }
@@ -4181,5 +4259,5 @@ function setInventory(inv, seen, equip){ S.inv=inv; if(seen) S.seen=Object.assig
 if (VISIT) setTimeout(()=>toast(`Visiting ${BOOT.host.name}'s island${BOOT.host.island?' ('+BOOT.host.island+')':''} as a ${BOOT.role}.`), 1500);
 
 addEventListener('visibilitychange', ()=>{ if(document.hidden) save(); else if(Snd.ctx) Snd.ctx.resume(); });
-window.__game = { v1:{ scene, camera, OUT, updateSky, updateHUD, snowPass, SNOW_U, townNewDay, applyTown, talkHall, openHallPanel, buildPlaza, refreshStoreItems, buildStoreAll, buildShop, buildMuseumAll, spawnExhibits, exhibitSlots, mentorMoment, teachWoodworking, openCraft, doCook, nearStation, toggleSled, setSled, get sledding(){ return sledding; }, sledV, eatFood, Plant, fullBagCatch, KB, landSeaTap, terraLand, LAMPS:()=>LAMPS, hasUpstairs, ShopItem, Stairs, get exhibits(){ return exhibits; }, KEEPOUT, dayKeyOf, World, startPlacing, checkPlace, get placing(){ return placing; }, FX, homeStock, buyHome, draftUnowned, get homeRack(){ return homeRack; }, openShop, openBuild:(o)=>openBuild(o), closeBuild, get buildMode(){ return buildMode; }, ents, Tree, Stump, Weed, Bug, bugs, player, interact, layoutBar, pickNote, itemToast, reel, Fishing, fishes, relayout, enterRoom:(id)=>enterRoom(id), trees }, get S(){ return S; }, dbg:{ showChoices:(t,c)=>showChoices(t,c), dialog:(...a)=>dialog(...a), setRiding:(v)=>setRiding(v), enterRoom:(id)=>enterRoom(id), openBuild:()=>openBuild(), rooms:()=>Object.keys(ROOMS), get yaw(){ return camYaw; }, set yaw(v){ camYaw=v; }, get riding(){ return riding; }, get snow(){ return SNOW_U.value; }, setWeather:(w)=>{ weatherOverride=w; World.weather=w; snowT=0; }, get dlg(){ return !!dlgState; } }, walkable, blocked, groundY, launchRag, ragdolls, swing, meBody, refreshPortals, portalArches, get portalEnt(){ return portalEnt; }, enterRoom, PLACES, net:{ bonked, visibleRemotes:()=>[...remotes.values()].filter(r=>r.obj.visible).map(r=>[r.name,+r.pos.x.toFixed(1),+r.pos.z.toFixed(1)]), remoteUpsert, remotePos, remoteLeave, remoteEmote, playerState, setInventory, toast:(m)=>toast(m), updateHUD:()=>updateHUD(), get started(){ return started; } }, ITEMS, itemThumb:(id)=>thumb(id), layoutInfo:()=>({ id:LAYOUT_ID, PLACES, PATHS, LOT, rects:RECTS.map(r=>r.slice(0,4)), lot:lotRect() }), terrainH:(x,z)=>rawHeight(x,z), terrainSlope:(x,z)=>hillSlope(x,z), interact, spawnBug:(id,x,z)=>new Bug(id,x,z), tapOdds:()=>Object.fromEntries(Object.keys(TAP_BASE).map(k=>[k, +tapChance({rarity:k}).toFixed(2)])), placingObj:()=>placing&&placing.m, toScreen:v=>{ const p=v.clone().project(camera); return [(p.x*0.5+0.5)*innerWidth, (-p.y*0.5+0.5)*innerHeight]; }, rebuildHome:()=>{ buildPlayerHouse(); rebuildHomeRoom(); }, openBuild, closeBuild, get buildMode(){ return buildMode; }, talkShop, openDonate, talkCurator, spawnMossby, onFelled, findPath, startPlacing, LOT, RECTS, shopEnts, museumEnt, houseEnt:()=>houseEnt, Time, player, ents, ITEMS, residents, World, ROOMS, goTo, handleTap, doAction, updateSky, rollDay, spawnDaily, castAt, Fishing, fishes, bugs, openBag, openBook, openShop, openBoard, openMenu, openCraft, doCraft, WOODWORK, enterRoom, exitRoom, equip, startLayout, endLayout, trees, applyControls, magic:{ startMagic, endMagic, landTap, magicPlace, castMagic, get mode(){ return magicMode; }, raiseTower, talkWizard, drinkPotion, potionOn, luckW, rollFavors, Q, favorChoices, findTowerSpot, get tower(){ return towerEnt; }, PLACES, TERRA, FALLS } };
+window.__game = { v1:{ scene, camera, OUT, updateSky, updateHUD, snowPass, SNOW_U, townNewDay, applyTown, talkHall, openHallPanel, buildPlaza, refreshStoreItems, buildStoreAll, buildShop, buildMuseumAll, spawnExhibits, exhibitSlots, mentorMoment, teachWoodworking, openCraft, doCook, nearStation, toggleSled, setSled, get sledding(){ return sledding; }, sledV, eatFood, Plant, fullBagCatch, KB, landSeaTap, terraLand, LAMPS:()=>LAMPS, hasUpstairs, ShopItem, Stairs, get exhibits(){ return exhibits; }, KEEPOUT, dayKeyOf, World, startPlacing, checkPlace, get placing(){ return placing; }, FX, homeStock, buyHome, draftUnowned, get homeRack(){ return homeRack; }, openShop, openBuild:(o)=>openBuild(o), closeBuild, get buildMode(){ return buildMode; }, ents, Tree, Stump, Weed, Bug, bugs, player, interact, layoutBar, pickNote, itemToast, reel, Fishing, fishes, spawnFish, WU, relayout, enterRoom:(id)=>enterRoom(id), trees }, get S(){ return S; }, dbg:{ showChoices:(t,c)=>showChoices(t,c), dialog:(...a)=>dialog(...a), setRiding:(v)=>setRiding(v), enterRoom:(id)=>enterRoom(id), openBuild:()=>openBuild(), rooms:()=>Object.keys(ROOMS), get yaw(){ return camYaw; }, set yaw(v){ camYaw=v; }, get riding(){ return riding; }, get snow(){ return SNOW_U.value; }, setWeather:(w)=>{ weatherOverride=w; World.weather=w; snowT=0; }, get dlg(){ return !!dlgState; } }, walkable, blocked, groundY, launchRag, ragdolls, swing, meBody, refreshPortals, portalArches, get portalEnt(){ return portalEnt; }, enterRoom, PLACES, net:{ bonked, visibleRemotes:()=>[...remotes.values()].filter(r=>r.obj.visible).map(r=>[r.name,+r.pos.x.toFixed(1),+r.pos.z.toFixed(1)]), remoteUpsert, remotePos, remoteLeave, remoteEmote, playerState, setInventory, toast:(m)=>toast(m), updateHUD:()=>updateHUD(), get started(){ return started; } }, ITEMS, itemThumb:(id)=>thumb(id), layoutInfo:()=>({ id:LAYOUT_ID, PLACES, PATHS, LOT, rects:RECTS.map(r=>r.slice(0,4)), lot:lotRect() }), terrainH:(x,z)=>rawHeight(x,z), terrainSlope:(x,z)=>hillSlope(x,z), interact, spawnBug:(id,x,z)=>new Bug(id,x,z), tapOdds:()=>Object.fromEntries(Object.keys(TAP_BASE).map(k=>[k, +tapChance({rarity:k}).toFixed(2)])), placingObj:()=>placing&&placing.m, toScreen:v=>{ const p=v.clone().project(camera); return [(p.x*0.5+0.5)*innerWidth, (-p.y*0.5+0.5)*innerHeight]; }, rebuildHome:()=>{ buildPlayerHouse(); rebuildHomeRoom(); }, openBuild, closeBuild, get buildMode(){ return buildMode; }, talkShop, openDonate, talkCurator, spawnMossby, onFelled, findPath, startPlacing, LOT, RECTS, shopEnts, museumEnt, houseEnt:()=>houseEnt, Time, player, ents, ITEMS, residents, World, ROOMS, goTo, handleTap, doAction, updateSky, rollDay, spawnDaily, castAt, Fishing, fishes, bugs, openBag, openBook, openShop, openBoard, openMenu, openCraft, doCraft, WOODWORK, enterRoom, exitRoom, equip, startLayout, endLayout, trees, applyControls, magic:{ startMagic, endMagic, landTap, magicPlace, castMagic, get mode(){ return magicMode; }, raiseTower, talkWizard, drinkPotion, potionOn, luckW, rollFavors, Q, favorChoices, findTowerSpot, get tower(){ return towerEnt; }, PLACES, TERRA, FALLS } };
 window.__game.farm = { openPlantPanel, startGridPlacing, plantGrid, checkGrid, openGarden, rebuildGardens, gardenAtXZ, islandSeeds, harvestRec, perimeter, get fenceSegs(){ return FENCE_SEGS; }, fenceHit, get placing(){ return placing; }, plantEnts, gardenEnts, CELL };

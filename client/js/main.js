@@ -15,6 +15,7 @@ import * as GC from './ground.js';
 import * as CH from './chars.js';
 import { openCreator } from './creator.js';
 import { buildPlot, buildStand, buildStore, buildTownHall, buildMuseumTier, buildCrop, buildStairs } from './models3.js';
+import { buildCottage } from './cottage.js';
 import { hasUpstairs, winAt, winKey, buildCustomHouse, buildHomeInterior, buildShopBuilding, buildMuseum, buildKeeper, buildMossby, buildExhibit, buildTower, buildWizard, planGrid, planCells, planProblem, fixDoor, linkKey, linkOf, defaultExt, defaultRoom } from './models2.js';
 
 const $ = s => document.querySelector(s);
@@ -1235,7 +1236,7 @@ const ROOF=[0xe0745a,0x7a9a5a,0x9a7ab8,0x4a7ad8,0xe88aa8,0x2a5a4a,0xd8b04a];
 /* ---------- Neighbors' homes, and plots for neighbors still on the way ---------- */
 const plotEnts={};
 function buildResidentHome(R){
-  const i=RESIDENTS.indexOf(R), obj=buildHouse(1, 0xfff4e4, ROOF[i%ROOF.length], R.room.accent);
+  const i=RESIDENTS.indexOf(R), obj=buildCottage(R.id, { roofC:ROOF[i%ROOF.length], accent:R.room.accent });
   const b=new Building('rhome',R.home[0],R.home[1],HOUSE_R[1],obj,()=>{ const res=residents&&residents.find(x=>x.spec.id===R.id); return res&&res.loc==='in'?'Enter':'Knock'; },()=>{
     const res=residents.find(x=>x.spec.id===R.id); Snd.door();
     if (res.loc==='in'){ enterRoom(R.id); if(res.asleep) setTimeout(()=>toast(`Shh... ${R.name} is fast asleep.`),500); }

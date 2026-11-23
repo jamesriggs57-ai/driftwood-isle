@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { TAU, mulberry32 } from './util.js';
 import { BUILD } from './content.js';
 import { asChar, M, MF, mk, G, outline, windowMat, glowMat, addGlow, FURN_BUILDERS, buildItemModel, buildAnimal } from './models.js';
+import { cottageRoof, mergeStatic } from './cottage.js';
 
 /* ---------- Canvas textures (cached by kind + color) ---------- */
 const TEX = new Map();
@@ -21,6 +22,10 @@ function surfTex(kind, color){
     else if (kind==='shingle'||kind==='roof'){ const h=kind==='roof'?16:14; for(let y=0,row=0;y<S;y+=h,row++){ for(let i=-(row%2)*10;i<S;i+=20){ x.fillStyle=shade(color,(r()-0.5)*0.08); x.fillRect(i+1,y,18,h-2); x.fillStyle=shade(color,-0.14); x.fillRect(i,y+h-2,20,2); } } }
     else if (kind==='brick'){ x.fillStyle='#e8dccc'; x.fillRect(0,0,S,S); for(let y=0,row=0;y<S;y+=16,row++) for(let i=-(row%2)*16;i<S;i+=32){ x.fillStyle=shade(color,(r()-0.5)*0.1); x.fillRect(i+2,y+2,28,12); } }
     else if (kind==='stone'){ x.fillStyle=shade(color,-0.18); x.fillRect(0,0,S,S); for(let k=0;k<26;k++){ const cx=r()*S, cy=r()*S, w=14+r()*16, h=10+r()*10; x.fillStyle=shade(color,(r()-0.5)*0.14); x.beginPath(); x.ellipse(cx,cy,w/2,h/2,0,0,TAU); x.fill(); x.beginPath(); x.ellipse(cx-S*Math.sign(cx-S/2),cy,w/2,h/2,0,0,TAU); x.fill(); } }
+    else if (kind==='timber'){ for(let k=0;k<700;k++){ x.fillStyle=shade(color,(r()-0.5)*0.06); x.fillRect(r()*S,r()*S,2,2); } const b='#5a3c2a'; x.fillStyle=b;   // one tile per cell: posts, rails, a cross under the window
+      x.fillRect(0,0,6,S); x.fillRect(S-6,0,6,S); x.fillRect(0,S-8,S,8); x.fillRect(0,0,S,7); x.fillRect(0,S*0.64,S,7);
+      x.lineWidth=8; x.strokeStyle=b; x.beginPath(); x.moveTo(4,S*0.66); x.lineTo(S-4,S-6); x.moveTo(S-4,S*0.66); x.lineTo(4,S-6); x.stroke();
+      x.lineWidth=6; x.beginPath(); x.moveTo(3,28); x.lineTo(26,4); x.moveTo(S-3,28); x.lineTo(S-26,4); x.stroke(); }
     else if (kind==='stucco'){ for(let k=0;k<900;k++){ x.fillStyle=shade(color,(r()-0.5)*0.07); x.fillRect(r()*S,r()*S,2,2); } }
     else if (kind==='log'){ for(let y=0;y<S;y+=21){ const g=x.createLinearGradient(0,y,0,y+21); g.addColorStop(0,shade(color,-0.12)); g.addColorStop(0.4,shade(color,0.06)); g.addColorStop(1,shade(color,-0.16)); x.fillStyle=g; x.fillRect(0,y,S,21); } }
     else if (kind==='wood'){ for(let y=0;y<S;y+=16){ x.fillStyle=shade(color,(r()-0.5)*0.08); x.fillRect(0,y,S,15); x.fillStyle=shade(color,-0.12); x.fillRect(0,y+15,S,1); x.fillRect(((y*37)%S),y,1,15); } }
@@ -39,6 +44,7 @@ function surfTex(kind, color){
 // A material whose texture repeats every `tile` meters for a surface of size w x h
 function tiled(kind, color, w, h, tile=1.2, extra){
   const t=surfTex(kind, color).clone(); t.needsUpdate=true; t.repeat.set(Math.max(0.2,w/tile), Math.max(0.2,h/tile));
+  if (kind==='timber') t.repeat.set(Math.max(1,Math.round(w/BUILD.EC)), Math.max(1,Math.round(h/2.2)));
   return new THREE.MeshStandardMaterial(Object.assign({ map:t, roughness:0.9 }, extra||{}));
 }
 // A box whose side faces are each tiled to their own size
@@ -103,7 +109,13 @@ export function defaultRoom(id,x,z,w,d){ return { id, x, z, w, d, floor:'wood', 
 function roofOn(g, style, W, D, baseY, roofC, trimC, wallKind, wallC){
   // returns roof height above baseY. Ridge runs along the longer side.
   const roofTex=(w,h)=>tiled('roof', roofC, w, h, 1.0);
-  const along = W>=D; const L = along?W:D, S = along?D:W; const grp=new THREE.Group(); g.add(grp); if(!along) grp.rotation.y=Math.PI/2;
+  const along = W>=D; const L = along?W:D, S = along?D:W;
+  // v1.8: cottage roofs with shingle courses and flared eaves, thatch, moss and gambrel
+  if (['gable','steep','mossy','thatch','gambrel'].includes(style)){
+    const gk = wallKind==='timber' ? 'stucco' : wallKind, gm=tiled(gk, wallC, 1, 1, 1.2); gm.map.repeat.set(0.83,0.83);
+    return cottageRoof(g, { style, L, S, y:baseY, c:roofC, trim: style==='thatch' ? 0x6a4a30 : trimC, gableMat:gm, ridgeZ:!along, moss: style==='mossy'?0.75:0, seed:Math.round(W*31+D*17), timber: wallKind==='timber', beamC:0x5a3c2a });
+  }
+  const grp=new THREE.Group(); g.add(grp); if(!along) grp.rotation.y=Math.PI/2;
   if (style==='flat'){
     mk(G.box(W+0.3,0.22,D+0.3), M(new THREE.Color(roofC).offsetHSL(0,0,-0.1).getHex()), 0,baseY+0.11,0,g);
     for (const s of [-1,1]){ mk(G.box(W+0.4,0.32,0.16), M(trimC), 0,baseY+0.3,s*(D/2+0.12),g); mk(G.box(0.16,0.32,D+0.4), M(trimC), s*(W/2+0.12),baseY+0.3,0,g); }
@@ -146,6 +158,8 @@ function houseWindow(g, x, y, z, ry, E, sz=1){
     mk(G.box(w+0.14,h+0.14,0.08), frame, 0,0,0,p); mk(G.box(w,h,0.06), windowMat, 0,0,0.03,p);
     mk(G.box(0.04,h,0.08), frame, 0,0,0.05,p); mk(G.box(w,0.04,0.08), frame, 0,0,0.05,p);
     if (st==='arched'){ const a=mk(G.cyl(w/2+0.07,w/2+0.07,0.08,16,1,false,0,Math.PI), frame, 0,h/2,0,p); a.rotation.set(Math.PI/2,0,Math.PI/2); a.rotation.order='ZXY'; const ag=mk(new THREE.CircleGeometry(w/2,16,0,Math.PI), windowMat, 0,h/2,0.035,p); }
+    else mk(G.box(w+0.28,0.09,0.12), M(new THREE.Color(E.trimC).offsetHSL(0,0,-0.08).getHex()), 0,h/2+0.11,0.04,p);   // little header
+    if (!E.boxes) mk(G.box(w+0.3,0.07,0.16), M(new THREE.Color(E.trimC).offsetHSL(0,0,-0.08).getHex()), 0,-h/2-0.1,0.07,p);   // sill
   }
   if (E.shutters && st!=='round') for (const s of [-1,1]){ const sh=mk(G.box(0.24*sz,h+0.08,0.05), M(E.shutC), s*(w/2+0.2*sz),0,0.02,p); for(let k=0;k<3;k++) mk(G.box(0.18*sz,0.03,0.06), M(new THREE.Color(E.shutC).offsetHSL(0,0,-0.1).getHex()), s*(w/2+0.2*sz),-h/3+k*h/3,0.03,p); }
   if (E.boxes){ mk(G.box(w+0.16,0.16,0.22), M(0x8b5e3a), 0,-h/2-0.13,0.13,p); const fc=[0xff7f7f,0xffd04d,0xffffff,0xc7a0ff]; for(let k=0;k<4;k++) mk(G.ico(0.07,1), M(fc[k]), -w/2+0.1+k*(w-0.2)/3, -h/2+0.0, 0.16, p); }
@@ -216,6 +230,7 @@ export function buildCustomHouse(home){
   if (E.chimney!=='none' && best){ const ch=new THREE.Group(); ch.position.set(best.x,0,best.z); g.add(ch); const h=best.top; const cm=E.chimney==='stone'?['stone',0xa8a8a0]:['brick',0xb06a50];
     const cb=texBox(cm[0],cm[1],0.5,h-F,0.5,0.7); cb.position.y=F+(h-F)/2; ch.add(cb); cb.castShadow=true; mk(G.box(0.62,0.12,0.62), M(0x5a4a40), 0,h,0,ch); chimney=new THREE.Vector3(best.x,h+0.2,best.z); }
   // mailbox at the front left of the lot
+  mergeStatic(g);
   const mb=new THREE.Group(); mb.position.set(cx(0)-0.2,0,cz(GD)+0.6); FURN_BUILDERS.mailbox(mb); g.add(mb);
   g.userData={ chimney, door:doorPt, porchD, rects, size:{W:GW*EC,D:GD*EC} };
   return g;

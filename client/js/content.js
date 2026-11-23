@@ -507,8 +507,8 @@ export const MUSEUM = { kinds:['fish','bug','fossil','shell'], gifts:[[10,'globe
 export const BUILD = {
   GW:7, GD:6, EC:1.25, IC:2.4,
   cellCost:n => n<=9 ? 1000 : n<=12 ? 3000 : n<=24 ? 10000 : 25000,   // a 9-square starter fits a guest wallet; big houses are a long-term goal
-  walls:[['siding','Siding'],['plank','Board & batten'],['shingle','Shingles'],['brick','Brick'],['stone','Stone'],['stucco','Stucco'],['log','Log cabin']],
-  roofs:[['gable','Gable'],['steep','Steep gable'],['hip','Hip'],['shed','Lean-to'],['flat','Flat']],
+  walls:[['siding','Siding'],['plank','Board & batten'],['shingle','Shingles'],['brick','Brick'],['stone','Stone'],['stucco','Stucco'],['log','Log cabin'],['timber','Half-timbered']],
+  roofs:[['gable','Gable'],['steep','Steep gable'],['hip','Hip'],['shed','Lean-to'],['flat','Flat'],['thatch','Thatch'],['mossy','Mossy shingles'],['gambrel','Gambrel']],
   doors:[['plank','Plank'],['arched','Arched'],['glass','French'],['dutch','Dutch']],
   windows:[['square','Square'],['tall','Tall'],['round','Round'],['arched','Arched'],['wide','Picture']],
   founds:[['stone','Stone'],['brick','Brick'],['wood','Wood lattice'],['none','None']],

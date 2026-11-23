@@ -63,3 +63,11 @@ CREATE TABLE IF NOT EXISTS mail (
 );
 CREATE INDEX IF NOT EXISTS mail_to ON mail(to_id, claimed);
 CREATE INDEX IF NOT EXISTS links_friend ON links(friend_id);
+-- Shared with the Vinatix hub (vinatix.com): progress for other games, one row per account per game.
+CREATE TABLE IF NOT EXISTS game_saves (
+  user_id TEXT NOT NULL,
+  game TEXT NOT NULL,
+  data TEXT NOT NULL,
+  updated INTEGER NOT NULL,
+  PRIMARY KEY (user_id, game)
+);

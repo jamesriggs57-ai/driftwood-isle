@@ -14,6 +14,16 @@ server/          Cloudflare Worker (API), D1 database, Durable Object (live room
   wrangler.toml  Cloudflare config
 ```
 
+## On vinatix.com
+
+The game lives at vinatix.com/driftwood/ (a Workers route in `server/wrangler.toml`) and still works at the root
+of any address the Worker is on. The server takes the `/driftwood` prefix off and puts it back into the links it
+hands out; the client only uses relative URLs (`api/save`, never `/api/save`).
+
+Accounts are Vinatix accounts: the Vinatix hub Worker reads and writes the same users, sessions and login_tokens
+tables in this database and uses the same `dw_sess` cookie, so signing in on vinatix.com/account or in the game is
+the same thing. Deleting an account here also deletes its progress in other Vinatix games (`game_saves`).
+
 ## Run it on your computer
 
 Needs Node.js 18 or newer.

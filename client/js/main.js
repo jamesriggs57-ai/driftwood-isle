@@ -2284,8 +2284,12 @@ function rollDay(){
   const shellPool=Object.values(ITEMS).filter(i=>i.kind==='shell');
   S.ground = S.ground.filter(g=>!g.beach);
   for(let i=0;i<8;i++){ for(let k=0;k<30;k++){ const a=r()*TAU, d=(40+r()*16)*SC; const x=Math.cos(a)*d, z=Math.sin(a)*d; if(isBeach(x,z) && !onDock(x,z)){ S.ground.push({ id:weightedPick(r,shellPool.filter(allowedFind),i=>i.rarity).id, x, z, beach:true }); break; } } }
-  // v1.8: packets of this island's own seeds turn up in the grass every day
-  { const pool=islandSeeds(); for (let i=0;i<6;i++){ const p=randLand(r,SAND_H+0.2,9,0.8); if (p && !gardenAtXZ(p[0],p[1])) S.ground.push({ id:pool[Math.floor(r()*pool.length)], x:p[0], z:p[1], beach:true, wild:true, n:2+Math.floor(r()*3) }); } }
+  // v1.9: this island's own crops grow wild in a few spots, ripe. Picking one gives the crop and 1 to 4 seeds. Topped back up to 6 each day.
+  if (!VISIT){ const pool=islandSeeds(); let have=S.plants.filter(p=>p.wild).length;
+    for (let tries=0; have<6 && tries<60; tries++){ const p=randLand(r,SAND_H+0.2,9,0.8); if (!p) continue; const [x,z]=p;
+      if (gardenAtXZ(x,z) || visPathDist(x,z)<1.2 || blocked(x,z,0.45) || S.plants.some(q=>Math.hypot(q.x-x,q.z-z)<1.2) || trees.some(t=>!t.removed && Math.hypot(t.pos.x-x,t.pos.z-z)<1.3)) continue;
+      const seed=pool[Math.floor(r()*pool.length)];
+      S.plants.push({ id:'w'+key.replace(/\W/g,'')+have+Math.floor(r()*1e4), sp:ITEMS[seed].plant, x, z, stage:3, rot:r()*TAU, lastGrow:key, wild:true }); have++; } }
   // plants grow overnight (watered plants always grow)
   if (!VISIT) for (const p of S.plants){ if (p.lastGrow===key) continue; const watered = p.watered && p.watered!==key; if (p.stage<3 && (watered || r()<0.55)) p.stage++; p.watered=null; p.lastGrow=key; }
   S.day={ key, fruit:{}, branch:{}, chop:{}, rock:{}, lucky:Math.floor(r()*9), digs, weeds, weather, peddler:!GUEST && r()<(S.magic&&S.magic.beacon?0.55:0.35),

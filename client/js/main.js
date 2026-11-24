@@ -5,13 +5,17 @@
 import * as THREE from 'three';
 import { TAU, clamp, lerp, smooth, mulberry32, hashStr, hash2, vnoise, fbm, weightedPick, inHours, inMonths, fmt, polyDist, segDist, Time, seasonOf } from './util.js';
 import { ITEMS, NATIVE_FRUITS, PLANTS, TOOLS, WOODWORK, BACKPACKS, BASE_SLOTS, HOUSE_LEVELS, RESIDENTS, DIALOGUE, PEDDLER, EVENTS, rarityLabel, RARITY_COLORS, SHOPS, INVEST, KEEPERS, MUSEUM, BUILD,
-  FOREIGN_FRUIT_PRICE, FRUIT_REGROW_DAYS, POTIONS, WIZARD, MAGIC, STORY, FAVOR_ASKS, CROPS, RECIPES, ARRIVE, MENTOR, islandSeedPool, ISLAND_SEED_BUY, GARDEN_FENCES, GARDEN_DECOR, FR, RARE_WORK, RARE_ODDS, PLAN_PRICE } from './content.js';
+  FOREIGN_FRUIT_PRICE, FRUIT_REGROW_DAYS, POTIONS, WIZARD, MAGIC, STORY, FAVOR_ASKS, CROPS, RECIPES, ARRIVE, MENTOR, islandSeedPool, ISLAND_SEED_BUY, GARDEN_FENCES, GARDEN_DECOR, FR, RARE_WORK, RARE_ODDS, PLAN_PRICE,
+  WEAR_IDS, FAVOR_THEMES, DO_TASKS } from './content.js';
+import { ACHIEVEMENTS, ACH_GROUPS } from './achieve.js';
+import { BY_SLOT, SLOT_NAMES } from './wardrobe-data.js';
 import { CELL, buildSoil, buildFences, buildStake, buildGardenSign, buildScarecrow, buildLanternPost, buildFlowerArch } from './farm.js';
 import { Snd } from './audio.js';
 import { LAYOUTS, DEFAULT_SHAPE, islandRadius, generateLayout, bluffD } from './layouts.js';
 import { buildBike, MODEL, M, mk, G, outline, windowMat, glowMats, glowMat, glowSprites, addGlow, textSprite, PALETTE, buildItemModel, thumb, toolThumb, FURN_BUILDERS, MF,
   buildTree, buildStump, buildShrub, buildFlower, buildTool, buildAnimal, buildPlayer, buildHouse, buildStall, buildBoard, buildPlankDeck, buildRoom, buildBird, buildGull, buildDuck, buildWeedClump } from './models.js';
 import './furn.js';
+import './decor2.js';
 import { addAura, buildBottle } from './rare.js';
 import * as GC from './ground.js';
 import * as CH from './chars.js';
@@ -70,6 +74,9 @@ const START_RES=['pippa','bramble','mabel'], MOVE_ORDER=['lumi','otis','clover',
 if (!S.town){ const older = !!S.day || !!S.player; S.town = { res: older ? RESIDENTS.map(R=>R.id) : START_RES.slice(), next:null, last:null, hall:0, fund:0, met:{}, deco:0 }; }
 S.town.met=S.town.met||{}; S.town.res=S.town.res.filter(id=>RESIDENTS.some(R=>R.id===id));
 const livesHere = id => S.town.res.includes(id);
+/* v1.19: clothes you own (wear them from Change my look) and achievements you've earned */
+S.wardrobe = Array.isArray(S.wardrobe) ? S.wardrobe.filter(id=>ITEMS[id] && ITEMS[id].kind==='wear') : [];
+if (S.stats) S.stats.maxClams=Math.max(S.stats.maxClams||0, S.clams||0);
 if (VISIT && S.day && S.day.vpicked) S.ground = S.ground.filter(g=>!(g.beach && S.day.vpicked.includes(Math.round(g.x*10)+','+Math.round(g.z*10))));
 if (LAY.homes) for (const R of RESIDENTS) if (LAY.homes[R.id]) R.home = LAY.homes[R.id];
 if (!S.nativeFruit || !ITEMS[S.nativeFruit]) S.nativeFruit = NATIVE_FRUITS[S.seed % NATIVE_FRUITS.length];
@@ -771,14 +778,14 @@ class Tree extends Ent {
     if (lab==='Look') return;
     this.shake=1; Snd.rustle(); const tp=this.pos.clone(); tp.y+=2.8; puff(tp, World.season==='winter'?0xffffff:0x6cc050, 6, 0.8, 1, 1.2, 1);
     const n=this.fruitLeft();
-    if (n>0){ S.day.fruit[this.key]=0; if (!VISIT) (S.fruitPicked=S.fruitPicked||{})[this.key]=dayNum(today()); for(let i=0;i<n;i++) setTimeout(()=>dropNear(this.fruit, this.pos, 1.6), 250+i*120); }
+    if (n>0){ track('shake'); S.day.fruit[this.key]=0; if (!VISIT) (S.fruitPicked=S.fruitPicked||{})[this.key]=dayNum(today()); for(let i=0;i<n;i++) setTimeout(()=>dropNear(this.fruit, this.pos, 1.6), 250+i*120); }
     else if (!S.day.branch[this.key] && Math.random()<0.7){ S.day.branch[this.key]=true; setTimeout(()=>dropNear('softwood', this.pos, 1.6), 300); }
     const sap=(S.day.sap=S.day.sap||{}); if (!sap[this.key]){ sap[this.key]=1; rareRoll('shake', 'goldsap', this.pos); }
     save(); setTimeout(()=>this.refresh(),250);
   }
   chop(){
     const tier=toolTier('axe'); if(!useTool('axe')) return;
-    const n=(S.day.chop[this.key]||0); S.day.chop[this.key]=n+1; S.stats.chopped++;
+    const n=(S.day.chop[this.key]||0); S.day.chop[this.key]=n+1; S.stats.chopped++; track('chop');
     this.shake=0.7; Snd.chop(); puff(this.pos.clone().add(new THREE.Vector3(0,1,0)), 0xd8b080, 5, 0.4, 1.5, 0.8, 0.5);
     if (n<3){ dropNear('wood', this.pos, 1.6); if (tier>=2) dropNear('wood', this.pos, 1.6); rareRoll('chop', 'heartwood', this.pos); }
     else if (TOOLS.axe.tiers[tier].nofell) toast('Too flimsy to fell it.');
@@ -793,7 +800,7 @@ class Stump extends Ent {
   constructor(rec){ super('stump',rec.x,rec.z,0.45); this.rec=rec; this.solid=true; this.reach=1.4; this.attach(buildStump()); }
   label(){ return S.equip==='shovel' ? 'Dig up' : 'Look'; }
   act(){ if (this.label()==='Look') return; if(!useTool('shovel')) return; Snd.dig(); S.stumps.splice(S.stumps.indexOf(this.rec),1);
-    const pos=this.pos.clone(); FX.stumpOut(this.obj, pos); this.remove(true); setTimeout(()=>dropNear('stump', pos, 1.1), 900); rareRoll('stump', 'glimmermoss', pos); S.stats.dug++; save(); }
+    const pos=this.pos.clone(); FX.stumpOut(this.obj, pos); this.remove(true); setTimeout(()=>dropNear('stump', pos, 1.1), 900); rareRoll('stump', 'glimmermoss', pos); S.stats.dug++; track('dig'); save(); }
 }
 if (!S.stumps) S.stumps=[];
 
@@ -818,7 +825,7 @@ class Rock extends Ent {
 class DigSpot extends Ent {
   constructor(i,x,z){ super('dig',x,z,0.4); this.i=i; this.reach=1.3; const g=new THREE.Group(); for(const a of [0.6,-0.6]){ const m=mk(G.box(0.7,0.03,0.12), M(0x6a4a30), 0,0.03,0,g); m.rotation.y=a; m.castShadow=false; } this.attach(g); this.hitSphere(0.5,0.2); }
   label(){ return 'Dig'; }
-  act(){ if(!needTool('shovel') || !useTool('shovel')) return; Snd.dig(); puff(this.pos.clone().add(new THREE.Vector3(0,0.2,0)), 0xb08a5a, 8, 0.6, 2.5, 1, 0.6); S.day.digs[this.i].dug=true; S.stats.dug++; FX.hole(this.pos.clone(), 0.5, 1.6);
+  act(){ if(!needTool('shovel') || !useTool('shovel')) return; Snd.dig(); puff(this.pos.clone().add(new THREE.Vector3(0,0.2,0)), 0xb08a5a, 8, 0.6, 2.5, 1, 0.6); S.day.digs[this.i].dug=true; S.stats.dug++; track('dig'); FX.hole(this.pos.clone(), 0.5, 1.6);
     const f=tierPick(Math.random, Object.values(ITEMS).filter(i=>i.kind==='fossil' && allowedFind(i)), i=>luckW(i,'dig'), 'dig'); this.remove(); setTimeout(()=>dropNear(f.id, this.pos, 0.3, true), 200);
     if (Math.random()<(potionOn('dig')?0.25:0.12)){ setTimeout(()=>{ const got=grantRandomStyle(); if(got){ Snd.jingle(); toast(`Swatch book: ${got}`); } }, 900); }
     if (!GUEST && Math.random()<rareChance('digPlan','dig')){ const pl=randomPlan(); if (pl){ const p=this.pos.clone(); setTimeout(()=>{ dropNear(pl, p, 0.9); sparkle(p.clone().add(new THREE.Vector3(0,1,0))); Snd.jingle(); toast('Something rolled up in the dirt...', thumb(pl), 'new', 'A rare plan!'); }, 1100); } }
@@ -832,13 +839,13 @@ class GroundItem extends Ent {
     if (ITEMS[id].kind==='plan'){ const fresh=learnPlan(id); if (!fresh){ addClams(ITEMS[id].price); toast(`You already know that plan. Pemberton gave you ${fmt(ITEMS[id].price)} clams for the paper.`); }
       Snd.pop(); const i=S.ground.indexOf(this.rec); if(i>=0) S.ground.splice(i,1); this.remove(); save(); return; }
     const res=addItem(id, this.rec.m); if(!res){ toast('Your bag is full. Sell or drop something first.'); return; }
-    for (let k=1;k<(this.rec.n||1);k++){ if (!addItem(id)) break; pickNote(id,'Picked up'); } Snd.pop(); const i=S.ground.indexOf(this.rec); if(i>=0) S.ground.splice(i,1); if (VISIT && this.rec.beach){ (S.day.vpicked=S.day.vpicked||[]).push(Math.round(this.rec.x*10)+','+Math.round(this.rec.z*10)); } this.remove(); save(); itemToast(id, res==='new', 'Picked up'); craftNudge(id); }
+    for (let k=1;k<(this.rec.n||1);k++){ if (!addItem(id)) break; pickNote(id,'Picked up'); } Snd.pop(); const i=S.ground.indexOf(this.rec); if(i>=0) S.ground.splice(i,1); if (VISIT && this.rec.beach){ (S.day.vpicked=S.day.vpicked||[]).push(Math.round(this.rec.x*10)+','+Math.round(this.rec.z*10)); } this.remove(); { const kd=ITEMS[id].kind; if (kd==='fruit') track('fruit', this.rec.n||1); else if (kd==='shell') track('shell', this.rec.n||1); } save(); itemToast(id, res==='new', 'Picked up'); craftNudge(id); }
   update(dt,t){ if (this.aura) this.aura(t,dt); this.obj.children[0].rotation.y=this.spin+Math.sin(t*1.5+this.spin)*0.2; if(this.bounce>0){ this.bounce=Math.max(0,this.bounce-dt*2.2); this.obj.position.y=this.pos.y+Math.abs(Math.sin(this.bounce*Math.PI*2))*this.bounce*1.4; } }
 }
 class Weed extends Ent {
   constructor(i,x,z){ super('weed',x,z,0.5); this.i=i; this.reach=1.4; const g=buildWeedClump(hashStr(today()+':'+i)%9973+1, 1.45); g.rotation.y=i*1.7; this.attach(g); this.hitSphere(0.6,0.35); }
   label(){ return 'Pull'; }
-  act(){ const r=addItem('weed'); if(!r){ toast('Your bag is full.'); return; } Snd.rustle(); puff(this.pos.clone().add(new THREE.Vector3(0,0.3,0)),0x6a8a2a,8,0.5,2,0.8,0.5); puff(this.pos.clone().add(new THREE.Vector3(0,0.1,0)),0x6a5038,5,0.4,1.5,0.7,0.5); S.day.weeds[this.i].pulled=true; FX.yank(this.obj); this.remove(true); if (World.night>0.5) rareRoll('weedNight', 'glimmermoss', this.pos); save(); itemToast('weed', r==='new','Pulled'); }
+  act(){ const r=addItem('weed'); if(!r){ toast('Your bag is full.'); return; } Snd.rustle(); puff(this.pos.clone().add(new THREE.Vector3(0,0.3,0)),0x6a8a2a,8,0.5,2,0.8,0.5); puff(this.pos.clone().add(new THREE.Vector3(0,0.1,0)),0x6a5038,5,0.4,1.5,0.7,0.5); S.day.weeds[this.i].pulled=true; track('weed'); FX.yank(this.obj); this.remove(true); if (World.night>0.5) rareRoll('weedNight', 'glimmermoss', this.pos); save(); itemToast('weed', r==='new','Pulled'); }
 }
 
 /* ---------- v1.9 harvesting ---------- */
@@ -855,9 +862,9 @@ function harvestRec(rec, bulk){ const P=PLANTS[rec.sp], C=CROPS[P.crop], n=C.n[0
   for (let i=0;i<seeds;i++){ if (!addItem(sid)){ dropNear(sid, at, 0.9); dropped=true; } }
   const e=plantEntOf(rec);
   if (C.regrow){ rec.stage=C.regrowTo||1; if (e) e.rebuild(); } else { S.plants.splice(S.plants.indexOf(rec),1); if (e) e.remove(); }
-  S.stats.harvested=(S.stats.harvested||0)+n; return { n, seeds, isNew, dropped }; }
+  S.stats.harvested=(S.stats.harvested||0)+n; track('harvest'); return { n, seeds, isNew, dropped }; }
 /* ---------- Planted flowers and shrubs ---------- */
-function waterPlant(rec, pos){ if(!useTool('can')) return; rec.watered=today(); S.stats.watered++; Snd.water(); for(let i=0;i<8;i++) puff(pos.clone().add(new THREE.Vector3((Math.random()-0.5)*0.6,0.8,(Math.random()-0.5)*0.6)),0x7fc8f0,1,0.15,-1,0.4,0.5); toast('Watered. It will grow faster tomorrow.'); save(); }
+function waterPlant(rec, pos){ if(!useTool('can')) return; rec.watered=today(); S.stats.watered++; track('water'); Snd.water(); for(let i=0;i<8;i++) puff(pos.clone().add(new THREE.Vector3((Math.random()-0.5)*0.6,0.8,(Math.random()-0.5)*0.6)),0x7fc8f0,1,0.15,-1,0.4,0.5); toast('Watered. It will grow faster tomorrow.'); save(); }
 class Plant extends Ent {
   // Vegetables and herbs: pick a few. Tomatoes and herbs grow back; the rest come up whole.
   // Vegetables, herbs and berries: you get some of the crop and 1 to 4 seeds back. Tomatoes, herbs and berries stay planted and grow back.
@@ -1124,7 +1131,7 @@ class Bug extends Ent {
   swing(chance, verdict){
     if(!useTool('net')) return; Snd.swoosh(); player.act=0.4;
     if (Math.random()<chance){ const meta=rollStats(this.id), id=this.id; setTimeout(()=>Snd.jingle(),120); sparkle(this.obj.position.clone()); this.despawn();
-      const kept=r=>{ S.caught++; S.stats.bugs++; S.stats.tapCatch=(S.stats.tapCatch||0)+(verdict?0:1); const best=recordCatch(id, meta); catchToast(id, meta, r==='new', best); save(); skillHint(); };
+      const kept=r=>{ S.caught++; S.stats.bugs++; track('bug'); { const hr=Time.hour(); if (hr>=19||hr<5) track('bugnight'); } if (World.weather==='rain') track('bugrain'); S.stats.tapCatch=(S.stats.tapCatch||0)+(verdict?0:1); const best=recordCatch(id, meta); catchToast(id, meta, r==='new', best); save(); skillHint(); };
       const r=addItem(id, meta); if(!r){ fullBagCatch(id, meta, kept); return; } kept(r); }
     else { Snd.fail(); toast(verdict==='miss' ? ['Whiff!','It slipped away.','Too early!'][Math.floor(Math.random()*3)] : ['Whoosh! It got away.','Missed!','So close!'][Math.floor(Math.random()*3)]); this.startFlee(); }
   }
@@ -1223,7 +1230,7 @@ function castAt(pt){
 function reel(){
   const f=Fishing.fish;
   if (Fishing.state==='bite' && f){ useTool('rod'); const meta=rollStats(f.id), id=f.id; Snd.splash(); FX.fishCatch(id, bobber.position.clone()); setTimeout(()=>sparkle(player.pos.clone().add(new THREE.Vector3(0,2.3,0))), 600);
-    const kept=r=>{ setTimeout(()=>Snd.fanfare(),150); S.caught++; S.stats.fish++; const best=recordCatch(id, meta); catchToast(id, meta, r==='new', best); rareRoll('catch', 'moonpearl', player.pos, 'fish'); save(); };
+    const kept=r=>{ setTimeout(()=>Snd.fanfare(),150); S.caught++; S.stats.fish++; track('fish'); const best=recordCatch(id, meta); catchToast(id, meta, r==='new', best); rareRoll('catch', 'moonpearl', player.pos, 'fish'); save(); };
     const r=addItem(id, meta); if(!r) setTimeout(()=>fullBagCatch(id, meta, kept), 250); else kept(r);
     f.m.parent && f.m.parent.remove(f.m); fishes.splice(fishes.indexOf(f),1);
   } else if (f && (f.state==='nibble'||f.state==='approach')){ toast('Too soon!'); f.state='flee'; f.t=0; Snd.splash(); }
@@ -1678,6 +1685,7 @@ function buildPlaza(){
 function talkHall(){
   const k=KEEPERS.clementine, v=k.voice, T=S.town, t=T.hall||0;
   const menu=()=>dialog(k.name, v, [], null, [
+    ...favorChoices(npcOf('clementine'), ()=>menu()),
     { label:'Town projects', fn:()=>openHallPanel() },
     ...(VISIT?[]:[{ label: !S.home.built ? 'A house?' : loanOpen() ? 'Pay my loan' : 'Home loan', fn:()=>talkLoan(menu) }]),
     { label:'New neighbors?', fn:()=>{ const nxt=T.next && RESIDENTS.find(R=>R.id===T.next.id), cap=townCap();
@@ -1727,6 +1735,13 @@ const MAGIC_CSS = `
 #hud.magic #act,#hud.magic #toolBtn,#hud.magic #bar,#hud.magic #joyZone,#hud.magic #hint{display:none}
 .favor{border:3px solid var(--line);border-radius:14px;padding:8px 10px;margin:6px 0;background:#fffdf6}
 .favor b{display:block}
+.favor .fg{display:flex;align-items:center;gap:6px;margin-top:4px}.favor .fg img{width:30px;height:30px}
+.achHead{display:flex;align-items:center;gap:10px}.achHead .bar{flex:1}
+.achGrp{margin:14px 0 4px;font-weight:700;color:var(--brown)}.achGrp span{font-weight:500;color:var(--brown2);font-size:13px}
+.achGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.ach{border:3px solid var(--line);border-radius:16px;background:#fffdf6;padding:8px;display:flex;gap:8px;align-items:center;min-height:64px}
+.ach img{width:46px;height:46px;flex:0 0 46px}.ach .an{font-weight:700;font-size:14px;line-height:1.15;color:var(--brown)}.ach .ad{font-size:12px;line-height:1.2;color:var(--brown2)}
+.ach.locked{background:#f3ede2;border-style:dashed}.ach.locked .an{color:#a8987f}
 `;
 { const st=document.createElement('style'); st.textContent=MAGIC_CSS; document.head.appendChild(st);
   const pc=document.createElement('div'); pc.id='potions'; $('#hud').appendChild(pc);
@@ -1778,7 +1793,7 @@ const generalPool = m => Object.values(ITEMS).filter(i=>i.kind==='furniture' && 
 const isRarePiece = id => { const it=ITEMS[id]; return it && it.kind==='furniture' && it.rarity!==undefined && it.rarity<3; };
 function drinkPotion(slot){
   const s=S.inv[slot]; if(!s) return; const it=ITEMS[s.id]; if (it.kind!=='potion') return;
-  removeAt(slot,1); const k=it.luck, until=Math.max(nowMs(), S.potions[k]||0)+it.mins*60000; S.potions[k]=until; save();
+  removeAt(slot,1); track('potion'); const k=it.luck, until=Math.max(nowMs(), S.potions[k]||0)+it.mins*60000; S.potions[k]=until; save();
   Snd.jingle(); sparkle(player.pos.clone().add(new THREE.Vector3(0,1.6,0))); toast(`You drank the ${it.name}! Luck lasts ${it.mins} minutes.`, thumb(s.id), 'new');
   updatePotionHUD();
 }
@@ -1942,6 +1957,7 @@ function raiseTower(){
 function talkWizard(){
   const W=WIZARD, v=W.voice;
   const menu=()=>dialog(W.name, v, [], null, [
+    ...favorChoices(npcOf('wendell'), ()=>menu()),
     { label:'Potions', fn:()=>openPotionShop() },
     { label:'Move a building', fn:()=>{ if (noEdit()) return; if (!moveUnlocked()){ dialog(W.name, v, [W.moveLock.replace('{cells}',MAGIC.unlockMove.cells).replace('{shops}',MAGIC.unlockMove.shops), `Right now: a house of ${cellsBuilt()} squares, ${shopsBacked()} of 3 shops backed.`], menu); return; } openMoveList(); } },
     { label:'Shape the land', fn:()=>{ if (noEdit()) return; if (!landUnlocked()){ dialog(W.name, v, [W.landLock.replace('{cells}',MAGIC.unlockLand.cells), `Right now: a house of ${cellsBuilt()} squares, ${shopsBacked()} of 3 shops backed.`], menu); return; } startMagic('land'); } },
@@ -1959,38 +1975,70 @@ function openPotionShop(){
   openPanel('Wendell\'s Potions'); render();
 }
 
-/* ---------- Favors (mini quests) ---------- */
+/* ---------- Favors (mini quests) ----------
+   v1.19: every islander, every shopkeeper, Clementine, Professor Thistle and Wendell ask for things that fit who they are
+   (FAVOR_THEMES in content.js) and say thanks with something on theme: furniture or clothes from their own list.
+   A favor is put together from an opener, one of that character's asks, and a gift. "do" favors count what you do after you agree. */
 if (!S.quests) S.quests={ offers:{}, active:[], done:0, story:{} };
-const Q=S.quests; Q.offers=Q.offers||{}; Q.active=Q.active||[]; Q.story=Q.story||{};
+const Q=S.quests; Q.offers=Q.offers||{}; Q.active=Q.active||[]; Q.story=Q.story||{}; Q.gifted=Q.gifted||[];
+const MAX_FAVORS=4;
+const KEEPER_IDS=['pemberton','marlo','sprig','clementine','thistle','wendell'];
 const resById = id => residents.find(r=>r.spec.id===id);
+// Anyone who can ask a favor: an islander, or a keeper (the shops, the town hall, the museum, the wizard)
+function npcOf(id){ const r=resById(id); if (r) return { id, name:r.spec.name, voice:r.spec.voice, c:r.spec.catch, pos:r.pos, res:r };
+  if (id==='wendell') return { id, name:WIZARD.name, voice:WIZARD.voice, c:FAVOR_THEMES.wendell.c, pos:player.pos };
+  const k=KEEPERS[id]; return k ? { id, name:k.name, voice:k.voice, c:(FAVOR_THEMES[id]||{}).c||'', pos:player.pos } : null; }
+const npcName = id => (npcOf(id)||{}).name || 'Someone';
+const keeperAround = id => id==='wendell' ? !!S.magic.tower : KEEPER_IDS.includes(id);
 const favorFor = id => Q.active.find(f=>f.who===id);
-const favorItemName = f => f.kind==='kind' ? ({fish:'fish',bug:'bug',fossil:'fossil',shell:'beach find',flower:'flower'})[f.item]+(f.n>1&&f.item!=='fish'?'s':'') : ITEMS[f.item].name;
+const KIND_WORD={ fish:['fish','fish'], bug:['bug','bugs'], fossil:['fossil','fossils'], shell:['beach find','beach finds'], flower:['flower','flowers'], fruit:['piece of fruit','pieces of fruit'],
+  veg:['vegetable','vegetables'], herb:['herb','herbs'], berry:['berry','berries'], food:['home-cooked dish','home-cooked dishes'], furniture:['piece of furniture','pieces of furniture'] };
+const KIND_VAL={ fish:350, bug:300, fossil:800, shell:120, flower:90, fruit:120, veg:150, herb:120, berry:110, food:450, furniture:1500 };
+const favorItemName = f => f.kind==='kind' ? (KIND_WORD[f.item]||[f.item,f.item])[f.n>1?1:0] : ITEMS[f.item].name;
+function favorTask(f){ if (f.to) return `Take the parcel to ${npcName(f.to)}`;
+  if (f.kind==='do') return (DO_TASKS[f.item]||['Help out'])[0].replace('{n}',f.n).replace(/\{s\}/g,f.n>1?'s':'');
+  return `Bring ${f.n>1?f.n+' ':''}${favorItemName(f)}${f.catch?' (catch one)':''}${f.cook?' (cook it)':''}`; }
 function storyOpen(key){ const st=Q.story[key]; if (st==='done') return false;
   if (key==='wizard') return !S.magic.tower && (S.caught>=4 || discovered()>=10 || S.home.built);
   if (key==='beacon') return !GUEST && !!S.magic.tower && S.caught>=12;
   if (key==='swatches') return (S.friend.juniper||0)>=6;
   return false; }
-function makeFavor(res, r){
-  const asks=FAVOR_ASKS.filter(a=>a.kind!=='deliver' || residents.length>1);
-  for (let tries=0; tries<12; tries++){
-    const a=asks[Math.floor(r()*asks.length)], n=a.n[0]+Math.floor(r()*(a.n[1]-a.n[0]+1)); let f={ who:res.spec.id, kind:a.kind, n, line:a.line, id:'f'+Date.now().toString(36)+Math.floor(r()*1e5) };
-    if (a.kind==='item'){ f.item = a.id==='native' ? S.nativeFruit : a.id; f.kind='item'; if (!ITEMS[f.item]) continue; f.value=ITEMS[f.item].price*n; }
-    else if (a.kind==='kind'){ f.item=a.id; f.value={fish:350,bug:300,fossil:800,shell:120,flower:90}[a.id]*n; }
-    else if (a.kind==='catch'){ const m=Time.month(); const pool=Object.values(ITEMS).filter(i=>i.kind===a.id && inMonths(m,i.months) && (i.rarity??5)>=(GUEST?3:2.5) && (i.rarity??5)<6 && !i.weather); if(!pool.length) continue; const it=pool[Math.floor(r()*pool.length)]; f.kind='item'; f.item=it.id; f.n=1; f.catch=true; f.value=it.price*1.5; }
-    else if (a.kind==='deliver'){ const others=residents.filter(x=>x!==res); const to=others[Math.floor(r()*others.length)]; f.to=to.spec.id; f.item='parcel'; f.value=500; }
-    f.reward=Math.round((f.value*1.25+400)/50)*50; return f; }
+// A thank-you gift from someone's own list: clothes you don't own yet and things you haven't been given come first
+function pickGift(who, r){ const T=FAVOR_THEMES[who]; if (!T) return null;
+  const ok=id=>{ const it=ITEMS[id]; if (!it) return false; return it.kind==='wear' ? !ownsWear(id) : allowedFind(it); };
+  const fresh=T.gifts.filter(id=>ok(id) && !Q.gifted.includes(id)), any=T.gifts.filter(ok), pool=fresh.length?fresh:any;
+  return pool.length ? pool[Math.floor(r()*pool.length)] : null; }
+function makeFavor(who, r){
+  const T=FAVOR_THEMES[who]; if (!T) return null;
+  const others=residents.filter(x=>x.spec.id!==who);
+  const full=(()=>{ try { return museumFull(); } catch(e){ return false; } })();   // (favors are first rolled before the museum code has loaded)
+  const asks=T.asks.filter(a=>(a.t!=='deliver' || others.length>0) && !(a.t==='do' && a.id==='potion' && !S.magic.tower) && !(a.t==='do' && a.id==='donate' && full));
+  for (let tries=0; tries<14; tries++){
+    const a=asks[Math.floor(r()*asks.length)], n=a.n[0]+Math.floor(r()*(a.n[1]-a.n[0]+1));
+    const f={ who, kind:a.t, n, line:a.line, open:T.open[Math.floor(r()*T.open.length)], id:'f'+Date.now().toString(36)+Math.floor(r()*1e5) };
+    if (a.t==='item'){ f.item = a.id==='native' ? S.nativeFruit : a.id; if (!ITEMS[f.item]) continue; f.value=ITEMS[f.item].price*n; }
+    else if (a.t==='kind'){ f.item=a.id; f.value=(KIND_VAL[a.id]||200)*n; }
+    else if (a.t==='catch'){ const m=Time.month(); const pool=Object.values(ITEMS).filter(i=>i.kind===a.id && inMonths(m,i.months) && (i.rarity??5)>=(GUEST?3:2.5) && (i.rarity??5)<6 && !i.weather); if (!pool.length) continue;
+      const it=pool[Math.floor(r()*pool.length)]; f.kind='item'; f.item=it.id; f.n=1; f.catch=true; f.value=it.price*1.5; }
+    else if (a.t==='cook'){ const rc=RECIPES[Math.floor(r()*RECIPES.length)]; f.kind='item'; f.item=rc.id; f.n=1; f.cook=true; f.value=ITEMS[rc.id].price*1.3; }
+    else if (a.t==='deliver'){ const to=others[Math.floor(r()*others.length)]; f.kind='deliver'; f.to=to.spec.id; f.item='parcel'; f.n=1; f.value=500; }
+    else if (a.t==='do'){ if (!DO_TASKS[a.id]) continue; f.item=a.id; f.prog=0; f.value=DO_TASKS[a.id][1]*n; }
+    f.reward=Math.round((f.value+300)/50)*50; f.gift=pickGift(who, r); return f; }
   return null;
 }
 function rollFavors(r){
   if (VISIT) return;
   Q.offers={};
-  for (const res of residents){ const id=res.spec.id; if (favorFor(id) || Q.active.some(f=>f.to===id)) continue;
+  const who=[...residents.map(x=>x.spec.id), ...KEEPER_IDS.filter(keeperAround)];
+  for (const id of who){ if (favorFor(id) || Q.active.some(f=>f.to===id)) continue;
     const story=Object.keys(STORY).find(k=>STORY[k].who===id && storyOpen(k)); if (story){ Q.offers[id]={ story }; continue; }
-    if (Q.active.length<3 && r()<0.4){ const f=makeFavor(res, r); if (f) Q.offers[id]=f; } }
+    if (Q.active.length<MAX_FAVORS && r()<(KEEPER_IDS.includes(id)?0.32:0.42)){ const f=makeFavor(id, r); if (f) Q.offers[id]=f; } }
 }
 function haveFor(f){ if (f.story){ return STORY[f.story].need.every(([id,n])=> ITEMS[id] ? countItem(id)>=n : S.inv.filter(s=>ITEMS[s.id].kind===id).reduce((a,s)=>a+s.n,0)>=n); }
+  if (f.kind==='do') return (f.prog||0)>=f.n;
   if (f.kind==='kind') return S.inv.filter(s=>ITEMS[s.id].kind===f.item).reduce((a,s)=>a+s.n,0)>=f.n; return countItem(f.item)>=f.n; }
 function takeFor(needs){ for (const [id,n] of needs){ if (ITEMS[id]) { removeItem(id,n); continue; } let left=n; for (let i=S.inv.length-1;i>=0&&left>0;i--){ const s=S.inv[i]; if(ITEMS[s.id].kind!==id) continue; const k=Math.min(left,s.n); removeAt(i,k); left-=k; } } }
+// Old favors (from before v1.19) still pay out with a random bonus
 function favorBonus(){
   const x=Math.random();
   if (x<0.3){ const id=POTIONS[Math.floor(Math.random()*3)]; return { item:id }; }
@@ -1999,13 +2047,20 @@ function favorBonus(){
   if (x<0.8){ const pool=Object.values(ITEMS).filter(i=>i.kind==='furniture' && i.shop==='rare' && (i.rarity??FR.c)>=1.5); return { item:pool[Math.floor(Math.random()*pool.length)].id }; }
   return null;
 }
-function giveReward(res, f, then){
-  const c={ c:res.spec.catch }; const lines=[fill(['Thank you so much, {p}! Here, this is for you, {c}.','You\'re the best, {c}! Take this, please.','Perfect! I owe you one, {c}. Here.'][Math.floor(Math.random()*3)], c)];
-  addClams(f.reward); S.friend[res.spec.id]=(S.friend[res.spec.id]||0)+3; Q.done=(Q.done||0)+1;
-  const b=favorBonus(); if (b && b.item) lines.push(fill(`Oh, and I found ${b.n?b.n+' ':article(ITEMS[b.item].name)+' '}${ITEMS[b.item].name}${b.n>1?'s':''} lying around. You should have ${b.n>1?'them':'it'}, {c}.`, c));
+function receive(id){ if (ITEMS[id].kind==='wear'){ grantWear(id); return; } const r=addItem(id); if (r) itemToast(id, r==='new', 'Received'); else { dropNear(id, player.pos); toast(`Your bag is full, so the ${ITEMS[id].name} is on the ground.`); } }
+function giveReward(npc, f, then){
+  const T=FAVOR_THEMES[npc.id], c={ c:npc.c };
+  const lines=[fill(T ? T.thanks[Math.floor(Math.random()*T.thanks.length)] : ['Thank you so much, {p}! Here, this is for you, {c}.','You\'re the best, {c}! Take this, please.','Perfect! I owe you one, {c}. Here.'][Math.floor(Math.random()*3)], c)];
+  addClams(f.reward); Q.done=(Q.done||0)+1;
+  if (npc.res) S.friend[npc.id]=(S.friend[npc.id]||0)+3; else (S.kfriend=S.kfriend||{})[npc.id]=(S.kfriend[npc.id]||0)+3;   // keepers' goodwill is kept apart (bag upgrades count islander best friends)
+  let gift=null, b=null;
+  if ('gift' in f){ gift=f.gift; if (!gift || !ITEMS[gift] || (ITEMS[gift].kind==='wear' && ownsWear(gift))) gift=pickGift(npc.id, Math.random); }
+  else b=favorBonus();
+  if (gift){ Q.gifted.push(gift); const it=ITEMS[gift]; lines.push(fill(it.kind==='wear' ? `And this ${it.name.toLowerCase()} is for you. I think it'll suit you, {c}.` : `And I want you to have this ${it.name.toLowerCase()}, {c}.`, c)); }
+  if (b && b.item) lines.push(fill(`Oh, and I found ${b.n?b.n+' ':article(ITEMS[b.item].name)+' '}${ITEMS[b.item].name}${b.n>1?'s':''} lying around. You should have ${b.n>1?'them':'it'}, {c}.`, c));
   if (b && b.style) lines.push(fill(`I also had a swatch book I don't need. Now you can use ${b.style} on your house, {c}.`, c));
-  save(); Snd.coin(); sparkle(res.pos.clone().add(new THREE.Vector3(0,2,0)));
-  dialog(res.spec.name, res.spec.voice, lines, ()=>{ toast(`Favor done! +${fmt(f.reward)} clams`, null, 'new'); if (b && b.item){ for(let i=0;i<(b.n||1);i++){ const r=addItem(b.item); if(r) itemToast(b.item, r==='new', 'Received'); else dropNear(b.item, player.pos); } } then&&then(); });
+  save(); Snd.coin(); sparkle(npc.pos.clone().add(new THREE.Vector3(0,2,0)));
+  dialog(npc.name, npc.voice, lines, ()=>{ toast(`Favor done! +${fmt(f.reward)} clams`, null, 'new'); if (gift) receive(gift); if (b && b.item){ for(let i=0;i<(b.n||1);i++) receive(b.item); } checkAch(); then&&then(); });
 }
 function finishStory(res, key, then){
   const st=STORY[key], c={ c:res.spec.catch }; takeFor(st.need); Q.story[key]='done'; delete Q.offers[res.spec.id]; S.friend[res.spec.id]=(S.friend[res.spec.id]||0)+4; save();
@@ -2014,42 +2069,127 @@ function finishStory(res, key, then){
       setTimeout(()=>{ toast(`A wizard tower appeared ${dir} of the plaza!`, null, 'new'); }, 400); } }
     if (key==='beacon'){ S.magic.beacon=true; save(); toast('The dock beacon is lit!', null, 'new', 'Traveling traders will visit more often.'); Snd.fanfare(); }
     if (key==='swatches'){ const got=[]; for(let i=0;i<4;i++){ const g=grantRandomStyle(); if(g) got.push(g); } toast(got.length?`New house styles: ${got.join(', ')}`:'You already own every style!', null, 'new'); Snd.fanfare(); }
-    then&&then(); });
+    checkAch(); then&&then(); });
 }
-// Extra talk options for a resident: favors they're offering, ones you're doing, parcels for them
-function favorChoices(res, menu){
-  if (VISIT) return [];
-  const id=res.spec.id, out=[], c={ c:res.spec.catch }, nm=res.spec.name, v=res.spec.voice;
+function favorLine(off, c){ const nm = off.kind==='kind' ? favorItemName(off) : off.kind==='do' ? '' : ITEMS[off.item].name+(off.n>1 && !off.catch && !off.cook && !/s$/.test(ITEMS[off.item].name) ? 's' : '');
+  return fill(off.line.replace(/\{n\}/g,off.n).replace(/\{s\}/g,off.n>1?'s':'').replace('{item}', nm).replace('{to}', npcName(off.to)), c); }
+// Talk options for anyone who asks favors: one they're offering, one you're doing for them, a parcel for them
+function favorChoices(npc, menu){
+  if (VISIT || !npc) return [];
+  const id=npc.id, out=[], c={ c:npc.c }, nm=npc.name, v=npc.voice;
   const parcel=Q.active.find(f=>f.to===id);
-  if (parcel) out.push({ label:`Parcel from ${resById(parcel.who)?.spec.name||'a friend'}`, fn:()=>{ if(!countItem('parcel')){ dialog(nm,v,[fill('A parcel for me? I don\'t see one in your bag, {c}.',c)],menu); return; } removeItem('parcel',1); Q.active.splice(Q.active.indexOf(parcel),1); const from=resById(parcel.who); S.friend[id]=(S.friend[id]||0)+2;
-    dialog(nm,v,[fill(`From ${from?from.spec.name:'a friend'}? How sweet! Thank you for bringing it, {c}.`,c)], ()=>giveReward(from||res, parcel, menu)); } });
+  if (parcel) out.push({ label:`Parcel from ${npcName(parcel.who)}`, fn:()=>{ if(!countItem('parcel')){ dialog(nm,v,[fill('A parcel for me? I don\'t see one in your bag, {c}.',c)],menu); return; } removeItem('parcel',1); Q.active.splice(Q.active.indexOf(parcel),1); const from=npcOf(parcel.who)||npc; S.friend[id]=(S.friend[id]||0)+2;
+    dialog(nm,v,[fill(`From ${from.name}? How sweet! Thank you for bringing it, {c}.`,c)], ()=>giveReward(from, parcel, menu)); } });
   const mine=favorFor(id);
   if (mine) out.push({ label:'About your favor...', fn:()=>{
     const skip = { label:'Can I skip this one?', alt:true, fn:()=>{ Q.active.splice(Q.active.indexOf(mine),1); if (mine.to && countItem('parcel')) removeItem('parcel',1); save(); dialog(nm,v,[fill('Of course! Don\'t worry about it, {c}.',c)], menu); } };
-    if (mine.kind==='deliver' || mine.to){
-      if (!countItem('parcel')){ if (!canAdd('parcel')){ dialog(nm,v,[fill('Lost the parcel? I have a spare, but your bag is full, {c}.',c)], menu); return; } addItem('parcel'); save(); dialog(nm,v,[fill(`Lost it? No worries, here's another one for ${resById(mine.to)?.spec.name}, {c}.`,c)], menu); return; }
-      dialog(nm,v,[fill(`Did you take my parcel to ${resById(mine.to)?.spec.name}? They live just over there, {c}.`,c)], null, [{ label:'On my way!', fn:menu }, skip]); return; }
+    if (mine.to){
+      if (!countItem('parcel')){ if (!canAdd('parcel')){ dialog(nm,v,[fill('Lost the parcel? I have a spare, but your bag is full, {c}.',c)], menu); return; } addItem('parcel'); save(); dialog(nm,v,[fill(`Lost it? No worries, here's another one for ${npcName(mine.to)}, {c}.`,c)], menu); return; }
+      dialog(nm,v,[fill(`Did you take my parcel to ${npcName(mine.to)}? They're not far, {c}.`,c)], null, [{ label:'On my way!', fn:menu }, skip]); return; }
+    if (mine.kind==='do'){
+      if (!haveFor(mine)){ dialog(nm,v,[fill(`How's it going? ${favorTask(mine)}: you're at ${mine.prog||0} of ${mine.n}. No rush, {c}!`,c)], null, [{ label:'Still on it', fn:menu }, skip]); return; }
+      Q.active.splice(Q.active.indexOf(mine),1); dialog(nm,v,[fill('You did it? All of it? Oh, {c}!',c)], ()=>giveReward(npc, mine, menu)); return; }
     if (!haveFor(mine)){ dialog(nm,v,[fill(`Still hoping for ${mine.n>1?mine.n+' ':''}${favorItemName(mine)}, {c}. No rush!`,c)], null, [{ label:'Still looking', fn:menu }, skip]); return; }
-    dialog(nm,v,[fill('Oh! Is that for me?',c)], null, [{ label:'Here you go!', fn:()=>{ if(mine.kind==='kind') takeFor([[mine.item,mine.n]]); else removeItem(mine.item,mine.n); Q.active.splice(Q.active.indexOf(mine),1); giveReward(res, mine, menu); } }, { label:'Not yet', alt:true, fn:menu }]); } });
+    dialog(nm,v,[fill('Oh! Is that for me?',c)], null, [{ label:'Here you go!', fn:()=>{ if(mine.kind==='kind') takeFor([[mine.item,mine.n]]); else removeItem(mine.item,mine.n); Q.active.splice(Q.active.indexOf(mine),1); giveReward(npc, mine, menu); } }, { label:'Not yet', alt:true, fn:menu }]); } });
   const off=Q.offers[id];
-  if (off && off.story){ const st=STORY[off.story];
+  if (off && off.story && npc.res){ const st=STORY[off.story], res=npc.res;
     out.unshift({ label: Q.story[off.story]==='asked' ? 'About that wish...' : 'You look thoughtful', fn:()=>{
       if (Q.story[off.story]==='asked' && haveFor(off)) { dialog(nm,v,[fill('Did you bring them, {c}?',c)], null, [{ label:'I did!', fn:()=>finishStory(res, off.story, menu) }, { label:'Not yet', alt:true, fn:menu }]); return; }
       Q.story[off.story]='asked'; save(); dialog(nm,v,st.ask.map(l=>fill(l,c)), menu); } }); }
-  else if (off){
+  else if (off && !off.story){
     out.unshift({ label:'Need a hand?', fn:()=>{
-      const line=fill(off.line.replace('{n}',off.n).replace('{s}',off.n>1?'s':'').replace('{item}', off.kind==='kind'?favorItemName(off):ITEMS[off.item].name+(off.n>1&&off.kind==='item'&&!off.catch&&!/s$/.test(ITEMS[off.item].name)?'s':'')).replace('{to}', resById(off.to)?.spec.name||''), c);
-      dialog(nm,v,[line, `I'd pay you ${fmt(off.reward)} clams for it.`], null, [
-        { label:'Sure!', fn:()=>{ if (Q.active.length>=3){ dialog(nm,v,[fill('You look busy already! Finish a favor or two first, {c}.',c)], menu); return; }
+      const g=off.gift && ITEMS[off.gift], pay = g ? `If you do, I'll give you my ${g.name.toLowerCase()}, and ${fmt(off.reward)} clams on top.` : `I'd pay you ${fmt(off.reward)} clams for it.`;
+      dialog(nm,v,[off.open?fill(off.open,c):null, favorLine(off,c), pay].filter(Boolean), null, [
+        { label:'Sure!', fn:()=>{ if (Q.active.length>=MAX_FAVORS){ dialog(nm,v,[fill('You look busy already! Finish a favor or two first, {c}.',c)], menu); return; }
             if (off.to){ if(!canAdd('parcel')){ dialog(nm,v,[fill('Your bag looks full, {c}. Make room for the parcel first.',c)], menu); return; } addItem('parcel'); }
-            Q.active.push(off); delete Q.offers[id]; save(); Snd.jingle(); toast(`Favor for ${nm}: ${off.to?'deliver a parcel to '+resById(off.to)?.spec.name:'bring '+(off.n>1?off.n+' ':'')+favorItemName(off)}`); menu(); } },
+            if (off.kind==='do') off.prog=0;
+            Q.active.push(off); delete Q.offers[id]; save(); Snd.jingle(); toast(`Favor for ${nm}: ${favorTask(off)}`, g?thumb(off.gift):null); menu(); } },
         { label:'Maybe later', alt:true, fn:menu } ]); } });
   }
   return out;
 }
 function favorsHTML(){
-  if (!Q.active.length) return '<div class="muted">No favors right now.</div>';
-  return Q.active.map(f=>{ const who=resById(f.who)?.spec.name||'Someone'; const what=f.to?`Take the parcel to ${resById(f.to)?.spec.name}`:`Bring ${f.n>1?f.n+' ':''}${favorItemName(f)}${f.catch?' (catch one)':''}`; return `<div class="favor"><b>${who}</b>${what} · ${haveFor(f)&&!f.to?'<span style="color:#4f9a3a;font-weight:600">Ready to hand over</span>':''} <span class="muted">${fmt(f.reward)} clams</span></div>`; }).join('');
+  if (!Q.active.length) return '<div class="muted">No favors right now. Islanders and shopkeepers sometimes need a hand, so stop and talk!</div>';
+  return Q.active.map(f=>{ const ready=!f.to && haveFor(f), prog=f.kind==='do'?` · ${Math.min(f.prog||0,f.n)} of ${f.n}`:'', g=f.gift&&ITEMS[f.gift];
+    return `<div class="favor"><b>${npcName(f.who)}</b>${favorTask(f)}${prog}${ready?` · <span style="color:#4f9a3a;font-weight:600">${f.kind==='do'?'Done! Go tell them':'Ready to hand over'}</span>`:''}
+      <div class="fg">${g?`<img src="${thumb(f.gift)}">`:''}<span class="muted">${fmt(f.reward)} clams${g?' + '+g.name:''}</span></div></div>`; }).join('');
+}
+
+/* ---------- v1.19 wardrobe: clothes go straight into your wardrobe, never your bag ---------- */
+const ownsWear = id => S.wardrobe.includes(id);
+function grantWear(id, quiet){ if (!ITEMS[id] || ITEMS[id].kind!=='wear' || ownsWear(id)) return false; S.wardrobe.push(id); save();
+  if (!quiet){ toast(`New clothes: ${ITEMS[id].name}`, thumb(id), 'new', 'Wear it from Menu, Change my look.'); Snd.fanfare(); } checkAch(); return true; }
+// what the character creator may show: the original outfits and colors plus whatever you own
+function wardrobeOwned(){ const o={ outfits:new Set(), colors:new Set(), acc:{ hat:new Set(), face:new Set(), neck:new Set(), back:new Set() } };
+  for (const id of S.wardrobe){ const w=ITEMS[id].wear; if (w.t==='outfit') o.outfits.add(w.i); else if (w.t==='color') o.colors.add(w.i); else { for (const [slot,list] of Object.entries(BY_SLOT)){ const k=list.findIndex(a=>a.id===w.i); if (k>=0) o.acc[slot].add(k+1); } } }
+  return o; }
+const wearKind = it => it.wear.t==='outfit' ? 'Outfit' : it.wear.t==='color' ? 'Outfit color' : ({ hat:'Hat', face:'Glasses', neck:'Neckwear', back:'Worn on your back' })[(Object.entries(BY_SLOT).find(([,l])=>l.some(a=>a.id===it.wear.i))||['hat'])[0]];
+// Pemberton's clothes rack: 7 pieces a day, rarer ones turn up less often
+function clothesStock(){ const r=mulberry32(hashStr(S.day.key+':clothes:'+S.seed)), pool=WEAR_IDS.map(id=>ITEMS[id]).filter(i=>i.shop==='clothes'), out=[];
+  for (let k=0;k<7 && pool.length;k++){ const tot=pool.reduce((a,i)=>a+i.rarity,0); let x=r()*tot, j=0; for (;j<pool.length-1;j++){ x-=pool[j].rarity; if (x<=0) break; } out.push(pool.splice(j,1)[0].id); }
+  return out; }
+
+/* ---------- v1.19 achievements ---------- */
+// track(): count something you did. Feeds "do" favors and the achievement stats (S.stats.t_*).
+function track(ev, n=1){ if (!S.stats || VISIT && ev!=='visit') return; const k='t_'+ev; S.stats[k]=(S.stats[k]||0)+n;
+  const act=(S.quests&&S.quests.active)||[];
+  for (const f of act) if (f.kind==='do' && f.item===ev && (f.prog||0)<f.n){ f.prog=Math.min(f.n,(f.prog||0)+n);
+    if (f.prog>=f.n){ toast(`${favorTask(f)}: done!`, null, 'new', `Go tell ${npcName(f.who)}.`); Snd.jingle(); } }
+  achDirty=true; }
+let achDirty=true, achTicks=0;
+const seenKinds = kind => Object.keys(S.seen).filter(id=>ITEMS[id] && ITEMS[id].kind===kind).length;
+function achValue(stat){ const st=S.stats||{};
+  switch (stat){
+    case 'bugKinds': return seenKinds('bug'); case 'fishKinds': return seenKinds('fish'); case 'fossilKinds': return seenKinds('fossil'); case 'shellKinds': return seenKinds('shell');
+    case 't_cook': return Math.max(st.t_cook||0, (S.cook&&S.cook.made)||0); case 'recipes': return (S.cook&&S.cook.kinds||[]).length;
+    case 't_craft': return Math.max(st.t_craft||0, ((S.craft&&S.craft.made)||0)+((S.rare&&S.rare.made)||0)); case 'plans': return (S.rare&&S.rare.plans||[]).length;
+    case 'museum': return donatedCount(); case 'favors': return Q.done||0; case 'stories': return Object.values(Q.story).filter(x=>x==='done').length;
+    case 'bestFriends': return bestFriends(); case 'house': return S.home&&S.home.built?1:0; case 'cells': return cellsBuilt(); case 'rooms': return S.home&&S.home.built?S.home.plan.rooms.length:0;
+    case 'styles': return Object.keys(S.styles||{}).filter(k=>{ const i=k.indexOf(':'), list=k.slice(0,i), opts=BUILD[list]; if (!opts) return false; const idx=opts.findIndex(o=>String(Array.isArray(o)?o[0]:o)===k.slice(i+1)); return idx>=freeCount(list); }).length;   // unlocked, not the free starters case 'placed': return S.placed.length; case 'wallet': return Math.max(st.maxClams||0, S.clams);
+    case 'shops': return shopsBacked(); case 'grandShop': return Math.max(...['general','aquarium','garden'].map(k=>(S.shops[k]&&S.shops[k].tier)||0));
+    case 'hall': return S.town.hall||0; case 'islanders': return S.town.res.length; case 'tower': return S.magic.tower?1:0;
+    case 'wardrobe': return S.wardrobe.length; case 'pack': return (S.pack??-1)+1; case 'bike': return S.bike?1:0; case 'gardens': return (S.gardens||[]).length;
+    case 'heirloom': return Object.entries(S.tools||{}).some(([t,o])=>o && TOOLS[t] && TOOLS[t].tiers[o.tier] && TOOLS[t].tiers[o.tier].forever)?1:0;
+    default: return st[stat]||0; } }
+const achCount = () => S.ach ? Object.keys(S.ach.got).length : 0;
+function checkAch(){ if (VISIT) return; const first=!S.ach; if (first) S.ach={ got:{} };
+  const fresh=[]; for (const a of ACHIEVEMENTS){ if (S.ach.got[a.id]) continue; let v=0; try { v=achValue(a.stat); } catch(e){ continue; } if (v>=a.n){ S.ach.got[a.id]=Date.now(); fresh.push(a); } }
+  achDirty=false; if (!fresh.length){ if (first) save(); return; } save();
+  if (first){ setTimeout(()=>toast(`You've already earned ${fresh.length} achievement${fresh.length>1?'s':''}!`, medalImg(fresh[fresh.length-1]), 'new', 'See them in Menu, Achievements.'), 4000); return; }
+  Snd.fanfare(); fresh.slice(0,3).forEach((a,i)=>setTimeout(()=>toast(`Achievement: ${a.name}`, medalImg(a), 'new', a.desc), i*900));
+  if (fresh.length>3) setTimeout(()=>toast(`And ${fresh.length-3} more achievements!`, null, 'new'), 2700); }
+// once a second: things that depend on the clock, the weather or your wallet
+function achTick(){ if (VISIT || !S.stats || !S.day) return; const st=S.stats, h=Time.hour();
+  if (S.clams>(st.maxClams||0)) st.maxClams=S.clams;
+  if (st.lastDay!==S.day.key){ st.lastDay=S.day.key; st.t_day=(st.t_day||0)+1; achDirty=true; }
+  const flag=k=>{ if (!st[k]){ st[k]=1; achDirty=true; } };
+  if (h<4) flag('t_nightowl'); if (h>=5 && h<7) flag('t_earlybird'); if (World.weather==='snow') flag('t_snowday'); if (World.weather==='rain') flag('t_rainday');
+  if (achDirty || ++achTicks%5===0) checkAch(); }   // every 5 s anyway, for things nothing tracks (museum, house, furniture)
+// medals: a ribbon and a disc in the group's colors, with tier stars
+const ACH_COL = { bugs:['#7cc35a','#3f8a2a'], fish:['#5ab0e0','#2a6aa8'], dig:['#e8b070','#a8703a'], trees:['#9ad06a','#5a8a3a'], garden:['#f0a0c0','#c0507a'], kitchen:['#f2c060','#c08a20'],
+  museum:['#c8b090','#806a4a'], friends:['#f59a9a','#c0505a'], home:['#e8a070','#b0603a'], money:['#f2d060','#c09a20'], town:['#b8a0e8','#7a5ac0'], style:['#f08ad0','#b04a90'], gear:['#a0b8c8','#5a7a90'], time:['#8ab0e8','#4a6ab0'] };
+const MEDAL={};
+function medalImg(a, locked){ const key=locked?'locked':a.id; if (MEDAL[key]) return MEDAL[key];
+  const cv=document.createElement('canvas'); cv.width=cv.height=96; const x=cv.getContext('2d'); const [c1,c2]=locked?['#d8cfc0','#b0a490']:(ACH_COL[a.group]||['#f2d060','#c09a20']);
+  x.fillStyle=locked?'#c8bca8':c2; x.beginPath(); x.moveTo(30,4); x.lineTo(46,40); x.lineTo(38,44); x.lineTo(20,8); x.fill(); x.beginPath(); x.moveTo(66,4); x.lineTo(50,40); x.lineTo(58,44); x.lineTo(76,8); x.fill();
+  const g=x.createRadialGradient(40,46,4,48,56,34); g.addColorStop(0,'#fff8e0'); g.addColorStop(0.35,c1); g.addColorStop(1,c2); x.fillStyle=g; x.beginPath(); x.arc(48,58,32,0,Math.PI*2); x.fill();
+  x.lineWidth=4; x.strokeStyle='rgba(255,255,255,.75)'; x.beginPath(); x.arc(48,58,25,0,Math.PI*2); x.stroke();
+  x.fillStyle=locked?'#fff':'#fffdf4'; x.textAlign='center'; x.textBaseline='middle';
+  if (locked){ x.font='bold 30px Fredoka, sans-serif'; x.fillText('?',48,59); }
+  else { const tiers=ACHIEVEMENTS.filter(b=>b.stat===a.stat), t=tiers.indexOf(a), stars=tiers.length<2?1:t<tiers.length/3?1:t<tiers.length*2/3?2:3;
+    const star=(cx,cy,R)=>{ x.beginPath(); for (let i=0;i<10;i++){ const an=-Math.PI/2+i*Math.PI/5, rr=i%2?R*0.45:R; x.lineTo(cx+Math.cos(an)*rr, cy+Math.sin(an)*rr); } x.closePath(); x.fill(); };
+    if (stars===1) star(48,58,15); else if (stars===2){ star(38,58,11); star(58,58,11); } else { star(48,50,10); star(36,64,9); star(60,64,9); } }
+  return MEDAL[key]=cv.toDataURL(); }
+function openAchievements(){
+  checkAch(); const got=S.ach.got, n=achCount();
+  let h=`<div class="notice"><div class="achHead"><b>${n} of ${ACHIEVEMENTS.length} earned</b><div class="bar"><div style="width:${n/ACHIEVEMENTS.length*100}%"></div></div></div><span class="muted">The ones you haven't earned yet stay secret. Keep exploring!</span></div>`;
+  for (const [g,name] of ACH_GROUPS){ const list=ACHIEVEMENTS.filter(a=>a.group===g); if (!list.length) continue; const k=list.filter(a=>got[a.id]).length;
+    h+=`<div class="achGrp">${name} <span>· ${k} of ${list.length}</span></div><div class="achGrid">`;
+    for (const a of list.slice().sort((p,q)=>(got[q.id]?1:0)-(got[p.id]?1:0))) h+= got[a.id]
+      ? `<div class="ach"><img src="${medalImg(a)}"><div><div class="an">${a.name}</div><div class="ad">${a.desc}</div></div></div>`
+      : `<div class="ach locked"><img src="${medalImg(a,true)}"><div><div class="an">???</div><div class="ad">Hidden</div></div></div>`;
+    h+='</div>'; }
+  openPanel('Achievements'); pBody.innerHTML=h;
 }
 
 /* ---------- Wizard map modes: move a building, shape the land ---------- */
@@ -2226,8 +2366,8 @@ function castMagic(){
       { label:'Keep fiddling', alt:true, fn:()=>{ if (magicMode) renderMagicBar(); } } ]);
     return; }
   const P = M.kind==='move' ? { kind:'move', key:M.key, at:M.at.slice() } : Object.assign({ kind:'land', pend:M.pend }, pendBounds());
-  if (M.kind==='move'){ S.clams-=cost; (S.terra.moved=S.terra.moved||{})[M.key]=M.at.slice(); if (M.key==='tower') S.magic.at=M.at.slice(); }
-  else { S.clams-=cost;
+  if (M.kind==='move'){ S.clams-=cost; track('moved'); (S.terra.moved=S.terra.moved||{})[M.key]=M.at.slice(); if (M.key==='tower') S.magic.at=M.at.slice(); }
+  else { S.clams-=cost; track('terra', Object.keys(M.pend).length);
     for (const [k,p] of Object.entries(M.pend)){ const c=Object.assign({}, TERRA[k]||{}); if (p.d) c.d=(c.d||0)+p.d; if (c.d===0) delete c.d; if (p.w!==undefined){ if (p.w) c.w=p.w; else delete c.w; } if (p.L!==undefined){ if (p.L) c.L=1; else delete c.L; } if (Object.keys(c).length) TERRA[k]=c; else delete TERRA[k]; }
     S.terra.cells=TERRA; }
   P.ghost=M.bghost; P.marks=M.marks; P.camT=M.camT.clone(); P.dist=M.dist;
@@ -2665,7 +2805,7 @@ function talkTo(res){
   if (res.spec.id==='bramble' && !S.craft && (countItem('wood')+countItem('softwood'))>0 && teachWoodworking(res, end)) return;
   if (mentorMoment(res, end)) return;
   const menu=()=>dialog(res.spec.name, res.spec.voice, [], end, [
-    ...favorChoices(res, ()=>menu()),
+    ...favorChoices(npcOf(res.spec.id), ()=>menu()),
     { label:'Chat', fn:()=>{ const first=!S.day.chat[res.spec.id]; let line;
         if(first){ S.day.chat[res.spec.id]=true; S.friend[res.spec.id]=(S.friend[res.spec.id]||0)+1; save(); line=fill(P.chat[Math.floor(Math.random()*P.chat.length)],c); }
         else line=fill(P.again[Math.floor(Math.random()*P.again.length)],c);
@@ -2673,10 +2813,11 @@ function talkTo(res){
     { label:'Give a gift', fn:()=>{ if(S.day.gift[res.spec.id]){ dialog(res.spec.name,res.spec.voice,[fill('You already gave me something today, {c}! Save it for tomorrow.',c)],menu); return; }
         openBag('give', i=>{ panelClose=null; closePanel(); giveGift(res,i,menu); }, ()=>menu()); } },
     { label:'Bye!', alt:true, fn:end } ]);
+  if (!VISIT){ const tk=(S.day.talked=S.day.talked||{}); if (!tk[res.spec.id]){ tk[res.spec.id]=1; track('talk'); } }
   dialog(res.spec.name, res.spec.voice, [greetingFor(res)], menu);
 }
 function giveGift(res, slot, menu){
-  const P=DIALOGUE[res.spec.personality], s=S.inv[slot], it=ITEMS[s.id]; removeAt(slot,1); S.day.gift[res.spec.id]=true;
+  const P=DIALOGUE[res.spec.personality], s=S.inv[slot], it=ITEMS[s.id]; removeAt(slot,1); S.day.gift[res.spec.id]=true; track('gift');
   const tier = res.spec.loves.includes(it.kind)?'love' : res.spec.likes.includes(it.kind)?'like' : 'meh';
   const pts = tier==='love'?3:tier==='like'?2:1; S.friend[res.spec.id]=(S.friend[res.spec.id]||0)+pts; save();
   const c={ c:res.spec.catch, item:it.name }; const lines=[fill(P[tier][Math.floor(Math.random()*P[tier].length)],c)]; let reward=null;
@@ -2812,7 +2953,7 @@ function cookFits(r,k){ // never lose anything to a full bag: worst case, all in
   let add=k; const st=ITEMS[r.id].stack; for (const x of inv){ if (x.id===r.id && x.n<st) add-=st-x.n; } return add<=0 || Math.ceil(add/st)<=slotsMax()-inv.length; }
 function doCook(r,k,at){ if (k<=0 || (!r.fire && at!=='stove') || !at || !cookFits(r,k) || !r.need.every(q=>haveNeed(q,k))) return false;
   takeFor(r.need.map(([id,n])=>[id,n*k])); let isNew=false; for (let i=0;i<k;i++) if (addItem(r.id)==='new') isNew=true;
-  S.cook.made+=k; if (!S.cook.kinds.includes(r.id)) S.cook.kinds.push(r.id); save(); Snd.water(); setTimeout(()=>Snd.jingle(),160);
+  S.cook.made+=k; track('cook',k); if (!S.cook.kinds.includes(r.id)) S.cook.kinds.push(r.id); save(); Snd.water(); setTimeout(()=>Snd.jingle(),160);
   puff(player.pos.clone().add(new THREE.Vector3(Math.sin(player.face)*1.2,1.0,Math.cos(player.face)*1.2)),0xf4f4f4,8,0.4,1.6,0.9,1.0);
   toast(`${isNew?'New! ':''}You cooked ${k>1?k+' '+r.name+(/s$/.test(r.name)?'':'s'):article(r.name)+' '+r.name}!`, thumb(r.id), isNew?'new':''); return true; }
 function cookTab(h0){
@@ -2849,7 +2990,7 @@ function doCraft(r, k){
   for (const [m,n] of Object.entries(r.mats)) if (countItem(m)<n*k) return false;
   for (const [m,n] of Object.entries(r.mats)) removeItem(m, n*k);
   const n=recipeOut(r)*k; let isNew=false; for(let i=0;i<n;i++){ if(addItem(r.id)==='new') isNew=true; }
-  const before=kindsMade(); S.craft.made+=k; S.craft.kinds=S.craft.kinds||[];
+  const before=kindsMade(); S.craft.made+=k; track('craft',k); S.craft.kinds=S.craft.kinds||[];
   if (r.plan){ S.rare.made+=k; save(); Snd.chop(); setTimeout(()=>Snd.fanfare(),200); sparkle(player.pos.clone().add(new THREE.Vector3(0,2.2,0)));
     toast(`You made the ${ITEMS[r.id].name}!`, thumb(r.id), 'new', `${rarityTag(ITEMS[r.id])} It's in your bag.`); return true; }
   if(!S.craft.kinds.includes(r.id)) S.craft.kinds.push(r.id); save();
@@ -2961,9 +3102,12 @@ const isSold = (which, id, i) => { if (which==='rare') return !!S.day.psold[i]; 
 const markSold = (which, id, i) => { if (which==='rare'){ S.day.psold[i]=true; return; } if (which==='stall'){ S.day.sold['id:'+id]=true; return; } const m=(S.day.ssold=S.day.ssold||{}); (m[which]=m[which]||{})[id]=true; };
 
 function talkShop(id){
-  const k=KEEPERS[SHOPS[id].keeper], open=shopOpen(id);
+  const k=KEEPERS[SHOPS[id].keeper], open=shopOpen(id), shop=()=>openShop(id==='general'?'stall':id);
   if (id==='general' && !open){ dialog(k.name, k.voice, [keeperLine(k.id,'night')], ()=>openShop('stall')); return; }
-  dialog(k.name, k.voice, [keeperLine(k.id,'greet')], ()=>openShop(id==='general'?'stall':id));
+  // v1.19: shopkeepers ask favors too. With nothing to ask, talking goes straight to the shop like before.
+  const menu=()=>dialog(k.name, k.voice, [], null, [ { label:'Let\'s shop', fn:shop }, ...favorChoices(npcOf(k.id), ()=>menu()), { label:'Bye!', alt:true, fn:()=>{} } ]);
+  if (!favorChoices(npcOf(k.id), ()=>{}).length){ dialog(k.name, k.voice, [keeperLine(k.id,'greet')], shop); return; }
+  dialog(k.name, k.voice, [keeperLine(k.id,'greet')], menu);
 }
 function investBox(id){
   const sh=SHOPS[id], st=S.shops[id], t=st.tier, k=KEEPERS[sh.keeper];
@@ -2984,7 +3128,7 @@ function doInvest(id){ if (noEdit()) return false;
 }
 function openShop(which, startTab){
   let tab=startTab||'buy', sel=-1; const sid=shopKey(which);
-  const tabs = which==='rare' ? [['buy','Rare finds'],['sell','Sell']] : which==='stall' ? [['buy','Furniture'],['home','Home goods'],['garden','Garden'],['tools','Tools'],['packs','Bags & bike'],['sell','Sell'],['invest','Invest']] : [['buy','Shop'],['sell','Sell'],['invest','Invest']];
+  const tabs = which==='rare' ? [['buy','Rare finds'],['sell','Sell']] : which==='stall' ? [['buy','Furniture'],['clothes','Clothes'],['home','Home goods'],['garden','Garden'],['tools','Tools'],['packs','Bags & bike'],['sell','Sell'],['invest','Invest']] : [['buy','Shop'],['sell','Sell'],['invest','Invest']];
   const buyRow=(id,i,sold,price,orig)=>{ const it=ITEMS[id]; return `<div class="row"><img src="${thumb(id)}"><div class="grow"><div class="nm">${it.name}${it.kind==='furniture'&&it.rarity!==undefined?' '+rarityTag(it):''}</div><div class="sub">${fmt(price)} clams${orig&&orig!==price?` <s>${fmt(orig)}</s>`:''}${it.kind==='seed'?' · plant on grass':''}${it.kind==='sapling'?' · needs a shovel to plant':''}</div></div><button class="btn" data-b="${i}" ${sold||S.clams<price?'disabled':''}>${sold?'Sold':'Buy'}</button></div>`; };
   let list=[];
   // v1.8: this island's own seeds, always in stock, cheap, by the handful
@@ -3020,8 +3164,8 @@ function openShop(which, startTab){
       const s=S.inv[sel]; if(s){ const it=ITEMS[s.id], pr=sellPrice(s,which); const same=S.inv.filter(x=>x.id===s.id && !x.m).reduce((a,x)=>a+x.n,0);
         if (pr===null) setFoot(`<div class="detail">${itemDetail(s)}<div class="acts muted" style="max-width:220px">${KEEPERS[SHOPS[sid].keeper].refuse}</div></div>`);
         else { setFoot(`<div class="detail">${itemDetail(s).replace(/Sells for [\d,]+ clams/, `Sells here for <b>${fmt(pr)}</b> clams`)}<div class="acts"><button class="btn" id="s1">Sell 1</button>${!s.m&&same>1?`<button class="btn alt" id="sA">Sell all ${fmt(pr*same)}</button>`:''}</div></div>`);
-          pFoot.querySelector('#s1').onclick=()=>{ if(!walletOK(pr)) return; removeAt(sel,1); addClams(pr); addTrade(which,pr); Snd.coin(); if(!S.inv[sel]||S.inv[sel].id!==s.id) sel=-1; render(); };
-          const sa=pFoot.querySelector('#sA'); if(sa) sa.onclick=()=>{ if(!walletOK(pr*same)) return; removeItem(s.id,same); addClams(pr*same); addTrade(which,pr*same); Snd.coin(); sel=-1; render(); }; }
+          pFoot.querySelector('#s1').onclick=()=>{ if(!walletOK(pr)) return; removeAt(sel,1); addClams(pr); addTrade(which,pr); track('sold'); track('earned',pr); Snd.coin(); if(!S.inv[sel]||S.inv[sel].id!==s.id) sel=-1; render(); };
+          const sa=pFoot.querySelector('#sA'); if(sa) sa.onclick=()=>{ if(!walletOK(pr*same)) return; removeItem(s.id,same); addClams(pr*same); addTrade(which,pr*same); track('sold',same); track('earned',pr*same); Snd.coin(); sel=-1; render(); }; }
       } else setFoot('');
       // quick sell-everything-they-want button for specialists
       if (which!=='stall' && which!=='rare'){ const total=S.inv.reduce((a,x)=>{ const p=sellPrice(x,which); return a+(p===null?0:p*x.n); },0); if(total>0) h+=`<button class="btn" id="sAllShop" style="margin-top:10px">Sell all ${buysText(SHOPS[sid])} for ${fmt(total)}</button>`; } }
@@ -3030,8 +3174,13 @@ function openShop(which, startTab){
       else if (!st.length) h+='<div class="notice">You own every style Pemberton can get. Impressive!</div>';
       st.forEach((it,i)=>{ const own=homeOwned(it), p=homePrice(it); h+=`<div class="row">${homeSwatch(it)}<div class="grow"><div class="nm">${homeName(it.list,it.v)}</div><div class="sub">${fmt(p)} clams · ${homeWhere(it)}</div></div><div style="display:flex;flex-direction:column;gap:4px"><button class="btn alt sm" data-ht="${i}">Try it on</button><button class="btn sm" data-hb="${i}" ${own||S.clams<p?'disabled':''}>${own?'Owned':'Buy'}</button></div></div>`; });
       }
+    if (tab==='clothes'){ const L=clothesStock();
+      h+=`<div class="muted" style="margin-bottom:8px">New clothes every day. They go straight into your wardrobe: wear them from Menu, Change my look.</div>`;
+      L.forEach(id=>{ const it=ITEMS[id], own=ownsWear(id), p=buyPrice(which,it); h+=`<div class="row"><img src="${thumb(id)}"><div class="grow"><div class="nm">${it.name} ${rarityTag(it)}</div><div class="sub">${fmt(p)} clams${it.buy!==p?` <s>${fmt(it.buy)}</s>`:''} · ${wearKind(it)}</div></div><button class="btn" data-cw="${id}" ${own||S.clams<p?'disabled':''}>${own?'Owned':'Buy'}</button></div>`; });
+      h+=`<div class="muted" style="margin-top:10px">You own ${S.wardrobe.length} of ${WEAR_IDS.length} pieces. Some only come as thank-you gifts from islanders.</div>`; }
     if (tab==='invest') h+=investBox(sid);
     pBody.innerHTML=h;
+    pBody.querySelectorAll('[data-cw]').forEach(b=>b.onclick=()=>{ const id=b.dataset.cw, it=ITEMS[id], price=buyPrice(which,it); if (ownsWear(id) || S.clams<price) return; S.clams-=price; addTrade(which,price); Snd.coin(); updateHUD(); grantWear(id); save(); render(); });
     pBody.querySelectorAll('[data-hb]').forEach(b=>b.onclick=()=>{ if (buyHome(homeStock()[+b.dataset.hb])) render(); });
     const bp=pBody.querySelector('#buyPlan'); if (bp) bp.onclick=()=>{ const pl=S.day.pplan; if (!pl || knowsPlan(ITEMS[pl].learns) || S.clams<PLAN_PRICE) return; S.clams-=PLAN_PRICE; updateHUD(); Snd.coin(); learnPlan(pl); save(); render(); };
     pBody.querySelectorAll('[data-ht]').forEach(b=>b.onclick=()=>{ const it=homeStock()[+b.dataset.ht];
@@ -3040,11 +3189,11 @@ function openShop(which, startTab){
       panelClose=null; closePanel(); openBuild({ tryItem:it }); });
     pBody.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>{ tab=b.dataset.t; sel=-1; Snd.click(); render(); pBody.scrollTop=0; });
     pBody.querySelectorAll('.slot[data-i]').forEach(el=>el.onclick=()=>{ sel=+el.dataset.i; Snd.click(); render(); });
-    const sAll=pBody.querySelector('#sAllShop'); if(sAll) sAll.onclick=()=>{ let tot=0; for(let i=S.inv.length-1;i>=0;i--){ const x=S.inv[i], p=sellPrice(x,which); if(p===null) continue; if(GUEST && S.clams+tot+p*x.n>GUEST_CAP.clams) continue; tot+=p*x.n; S.inv.splice(i,1); } addClams(tot); addTrade(which,tot); Snd.coin(); save(); sel=-1; render(); };
+    const sAll=pBody.querySelector('#sAllShop'); if(sAll) sAll.onclick=()=>{ let tot=0, cnt=0; for(let i=S.inv.length-1;i>=0;i--){ const x=S.inv[i], p=sellPrice(x,which); if(p===null) continue; if(GUEST && S.clams+tot+p*x.n>GUEST_CAP.clams) continue; tot+=p*x.n; cnt+=x.n; S.inv.splice(i,1); } addClams(tot); addTrade(which,tot); track('sold',cnt); track('earned',tot); Snd.coin(); save(); sel=-1; render(); };
     pBody.querySelectorAll('[data-is]').forEach(b=>b.onclick=()=>{ const [id,k0]=b.dataset.is.split(':'), k=+k0, price=ISLAND_SEED_BUY*k; if (S.clams<price) return; if (!roomFor([[id,k]])){ toast('Your bag is full.'); return; }
       S.clams-=price; addTrade(which,price); let isNew=false; for (let q=0;q<k;q++) if (addItem(id)==='new') isNew=true; Snd.coin(); updateHUD(); toast(`${isNew?'New! ':''}Bought ${k} ${ITEMS[id].name.toLowerCase()}.`, thumb(id), isNew?'new':''); save(); render(); });
     pBody.querySelectorAll('[data-b]').forEach(b=>b.onclick=()=>{ const i=+b.dataset.b; const id=list[i], it=ITEMS[id], price=buyPrice(which,it);
-      if(S.clams<price) return; if(!canAdd(id)){ toast('Your bag is full.'); return; } S.clams-=price; if(tab==='garden') S.day.gsold[i]=true; else markSold(which,id,i); addTrade(which,price); const r=addItem(id); Snd.coin(); updateHUD(); itemToast(id, r==='new', 'Bought'); render(); });
+      if(S.clams<price) return; if(!canAdd(id)){ toast('Your bag is full.'); return; } S.clams-=price; if(tab==='garden') S.day.gsold[i]=true; else markSold(which,id,i); addTrade(which,price); if (which==='rare') track('peddler'); const r=addItem(id); Snd.coin(); updateHUD(); itemToast(id, r==='new', 'Bought'); render(); });
     pBody.querySelectorAll('[data-tool]').forEach(b=>b.onclick=()=>{ const [t,k]=b.dataset.tool.split(':'); const tr=TOOLS[t].tiers[+k]; if(S.clams<tr.cost) return; S.clams-=tr.cost; addTrade(which,tr.cost); S.tools[t]={ tier:+k, uses:tr.forever?0:tr.uses }; S.toolEver[t]=Math.max(S.toolEver[t]??-1, +k); Snd.coin(); equip(t); updateHUD(); toast(`You got the ${tr.name}! It's in your hand now.`, toolThumb(t,+k)); save(); render(); });
     const bs=pBody.querySelector('#buySled'); if (bs) bs.onclick=()=>{ if (countItem('sled')||S.clams<ITEMS.sled.buy) return; if (!canAdd('sled')){ toast('Your bag is full.'); return; } S.clams-=ITEMS.sled.buy; addTrade(which,ITEMS.sled.buy); addItem('sled'); Snd.coin(); updateHUD(); setSledBtn(); toast('You got a sled! Find a snowy hill.'); save(); render(); };
     const bb=pBody.querySelector('#buyBike'); if(bb) bb.onclick=()=>{ if(S.bike||S.clams<BIKE_COST) return; S.clams-=BIKE_COST; addTrade(which,BIKE_COST); S.bike=true; Snd.fanfare(); updateHUD(); setBikeBtn(); toast('You got a bicycle!'); save(); render(); };
@@ -3087,6 +3236,7 @@ initTownBuildings(); applyTown();
 function talkCurator(){
   const k=KEEPERS.thistle, v=k.voice;
   const menu=()=>dialog(k.name, v, [], null, [
+    ...favorChoices(npcOf('thistle'), ()=>menu()),
     { label:'Donate', fn:()=>openDonate() },
     { label:'How\'s the collection?', fn:()=>{ const by=MUSEUM.kinds.map(kd=>{ const l=MUSEUM_IDS[kd]; const n=l.filter(id=>S.museum.items[id]).length; return `${n} of ${l.length} ${kd==='shell'?'beach finds':kd==='fossil'?'fossils':kd+(kd==='fish'?'':'s')}`; });
         const next=MUSEUM.gifts.find(([n])=>donatedCount()<n);
@@ -3098,7 +3248,7 @@ function talkCurator(){
 function eligibleDonations(){ const seen=new Set(), out=[]; S.inv.forEach((s,i)=>{ const it=ITEMS[s.id]; if (MUSEUM.kinds.includes(it.kind) && !S.museum.items[s.id] && !seen.has(s.id)){ seen.add(s.id); out.push(i); } }); return out; }
 const museumFull = () => donatedCount() >= exhibitSlots().length;
 function donate(slot){
-  const s=S.inv[slot], id=s.id; if (museumFull()) return false; removeAt(slot,1); S.museum.items[id]=Date.now(); save(); spawnExhibits(); Snd.jingle(); return true;
+  const s=S.inv[slot], id=s.id; if (museumFull()) return false; removeAt(slot,1); S.museum.items[id]=Date.now(); track('donate'); save(); spawnExhibits(); Snd.jingle(); return true;
 }
 function openDonate(){ if (noEdit()) return;
   const render=()=>{ const el=eligibleDonations();
@@ -3244,7 +3394,7 @@ function openLoanPanel(){
       <div style="display:flex;gap:6px;flex-wrap:wrap">${[1000,10000].filter(n=>n<L.owed).map(n=>`<button class="btn alt" data-pay="${n}" ${S.clams<n?'disabled':''}>Pay ${fmt(n)}</button>`).join('')}<button class="btn" data-pay="${L.owed}" ${S.clams<1?'disabled':''}>${S.clams>=L.owed?`Pay it all off (${fmt(L.owed)})`:`Pay ${fmt(S.clams)}`}</button></div>`;
     pBody.innerHTML=h;
     pBody.querySelectorAll('[data-pay]').forEach(b=>b.onclick=()=>{ if (noEdit() || !loanOpen()) return; const n=Math.min(+b.dataset.pay, S.loan.owed, S.clams); if (n<=0) return;
-      S.clams-=n; S.loan.owed-=n; Snd.coin(); if (S.loan.owed<=0){ S.loan=null; Snd.fanfare(); toast('Home loan paid off!', null, 'new', 'Want more room? Draw new rooms in the builder.'); } updateHUD(); save(); render(); });
+      S.clams-=n; S.loan.owed-=n; Snd.coin(); if (S.loan.owed<=0){ S.loan=null; track('loanpaid'); Snd.fanfare(); toast('Home loan paid off!', null, 'new', 'Want more room? Draw new rooms in the builder.'); } updateHUD(); save(); render(); });
   };
   openPanel('Home Loan'); render();
 }
@@ -3557,10 +3707,12 @@ function openBoard(){
     if (!S.home.built) h+= GUEST ? `You're living in a tent. Houses are for islanders with an account.` : `You're still in a tent! Clementine at the town hall can loan you a base-model house: one room of 9 floor squares for ${fmt(houseCost(9,0))} clams, paid back a little at a time.`;
     else h+=`${S.home.plan.rooms.length} room${S.home.plan.rooms.length>1?'s':''} · ${planCells(S.home.plan)} floor squares.${loanOpen()?` Home loan: <b>${fmt(S.loan.owed)}</b> of ${fmt(S.loan.total)} clams left.`:''} New styles, add-ons and paint cost clams (switching between ones you own is free), new floor goes on a home loan, and each layout change costs ${REMODEL_FEE} clams.${GUEST?'':`<br><button class="btn" id="bdOpen" style="margin-top:8px">Open build mode</button>`}`;
     h+=`</div><div class="notice"><b>Museum</b><br>${donatedCount()} of ${MUSEUM_TOTAL} displays filled. Professor Thistle is just south of the plaza.</div>`;
-    if (!VISIT) h+=`<div class="notice"><b>Favors</b> <span class="muted">· ${Q.done||0} done so far</span>${favorsHTML()}</div>`;
+    if (!VISIT) h+=`<div class="notice"><b>Favors</b> <span class="muted">· ${Q.done||0} done so far · up to ${MAX_FAVORS} at a time</span>${favorsHTML()}</div>`;
+    h+=`<div class="notice"><b>Achievements</b> <span class="muted">· ${achCount()} of ${ACHIEVEMENTS.length} earned</span><br><button class="btn alt" id="bdAch" style="margin-top:6px">See achievements</button></div>`;
     if (S.magic.tower) h+=`<div class="notice"><b>Wendell the wizard</b><br>Potions any time. ${moveUnlocked()?'Moving buildings: ready.':`Moving buildings opens with a house of ${MAGIC.unlockMove.cells} squares and ${MAGIC.unlockMove.shops} shops backed.`} ${landUnlocked()?'Shaping land: ready.':`Shaping land opens with a house of ${MAGIC.unlockLand.cells} squares and all 3 shops backed.`}</div>`;
     pBody.innerHTML=h;
     const bdo=pBody.querySelector('#bdOpen'); if (bdo) bdo.onclick=()=>{ panelClose=null; closePanel(); openBuild(); };
+    const bda=pBody.querySelector('#bdAch'); if (bda) bda.onclick=()=>{ closePanel(); setTimeout(()=>openAchievements(), 60); };
   };
   openPanel('Island Board'); render();
 }
@@ -3572,7 +3724,7 @@ const keyName = k => k===' '?'Space' : k.length===1 ? k.toUpperCase() : k[0].toU
 function openMenu(){
   const c=CT();
   const render=()=>{
-    pBody.innerHTML=`<div class="notice"><b>${S.player}</b> of <b>${S.island}</b><br><span class="muted">Caught: ${S.caught} · Discovered: ${discovered()} · Bag: ${slotsMax()} slots</span><br><button class="btn alt" id="mLook" style="margin-top:8px">Change my look</button> <button class="btn alt" id="mParty" style="margin-top:8px">Party games</button></div>
+    pBody.innerHTML=`<div class="notice"><b>${S.player}</b> of <b>${S.island}</b><br><span class="muted">Caught: ${S.caught} · Discovered: ${discovered()} · Bag: ${slotsMax()} slots</span><br><button class="btn alt" id="mLook" style="margin-top:8px">Change my look</button> <button class="btn alt" id="mAch" style="margin-top:8px">Achievements</button> <button class="btn alt" id="mParty" style="margin-top:8px">Party games</button></div>
     <label class="f">Sound <select id="mSnd"><option value="1">On</option><option value="0">Off</option></select></label>
     <label class="f">Music volume</label><input type="range" id="mMus" min="0" max="1" step="0.05" value="${S.settings.music}">
     <label class="f">Brightness</label><input type="range" id="mBr" min="0.7" max="1.7" step="0.05" value="${S.settings.bright}">
@@ -3600,7 +3752,8 @@ function openMenu(){
     </div>
     <button class="btn warn" id="mReset">Start a new island</button>${saveOK?'':'<div class="muted" style="margin-top:8px">Saving isn\'t available in this browser.</div>'}`;
     $('#mParty').onclick=()=>{ closePanel(); setTimeout(()=>PARTY.open(), 50); };
-    $('#mLook').onclick=async()=>{ closePanel(); const L=await openCreator({ look:CH.parseLook(S.look), title:'Change your look', cancel:true }); if (L) setPlayerLook(CH.lookCode(L)); };
+    $('#mLook').onclick=async()=>{ closePanel(); const L=await openCreator({ look:CH.parseLook(S.look), title:'Change your look', cancel:true, owned:wardrobeOwned() }); if (L){ const code=CH.lookCode(L); if (code!==S.look) track('look'); setPlayerLook(code); checkAch(); } };
+    $('#mAch').onclick=()=>{ closePanel(); setTimeout(()=>openAchievements(), 60); };
     const snd=$('#mSnd'); snd.value=S.settings.sound?'1':'0'; snd.onchange=()=>{ Snd.setOn(snd.value==='1'); save(); };
     $('#mMus').oninput=e=>{ Snd.setMusic(+e.target.value); save(); };
     $('#mBr').oninput=e=>{ S.settings.bright=+e.target.value; save(); updateSky(); };
@@ -3724,13 +3877,13 @@ $('#pRotL').onclick=()=>turnBy(Math.PI/12); $('#pRotR').onclick=()=>turnBy(-Math
 $('#pNo').onclick=()=>{ endPlacing(); Snd.click(); };
 $('#pOk').onclick=()=>{ if (placing && placing.mode==='grid'){ plantGrid(); return; } if(!checkPlace()) return; const p=placing.m.position, id=placing.id, it=ITEMS[id];
   if (placing.moving){ const e=placing.moving, rec=e.rec; rec.x=p.x; rec.z=p.z; rec.rot=placing.rot; e.pos.set(p.x, World.inside?0:groundY(p.x,p.z), p.z); e.obj.position.copy(e.pos); e.model.rotation.y=rec.rot; e.obj.visible=true; e.solid=!it.flat; placing.done=true; }
-  else if (placing.mode==='furn'){ const rec={ id, x:p.x, z:p.z, rot:placing.rot }; removeItem(id,1); S.placed.push(rec); new Furniture(rec);
+  else if (placing.mode==='furn'){ const rec={ id, x:p.x, z:p.z, rot:placing.rot }; removeItem(id,1); S.placed.push(rec); new Furniture(rec); track('place');
     if (isFence(id) && countItem(id)>0){ const a=fenceAxis(placing.rot), nx=p.x+a[0], nz=p.z+a[1], rot=placing.rot;   // the next fence waits at the end of the line
       puff(p.clone().add(new THREE.Vector3(0,0.3,0)),0xffffff,6,0.5,1.2,0.8,0.5); Snd.pop(); save(); endPlacing();
       startPlacing(id,'furn'); if (placing){ placing.rot=rot; placing.m.rotation.y=rot; placing.m.position.set(nx, World.inside?0:groundY(nx,nz), nz); checkPlace(); $('#pNo').textContent='Done'; } return; } }
   else { const P=PLANTS[it.plant], soft=P.ptype==='flower'||P.ptype==='crop'; if (!soft && !needTool('shovel')) return; if (!soft) useTool('shovel');
     const rec={ id:'p'+Date.now().toString(36)+Math.floor(Math.random()*1e4), sp:it.plant, x:p.x, z:p.z, stage:0, rot:placing.rot, color:(P.colors&&P.colors.length)?P.colors[Math.floor(Math.random()*P.colors.length)]:undefined, lastGrow:today() };
-    if (it.kind==='fruit') rec.fruit=id; removeItem(id,1); S.plants.push(rec); if (P.ptype==='tree') onReplant(p.clone()); const pe=P.ptype==='tree' ? new Tree(rec.id,rec.x,rec.z,rec.sp,rec.fruit||(rec.sp==='palm'?'coconut':null),rec) : new Plant(rec); plantEnts.push(pe); FX.sprout(pe); Snd.dig(); toast(`Planted! ${P.ptype==='tree'?'Trees take a few days to grow.':P.ptype==='crop'?`Ready in about ${P.days} days. Water it every day to speed it up.`:'Water it to help it grow.'}`);
+    if (it.kind==='fruit') rec.fruit=id; removeItem(id,1); S.plants.push(rec); track('plant'); if (P.ptype==='tree') onReplant(p.clone()); const pe=P.ptype==='tree' ? new Tree(rec.id,rec.x,rec.z,rec.sp,rec.fruit||(rec.sp==='palm'?'coconut':null),rec) : new Plant(rec); plantEnts.push(pe); FX.sprout(pe); Snd.dig(); toast(`Planted! ${P.ptype==='tree'?'Trees take a few days to grow.':P.ptype==='crop'?`Ready in about ${P.days} days. Water it every day to speed it up.`:'Water it to help it grow.'}`);
     if (P.ptype==='crop' && countItem(id)>0 && !World.inside){ const last=p.clone(), keepId=id, rot=placing.rot; setTimeout(()=>{ if (placing || countItem(keepId)<1) return; startPlacing(keepId,'plant'); if (placing){ placing.m.position.set(last.x+0.9*Math.cos(rot), groundY(last.x+0.9,last.z), last.z-0.9*Math.sin(rot)); checkPlace(); } }, 50); } }
   if (placing.mode==='furn' || placing.moving) puff(p.clone().add(new THREE.Vector3(0,0.3,0)),0xffffff,8,0.6,1.5,1,0.6); Snd.pop(); save(); endPlacing(); };
 
@@ -3785,7 +3938,7 @@ function checkGrid(){ const P=placing, m=P.m, ax=m.position.x, az=m.position.z;
 function plantGrid(){ const P=placing; if (!checkGrid()) return; const id=P.id, it=ITEMS[id], PL=PLANTS[it.plant], n=Math.min(P.cells.length, countItem(id)); if (n<1){ endPlacing(); return; }
   const cells=P.cells.slice(0,n), made=[], base=Date.now().toString(36);
   cells.forEach(([i,j],k)=>{ const rec={ id:'p'+base+k.toString(36)+Math.floor(Math.random()*1e3), sp:it.plant, x:i*CELL, z:j*CELL, stage:0, rot:(PL.ptype==='crop'?(Math.random()-0.5)*0.5:Math.random()*TAU), color:(PL.colors&&PL.colors.length)?PL.colors[Math.floor(Math.random()*PL.colors.length)]:undefined, lastGrow:today() };
-    S.plants.push(rec); const pe=new Plant(rec); plantEnts.push(pe); made.push(pe); pe.obj.scale.setScalar(0.001); });
+    S.plants.push(rec); track('plant'); const pe=new Plant(rec); plantEnts.push(pe); made.push(pe); pe.obj.scale.setScalar(0.001); });
   // pop up row by row
   let t=0; FX.add(dt=>{ t+=dt; let busy=false; made.forEach((pe,k)=>{ if (pe.removed) return; const q=Math.max(0,(t-k*0.015)/0.3); if (q<1) busy=true; pe.obj.scale.setScalar(q>=1?1:Math.max(0.001,easeOut(q)*(1+Math.sin(q*Math.PI)*0.25))); }); return busy; });
   if (made[0]) FX.hole(made[0].pos, 0.32, 1.1);
@@ -3823,7 +3976,7 @@ function openGarden(g){
       if (n){ Snd.pop(); if (isNew) Snd.fanfare(); for (const p of ripe.slice(0,12)) puff(new THREE.Vector3(p.x,groundY(p.x,p.z)+0.3,p.z),0x7cc35a,4,0.4,1.4,0.6,0.5);
         const what=Object.entries(kinds).map(([c,k])=>`${k} ${cropWord(CROPS[c],k)}`).join(', ')||`${n} flowers`; toast(`Harvested ${what}${seeds?` and ${seeds} seeds`:''}.${full?' Your bag filled up, so some are still growing.':''}`, ripe[0]?thumb(PLANTS[ripe[0].sp].crop||ripe[0].sp):null); }
       else if (full) toast('Your bag is full.'); save(); rebuildGardens(); render(); });
-    on('#gWa', ()=>{ if (noEdit() || !needTool('can')) return; let n=0; for (const p of dry){ if (!S.tools.can) break; p.watered=today(); S.stats.watered++; useTool('can'); n++; }
+    on('#gWa', ()=>{ if (noEdit() || !needTool('can')) return; let n=0; for (const p of dry){ if (!S.tools.can) break; p.watered=today(); S.stats.watered++; track('water'); useTool('can'); n++; }
       Snd.water(); for (const p of dry.slice(0,16)) puff(new THREE.Vector3(p.x,groundY(p.x,p.z)+0.8,p.z),0x7fc8f0,2,0.2,-1,0.4,0.5); toast(`Watered ${n} plant${n>1?'s':''}. They'll grow faster tomorrow.`); save(); render(); });
     pBody.querySelectorAll('[data-gs]').forEach(b=>b.onclick=()=>{ panelClose=null; closePanel(); openPlantPanel(b.dataset.gs, g); });
     on('#gGap', ()=>{ if (!pay(gaps.length*GARDEN_FENCES[g.fence].per)) return; g.fenced=[...new Set([...(g.fenced||[]), ...gaps.map(e=>e.key)])]; rebuildGardens(); save(); render(); });
@@ -4107,7 +4260,7 @@ const TOOL_LABEL = { axe:'Chop', shovel:'Dig', rod:'Cast', net:'Catch', can:'Wat
 const clock=new THREE.Clock(); let t=0, secT=0, saveT=0, started=false;
 function frame(){
   const dt=Math.min(0.05, clock.getDelta()); t+=dt;
-  secT+=dt; if(secT>1){ secT=0; if(rollDay()){ spawnDaily(); ensureFavors(); refreshStoreItems(); applyTown(); toast('A new day on '+(S.island||'the island')+'!'); } refreshStands(); setSledBtn(); updateSky(); updateHUD(); updatePotionHUD(); }
+  secT+=dt; if(secT>1){ secT=0; if(rollDay()){ spawnDaily(); ensureFavors(); refreshStoreItems(); applyTown(); toast('A new day on '+(S.island||'the island')+'!'); } refreshStands(); setSledBtn(); updateSky(); updateHUD(); updatePotionHUD(); achTick(); }
   saveT+=dt; if(saveT>15){ saveT=0; save(); }
   updateRemotes(dt,t); updateSnow(dt); PARTY.update(dt,t);
   if (started){ updateHold(dt); if (meBody.rag) updateRag(meBody,dt,t); else movePlayer(dt,t); bonkCool=Math.max(0,bonkCool-dt); updateBugs(dt); updateFishing(dt,t); updateCatchMeter(dt); tickDialog(dt); updateActButton(); updateCutaway(); }
@@ -4142,7 +4295,7 @@ $('#bStart').onclick=async()=>{
     const wake=()=>{ if (Snd.ctx && Snd.ctx.state==='suspended') Snd.ctx.resume(); }; addEventListener('pointerdown', wake, { once:true }); addEventListener('keydown', wake, { once:true }); return; }
   if (isNew){ S.player=($('#inName').value||'').trim()||'Sam'; S.island=($('#inIsle').value||'').trim()||'Pebblewick'; save(); }
   if (!S.look){ $('#start').style.visibility='hidden';
-    const L=await openCreator({ look:CH.defaultLook(), title: isNew ? 'Make your character' : 'Pick your new look', sub: isNew ? 'Welcome to '+S.island+', '+S.player+'!' : '', doneLabel: isNew ? 'Let\'s go!' : 'Done' });
+    const L=await openCreator({ look:CH.defaultLook(), owned:wardrobeOwned(), title: isNew ? 'Make your character' : 'Pick your new look', sub: isNew ? 'Welcome to '+S.island+', '+S.player+'!' : '', doneLabel: isNew ? 'Let\'s go!' : 'Done' });
     setPlayerLook(CH.lookCode(L)); }
   Snd.init(S.settings, World); if(Snd.ctx && Snd.ctx.state==='suspended') Snd.ctx.resume();
   $('#start').remove(); started=true; updateHUD();
@@ -4189,7 +4342,7 @@ function toggleSled(){
   setSled(true); }
 function setSled(on){
   if (on===sledding) return; sledding=on; const u=player.obj.userData;
-  if (on){ if (riding) setRiding(false); stopMove(); if (Fishing.state!=='idle') reel(); if (!sledObj){ sledObj=buildItemModel('sled'); sledObj.scale.setScalar(1.15); } player.obj.add(sledObj); if (u.body) u.body.position.y=0.18; sledV.set(Math.sin(player.face)*1.5, Math.cos(player.face)*1.5); Snd.pop();
+  if (on){ track('sled'); if (riding) setRiding(false); stopMove(); if (Fishing.state!=='idle') reel(); if (!sledObj){ sledObj=buildItemModel('sled'); sledObj.scale.setScalar(1.15); } player.obj.add(sledObj); if (u.body) u.body.position.y=0.18; sledV.set(Math.sin(player.face)*1.5, Math.cos(player.face)*1.5); Snd.pop();
   }
   else { if (sledObj) player.obj.remove(sledObj); if (u.body) u.body.position.y=0; sledV.set(0,0); }
   const b=$('#bSled'); if (b) b.classList.toggle('on', sledding);
@@ -4243,6 +4396,7 @@ function remoteEmote(id, e){ const txt=EMOTE_TEXT[e]; if(!txt) return; const pos
 function jelly(obj, st, dt, moving, t, speed=1){
   const u=obj.userData; if(!u.body) return; if (st.seed===undefined) st.seed=Math.random()*10;
   dt=Math.min(dt,0.05);
+  if (u.anims) for (const f of u.anims) f(t, dt, moving);   // v1.19 worn accessories (wings, balloons)
   st.v=(st.v||0) + (-(st.x||0)*150 - (st.v||0)*7.5)*dt; st.x=(st.x||0)+st.v*dt;
   if (moving!==!!st.prevMoving){ st.v += moving ? 1.4 : -2.2; st.prevMoving=moving; }       // start: stretch up; stop: squish down
   if (moving){ const ph=(st.ph||0)+dt*(7+5*speed), step=Math.floor(ph/Math.PI); if (step!==st.step){ st.step=step; st.v-=1.1*Math.min(1,speed+0.3); } st.ph=ph; }
@@ -4468,5 +4622,5 @@ const PARTY = createParty({ scene, player, meBody, remotes, groundY, walkable, r
     keep:()=>{ if (r.partyAway && r.obj.parent){ r.partyAway.parent=r.obj.parent; r.obj.parent.remove(r.obj); } },
     back:()=>{ const a=r.partyAway; if (!a) return; delete r.partyAway; r.solid=a.solid; if (a.parent && !r.obj.parent) a.parent.add(r.obj); } })),
   swingAnim:(face)=>{ stopMove(); player.face=face; player.obj.rotation.y=face; player.act=0.4; bonkCool=0.35; Snd.swoosh(); } });
-window.__game = { party:PARTY, v119:{ tierPick, openChest, townCap:()=>townCap() }, v13:{ shopStock:w=>shopStock(w), learnPlan, rareRoll, knowsPlan, unfoundPlans, stockWeight, RARE_WORK, GroundItem, ShopItem, Furniture }, v1:{ scene, camera, OUT, updateSky, updateHUD, snowPass, SNOW_U, townNewDay, applyTown, talkHall, openHallPanel, buildPlaza, refreshStoreItems, buildStoreAll, buildShop, buildMuseumAll, spawnExhibits, exhibitSlots, mentorMoment, teachWoodworking, openCraft, doCook, nearStation, toggleSled, setSled, get sledding(){ return sledding; }, sledV, eatFood, Plant, fullBagCatch, KB, landSeaTap, terraLand, LAMPS:()=>LAMPS, hasUpstairs, ShopItem, Stairs, get exhibits(){ return exhibits; }, KEEPOUT, dayKeyOf, World, startPlacing, checkPlace, get placing(){ return placing; }, FX, homeStock, buyHome, draftUnowned, get homeRack(){ return homeRack; }, openShop, openBuild:(o)=>openBuild(o), closeBuild, get buildMode(){ return buildMode; }, ents, Tree, Stump, Weed, Bug, bugs, player, interact, layoutBar, pickNote, itemToast, reel, Fishing, fishes, spawnFish, WU, relayout, enterRoom:(id)=>enterRoom(id), trees }, get S(){ return S; }, dbg:{ showChoices:(t,c)=>showChoices(t,c), dialog:(...a)=>dialog(...a), setRiding:(v)=>setRiding(v), enterRoom:(id)=>enterRoom(id), openBuild:()=>openBuild(), rooms:()=>Object.keys(ROOMS), get yaw(){ return camYaw; }, set yaw(v){ camYaw=v; }, get riding(){ return riding; }, get snow(){ return SNOW_U.value; }, setWeather:(w)=>{ weatherOverride=w; World.weather=w; snowT=0; }, get dlg(){ return !!dlgState; } }, walkable, blocked, groundY, launchRag, ragdolls, swing, meBody, refreshPortals, portalArches, get portalEnt(){ return portalEnt; }, enterRoom, PLACES, net:{ party:(id,d)=>PARTY.onNet(id,d), bonked, visibleRemotes:()=>[...remotes.values()].filter(r=>r.obj.visible).map(r=>[r.name,+r.pos.x.toFixed(1),+r.pos.z.toFixed(1)]), remoteUpsert, remotePos, remoteLeave, remoteEmote, playerState, setInventory, toast:(m)=>toast(m), updateHUD:()=>updateHUD(), get started(){ return started; } }, ITEMS, itemThumb:(id)=>thumb(id), layoutInfo:()=>({ id:LAYOUT_ID, PLACES, PATHS, LOT, rects:RECTS.map(r=>r.slice(0,4)), lot:lotRect() }), terrainH:(x,z)=>rawHeight(x,z), terrainSlope:(x,z)=>hillSlope(x,z), interact, spawnBug:(id,x,z)=>new Bug(id,x,z), tapOdds:()=>Object.fromEntries(Object.keys(TAP_BASE).map(k=>[k, +tapChance({rarity:k}).toFixed(2)])), placingObj:()=>placing&&placing.m, toScreen:v=>{ const p=v.clone().project(camera); return [(p.x*0.5+0.5)*innerWidth, (-p.y*0.5+0.5)*innerHeight]; }, rebuildHome:()=>{ buildPlayerHouse(); rebuildHomeRoom(); }, openBuild, closeBuild, get buildMode(){ return buildMode; }, talkShop, openDonate, talkCurator, spawnMossby, onFelled, findPath, startPlacing, LOT, RECTS, shopEnts, museumEnt, houseEnt:()=>houseEnt, Time, player, ents, ITEMS, residents, World, ROOMS, goTo, handleTap, doAction, updateSky, rollDay, spawnDaily, castAt, Fishing, fishes, bugs, openBag, openBook, openShop, openBoard, openMenu, openCraft, doCraft, WOODWORK, enterRoom, exitRoom, equip, startLayout, endLayout, trees, applyControls, magic:{ startMagic, endMagic, landTap, magicPlace, castMagic, get mode(){ return magicMode; }, raiseTower, talkWizard, drinkPotion, potionOn, luckW, rollFavors, Q, favorChoices, findTowerSpot, get tower(){ return towerEnt; }, PLACES, TERRA, FALLS } };
+window.__game = { v120:{ track, checkAch, achValue, grantWear, ownsWear, openAchievements, makeFavor, rollFavors, favorChoices, npcOf, clothesStock, wardrobeOwned, get Q(){ return Q; } }, party:PARTY, v119:{ tierPick, openChest, townCap:()=>townCap() }, v13:{ shopStock:w=>shopStock(w), learnPlan, rareRoll, knowsPlan, unfoundPlans, stockWeight, RARE_WORK, GroundItem, ShopItem, Furniture }, v1:{ scene, camera, OUT, updateSky, updateHUD, snowPass, SNOW_U, townNewDay, applyTown, talkHall, openHallPanel, buildPlaza, refreshStoreItems, buildStoreAll, buildShop, buildMuseumAll, spawnExhibits, exhibitSlots, mentorMoment, teachWoodworking, openCraft, doCook, nearStation, toggleSled, setSled, get sledding(){ return sledding; }, sledV, eatFood, Plant, fullBagCatch, KB, landSeaTap, terraLand, LAMPS:()=>LAMPS, hasUpstairs, ShopItem, Stairs, get exhibits(){ return exhibits; }, KEEPOUT, dayKeyOf, World, startPlacing, checkPlace, get placing(){ return placing; }, FX, homeStock, buyHome, draftUnowned, get homeRack(){ return homeRack; }, openShop, openBuild:(o)=>openBuild(o), closeBuild, get buildMode(){ return buildMode; }, ents, Tree, Stump, Weed, Bug, bugs, player, interact, layoutBar, pickNote, itemToast, reel, Fishing, fishes, spawnFish, WU, relayout, enterRoom:(id)=>enterRoom(id), trees }, get S(){ return S; }, dbg:{ showChoices:(t,c)=>showChoices(t,c), dialog:(...a)=>dialog(...a), setRiding:(v)=>setRiding(v), enterRoom:(id)=>enterRoom(id), openBuild:()=>openBuild(), rooms:()=>Object.keys(ROOMS), get yaw(){ return camYaw; }, set yaw(v){ camYaw=v; }, get riding(){ return riding; }, get snow(){ return SNOW_U.value; }, setWeather:(w)=>{ weatherOverride=w; World.weather=w; snowT=0; }, get dlg(){ return !!dlgState; } }, walkable, blocked, groundY, launchRag, ragdolls, swing, meBody, refreshPortals, portalArches, get portalEnt(){ return portalEnt; }, enterRoom, PLACES, net:{ party:(id,d)=>PARTY.onNet(id,d), bonked, visibleRemotes:()=>[...remotes.values()].filter(r=>r.obj.visible).map(r=>[r.name,+r.pos.x.toFixed(1),+r.pos.z.toFixed(1)]), remoteUpsert, remotePos, remoteLeave, remoteEmote, playerState, setInventory, toast:(m)=>toast(m), updateHUD:()=>updateHUD(), get started(){ return started; } }, ITEMS, itemThumb:(id)=>thumb(id), layoutInfo:()=>({ id:LAYOUT_ID, PLACES, PATHS, LOT, rects:RECTS.map(r=>r.slice(0,4)), lot:lotRect() }), terrainH:(x,z)=>rawHeight(x,z), terrainSlope:(x,z)=>hillSlope(x,z), interact, spawnBug:(id,x,z)=>new Bug(id,x,z), tapOdds:()=>Object.fromEntries(Object.keys(TAP_BASE).map(k=>[k, +tapChance({rarity:k}).toFixed(2)])), placingObj:()=>placing&&placing.m, toScreen:v=>{ const p=v.clone().project(camera); return [(p.x*0.5+0.5)*innerWidth, (-p.y*0.5+0.5)*innerHeight]; }, rebuildHome:()=>{ buildPlayerHouse(); rebuildHomeRoom(); }, openBuild, closeBuild, get buildMode(){ return buildMode; }, talkShop, openDonate, talkCurator, spawnMossby, onFelled, findPath, startPlacing, LOT, RECTS, shopEnts, museumEnt, houseEnt:()=>houseEnt, Time, player, ents, ITEMS, residents, World, ROOMS, goTo, handleTap, doAction, updateSky, rollDay, spawnDaily, castAt, Fishing, fishes, bugs, openBag, openBook, openShop, openBoard, openMenu, openCraft, doCraft, WOODWORK, enterRoom, exitRoom, equip, startLayout, endLayout, trees, applyControls, magic:{ startMagic, endMagic, landTap, magicPlace, castMagic, get mode(){ return magicMode; }, raiseTower, talkWizard, drinkPotion, potionOn, luckW, rollFavors, Q, favorChoices, findTowerSpot, get tower(){ return towerEnt; }, PLACES, TERRA, FALLS } };
 window.__game.farm = { openPlantPanel, startGridPlacing, plantGrid, checkGrid, openGarden, rebuildGardens, gardenAtXZ, islandSeeds, harvestRec, perimeter, get fenceSegs(){ return FENCE_SEGS; }, fenceHit, get placing(){ return placing; }, plantEnts, gardenEnts, CELL };

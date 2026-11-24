@@ -2,6 +2,7 @@
 // One builder for the player, residents, shopkeepers and friends. Same rig as before:
 // g.userData = { body, head, arms, legs, ears, tail, hand } — ears/tail groups carry userData.base for the jelly animation.
 import * as THREE from 'three';
+import * as WR from './wardrobe.js';
 
 const TAU = Math.PI * 2;
 const V3 = (x=0,y=0,z=0)=>new THREE.Vector3(x,y,z);
@@ -75,8 +76,12 @@ export const SPECIES = {
     { name:'Sunny', fur:0xf2ca74, muzzle:0xfff6dc, accent:0xe08a30, nose:0x7a4024 } ] },
 };
 export const SPECIES_IDS = Object.keys(SPECIES);
-export const OUTFITS = [ { id:'tee', name:'T-shirt' }, { id:'hoodie', name:'Hoodie' }, { id:'overalls', name:'Overalls' }, { id:'dress', name:'Dress' }, { id:'sweater', name:'Striped sweater' } ];
-export const OUTFIT_COLORS = [0xe0574a, 0xf2a240, 0xf2d060, 0x6cbf6a, 0x4fb3b0, 0x5a8ad8, 0x9a76d0, 0xf08aac, 0xf4f0e6, 0x4a4a54];
+export const OUTFITS = [ { id:'tee', name:'T-shirt' }, { id:'hoodie', name:'Hoodie' }, { id:'overalls', name:'Overalls' }, { id:'dress', name:'Dress' }, { id:'sweater', name:'Striped sweater' }, ...WR.OUTFITS_NEW ];
+export const OUTFIT_COLORS = [0xe0574a, 0xf2a240, 0xf2d060, 0x6cbf6a, 0x4fb3b0, 0x5a8ad8, 0x9a76d0, 0xf08aac, 0xf4f0e6, 0x4a4a54, ...WR.COLORS_NEW.map(c=>c[0])];
+export const COLOR_NAMES = [...WR.BASE_COLOR_NAMES, ...WR.COLORS_NEW.map(c=>c[1])];
+// v1.19: the first 5 outfits and 10 colors are free for everyone; the rest are found or bought (see wardrobe.js)
+export const BASE_OUTFITS = 5, BASE_COLORS = 10;
+export const ACC_SLOTS = WR.SLOTS;
 export const EYES = [ { id:'bright', name:'Bright' }, { id:'sparkle', name:'Sparkly' }, { id:'dot', name:'Dot' }, { id:'angry', name:'Angry' }, { id:'sad', name:'Sad' } ];
 export const NOSES = [ { id:'button', name:'Button' }, { id:'heart', name:'Heart' }, { id:'bean', name:'Bean' }, { id:'triangle', name:'Triangle' }, { id:'tiny', name:'Tiny' } ];
 export const FINISHES = [ { id:'smooth', name:'Smooth' }, { id:'felt', name:'Felt' } ];
@@ -84,14 +89,17 @@ export const MOUTHS = [ { id:'smile', name:'Smile' }, { id:'grin', name:'Big gri
 
 /* ================= look codes (saved and sent to friends) ================= */
 // "species.scheme.outfit.color.eyes.nose.mouth.finish" using indexes, e.g. "rabbit.0.0.5.0.0.0.1" (older 7-part codes read as smooth)
-export function defaultLook(){ return { sp:'rabbit', c:0, top:0, tc:5, e:0, n:0, m:0, f:0 }; }
-export function lookCode(L){ return [L.sp, L.c, L.top, L.tc, L.e, L.n, L.m, L.f||0].join('.'); }
-export function parseLook(code){ const d=defaultLook(); if (typeof code!=='string') return d; const p=code.split('.'); if ((p.length!==7 && p.length!==8) || !SPECIES[p[0]]) return d;
+export function defaultLook(){ return { sp:'rabbit', c:0, top:0, tc:5, e:0, n:0, m:0, f:0, hat:0, face:0, neck:0, back:0 }; }
+// v1.19: four accessory slots on the end (0 = none). Plain looks keep the short 8-part code so older games still read them.
+export function lookCode(L){ const base=[L.sp, L.c, L.top, L.tc, L.e, L.n, L.m, L.f||0]; const acc=WR.SLOTS.map(s=>L[s]|0); return (acc.some(x=>x) ? [...base, ...acc] : base).join('.'); }
+export function parseLook(code){ const d=defaultLook(); if (typeof code!=='string') return d; const p=code.split('.'); if ((p.length!==7 && p.length!==8 && p.length!==12) || !SPECIES[p[0]]) return d;
   const n=(i,max)=>{ const v=parseInt(p[i],10); return Number.isFinite(v) && v>=0 && v<max ? v : 0; };
-  return { sp:p[0], c:n(1,SPECIES[p[0]].schemes.length), top:n(2,OUTFITS.length), tc:n(3,OUTFIT_COLORS.length), e:n(4,EYES.length), n:n(5,NOSES.length), m:n(6,MOUTHS.length), f:p.length===8?n(7,FINISHES.length):0 }; }
+  return { sp:p[0], c:n(1,SPECIES[p[0]].schemes.length), top:n(2,OUTFITS.length), tc:n(3,OUTFIT_COLORS.length), e:n(4,EYES.length), n:n(5,NOSES.length), m:n(6,MOUTHS.length), f:p.length>=8?n(7,FINISHES.length):0,
+    ...Object.fromEntries(WR.SLOTS.map((s,i)=>[s, p.length===12?n(8+i,WR.SLOT_N[s]+1):0])) }; }
 // A random look. moodBias: 0..1 chance of allowing the angry/sad faces (they are rarer for townsfolk).
 export function randomLook(r=Math.random, moodBias=0.18){ const sp=SPECIES_IDS[Math.floor(r()*SPECIES_IDS.length)], face=()=>r()<moodBias ? 3+Math.floor(r()*2) : Math.floor(r()*3);
-  return { sp, c:Math.floor(r()*SPECIES[sp].schemes.length), top:Math.floor(r()*OUTFITS.length), tc:Math.floor(r()*OUTFIT_COLORS.length), e:face(), n:Math.floor(r()*NOSES.length), m:face(), f:r()<0.35?1:0 }; }
+  // (only the original outfits and colors, so islanders keep the exact looks they had before v1.19)
+  return { sp, c:Math.floor(r()*SPECIES[sp].schemes.length), top:Math.floor(r()*BASE_OUTFITS), tc:Math.floor(r()*BASE_COLORS), e:face(), n:Math.floor(r()*NOSES.length), m:face(), f:r()<0.35?1:0, hat:0, face:0, neck:0, back:0 }; }
 
 /* ================= materials (smooth, soft vinyl; flagged as character so weather never paints them) ================= */
 const MATS=new Map();
@@ -280,6 +288,7 @@ function buildTail(body, sp, sc){
 const TORSO_Y=0.7;
 function shell(r, t0, t1, m, body, sx=1, sy=0.92, sz=0.86){ const o=mesh(sph(r,32,14,0,TAU,Math.PI*t0,Math.PI*(t1-t0)), m, 0,TORSO_Y,0,body); o.scale.set(sx,sy,sz); return o; }
 function buildOutfit(body, arms, kind, color, sc){
+  if (WR.buildOutfitNew(kind, body, arms, color, sc)) return;
   const c=mat(color), light=mat(0xf6f2ea), trim=mat(shade(color,-0.1));
   const sleeve=(len)=>{ for (const a of arms){ const s=a.userData.side, sl=mesh(new THREE.CapsuleGeometry(0.122,len,8,16), kind==='overalls'?light:c, s*0.03,-0.08+(0.12-len)*0.3,0, a); sl.rotation.z=s*0.25; } };
   if (kind==='tee'){ shell(0.488,0.15,0.6,c,body); sleeve(0.04); const hem=mesh(new THREE.TorusGeometry(0.44,0.03,10,40), trim, 0,0.48,0,body); hem.rotation.x=Math.PI/2; hem.scale.set(1,0.86,1); shell(0.484,0.6,0.86,mat(0x56688a),body); const col=mesh(new THREE.TorusGeometry(0.19,0.035,10,28), trim, 0,1.1,0.02,body); col.rotation.x=Math.PI/2; }
@@ -431,13 +440,16 @@ export function buildCritter(look, opts={}){
     legs.push(p); }
   buildOutfit(trunk, arms, outfit, ocol, sc);
   dressUp(trunk, head, look.acc, look.accC);
+  const anims=[], animRig=[];
+  if (!npc) WR.dressAccessories(look, { head, trunk, body, wobbler, anim:f=>anims.push(f), rig:o=>animRig.push(o) });
   const tail = (npc && ['fox','otter','tortoise'].includes(sp) && opts.keeperTails===false) ? null : buildTail(body, sp, sc);
   if (tail) tail.position.z*=TR[1];
-  if (felt) g.traverse(o=>{ if (o.isMesh && o.material.userData.char && !o.material.transparent && o.material.roughness>0.4) o.material=feltMat(o.material); });
+  if (tail && !npc && look.back && (WR.BY_SLOT.back[look.back-1]||{}).hideTail) tail.visible=false;   // packs sit over the tail
+  if (felt) g.traverse(o=>{ if (o.isMesh && o.material.userData.char && !o.material.transparent && !o.material.map && o.material.roughness>0.4) o.material=feltMat(o.material); });
   const hand=new THREE.Group(); hand.position.set(0.07,-0.27,0.06); arms[1].add(hand);
-  mergeRig(g, [g, body, headRig, ...wob, ...arms, ...legs, ...ears, ...(tail?[tail]:[]), hand]);
+  mergeRig(g, [g, body, headRig, ...wob, ...animRig, ...arms, ...legs, ...ears, ...(tail?[tail]:[]), hand]);
   for (const c of g.children) c.userData.model=true;
-  g.userData={ wobble:wob, body, head:headRig, arms, legs, ears, tail, hand, v2:true, species:sp };
+  g.userData={ wobble:wob, body, head:headRig, arms, legs, ears, tail, hand, v2:true, species:sp, anims };
   return g;
 }
 

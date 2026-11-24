@@ -1,6 +1,8 @@
 // Character creator: pick a critter, its colors, an outfit and a face. Live 3D preview you can turn.
 import * as THREE from 'three';
 import * as CH from './chars.js';
+import { BY_SLOT, SLOT_NAMES } from './wardrobe-data.js';
+import { thumb } from './models.js';
 
 const css = `
 #creator{position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;padding:12px;background:linear-gradient(180deg,rgba(127,211,232,.6),rgba(255,226,181,.7));backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px)}
@@ -18,7 +20,7 @@ const css = `
 #creator .sw{width:38px;height:38px;border-radius:50%;border:3px solid #fff;box-shadow:0 0 0 2px rgba(91,67,50,.2);cursor:pointer;position:relative}
 #creator .sw.on{box-shadow:0 0 0 3px #f2a240}
 #creator .sw i{position:absolute;right:-2px;bottom:-2px;width:15px;height:15px;border-radius:50%;border:2px solid #fff}
-#creator .ic{padding:3px;line-height:0}#creator .ic canvas{width:74px;height:50px;border-radius:10px}
+#creator .ic{padding:3px;line-height:0}#creator .acc{padding:3px;line-height:0}#creator .acc img{width:46px;height:46px}#creator .acc.none{width:52px;height:52px;line-height:1.1;font-size:12px;padding:4px}#creator .cnote{font-size:13px;color:var(--brown2,#8a6a50);margin:2px 0 6px}#creator .ic canvas{width:74px;height:50px;border-radius:10px}
 #creator .cfoot{display:flex;gap:10px;justify-content:center;padding:10px 14px 14px;border-top:2px dashed var(--line,#e7d1a6)}
 #creator .cfoot .btn{font-size:18px;padding:10px 22px}
 @media (max-width:700px),(max-height:520px){ #creator .cmain{flex-direction:column} #creator .cprev{flex:0 0 auto} #creator .cprev canvas{max-width:min(240px,34vh)} #creator h2{font-size:21px} }
@@ -29,10 +31,14 @@ const esc = s => String(s).replace(/[&<>"]/g, c=>({ '&':'&amp;','<':'&lt;','>':'
 
 function iconCanvas(draw){ const cv=document.createElement('canvas'); cv.width=148; cv.height=100; draw(cv.getContext('2d')); return cv; }
 
-export function openCreator({ look=CH.defaultLook(), title='Make your character', sub='', doneLabel='Done', cancel=false }={}){
+// owned: the clothes you've collected (v1.19). Without it, only the original outfits and colors are shown.
+export function openCreator({ look=CH.defaultLook(), title='Make your character', sub='', doneLabel='Done', cancel=false, owned=null }={}){
+  const own = owned || { outfits:new Set(), colors:new Set(), acc:{ hat:new Set(), face:new Set(), neck:new Set(), back:new Set() } };
   return new Promise(resolve=>{
     if (!document.getElementById('creatorCss')){ const st=document.createElement('style'); st.id='creatorCss'; st.textContent=css; document.head.appendChild(st); }
-    const L={ ...look };
+    const L={ ...CH.defaultLook(), ...look };
+    const okTop=i=>i<CH.BASE_OUTFITS || own.outfits.has(i) || i===look.top, okCol=i=>i<CH.BASE_COLORS || own.colors.has(i) || i===look.tc;
+    const okAcc=(slot,k)=>own.acc[slot].has(k) || k===(look[slot]|0);
     const el=document.createElement('div'); el.id='creator';
     el.innerHTML=`<div class="cbox"><div class="chead"><h2>${esc(title)}</h2>${sub?`<div class="csub">${esc(sub)}</div>`:''}</div>
       <div class="cmain"><div class="cprev"><canvas id="crCv"></canvas></div><div class="copts" id="crOpts"></div></div>
@@ -53,20 +59,26 @@ export function openCreator({ look=CH.defaultLook(), title='Make your character'
     cv.addEventListener('pointermove',e=>{ if (drag) rotY=drag.r+(e.clientX-drag.x)*0.012; });
     cv.addEventListener('pointerup',()=>drag=null); cv.addEventListener('pointercancel',()=>drag=null);
     (function loop(){ if (!alive) return; requestAnimationFrame(loop); size(); const t=(performance.now()-t0)/1000; holder.rotation.y=rotY;
-      if (obj){ const u=obj.userData; pop*=0.9; const k=Math.sin(t*2.2)*0.02 + Math.sin(pop*9)*pop*0.12; u.body.scale.set(1-k*0.55,1+k,1-k*0.55);
+      if (obj){ const u=obj.userData; pop*=0.9; const k=Math.sin(t*2.2)*0.02 + Math.sin(pop*9)*pop*0.12; u.body.scale.set(1-k*0.55,1+k,1-k*0.55); if (u.anims) for (const f of u.anims) f(t, 0.016, false);
         if (u.arms) u.arms.forEach((a,i)=>a.rotation.z=(i?-1:1)*(0.05+Math.sin(t*1.6+i)*0.05)); if (u.tail) u.tail.rotation.y=Math.sin(t*2.5)*0.2; if (u.ears) u.ears.forEach((e,i)=>e.rotation.z=e.userData.base+Math.sin(t*1.7+i)*0.05); }
       R.render(sc,cam); })();
 
     // ---------- options ----------
     const sp=()=>CH.SPECIES[L.sp], sch=()=>sp().schemes[L.c];
+    // accessories you own, one row per slot; "None" takes it off
+    function accRows(){ const rows=CH.ACC_SLOTS.map(slot=>{ const list=BY_SLOT[slot].map((a,i)=>[a,i+1]).filter(([,k])=>okAcc(slot,k)); if (!list.length) return '';
+        const cur=L[slot]|0; const item=list.find(([,k])=>k===cur);
+        return `<div class="crow">${SLOT_NAMES[slot]} · <span style="font-weight:500">${item?esc(item[0].name):'None'}</span></div><div class="cchips"><button class="chip acc none ${cur===0?'on':''}" data-acc="${slot}:0">None</button>${list.map(([a,k])=>`<button class="chip acc ${k===cur?'on':''}" data-acc="${slot}:${k}" title="${esc(a.name)}"><img src="${thumb('wa_'+a.id)}" alt=""></button>`).join('')}</div>`; }).join('');
+      return rows || '<div class="crow">Accessories</div><div class="cnote">Hats, glasses, necklaces and backpacks turn up at Pemberton\'s clothes rack and as thank-you gifts from islanders.</div>'; }
     function render(){
       const s=sp(), S=sch();
       opts.innerHTML=`
         <div class="crow">Critter</div><div class="cchips">${CH.SPECIES_IDS.map(id=>`<button class="chip ${id===L.sp?'on':''}" data-sp="${id}">${CH.SPECIES[id].name}</button>`).join('')}</div>
         <div class="crow">Colors · <span style="font-weight:500">${esc(S.name)}</span></div><div class="cchips">${s.schemes.map((x,i)=>`<div class="sw ${i===L.c?'on':''}" data-c="${i}" title="${esc(x.name)}" style="background:${hex(x.fur)}"><i style="background:${hex(x.accent)}"></i></div>`).join('')}</div>
         <div class="crow">Finish</div><div class="cchips">${CH.FINISHES.map((o,i)=>`<button class="chip ${i===(L.f||0)?'on':''}" data-f="${i}">${o.name}</button>`).join('')}</div>
-        <div class="crow">Outfit</div><div class="cchips">${CH.OUTFITS.map((o,i)=>`<button class="chip ${i===L.top?'on':''}" data-top="${i}">${o.name}</button>`).join('')}</div>
-        <div class="crow">Outfit color</div><div class="cchips">${CH.OUTFIT_COLORS.map((c,i)=>`<div class="sw ${i===L.tc?'on':''}" data-tc="${i}" style="background:${hex(c)}"></div>`).join('')}</div>
+        <div class="crow">Outfit</div><div class="cchips">${CH.OUTFITS.map((o,i)=>okTop(i)?`<button class="chip ${i===L.top?'on':''}" data-top="${i}">${o.name}</button>`:'').join('')}</div>
+        <div class="crow">Outfit color · <span style="font-weight:500">${esc(CH.COLOR_NAMES[L.tc]||'')}</span></div><div class="cchips">${CH.OUTFIT_COLORS.map((c,i)=>okCol(i)?`<div class="sw ${i===L.tc?'on':''}" data-tc="${i}" title="${esc(CH.COLOR_NAMES[i]||'')}" style="background:${hex(c)}"></div>`:'').join('')}</div>
+        ${accRows()}
         <div class="crow">Eyes · <span style="font-weight:500">${CH.EYES[L.e].name}</span></div><div class="cchips" id="crEyes"></div>
         <div class="crow">Nose · <span style="font-weight:500">${CH.NOSES[L.n].name}</span></div><div class="cchips" id="crNoses"></div>
         <div class="crow">Mouth · <span style="font-weight:500">${CH.MOUTHS[L.m].name}</span></div><div class="cchips" id="crMouths"></div>`;
@@ -81,9 +93,13 @@ export function openCreator({ look=CH.defaultLook(), title='Make your character'
       opts.querySelectorAll('[data-f]').forEach(b=>b.onclick=()=>{ L.f=+b.dataset.f; rebuild(); render(); });
       opts.querySelectorAll('[data-top]').forEach(b=>b.onclick=()=>{ L.top=+b.dataset.top; rebuild(); render(); });
       opts.querySelectorAll('[data-tc]').forEach(b=>b.onclick=()=>{ L.tc=+b.dataset.tc; rebuild(); render(); });
+      opts.querySelectorAll('[data-acc]').forEach(b=>b.onclick=()=>{ const [slot,k]=b.dataset.acc.split(':'); L[slot]=+k; rebuild(); render(); });
     }
     const close=(val)=>{ alive=false; if (obj) disposeObj(obj); R.dispose(); try{ R.forceContextLoss(); }catch(e){} el.remove(); resolve(val); };
-    el.querySelector('#crRnd').onclick=()=>{ Object.assign(L, CH.randomLook(Math.random, 0.25)); rebuild(); render(); };
+    el.querySelector('#crRnd').onclick=()=>{ Object.assign(L, CH.randomLook(Math.random, 0.25)); const pick=a=>a[Math.floor(Math.random()*a.length)];
+      L.top=pick(CH.OUTFITS.map((o,i)=>i).filter(okTop)); L.tc=pick(CH.OUTFIT_COLORS.map((c,i)=>i).filter(okCol));
+      for (const slot of CH.ACC_SLOTS){ const ks=[0,...BY_SLOT[slot].map((a,i)=>i+1).filter(k=>okAcc(slot,k))]; L[slot]=Math.random()<0.5?0:pick(ks); }
+      rebuild(); render(); };
     el.querySelector('#crDone').onclick=()=>close({ ...L });
     if (cancel) el.querySelector('#crCancel').onclick=()=>close(null);
     rebuild(); render();

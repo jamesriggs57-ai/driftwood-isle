@@ -753,3 +753,197 @@ export const MENTOR = [
   { who:'otis', day:4, friend:4, winter:true, give:[['sled',1]],
     lines:['{p}! You know what snow means? SLED SEASON, {c}!','Here, take my spare sled. Hop on at the top of a hill and let gravity do the cardio!'] },
 ];
+
+/* =====================================================================
+   v1.19 CONTENT: wardrobe, 20 new furniture pieces, themed favors
+   ===================================================================== */
+import { OUTFITS_NEW, COLORS_NEW, ACCESSORIES } from './wardrobe-data.js';
+/* ---------- Wardrobe: clothes go straight into your wardrobe (never your bag). Wear them from Menu > Change my look.
+   shop:'clothes' = Pemberton's clothes rack (a few each day) and favors; shop:'favor' = only as a thank-you from an islander. */
+const W_RAR = { c:8, u:4, r:1.8, v:1 };
+const wear = (id, name, t, i, buy, r, shop='clothes') => def(id, { name, kind:'wear', wear:{ t, i }, price:0, buy, rarity:W_RAR[r], shop, stack:1, model:{ t:'wear', w:t, i } });
+{ const O={ sailor:[2400,'u'], raincoat:[2800,'u'], cardigan:[2200,'c'], puffer:[3400,'u'], flannel:[1800,'c'], robe:[6000,'v','favor'], peacoat:[3800,'r'], pajamas:[1600,'c'], ruffle:[4200,'r'], varsity:[3600,'r','favor'] };
+  OUTFITS_NEW.forEach((o,k)=>{ const [b,r,sh]=O[o.id]; wear('wo_'+o.id, o.name, 'outfit', 5+k, b, r, sh); });
+  const CR={ Brick:'c', Mustard:'c', Sage:'c', Forest:'u', Navy:'u', Lavender:'u', Peach:'c', Mint:'c', Plum:'r', Cocoa:'c' };
+  COLORS_NEW.forEach(([c,n],k)=>{ const r=CR[n]; wear('wc_'+n.toLowerCase(), n+' dye', 'color', 10+k, r==='c'?800:r==='u'?1200:1800, r); });
+  const A={ strawhat:[1400,'c'], sailorcap:[1800,'u'], pombeanie:[1200,'c'], wizardhat:[5000,'v','favor'], flowercrown:[2000,'u'], buckethat:[1500,'c'], tophat:[3200,'r'], anglercap:[2600,'u','favor'],
+    ballcap:[1200,'c'], crown:[12000,'v','favor'], nightcap:[1600,'u'], roundspecs:[1600,'c'], shades:[1800,'u'], starshades:[2200,'u'], monocle:[4000,'r','favor'], goggles:[3000,'r'],
+    pearls:[4800,'r'], puka:[1400,'c'], locket:[3600,'u'], bandana:[900,'c'], bowtie:[1100,'c'], longscarf:[1500,'c'], lei:[1600,'u'], moonstone:[4400,'r','favor'],
+    rucksack:[3800,'u'], bwings:[9000,'v'], shellpack:[4200,'r'], cape:[5200,'r'], teddypack:[3600,'u','favor'], balloon:[1200,'c'] };
+  ACCESSORIES.forEach(a=>{ const [b,r,sh]=A[a.id]; wear('wa_'+a.id, a.name, 'acc', a.id, b, r, sh); }); }
+export const WEAR_IDS = Object.keys(ITEMS).filter(id=>ITEMS[id].kind==='wear');
+
+/* ---------- v1.19 furniture. shop:'favor' pieces only come as an islander's thank-you. ---------- */
+furn('teaset','Tea Trolley',3200,0.55,U);
+furn('knitbasket','Knitting Basket',1100,0.4,C);
+furn('starlamp','Star Lamp',4800,0.4,{glow:true,...R});
+furn('moonmobile','Moon Mobile',3600,0.45,{shop:'favor',rarity:FR.r});
+furn('rodrack','Fishing Rod Rack',2600,0.55,{shop:'aquarium',tier:0,...C});
+furn('carvebench','Whittling Bench',2800,0.7,{shop:'favor',rarity:FR.r});
+furn('trampoline','Backyard Trampoline',6400,1.25,U);
+furn('cloudbag','Cloud Beanbag',2200,0.6,U);
+furn('eggchair','Hanging Egg Chair',7800,0.7,R);
+furn('vanity','Vanity Table',5200,0.65,{glow:true,...R});
+furn('candelabra','Silver Candelabra',3800,0.35,{glow:true,...U});
+furn('flowercart','Flower Cart',4200,0.8,{shop:'garden',tier:1,...U});
+furn('porchswing','Porch Swing',5600,1.1,R);
+furn('pottingbench','Potting Bench',2400,0.7,{shop:'garden',tier:0,...C});
+furn('ladybuglamp','Ladybug Lamp',2600,0.4,{shop:'garden',tier:1,glow:true,...U});
+furn('divehelmet','Diving Helmet',6800,0.45,{shop:'aquarium',tier:1,...R});
+furn('register','Brass Cash Register',5600,0.45,{shop:'favor',rarity:FR.r});
+furn('mailsorter','Mail Sorting Shelf',3400,0.6,{shop:'favor',rarity:FR.r});
+furn('curiocabinet','Curiosity Cabinet',9000,0.6,{shop:'favor',rarity:FR.v});
+furn('cauldron','Bubbling Cauldron',8000,0.6,{shop:'favor',glow:true,rarity:FR.v});
+
+/* ---------- Themed favors (v1.19) ----------
+   Every islander, shopkeeper, Clementine, Professor Thistle and Wendell asks for things that fit who they are, and pays you
+   back with something on theme. A favor is put together from: an opener, one of their asks, and a gift from their list.
+   Ask types: item (a specific item; 'native' = this island's fruit), kind (anything of a kind), catch (a specific in-season
+   critter), cook (a specific dish), deliver (a parcel to a neighbor), do (go do something n times; counted after you agree).
+   do events: bug, bugnight, fish, chop, dig, water, plant, harvest, fruit, shell, weed, cook, craft, donate, sold, talk, gift, place, potion */
+const A=(t,id,n,line,o={})=>Object.assign({ t, id, n, line }, o);
+export const FAVOR_THEMES = {
+  pippa:{ open:['Pippa is bouncing on her toes.','Ooh! {p}! Perfect timing, {c}!','I have the BEST idea and I need your help, {c}!'],
+    asks:[ A('kind','flower',[3,5],'I\'m making flower crowns for everyone on the island! Could you bring me {n} flowers?'),
+      A('do','bug',[3,5],'I want to count every bug on the island! Catch {n} bugs for my tally? You can keep them, I just want the number!'),
+      A('item','native',[4,6],'Fruit tunnel planning meeting! I need {n} {item} as snacks. Very important.'),
+      A('do','plant',[2,3],'Could you plant {n} things somewhere on the island? Flowers, trees, anything! More color!'),
+      A('catch','bug',[1,1],'I saw a {item} in my dreams last night. Could you catch one so I know it\'s real?'),
+      A('do','water',[5,8],'The flowers look thirsty! Could you water {n} plants for me?'),
+      A('do','fruit',[6,10],'I\'m drying fruit for winter! Pick up {n} pieces of fruit from around the island?'),
+      A('deliver',null,[1,1],'Could you take this to {to}? It\'s a surprise! Don\'t peek!'),
+      A('kind','berry',[3,5],'Berry pancakes! I need {n} berries. Any kind!') ],
+    gifts:['wa_flowercrown','porchswing','flowercart','ladybuglamp','wo_ruffle','wc_peach','wa_lei','wa_bwings','wa_balloon','tulipvase'],
+    thanks:['YOU are the best, {c}! Here, I want you to have this!','Yay yay yay! Okay, okay, this is for you, {c}!'] },
+  bramble:{ open:['Bramble grunts.','Hrm. You. Got a minute, {c}?','...Don\'t make a big deal out of this, {c}.'],
+    asks:[ A('item','wood',[6,10],'Firewood\'s low. Bring me {n} wood. Winter doesn\'t wait.'),
+      A('item','softwood',[4,6],'I\'m whittling. Need {n} branches. Straight ones, if you can.'),
+      A('item','stone',[4,6],'Dock post needs a stone footing. {n} stones.'),
+      A('item','iron',[1,2],'Hinge on my shed rusted through. {n} iron nugget{s}.'),
+      A('do','chop',[6,10],'Chop {n} pieces of wood. Good for the arms. ...And I need kindling.'),
+      A('do','fish',[2,4],'Catch {n} fish. Any kind. Keep them. I want to see if you have the patience.'),
+      A('catch','fish',[1,1],'There\'s a {item} out there that keeps stealing my bait. Catch it.'),
+      A('do','craft',[1,2],'Make {n} thing{s} at a workbench. Hands should know how to make things.'),
+      A('kind','fish',[1,1],'Bring me a fish for supper. Any fish.') ],
+    gifts:['carvebench','rodrack','wa_bandana','wo_flannel','wc_brick','wc_forest','wa_buckethat','logpile','wa_rucksack','stumpstool'],
+    thanks:['...Good work. Take this. I mean it.','Hrm. Thanks. Here. Don\'t mention it, {c}.'] },
+  lumi:{ open:['Lumi is gazing at nothing in particular.','Oh... {p}. I was hoping you\'d drift by, {c}.','The stars told me you\'d help with this, {c}.'],
+    asks:[ A('kind','shell',[2,4],'I\'m writing a poem about the tide. I need {n} beach finds to read it to.'),
+      A('kind','fossil',[1,1],'Could you bring me a fossil? I want to hold something older than the moon\'s stories.'),
+      A('do','bugnight',[2,3],'Moths only come out at night. Could you catch {n} bugs after dark? I want to know they\'re safe.'),
+      A('do','dig',[2,3],'Something is sleeping under the island. Dig up {n} cracks and see if it\'s awake?'),
+      A('catch','fish',[1,1],'Do you think a {item} dreams? Catch one and we can ask it.'),
+      A('do','shell',[3,5],'Walk the beach and pick up {n} beach finds. The sand likes to be visited.'),
+      A('kind','flower',[2,3],'Could you bring me {n} flowers? I want to press them into my star book.'),
+      A('do','donate',[1,2],'Professor Thistle\'s museum feels lonely. Could you donate {n} thing{s} to it?') ],
+    gifts:['starlamp','moonmobile','wa_moonstone','wa_starshades','wa_cape','wc_lavender','wc_navy','telescope','wo_pajamas','wa_nightcap'],
+    thanks:['You did it. The island feels a little brighter, {c}. This is for you.','Thank you... here. It was always meant to be yours, {c}.'] },
+  otis:{ open:['Otis is doing lunges.','{p}! Perfect! I need a teammate, {c}!','Okay okay okay, challenge time, {c}!'],
+    asks:[ A('do','bug',[4,6],'Bug sprint! Catch {n} bugs, go go go!'),
+      A('do','fish',[3,5],'Reel training! Catch {n} fish. Big ones build big arms!'),
+      A('do','chop',[8,12],'Chopping is the best workout. Do {n} chops, {c}!'),
+      A('item','coconut',[2,3],'Post-workout coconut water! Bring me {n} coconuts!'),
+      A('do','talk',[3,4],'Team spirit! Go say hi to {n} neighbors today!'),
+      A('catch','bug',[1,1],'I raced a {item} yesterday and LOST. Catch one so I can study its technique!'),
+      A('do','water',[6,8],'Watering can curls! Water {n} plants!'),
+      A('item','native',[4,4],'Fruit is fuel! Bring me {n} {item}!') ],
+    gifts:['trampoline','wo_varsity','wa_ballcap','wa_shades','wc_navy','wc_mustard','wo_puffer','wa_goggles','bench'],
+    thanks:['That\'s a personal best, {c}! Here, your trophy!','Teamwork! You earned this, {c}!'] },
+  mabel:{ open:['Mabel dusts flour off her paws.','Oh, {p}, dear! Do you have a moment, {c}?','I\'m in a bit of a pickle, {c}.'],
+    asks:[ A('kind','veg',[2,4],'I\'m making soup for the whole island. Could you bring me {n} vegetables?'),
+      A('kind','herb',[2,3],'My tea tin is empty. {n} herbs would be lovely.'),
+      A('cook',null,[1,1],'Would you make me a {item}? I want to see if your cooking is as good as mine!'),
+      A('do','cook',[1,2],'Cook {n} meal{s} for yourself, please. I worry you don\'t eat.'),
+      A('do','harvest',[3,5],'Pick {n} things from a garden, dear. Fresh food is happy food.'),
+      A('item','native',[3,5],'Pie season! Bring me {n} {item}.'),
+      A('deliver',null,[1,1],'Could you run this soup over to {to}? It\'s still warm!'),
+      A('do','water',[4,6],'Water {n} plants for me? My knees aren\'t what they were.') ],
+    gifts:['teaset','knitbasket','wo_cardigan','wc_sage','wc_peach','wa_longscarf','wa_roundspecs','wickerbasket','ottoman'],
+    thanks:['Oh, bless you, {c}. Here, take this. I insist.','You\'re a treasure, {p}. This is for you, {c}.'] },
+  juniper:{ open:['Juniper sighs, beautifully.','Darling. I have a small request, {c}.','{p}, you have taste. I need it, {c}.'],
+    asks:[ A('kind','fossil',[1,1],'My mantelpiece is bare. A fossil, darling. Any fossil.'),
+      A('kind','furniture',[1,1],'I\'m redecorating. Bring me a piece of furniture. Surprise me.'),
+      A('item','clay',[2,3],'I\'m trying sculpture. {n} clay, please. Fine clay.'),
+      A('do','donate',[1,2],'A cultured island needs a cultured museum. Donate {n} piece{s} to Professor Thistle.'),
+      A('do','sold',[5,8],'Clutter is the enemy of elegance. Sell {n} things you don\'t need, darling.'),
+      A('catch','fish',[1,1],'I want a {item} for a still life. Bring me one.'),
+      A('kind','flower',[4,6],'An arrangement for my foyer. {n} flowers, darling.'),
+      A('do','place',[2,3],'Place {n} pieces of furniture, darling. Your home should say something.') ],
+    gifts:['eggchair','vanity','candelabra','wa_pearls','wa_tophat','wo_peacoat','wc_plum','wa_locket','wa_crown','tiffany'],
+    thanks:['Exquisite, {c}. A token of my appreciation.','You never disappoint, darling. This is yours.'] },
+  clover:{ open:['Clover yawns.','Mmm, {p}... could you do me a teensy favor, {c}?','I would do this myself, but... nap, {c}.'],
+    asks:[ A('kind','food',[1,1],'Snack emergency. Bring me something you cooked. Anything.'),
+      A('item','native',[4,6],'I\'m out of {item}. Bring me {n}? I\'ll be right here. Lying down.'),
+      A('item','coconut',[2,2],'Coconuts. Two of them. One for each paw.'),
+      A('do','fruit',[5,8],'Pick up {n} pieces of fruit so I don\'t have to. You\'re a hero.'),
+      A('kind','berry',[3,5],'{n} berries. For a pie I\'m thinking about making. Someday.'),
+      A('do','weed',[4,6],'The weeds by my house are noisy. Pull {n} of them, please.'),
+      A('cook',null,[1,1],'Have you ever made {item}? I\'d really like one. For the science of snacks.'),
+      A('kind','fish',[1,1],'Grilled fish sounds good. Bring me any fish.') ],
+    gifts:['cloudbag','hammock','wa_nightcap','wo_pajamas','wa_teddypack','wc_mint','wc_cocoa','blanket','ottoman'],
+    thanks:['You did all that? I\'m tired just thinking about it. Here, {c}.','Mmm, perfect. This is for you. Don\'t wake me, {c}.'] },
+  pemberton:{ c:'friend', open:['Pemberton leans over the counter.','Psst. Partner. I\'ve got a job for you, {c}.','Business is business, {c}. And I need a hand.'],
+    asks:[ A('do','sold',[6,10],'Shelves are looking bare. Sell me {n} things, any things!'),
+      A('item','wood',[6,8],'I\'m building new shelves. {n} wood, please.'),
+      A('kind','shell',[3,5],'Visitors love beach trinkets. Bring me {n} beach finds to stock.'),
+      A('item','clay',[2,3],'Grandma\'s old jar cracked. I need {n} clay to fix it up.'),
+      A('item','iron',[1,2],'The cash drawer is jammed. {n} iron nugget{s} should sort it.'),
+      A('deliver',null,[1,1],'Special order for {to}. Could you deliver it? I\'d go myself, but the shop.'),
+      A('kind','fruit',[4,6],'Fruit stand idea! Bring me {n} pieces of fruit, any kind.') ],
+    gifts:['register','crate','wickerbasket','wa_bowtie','wa_buckethat','wo_flannel','wc_mustard','wc_brick','bookstack'],
+    thanks:['Pleasure doing business, {c}! Here, on the house.','Ha! Grandma would approve. Take this, {c}.'] },
+  marlo:{ c:'mate', open:['Marlo flips a shell coin.','Ahoy, {p}! Got a job for a sharp angler, {c}.','Splash! You\'re just who I needed, {c}.'],
+    asks:[ A('do','fish',[3,6],'The tanks need livening up! Catch {n} fish. Keep \'em, I just want to see your form!'),
+      A('catch','fish',[1,1],'A customer wants a {item}. Catch one for me?'),
+      A('kind','fish',[2,2],'Restock time! Bring me {n} fish, any kind.'),
+      A('kind','shell',[3,3],'I\'m decorating a new tank. {n} beach finds for the gravel, please!'),
+      A('do','shell',[4,6],'Comb the beach for me. Pick up {n} beach finds.'),
+      A('item','stone',[3,5],'I need {n} stones for a tidepool display.') ],
+    gifts:['divehelmet','rodrack','wa_anglercap','wo_sailor','wa_sailorcap','wa_shellpack','wa_puka','wc_navy','wo_raincoat','shipwheel'],
+    thanks:['Fair winds, {c}! Here\'s something from the back room.','Ha! You\'re a natural. Take this, {c}.'] },
+  sprig:{ c:'hi hi', open:['Sprig is peering into a jar.','Oh! Oh! {p}! Can you help me with a little science, {c}?','Psst. The beetles say you\'re reliable, {c}.'],
+    asks:[ A('do','bug',[3,6],'I\'m surveying the bug population! Catch {n} bugs for my count!'),
+      A('catch','bug',[1,1],'I need a {item} for my terrarium notes. Could you catch one?'),
+      A('kind','flower',[3,6],'Cross-pollination experiment! Bring me {n} flowers!'),
+      A('do','plant',[2,4],'Plant {n} things anywhere on the island. Bees need options!'),
+      A('do','water',[6,8],'Water {n} plants. Hydrated plants, happy bugs!'),
+      A('do','weed',[3,6],'Pull {n} weeds for my compost heap, please!'),
+      A('kind','bug',[1,2],'I\'m sketching wing patterns. Bring me {n} bug{s}?') ],
+    gifts:['pottingbench','ladybuglamp','flowercart','wa_bwings','wa_strawhat','wc_sage','wc_mint','wa_flowercrown','terrarium','butterflyframe'],
+    thanks:['For science, and for you! Thank you, {c}!','You\'re amazing! Here, this is yours, {c}.'] },
+  clementine:{ c:'neighbor', open:['Clementine shuffles a stack of papers.','Town business! Official town business, {c}!','Oh good, {p}! The town needs you, {c}.'],
+    asks:[ A('deliver',null,[1,1],'Official mail for {to}! Could you deliver it? The postal service is short-staffed. It\'s just me.'),
+      A('do','talk',[3,5],'Community outreach! Say hello to {n} islanders today.'),
+      A('do','weed',[5,8],'The plaza needs tidying. Pull {n} weeds, would you?'),
+      A('do','plant',[2,4],'Beautification project! Plant {n} things around town.'),
+      A('item','wood',[5,8],'The notice board needs repairs. {n} wood, please!'),
+      A('do','gift',[1,2],'Neighborly kindness week! Give {n} gift{s} to islanders.'),
+      A('kind','flower',[3,5],'Flowers for the town hall! {n} would be lovely.') ],
+    gifts:['mailsorter','signpost','mailbox','wa_bowtie','wa_roundspecs','wo_cardigan','wc_peach','bench','wa_locket'],
+    thanks:['On behalf of the whole town, thank you, {c}! Here!','Splendid civic work! This is for you, {c}.'] },
+  thistle:{ c:'my dear', open:['Professor Thistle adjusts his glasses. Slowly.','Ah. {p}. I have a scholarly request, {c}.','Mm. Yes. A task for a curious mind, {c}.'],
+    asks:[ A('do','donate',[1,3],'The collection grows slowly. Like me. Could you donate {n} new thing{s}?'),
+      A('kind','fossil',[1,1],'I would like to study a fossil at my desk. Any one will do.'),
+      A('do','dig',[3,5],'Field work! Dig up {n} cracks around the island. Science demands it.'),
+      A('catch','fish',[1,1],'I\'m writing a paper on the {item}. A specimen would be most helpful.'),
+      A('catch','bug',[1,1],'My notes on the {item} are incomplete. Could you catch one?'),
+      A('kind','shell',[2,3],'Beach finds tell us about the currents. Bring me {n}, please.') ],
+    gifts:['curiocabinet','globe','wa_monocle','wa_roundspecs','wo_peacoat','wc_cocoa','bookshelf','wa_bowtie','orrery'],
+    thanks:['Fascinating work. Truly. Please accept this, {c}.','For the advancement of knowledge, and for you. Here, {c}.'] },
+  wendell:{ c:'by my beard', open:['Wendell stirs the air with his staff.','Ah! The stars said you\'d come. They lie a lot, but not today, {c}.','A small errand, apprentice. Ahem. Friend, {c}.'],
+    asks:[ A('item','clay',[2,3],'I need {n} clay for new potion bottles. The old ones keep exploding.'),
+      A('kind','shell',[2,4],'Ground seashell is a fine catalyst. {n} beach finds, please.'),
+      A('do','bugnight',[2,3],'Night bugs carry moonlight on their wings. Catch {n} after dark.'),
+      A('item','weed',[4,6],'Weeds! Lovely, magical weeds. {n} of them.'),
+      A('kind','fossil',[1,1],'Old bones, old magic. Bring me a fossil.'),
+      A('do','potion',[1,1],'Test one of my potions for me. Drink {n}, and tell no one if you grow a tail.'),
+      A('item','iron',[1,2],'The cauldron has a crack. {n} iron nugget{s}, quickly!'),
+      A('catch','fish',[1,1],'One scale from a {item} is just what this spell needs.') ],
+    gifts:['cauldron','candelabra','crystalball','wa_wizardhat','wo_robe','wa_cape','wa_moonstone','wc_plum','wc_lavender','starlamp'],
+    thanks:['Splendid! Ahem. Your reward, as foretold, {c}.','Hocus pocus, a gift for you! I just handed it to you, but it\'s still magic, {c}.'] },
+};
+// "do" tasks: what to tell the player ({n} and {s} are filled in) and what each step is worth in clams
+export const DO_TASKS = { bug:['Catch {n} bug{s}',250], bugnight:['Catch {n} bug{s} after dark',320], fish:['Catch {n} fish',300], chop:['Chop wood {n} time{s}',60], dig:['Dig up {n} crack{s}',200],
+  water:['Water {n} plant{s}',60], plant:['Plant {n} thing{s}',150], harvest:['Harvest {n} crop{s}',100], fruit:['Pick up {n} piece{s} of fruit',110], shell:['Pick up {n} beach find{s}',110],
+  weed:['Pull {n} weed{s}',50], cook:['Cook {n} meal{s}',300], craft:['Make {n} thing{s} at a workbench',400], donate:['Donate {n} thing{s} to the museum',600], sold:['Sell {n} thing{s}',60],
+  talk:['Say hello to {n} neighbor{s}',90], gift:['Give {n} gift{s} to islanders',300], place:['Place {n} piece{s} of furniture',150], potion:['Drink {n} potion{s}',1500] };

@@ -211,6 +211,7 @@ furn('rug','Round Rug',1200,1.1,{flat:true,...U});
 furn('armchair','Armchair',1500,0.6,U);
 furn('floorlamp','Floor Lamp',1300,0.35,{glow:true,...U});
 furn('dresser','Dresser',1600,0.65,U);
+furn('chest','Storage Chest',2400,0.55,{shop:'home',stack:1,store:true,...C});   // v1.19: holds items; Pemberton always has one
 furn('desk','Writing Desk',1700,0.75,U);
 furn('stove','Wood Stove',3000,0.6,{glow:true,...U});
 furn('pumpkin','Harvest Pumpkin',650,0.5,{months:[9,10,11],...C});
@@ -287,8 +288,10 @@ export const RARE_WORK = [
 // One plan item per showpiece. Plans are learned the moment you pick one up, so you never hold duplicates.
 for (const r of RARE_WORK){ r.plan='plan_'+r.id; def(r.plan, { name:'Plan: '+ITEMS[r.id].name, kind:'plan', learns:r.id, price:6000, rarity:FR.l, stack:1, model:{t:'plan', of:r.id} }); }
 // How often rare things turn up (chance per action). Potions double the matching ones.
-export const RARE_ODDS = { chop:0.012, fell:0.06, shake:0.02, rock:0.012, rockNight:0.03, catch:0.015, stump:0.1, weedNight:0.03,
-  beachPearl:0.06, digPlan:0.015, bottlePlan:0.03, peddlerPlan:0.35 };
+// v1.19: cut hard. Rare ingredients are "very rare" (under 0.5% per ordinary action) and plans are legendary
+// (roughly one dug up in 1,000 digs, one in a bottle about once a year, Fennick has one about once a month).
+export const RARE_ODDS = { chop:0.003, fell:0.012, shake:0.004, rock:0.003, rockNight:0.005, catch:0.003, stump:0.02, weedNight:0.004,
+  beachPearl:0.01, digPlan:0.001, bottlePlan:0.003, peddlerPlan:0.08 };
 export const PLAN_PRICE = 45000;   // Fennick's price for a plan
 
 /* ---------- Woodworking ----------
@@ -309,6 +312,7 @@ export const WOODWORK = [
   { id:'bookshelf',  mats:{ wood:8, iron:1 },      unlock:8 },
   { id:'desk',       mats:{ wood:8, iron:2 },      unlock:8 },
   { id:'dresser',    mats:{ wood:8, iron:2 },      unlock:11 },
+  { id:'chest',      mats:{ wood:8, iron:2 },      unlock:2 },
   { id:'arbor',      mats:{ softwood:10, wood:4 }, unlock:11 },
   { id:'stumpstool', mats:{ stump:1 },             unlock:0 },
   { id:'stumptable', mats:{ stump:1, wood:3 },     unlock:2 },
@@ -550,7 +554,7 @@ export const KEEPERS = {
     invest:['A partner! I\'ll build a little greenhouse!','More glass, more plants, more bugs! Thank you!','A conservatory. A whole conservatory. I need to sit down.'] },
   clementine:{ id:'clementine', acc:['bow'], accC:0xf08aa8,  name:'Clementine', species:'hedgehog', ears:'round', fur:0xa88a6a, muzzle:0xf4e6d4, shirt:0xe8a040, cheek:0xf0a0a0, voice:520,
     greet:['Town business, town business! What can I do for you?','Good to see you! The island is growing every day.','Oh! Hello! I was just sorting the mail by smell. Long story.'],
-    first:['Oh, you must be the new face everyone is talking about! I\'m Clementine. I run the town.','Well, I run the tent. It\'s a very official tent.','New neighbors come to me first, and so do the island\'s big projects. Chip in a few clams and we\'ll turn this tent into a proper town hall!','I also do home loans. When you\'re ready to move out of your tent, come talk to me.'] },
+    first:['Oh, you must be the new face everyone is talking about! I\'m Clementine. I run the town.','Well, I run the tent. It\'s a very official tent.','The island\'s big projects come through me. Chip in a few clams and we\'ll turn this tent into a proper town hall! Nobody new will move here until the town looks like a town.','I also do home loans. When you\'re ready to move out of your tent, come talk to me.'] },
   thistle:{ id:'thistle', acc:['glasses'],  name:'Professor Thistle', species:'tortoise', ears:'none', fur:0x9ab07a, muzzle:0xd8e0b8, shirt:0x8a6a4a, cheek:0xe0b0a0, voice:200,
     greet:['Ah, welcome, welcome. Slowly now. Everything in here is very old. Including me.','Hello again! Have you brought something for the collection?'],
     night:['Mm? Oh. I was resting my eyes. The museum never closes. Neither do I, apparently.'],

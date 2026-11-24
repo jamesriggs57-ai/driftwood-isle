@@ -77,6 +77,7 @@ function clampGuest(d) {
   d.clams = Math.min(Math.floor(d.clams), GUEST.clams);
   d.inv = d.inv.filter(e => ITEMS[e.id] && (ITEMS[e.id].rarity ?? 5) >= GUEST.minRarity);
   for (const k of ['placed', 'ground']) if (Array.isArray(d[k])) d[k] = d[k].filter(e => ITEMS[e.id] && (ITEMS[e.id].rarity ?? 5) >= GUEST.minRarity);
+  if (Array.isArray(d.placed)) for (const e of d.placed) if (Array.isArray(e.store)) e.store = e.store.filter(x => x && ITEMS[x.id] && (ITEMS[x.id].rarity ?? 5) >= GUEST.minRarity);   // v1.19 storage chests
   if (d.museum && d.museum.items) for (const id of Object.keys(d.museum.items)) if (!ITEMS[id] || (ITEMS[id].rarity ?? 5) < GUEST.minRarity) delete d.museum.items[id];
   return d;
 }

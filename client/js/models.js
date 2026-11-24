@@ -397,6 +397,12 @@ export const FURN_BUILDERS = {
   rug(g){ const m=mk(G.cyl(1.1,1.1,0.03,28), M(0xd8805a), 0,0.015,0,g); m.castShadow=false; mk(G.cyl(0.8,0.8,0.035,28), M(0xf0c890), 0,0.02,0,g).castShadow=false; mk(G.cyl(0.45,0.45,0.04,24), M(0xd8805a), 0,0.025,0,g).castShadow=false; },
   armchair(g){ mk(G.box(0.95,0.4,0.85), M(0xc86a5a), 0,0.3,0,g); mk(G.box(0.95,0.7,0.2), M(0xc86a5a), 0,0.75,-0.35,g); for(const s of [-1,1]) mk(G.box(0.18,0.35,0.85), M(0xb85a4a), s*0.47,0.6,0,g); mk(G.box(0.7,0.12,0.6), M(0xf0d8c0), 0,0.55,0.05,g); },
   floorlamp(g){ mk(G.cyl(0.2,0.24,0.05,12), M(0x4a3a30), 0,0.03,0,g); mk(G.cyl(0.03,0.03,1.5,8), M(0x4a3a30), 0,0.78,0,g); mk(G.cyl(0.18,0.3,0.35,14,1,true), glowMat(0xfff0c8), 0,1.6,0,g); addGlow(g,1.5,2.8); },
+  chest(g){ // a wooden storage chest with iron bands, a domed lid and a brass latch
+    mk(G.box(1.0,0.5,0.6), M(WOODL), 0,0.27,0,g);
+    const lid=mk(G.cyl(0.3,0.3,1.0,16,1,false,0,Math.PI), M(WOOD), 0,0.52,0,g); lid.rotation.z=Math.PI/2; lid.scale.set(0.6,1,1);
+    for (const x of [-0.36,0.36]){ mk(G.box(0.08,0.52,0.63), M(0x5a5a62,{metalness:0.5,roughness:0.45}), x,0.27,0,g); const b=mk(G.cyl(0.315,0.315,0.08,16,1,false,0,Math.PI), M(0x5a5a62,{metalness:0.5,roughness:0.45}), x,0.52,0,g); b.rotation.z=Math.PI/2; b.scale.set(0.63,1,1.02); }
+    mk(G.box(0.14,0.16,0.04), M(0xf0c040,{metalness:0.6,roughness:0.3}), 0,0.5,0.31,g);
+    for (const x of [-0.42,0.42]) for (const z of [-0.24,0.24]) mk(G.box(0.1,0.06,0.1), M(WOOD2), x,0.03,z,g); },
   dresser(g){ mk(G.box(1.2,0.9,0.5), M(WOODL), 0,0.45,0,g); for(let i=0;i<3;i++){ mk(G.box(1.1,0.24,0.04), M(WOOD), 0,0.18+i*0.28,0.25,g); mk(G.sph(0.03,6,5), M(0xf0c040), 0,0.18+i*0.28,0.28,g); } mk(G.sph(0.12,10,8),M(0x8ac0e0),0.35,1.0,0,g); },
   desk(g){ mk(G.box(1.4,0.08,0.7), M(WOODL), 0,0.78,0,g); for(const x of [-0.62,0.62]) for(const z of [-0.28,0.28]) mk(G.box(0.07,0.76,0.07), M(WOOD2), x,0.38,z,g); mk(G.box(0.45,0.03,0.32), M(0xffffff), -0.2,0.83,0,g); mk(G.cyl(0.05,0.05,0.12,8), M(0x4a7ad8), 0.4,0.88,0,g); },
   stove(g){ mk(G.box(0.8,0.7,0.6), M(0x3a3a40,{metalness:0.4,roughness:0.5}), 0,0.45,0,g); for(const x of [-0.32,0.32]) for(const z of [-0.22,0.22]) mk(G.cyl(0.04,0.04,0.12,6), M(0x2a2a30), x,0.06,z,g); mk(G.box(0.4,0.3,0.02), glowMat(0xff8a3a), 0,0.42,0.31,g); mk(G.cyl(0.1,0.1,1.6,10), M(0x3a3a40), 0,1.6,-0.1,g); addGlow(g,0.45,2.2,0xffa060); },

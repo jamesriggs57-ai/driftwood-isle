@@ -52,7 +52,7 @@ export function openCreator({ look=CH.defaultLook(), title='Make your character'
     cv.addEventListener('pointerdown',e=>{ drag={ x:e.clientX, r:rotY }; cv.setPointerCapture(e.pointerId); });
     cv.addEventListener('pointermove',e=>{ if (drag) rotY=drag.r+(e.clientX-drag.x)*0.012; });
     cv.addEventListener('pointerup',()=>drag=null); cv.addEventListener('pointercancel',()=>drag=null);
-    (function loop(){ if (!alive) return; requestAnimationFrame(loop); size(); const t=(performance.now()-t0)/1000; if (!drag) rotY+=0.006; holder.rotation.y=rotY;
+    (function loop(){ if (!alive) return; requestAnimationFrame(loop); size(); const t=(performance.now()-t0)/1000; holder.rotation.y=rotY;
       if (obj){ const u=obj.userData; pop*=0.9; const k=Math.sin(t*2.2)*0.02 + Math.sin(pop*9)*pop*0.12; u.body.scale.set(1-k*0.55,1+k,1-k*0.55);
         if (u.arms) u.arms.forEach((a,i)=>a.rotation.z=(i?-1:1)*(0.05+Math.sin(t*1.6+i)*0.05)); if (u.tail) u.tail.rotation.y=Math.sin(t*2.5)*0.2; if (u.ears) u.ears.forEach((e,i)=>e.rotation.z=e.userData.base+Math.sin(t*1.7+i)*0.05); }
       R.render(sc,cam); })();

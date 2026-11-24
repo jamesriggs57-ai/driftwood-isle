@@ -23,6 +23,7 @@ import { openCreator } from './creator.js';
 import { createParty } from './party.js';
 import { buildPlot, buildStand, buildStore, buildTownHall, buildMuseumTier, buildCrop, buildStairs } from './models3.js';
 import { buildCottage } from './cottage.js';
+import { MUSEUM_ROOM, museumLayout, buildMuseumHall, buildDesk, buildBench, buildPalm, buildCenterpiece, buildShellCase, shellSlots, buildPedestal, fossilModel, shellModel, buildTank, buildTankView } from './museum.js';
 import { hasUpstairs, winAt, winKey, buildCustomHouse, buildHomeInterior, buildShopBuilding, buildMuseum, buildKeeper, buildMossby, buildExhibit, buildTower, buildWizard, planGrid, planCells, planProblem, fixDoor, linkKey, linkOf, defaultExt, defaultRoom } from './models2.js';
 
 const $ = s => document.querySelector(s);
@@ -1594,20 +1595,29 @@ function refreshStands(){ for (const id of ['aquarium','garden']) if (shopTier(i
 
 /* The museum grows as the collection does: a curio cottage, then a hall, then the full museum, then two wings.
    Builders do the work overnight once enough things have been donated. */
-const MUSEUM_SIZE=[[12,9],[18,13],[26,20],[34,22]], MUSEUM_AT=[0,12,35,65];
+const MUSEUM_AT=[0,12,35,65];
 const museumTierFor = n => n>=MUSEUM_AT[3]?3 : n>=MUSEUM_AT[2]?2 : n>=MUSEUM_AT[1]?1 : 0;
 if (S.museum.tier===undefined) S.museum.tier=museumTierFor(Object.keys(S.museum.items||{}).length);
 let museumEnt=null, thistle=null;
 const museumRoom=()=>ROOMS.museum;
+/* v1.21: inside is a proper hall (museum.js). Fish tanks down the left, insect terrariums down the right,
+   fossils on lit pedestals at the back, beach finds in a glass case in the middle. The hall gets bigger with each tier. */
 function buildMuseumAll(){
-  const t=S.museum.tier, [W,D]=MUSEUM_SIZE[t];
-  if (museumEnt) museumEnt.remove(); setRects('museum',[]); for (const id in exhibits){ exhibits[id].remove(); delete exhibits[id]; }
+  const t=S.museum.tier, [W,D]=MUSEUM_ROOM[t];
+  if (museumEnt) museumEnt.remove(); setRects('museum',[]); clearMuseumEnts();
   museumEnt=placeBuilding('museum', PLACES.museum[0], PLACES.museum[1], buildMuseumTier(t), 'Enter', ()=>enterRoom('museum')); museumEnt.tier=t;
   clearRoom('museum');
-  const items=[['counter',-W/2+3.2,D/2-1.9,0],['rug',0,D/2-2.0,0],['monstera',-W/2+0.8,D/2-1.2,0],['monstera',W/2-0.8,D/2-1.2,0]];
-  if (t>=1) items.push(['bench',W/4,D/2-1.4,0],['floorlamp',W/2-0.7,D/2-1.0,0]);
-  const R=makeRoom('museum', 11, { floor:0xd8c8a8, wall:0xf4eee0, pattern:'plain', accent:0x5a7a8a, items }, W, D, [museumEnt.doorPt[0], museumEnt.doorPt[1]+0.2]);
-  thistle=new Keeper(KEEPERS.thistle, R.ox-W/2+3.2, R.oz+D/2-2.8, ()=>talkCurator());
+  const [ox,oz]=roomOrigin(11), container=new THREE.Group(); container.visible=false; scene.add(container);
+  const shell=buildMuseumHall(W,D,t); shell.position.set(ox,0,oz); container.add(shell);
+  const LY=museumLayout(W,D,t), put=(m,x,z,ry=0)=>{ m.position.set(ox+x,0,oz+z); m.rotation.y=ry; container.add(m); return m; };
+  put(buildDesk(), LY.desk[0], LY.desk[1], Math.PI);
+  for (const [x,z,ry] of LY.benches) put(buildBench(), x, z, ry);
+  for (const [x,z] of LY.plants) put(buildPalm(), x, z);
+  put(buildShellCase(LY.shells.len), LY.shells.x, LY.shells.z);
+  if (LY.center) put(buildCenterpiece(t), LY.center.x, LY.center.z);
+  const R=ROOMS.museum={ id:'museum', ox, oz, w:W, d:D, group:container, shell, spec:{ mood:'museum' }, layout:LY, entry:[ox, oz+D/2-1.2], exit:[museumEnt.doorPt[0], museumEnt.doorPt[1]+0.2], bed:[ox,oz],
+    walk:(x,z)=>{ const lx=x-ox, lz=z-oz; if (!(Math.abs(lx)<W/2-0.4 && lz>-D/2+0.4 && lz<D/2-0.05)) return false; for (const b of LY.blocks) if (lx>b[0]-0.28 && lx<b[2]+0.28 && lz>b[1]-0.28 && lz<b[3]+0.28) return false; return true; } };
+  thistle=new Keeper(KEEPERS.thistle, ox+LY.keeper[0], oz+LY.keeper[1], ()=>talkCurator());
   if (typeof spawnExhibits==='function') spawnExhibits();
 }
 
@@ -2721,6 +2731,7 @@ function updateSky(){
   if (World.inside){
     sky.visible=stars.visible=moon.visible=false; scene.background=new THREE.Color(0x2e2420); scene.fog.color.setHex(0x2e2420); scene.fog.near=60; scene.fog.far=200;
     hemi.color.setHex(0xfff0dc); hemi.groundColor.setHex(0x8a6a50); hemi.intensity=1.6-World.night*0.35; sun.color.setHex(0xfff0dc); sun.intensity=1.3; sunDir.set(0.3,1,0.45).normalize();
+    if (World.inside==='museum'){ hemi.color.setHex(0xffe4c4); hemi.groundColor.setHex(0x5a3e2c); hemi.intensity=0.85; sun.color.setHex(0xffdcb0); sun.intensity=0.6; sunDir.set(0.15,1,0.35).normalize(); }
     renderer.toneMappingExposure = 1.15*(S.settings.bright||1); return; }
   sky.visible=stars.visible=true; scene.background=null; scene.fog.near=42; scene.fog.far=150;
   const dim = World.weather==='sunny'?0:(World.weather==='cloudy'?0.3:0.6);
@@ -3208,22 +3219,93 @@ function openShop(which, startTab){
 const MUSEUM_IDS = Object.fromEntries(MUSEUM.kinds.map(k=>[k, Object.values(ITEMS).filter(i=>i.kind===k).map(i=>i.id)]));
 const MUSEUM_TOTAL = Object.values(MUSEUM_IDS).reduce((a,l)=>a+l.length,0);
 const donatedCount = () => Object.keys(S.museum.items).length;
-// Displays fill the room in rows from the back wall: fish first, then bugs, fossils and beach finds.
 const MUSEUM_ORDER = MUSEUM.kinds.flatMap(k=>MUSEUM_IDS[k]);
-function exhibitSlots(){ const R=museumRoom(), W=R.w, D=R.d, cols=Math.max(1,Math.floor((W-2.2)/1.35)), out=[];
-  for (let r=0; ; r++){ const z=-D/2+1.3+r*1.8; if (z>D/2-4.4) break; for (let c=0;c<cols;c++) out.push([-(cols-1)*1.35/2+c*1.35, z]); } return out; }
-function exhibitSpot(id){ const have=MUSEUM_ORDER.filter(x=>S.museum.items[x]), i=have.indexOf(id), sl=exhibitSlots(); return sl[Math.min(Math.max(0,i), sl.length-1)]; }
+function exhibitInfo(id){ const it=ITEMS[id], when=new Date(S.museum.items[id]), R=S.rec[id], anon=S.museum.anon&&S.museum.anon[id];
+  return `${anon?'Given by an anonymous islander':'Donated'} ${when.toLocaleDateString('en-US',{month:'short',day:'numeric'})}${R&&!anon?` · your biggest: ${it.kind==='fish'?R.l+' cm':R.l+' mm'}`:''}${it.kind==='fish'||it.kind==='bug'?' · '+rarityTag(it):''}`; }
+// A fossil pedestal (empty ones stay, waiting) or a beach find in the glass case
 class Exhibit extends Ent {
-  constructor(id){ const [x,z]=exhibitSpot(id); super('exhibit', museumRoom().ox+x, museumRoom().oz+z, 0.42); this.id=id; this.solid=true; this.reach=1.6;
-    this.attach(buildExhibit(id, ITEMS[id].kind)); this.ph=Math.random()*10; }
-  label(){ return 'Look'; }
-  act(){ const it=ITEMS[this.id], when=new Date(S.museum.items[this.id]); const R=S.rec[this.id], anon=S.museum.anon&&S.museum.anon[this.id];
-    toast(it.name, thumb(this.id), '', `${anon?'Given by an anonymous islander':'Donated'} ${when.toLocaleDateString('en-US',{month:'short',day:'numeric'})}${R&&!anon?` · your biggest: ${it.kind==='fish'?R.l+' cm':R.l+' mm'}`:''}${it.kind==='fish'||it.kind==='bug'?' · '+rarityTag(it):''}`); }
-  update(dt,t){ const u=this.obj.userData; if(u.swim){ u.swim.position.x=Math.sin(t*0.8+this.ph)*0.18; u.swim.rotation.y=Math.PI/2+Math.cos(t*0.8+this.ph)*0.5; } if(u.spin) u.spin.rotation.y+=dt*0.4; }
+  constructor(id, x, z, obj, spin){ super('exhibit', x, z, 0.3); this.id=id; this.solid=false; this.reach=1.8; this.has=!!S.museum.items[id]; this.spin=spin; this.attach(obj); }
+  label(){ return this.has?'Look':null; }
+  act(){ if (!this.has){ toast(ITEMS[this.id].kind==='fossil'?'An empty pedestal. Professor Thistle is saving it for a fossil.':'An empty spot in the case.'); return; } toast(ITEMS[this.id].name, thumb(this.id), '', exhibitInfo(this.id)); }
+  update(dt){ if (this.spin) this.spin.rotation.y+=dt*0.35; }
 }
-const exhibits={};
-// Displays are laid out in order, so a new donation can shift the ones after it: rebuild them all
-function spawnExhibits(){ if (!museumRoom()) return; for (const id in exhibits){ exhibits[id].remove(); delete exhibits[id]; } for (const id of MUSEUM_ORDER) if (S.museum.items[id]) exhibits[id]=new Exhibit(id); }
+// A whole aquarium tank or terrarium. Walk up and press View (or click it) for the fullscreen view.
+class MuseumTank extends Ent {
+  constructor(T, R){ super('tank', R.ox+T.x, R.oz+T.z, 0.5); this.T=T; this.solid=false; this.reach=T.len/2+1.2;
+    this.have=T.group.ids.filter(id=>S.museum.items[id]); const g=buildTank(T.group, T.len, this.have); g.rotation.y=T.rot; this.attach(g); }
+  label(){ return 'View'; }
+  act(){ openTankView(this); }
+  update(dt,t){ const u=this.obj.userData; if (u.update && World.inside==='museum') u.update(t,dt); }
+}
+const exhibits={}, museumTanks=[];
+function clearMuseumEnts(){ for (const id in exhibits){ exhibits[id].remove(); delete exhibits[id]; } for (const e of museumTanks) e.remove(); museumTanks.length=0; }
+// Everything on display is rebuilt together (cheap, and only when something changes)
+function spawnExhibits(){ const R=museumRoom(); if (!R || !R.layout) return; clearMuseumEnts(); const LY=R.layout;
+  for (const T of LY.tanks) museumTanks.push(new MuseumTank(T, R));
+  for (const f of LY.fossils){ const has=!!S.museum.items[f.id], g=buildPedestal(f.id, f.h, f.big, has); let m=null; if (has){ m=fossilModel(f.id, f.big); m.position.y=f.h+0.05+m.userData.h/2+0.02; g.add(m); }
+    exhibits[f.id]=new Exhibit(f.id, R.ox+f.x, R.oz+f.z, g, m); }
+  const sl=shellSlots(LY.shells.len); MUSEUM_IDS.shell.forEach((id,i)=>{ if (!S.museum.items[id] || !sl[i]) return; const m=shellModel(id), g=new THREE.Group(); m.position.y=0.89+m.userData.h/2; g.add(m);
+    exhibits[id]=new Exhibit(id, R.ox+LY.shells.x+sl[i][0], R.oz+LY.shells.z+sl[i][1], g, null); }); }
+
+/* ---------- Fullscreen tank view ---------- */
+let tankView=null, tankZoom=null;
+const tvEl=document.createElement('div'); tvEl.id='tankView';
+tvEl.innerHTML=`<div class="tvHead"><div class="tvPlaque"><div class="tvName"></div><div class="tvSub"></div></div><button class="tvX" aria-label="Close">&times;</button></div>
+  <div class="tvEmpty"></div><div class="tvCard"></div><div class="tvStrip"></div>`;
+document.body.appendChild(tvEl);
+{ const st=document.createElement('style'); st.textContent=`
+#tankView{position:fixed;inset:0;z-index:26;display:none;touch-action:none;user-select:none;-webkit-user-select:none;box-shadow:inset 0 0 120px 30px rgba(20,12,6,.75)}
+#tankView.show{display:block}
+body.tankOpen #hud,body.tankOpen #grade{visibility:hidden}
+#tankView .tvHead{position:absolute;left:0;right:0;top:calc(env(safe-area-inset-top) + 12px);display:flex;justify-content:space-between;align-items:flex-start;padding:0 14px;pointer-events:none}
+#tankView .tvPlaque{background:linear-gradient(180deg,#f2d58a,#c9973e);border:3px solid #7a5220;border-radius:12px;padding:7px 16px 8px;color:#3e2810;box-shadow:0 4px 14px rgba(0,0,0,.45);pointer-events:auto}
+#tankView .tvName{font-weight:700;font-size:20px;line-height:1.1}
+#tankView .tvSub{font-size:13px;opacity:.8;margin-top:2px}
+#tankView .tvX{pointer-events:auto;width:48px;height:48px;border-radius:50%;border:3px solid var(--line,#e7d1a6);background:var(--cream,#fff8ea);font-size:28px;font-weight:700;color:#5b4336;line-height:1;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+#tankView .tvEmpty{position:absolute;left:50%;top:45%;transform:translate(-50%,-50%);background:rgba(255,248,234,.92);border:3px solid #e7d1a6;border-radius:18px;padding:14px 20px;color:#5b4336;font-weight:600;text-align:center;max-width:80vw;display:none}
+#tankView .tvCard{position:absolute;left:50%;bottom:calc(env(safe-area-inset-bottom) + 96px);transform:translateX(-50%);background:var(--cream,#fff8ea);border:3px solid var(--line,#e7d1a6);border-radius:18px;padding:10px 16px;color:#5b4336;display:none;align-items:center;gap:12px;width:min(440px,88vw);box-sizing:border-box;box-shadow:0 6px 18px rgba(0,0,0,.4)}
+#tankView .tvCard.show{display:flex}
+#tankView .tvCard img{width:56px;height:56px;flex:none}
+#tankView .tvCard b{font-size:17px}
+#tankView .tvCard .sub{font-size:13px;opacity:.85;margin-top:2px;line-height:1.35}
+#tankView .tvStrip{position:absolute;left:0;right:0;bottom:calc(env(safe-area-inset-bottom) + 12px);display:flex;gap:6px;padding:0 10px;overflow-x:auto;scrollbar-width:none;touch-action:pan-x}
+#tankView .tvStrip>:first-child{margin-left:auto}#tankView .tvStrip>:last-child{margin-right:auto}
+@media (max-width:600px){#tankView .tvChip{width:52px;height:52px}#tankView .tvChip img{width:42px;height:42px}#tankView .tvName{font-size:17px}}
+#tankView .tvChip{flex:none;width:62px;height:62px;border-radius:14px;border:3px solid #c9973e;background:rgba(255,248,234,.92);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0}
+#tankView .tvChip img{width:50px;height:50px}
+#tankView .tvChip.no{background:rgba(40,28,20,.6);border-color:rgba(201,151,62,.45);color:rgba(255,240,210,.6);font-weight:700;font-size:22px}
+#tankView .tvChip.sel{border-color:#fff;box-shadow:0 0 0 3px #f2b84a}
+`; document.head.appendChild(st); }
+function openTankView(ent){
+  if (tankView || tankZoom) return; const T=ent.T, R=museumRoom(); stopMove(); hideHint();
+  const c=new THREE.Vector3(R.ox+T.x, 1.42, R.oz+T.z), n=new THREE.Vector3(T.front[0]-T.x, 0, T.front[1]-T.z).normalize();
+  tankZoom={ t:0, from:camera.position.clone(), to:c.clone().addScaledVector(n, 2.9).setY(1.8), look:c, lookFrom:camTarget.clone() };
+  Snd.pop(); document.body.classList.add('tankOpen'); player.obj.visible=false;
+  setTimeout(()=>fade(()=>{ tankZoom=null; try { tankView=buildTankView(T.group, ent.have); tankView.group=T.group; tankView.ent=ent; tankView.sel=null; renderTankUI(); tvEl.classList.add('show'); }
+    catch(e){ console.error(e); tankView=null; tvEl.classList.remove('show'); document.body.classList.remove('tankOpen'); player.obj.visible=true; updateCamera(1); } }), 420);
+}
+function closeTankView(){ if (!tankView) return; Snd.click(); fade(()=>{ tvEl.classList.remove('show'); document.body.classList.remove('tankOpen'); player.obj.visible=true; tankView.dispose(); tankView=null; updateCamera(1); updateActButton.nh=undefined; }); }
+function renderTankUI(){ const V=tankView, g=V.group, have=new Set(V.ent.have);
+  tvEl.querySelector('.tvName').textContent=g.name; tvEl.querySelector('.tvSub').textContent=`${have.size} of ${g.ids.length} species${have.size===g.ids.length?' · complete!':''}`;
+  const em=tvEl.querySelector('.tvEmpty'); em.style.display=have.size?'none':'block'; em.textContent=`Nothing in this ${g.kind==='fish'?'tank':'terrarium'} yet. Bring Professor Thistle a ${g.kind==='fish'?'fish':'bug'} from this group and it will go right in.`;
+  tvEl.querySelector('.tvStrip').innerHTML=g.ids.map(id=>have.has(id)?`<button class="tvChip" data-id="${id}" title="${ITEMS[id].name}"><img src="${thumb(id)}" alt=""></button>`:`<button class="tvChip no" data-id="${id}">?</button>`).join('');
+  tvEl.querySelectorAll('.tvChip').forEach(b=>b.onclick=e=>{ e.stopPropagation(); Snd.click(); tankSelect(b.dataset.id, true); });
+  tvEl.querySelector('.tvCard').classList.remove('show'); }
+function tankSelect(id, follow){ const V=tankView; if (!V) return; const card=tvEl.querySelector('.tvCard');
+  tvEl.querySelectorAll('.tvChip').forEach(b=>b.classList.toggle('sel', b.dataset.id===id));
+  if (!id){ card.classList.remove('show'); V.view.follow=null; V.sel=null; return; } V.sel=id; const it=ITEMS[id];
+  if (!S.museum.items[id]){ const seen=!!S.rec[id]; card.innerHTML=`<div><b>${seen?it.name:'Not in the collection yet'}</b><div class="sub">${seen?'You have caught one before. Bring one to Professor Thistle to add it here.':`Somewhere out there: ${WHERE[it.where]||'on the island'}.`}</div></div>`; card.classList.add('show'); V.view.follow=null; return; }
+  card.innerHTML=`<img src="${thumb(id)}" alt=""><div><b>${it.name}</b><div class="sub">${WHERE[it.where]||''} · ${monthsText(it.months)} · ${hoursText(it.hours)}<br>${exhibitInfo(id)}</div></div>`; card.classList.add('show');
+  V.view.follow = follow ? V.specs.find(s=>s.id===id)||null : null; }
+tvEl.querySelector('.tvX').onclick=e=>{ e.stopPropagation(); closeTankView(); };
+{ let pd=null;
+  tvEl.addEventListener('pointerdown', e=>{ if (!tankView || e.target.closest('button,.tvCard,.tvStrip')) return; pd={ id:e.pointerId, x:e.clientX, y:e.clientY, sx:e.clientX, pan:tankView.view.panT, moved:false }; tvEl.setPointerCapture(e.pointerId); });
+  tvEl.addEventListener('pointermove', e=>{ if (!pd || e.pointerId!==pd.id || !tankView) return; const dx=e.clientX-pd.sx; if (Math.abs(dx)>6){ pd.moved=true; tankView.view.follow=null; }
+    tankView.view.panT=pd.pan-dx/innerWidth*9; tankView.view.yawT=THREE.MathUtils.clamp(-(e.clientX-pd.x)/innerWidth*0.6, -0.3, 0.3); });
+  const up=e=>{ if (!pd || e.pointerId!==pd.id) return; const was=pd; pd=null; if (!tankView) return; tankView.view.yawT=0;
+    if (!was.moved){ const sp=tankView.pick(e.clientX/innerWidth*2-1, -(e.clientY/innerHeight)*2+1); if (sp){ Snd.pop(); tankSelect(sp.id, true); } else tankSelect(null); } };
+  tvEl.addEventListener('pointerup', up); tvEl.addEventListener('pointercancel', up);
+  tvEl.addEventListener('wheel', e=>{ if (!tankView) return; e.preventDefault(); tankView.view.zoom=THREE.MathUtils.clamp(tankView.view.zoom*(1+e.deltaY*0.001), 0.6, 1); }, { passive:false }); }
 /* Anonymous donors: now and then someone leaves a pouch of clams at the museum overnight, and Professor Thistle
    passes it on to you for all your work on the collection. (Before v1.3 they left fish and bugs, which took away finds you'd rather donate yourself.) */
 function anonDonation(r){
@@ -3246,20 +3328,19 @@ function talkCurator(){
   const h=Time.hour(); dialog(k.name, v, [(h>=23||h<6) ? keeperLine('thistle','night') : keeperLine('thistle','greet')], menu);
 }
 function eligibleDonations(){ const seen=new Set(), out=[]; S.inv.forEach((s,i)=>{ const it=ITEMS[s.id]; if (MUSEUM.kinds.includes(it.kind) && !S.museum.items[s.id] && !seen.has(s.id)){ seen.add(s.id); out.push(i); } }); return out; }
-const museumFull = () => donatedCount() >= exhibitSlots().length;
+const museumFull = () => donatedCount() >= MUSEUM_TOTAL;   // v1.21: every species has a place; the building still grows as the collection does
 function donate(slot){
-  const s=S.inv[slot], id=s.id; if (museumFull()) return false; removeAt(slot,1); S.museum.items[id]=Date.now(); track('donate'); save(); spawnExhibits(); Snd.jingle(); return true;
+  const s=S.inv[slot], id=s.id; if (museumFull()) return false; removeAt(slot,1); S.museum.items[id]=Date.now(); track('donate'); save(); Snd.jingle(); return true;
 }
 function openDonate(){ if (noEdit()) return;
   const render=()=>{ const el=eligibleDonations();
     let h='';
-    if (museumFull()) h+=`<div class="notice">The ${['curio cottage','hall','museum','museum'][S.museum.tier]} is full! ${S.museum.grow?'The builders are making more room tonight.':''}</div>`;
     if (!el.length) h+='<div class="notice">Nothing new to donate right now. Catch fish and bugs, dig up fossils, or comb the beach.</div>';
     for (const i of el){ const s=S.inv[i], it=ITEMS[s.id]; h+=`<div class="row"><img src="${thumb(s.id)}"><div class="grow"><div class="nm">${it.name}</div><div class="sub">${kindName(it.kind)}${s.m?' · '+statText(s.id,s.m):''}</div></div><button class="btn" data-d="${i}">Donate</button></div>`; }
     if (el.length>1) h+=`<button class="btn" id="dAll" style="margin-top:6px">Donate all ${el.length}</button>`;
     h+=`<div class="muted" style="margin-top:10px">${donatedCount()} of ${MUSEUM_TOTAL} displays filled.</div>`;
     pBody.innerHTML=h;
-    const after=()=>{ checkMuseumGifts(); if (museumGrowCheck()) setTimeout(()=>dialog(KEEPERS.thistle.name, KEEPERS.thistle.voice, ['My word, we are running out of room! I\'ll have the builders come tonight. By tomorrow the museum will be bigger.']), 300); render(); };
+    const after=()=>{ spawnExhibits(); checkMuseumGifts(); if (museumGrowCheck()) setTimeout(()=>dialog(KEEPERS.thistle.name, KEEPERS.thistle.voice, ['My word, we are running out of room! I\'ll have the builders come tonight. By tomorrow the museum will be bigger.']), 300); render(); };
     const full=()=>{ toast('Every display spot is taken!'); Snd.fail(); };
     pBody.querySelectorAll('[data-d]').forEach(b=>b.onclick=()=>{ const i=+b.dataset.d, id=S.inv[i].id; if (!donate(i)){ full(); return; } itemToast(id,false,'Donated'); after(); });
     const da=pBody.querySelector('#dAll'); if(da) da.onclick=()=>{ let n=0; for(;;){ const el2=eligibleDonations(); if(!el2.length) break; if (!donate(el2[0])){ full(); break; } n++; } if (n) toast(`Donated ${n} things! Professor Thistle is delighted.`); after(); };
@@ -3991,6 +4072,7 @@ function openGarden(g){
 const keys={};
 addEventListener('keydown', e=>{ if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT'||e.target.tagName==='TEXTAREA') return; const k=e.key.toLowerCase();
   if (dlgState){ if (!e.repeat && dialogKey(k)) e.preventDefault(); return; }
+  if (tankView || tankZoom){ if (tankView && !e.repeat && (k==='escape'||k===KB().bag||k===KB().act||k==='enter'||k===' ')){ e.preventDefault(); closeTankView(); } return; }
   if (keyCapture){ e.preventDefault(); keyCapture(k); return; }
   keys[k]=true; if (e.repeat) return; const kb=KB();
   if (k===(kb.swing||' ')){ e.preventDefault(); swing(); return; }
@@ -4218,14 +4300,15 @@ function movePlayer(dt,t){
   let d=player.face-player.obj.rotation.y; d=Math.atan2(Math.sin(d),Math.cos(d)); player.obj.rotation.y+=d*Math.min(1,dt*12);
   marker.material.opacity=0.5+Math.sin(t*6)*0.3;
 }
-const camTarget=new THREE.Vector3();
+const camTarget=new THREE.Vector3(), _tzl=new THREE.Vector3();
 function updateCamera(dt){
+  if (tankZoom){ tankZoom.t=Math.min(1, tankZoom.t+dt/0.42); const k=1-(1-tankZoom.t)**3; camera.position.lerpVectors(tankZoom.from, tankZoom.to, k); camera.lookAt(_tzl.lerpVectors(tankZoom.lookFrom, tankZoom.look, k)); return; }
   if (buildMode){ camTarget.lerp(buildMode.camT, Math.min(1,dt*5)); const dist=buildMode.dist, pitch=buildMode.view==='in'?1.05:0.6, yaw=buildMode.yaw;
     camera.position.set(camTarget.x+Math.sin(yaw)*Math.cos(pitch)*dist, camTarget.y+Math.sin(pitch)*dist, camTarget.z+Math.cos(yaw)*Math.cos(pitch)*dist); camera.lookAt(camTarget);
     camera.setViewOffset(innerWidth, innerHeight, 0, buildEl.offsetHeight*0.5, innerWidth, innerHeight);
     sky.position.copy(camera.position); stars.position.copy(camera.position); sun.target.position.copy(camTarget); sun.position.copy(camTarget).addScaledVector(sunDir,50); return; }
   if (cine){ camTarget.lerp(cine.camT, Math.min(1,dt*4)); const dist=cine.dist, pitch=cine.pitch||1.0, sh=cine.shake||0; camYaw*=Math.exp(-dt*4);
-    camera.position.set(camTarget.x+(Math.random()-0.5)*sh, camTarget.y+Math.sin(pitch)*dist+(Math.random()-0.5)*sh, camTarget.z+Math.cos(pitch)*dist); camera.lookAt(camTarget);
+    const cy=cine.yaw||0; camera.position.set(camTarget.x+Math.sin(cy)*Math.cos(pitch)*dist+(Math.random()-0.5)*sh, camTarget.y+Math.sin(pitch)*dist+(Math.random()-0.5)*sh, camTarget.z+Math.cos(cy)*Math.cos(pitch)*dist); camera.lookAt(camTarget);
     sky.position.copy(camera.position); stars.position.copy(camera.position); sun.target.position.copy(camTarget); sun.position.copy(camTarget).addScaledVector(sunDir,50); return; }
   if (magicMode){ camTarget.lerp(magicMode.camT, Math.min(1,dt*6)); const dist=magicMode.dist, pitch=1.05; camYaw*=Math.exp(-dt*4);
     camera.position.set(camTarget.x, camTarget.y+Math.sin(pitch)*dist, camTarget.z+Math.cos(pitch)*dist); camera.lookAt(camTarget);
@@ -4263,14 +4346,15 @@ function frame(){
   secT+=dt; if(secT>1){ secT=0; if(rollDay()){ spawnDaily(); ensureFavors(); refreshStoreItems(); applyTown(); toast('A new day on '+(S.island||'the island')+'!'); } refreshStands(); setSledBtn(); updateSky(); updateHUD(); updatePotionHUD(); achTick(); }
   saveT+=dt; if(saveT>15){ saveT=0; save(); }
   updateRemotes(dt,t); updateSnow(dt); PARTY.update(dt,t);
-  if (started){ updateHold(dt); if (meBody.rag) updateRag(meBody,dt,t); else movePlayer(dt,t); bonkCool=Math.max(0,bonkCool-dt); updateBugs(dt); updateFishing(dt,t); updateCatchMeter(dt); tickDialog(dt); updateActButton(); updateCutaway(); }
+  if (started && !tankView){ updateHold(dt); if (meBody.rag) updateRag(meBody,dt,t); else movePlayer(dt,t); bonkCool=Math.max(0,bonkCool-dt); updateBugs(dt); updateFishing(dt,t); updateCatchMeter(dt); tickDialog(dt); updateActButton(); updateCutaway(); }
   for(const e of ents.slice()){ if (e.removed) continue; if (e.rag){ updateRag(e,dt,t); continue; } if (e instanceof Resident || Math.abs(e.pos.x-player.pos.x)<40) e.update(dt,t); }
   WU.uTime.value=t; if (!World.inside){ updateWater(t); updateAmbient(dt,t); updateFalls(dt,t);
     for(const c of clouds){ c.position.x+=c.userData.v*dt; if(c.position.x>150) c.position.x=-150; }
     const lnOn=activeEvents().some(e=>e.id==='lantern-night');
     for(const l of lanterns){ l.visible=lnOn; if(lnOn){ const u=l.userData; u.y+=dt*u.s; if(u.y>18){ u.y=0; u.a=Math.random()*TAU; } l.position.set(Math.cos(u.a+t*0.01)*u.d, 1+u.y, Math.sin(u.a+t*0.01)*u.d); l.children[1].material.opacity=Math.min(1,u.y/2)*(1-u.y/18)*0.9; } } }
   updatePrecip(dt,t); updateParticles(dt); updateFX(dt); updateCamera(dt);
-  renderer.render(scene,camera); requestAnimationFrame(frame);
+  if (tankView){ tankView.update(t, dt, innerWidth/innerHeight); renderer.render(tankView.scene, tankView.cam); } else renderer.render(scene,camera);
+  requestAnimationFrame(frame);
 }
 updateSky(); updateHUD(); camTarget.copy(player.pos); updateCamera(1); updateHeld(); updateToolBtn(); applyControls();
 requestAnimationFrame(frame);
@@ -4622,5 +4706,5 @@ const PARTY = createParty({ scene, player, meBody, remotes, groundY, walkable, r
     keep:()=>{ if (r.partyAway && r.obj.parent){ r.partyAway.parent=r.obj.parent; r.obj.parent.remove(r.obj); } },
     back:()=>{ const a=r.partyAway; if (!a) return; delete r.partyAway; r.solid=a.solid; if (a.parent && !r.obj.parent) a.parent.add(r.obj); } })),
   swingAnim:(face)=>{ stopMove(); player.face=face; player.obj.rotation.y=face; player.act=0.4; bonkCool=0.35; Snd.swoosh(); } });
-window.__game = { v120:{ track, checkAch, achValue, grantWear, ownsWear, openAchievements, makeFavor, rollFavors, favorChoices, npcOf, clothesStock, wardrobeOwned, get Q(){ return Q; } }, party:PARTY, v119:{ tierPick, openChest, townCap:()=>townCap() }, v13:{ shopStock:w=>shopStock(w), learnPlan, rareRoll, knowsPlan, unfoundPlans, stockWeight, RARE_WORK, GroundItem, ShopItem, Furniture }, v1:{ scene, camera, OUT, updateSky, updateHUD, snowPass, SNOW_U, townNewDay, applyTown, talkHall, openHallPanel, buildPlaza, refreshStoreItems, buildStoreAll, buildShop, buildMuseumAll, spawnExhibits, exhibitSlots, mentorMoment, teachWoodworking, openCraft, doCook, nearStation, toggleSled, setSled, get sledding(){ return sledding; }, sledV, eatFood, Plant, fullBagCatch, KB, landSeaTap, terraLand, LAMPS:()=>LAMPS, hasUpstairs, ShopItem, Stairs, get exhibits(){ return exhibits; }, KEEPOUT, dayKeyOf, World, startPlacing, checkPlace, get placing(){ return placing; }, FX, homeStock, buyHome, draftUnowned, get homeRack(){ return homeRack; }, openShop, openBuild:(o)=>openBuild(o), closeBuild, get buildMode(){ return buildMode; }, ents, Tree, Stump, Weed, Bug, bugs, player, interact, layoutBar, pickNote, itemToast, reel, Fishing, fishes, spawnFish, WU, relayout, enterRoom:(id)=>enterRoom(id), trees }, get S(){ return S; }, dbg:{ showChoices:(t,c)=>showChoices(t,c), dialog:(...a)=>dialog(...a), setRiding:(v)=>setRiding(v), enterRoom:(id)=>enterRoom(id), openBuild:()=>openBuild(), rooms:()=>Object.keys(ROOMS), get yaw(){ return camYaw; }, set yaw(v){ camYaw=v; }, get riding(){ return riding; }, get snow(){ return SNOW_U.value; }, setWeather:(w)=>{ weatherOverride=w; World.weather=w; snowT=0; }, get dlg(){ return !!dlgState; } }, walkable, blocked, groundY, launchRag, ragdolls, swing, meBody, refreshPortals, portalArches, get portalEnt(){ return portalEnt; }, enterRoom, PLACES, net:{ party:(id,d)=>PARTY.onNet(id,d), bonked, visibleRemotes:()=>[...remotes.values()].filter(r=>r.obj.visible).map(r=>[r.name,+r.pos.x.toFixed(1),+r.pos.z.toFixed(1)]), remoteUpsert, remotePos, remoteLeave, remoteEmote, playerState, setInventory, toast:(m)=>toast(m), updateHUD:()=>updateHUD(), get started(){ return started; } }, ITEMS, itemThumb:(id)=>thumb(id), layoutInfo:()=>({ id:LAYOUT_ID, PLACES, PATHS, LOT, rects:RECTS.map(r=>r.slice(0,4)), lot:lotRect() }), terrainH:(x,z)=>rawHeight(x,z), terrainSlope:(x,z)=>hillSlope(x,z), interact, spawnBug:(id,x,z)=>new Bug(id,x,z), tapOdds:()=>Object.fromEntries(Object.keys(TAP_BASE).map(k=>[k, +tapChance({rarity:k}).toFixed(2)])), placingObj:()=>placing&&placing.m, toScreen:v=>{ const p=v.clone().project(camera); return [(p.x*0.5+0.5)*innerWidth, (-p.y*0.5+0.5)*innerHeight]; }, rebuildHome:()=>{ buildPlayerHouse(); rebuildHomeRoom(); }, openBuild, closeBuild, get buildMode(){ return buildMode; }, talkShop, openDonate, talkCurator, spawnMossby, onFelled, findPath, startPlacing, LOT, RECTS, shopEnts, museumEnt, houseEnt:()=>houseEnt, Time, player, ents, ITEMS, residents, World, ROOMS, goTo, handleTap, doAction, updateSky, rollDay, spawnDaily, castAt, Fishing, fishes, bugs, openBag, openBook, openShop, openBoard, openMenu, openCraft, doCraft, WOODWORK, enterRoom, exitRoom, equip, startLayout, endLayout, trees, applyControls, magic:{ startMagic, endMagic, landTap, magicPlace, castMagic, get mode(){ return magicMode; }, raiseTower, talkWizard, drinkPotion, potionOn, luckW, rollFavors, Q, favorChoices, findTowerSpot, get tower(){ return towerEnt; }, PLACES, TERRA, FALLS } };
+window.__game = { v120:{ track, checkAch, achValue, grantWear, ownsWear, openAchievements, makeFavor, rollFavors, favorChoices, npcOf, clothesStock, wardrobeOwned, get Q(){ return Q; } }, party:PARTY, v119:{ tierPick, openChest, townCap:()=>townCap() }, v13:{ shopStock:w=>shopStock(w), learnPlan, rareRoll, knowsPlan, unfoundPlans, stockWeight, RARE_WORK, GroundItem, ShopItem, Furniture }, v1:{ scene, camera, OUT, updateSky, updateHUD, snowPass, SNOW_U, townNewDay, applyTown, talkHall, openHallPanel, buildPlaza, refreshStoreItems, buildStoreAll, buildShop, buildMuseumAll, spawnExhibits, mentorMoment, teachWoodworking, openCraft, doCook, nearStation, toggleSled, setSled, get sledding(){ return sledding; }, sledV, eatFood, Plant, fullBagCatch, KB, landSeaTap, terraLand, LAMPS:()=>LAMPS, hasUpstairs, ShopItem, Stairs, get exhibits(){ return exhibits; }, museumTanks, renderer, nearestEnt:()=>nearestEnt(), doAction:()=>doAction(), openTankView, closeTankView, get tankView(){ return tankView; }, KEEPOUT, dayKeyOf, World, startPlacing, checkPlace, get placing(){ return placing; }, FX, homeStock, buyHome, draftUnowned, get homeRack(){ return homeRack; }, openShop, openBuild:(o)=>openBuild(o), closeBuild, get buildMode(){ return buildMode; }, ents, Tree, Stump, Weed, Bug, bugs, player, interact, layoutBar, pickNote, itemToast, reel, Fishing, fishes, spawnFish, WU, relayout, enterRoom:(id)=>enterRoom(id), trees }, get S(){ return S; }, dbg:{ setCine:(c)=>{ cine=c; }, showChoices:(t,c)=>showChoices(t,c), dialog:(...a)=>dialog(...a), setRiding:(v)=>setRiding(v), enterRoom:(id)=>enterRoom(id), openBuild:()=>openBuild(), rooms:()=>Object.keys(ROOMS), get yaw(){ return camYaw; }, set yaw(v){ camYaw=v; }, get riding(){ return riding; }, get snow(){ return SNOW_U.value; }, setWeather:(w)=>{ weatherOverride=w; World.weather=w; snowT=0; }, get dlg(){ return !!dlgState; } }, walkable, blocked, groundY, launchRag, ragdolls, swing, meBody, refreshPortals, portalArches, get portalEnt(){ return portalEnt; }, enterRoom, PLACES, net:{ party:(id,d)=>PARTY.onNet(id,d), bonked, visibleRemotes:()=>[...remotes.values()].filter(r=>r.obj.visible).map(r=>[r.name,+r.pos.x.toFixed(1),+r.pos.z.toFixed(1)]), remoteUpsert, remotePos, remoteLeave, remoteEmote, playerState, setInventory, toast:(m)=>toast(m), updateHUD:()=>updateHUD(), get started(){ return started; } }, ITEMS, itemThumb:(id)=>thumb(id), layoutInfo:()=>({ id:LAYOUT_ID, PLACES, PATHS, LOT, rects:RECTS.map(r=>r.slice(0,4)), lot:lotRect() }), terrainH:(x,z)=>rawHeight(x,z), terrainSlope:(x,z)=>hillSlope(x,z), interact, spawnBug:(id,x,z)=>new Bug(id,x,z), tapOdds:()=>Object.fromEntries(Object.keys(TAP_BASE).map(k=>[k, +tapChance({rarity:k}).toFixed(2)])), placingObj:()=>placing&&placing.m, toScreen:v=>{ const p=v.clone().project(camera); return [(p.x*0.5+0.5)*innerWidth, (-p.y*0.5+0.5)*innerHeight]; }, rebuildHome:()=>{ buildPlayerHouse(); rebuildHomeRoom(); }, openBuild, closeBuild, get buildMode(){ return buildMode; }, talkShop, openDonate, talkCurator, spawnMossby, onFelled, findPath, startPlacing, LOT, RECTS, shopEnts, museumEnt, houseEnt:()=>houseEnt, Time, player, ents, ITEMS, residents, World, ROOMS, goTo, handleTap, doAction, updateSky, rollDay, spawnDaily, castAt, Fishing, fishes, bugs, openBag, openBook, openShop, openBoard, openMenu, openCraft, doCraft, WOODWORK, enterRoom, exitRoom, equip, startLayout, endLayout, trees, applyControls, magic:{ startMagic, endMagic, landTap, magicPlace, castMagic, get mode(){ return magicMode; }, raiseTower, talkWizard, drinkPotion, potionOn, luckW, rollFavors, Q, favorChoices, findTowerSpot, get tower(){ return towerEnt; }, PLACES, TERRA, FALLS } };
 window.__game.farm = { openPlantPanel, startGridPlacing, plantGrid, checkGrid, openGarden, rebuildGardens, gardenAtXZ, islandSeeds, harvestRec, perimeter, get fenceSegs(){ return FENCE_SEGS; }, fenceHit, get placing(){ return placing; }, plantEnts, gardenEnts, CELL };

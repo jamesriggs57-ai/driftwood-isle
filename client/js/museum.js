@@ -25,37 +25,72 @@ export const TANK_GROUPS = (() => { const out={};
     for (const it of Object.values(ITEMS)) if (it.kind===k && !seen.has(it.id)) gs[gs.length-1].ids.push(it.id); out[k]=gs; }
   return out; })();
 export const tankOf = id => { for (const k in TANK_GROUPS) for (const g of TANK_GROUPS[k]) if (g.ids.includes(id)) return g; return null; };
-const FOSSIL_ROWS = [['fern','ammonite','tusk','dinoegg','claw','sealily'], ['trilobite','sharktooth','amber','urchin','wingfossil']];
 const BIG_FOSSIL = new Set(['tusk','dinoegg','claw','ammonite']);
+export const isBigFossil = id => BIG_FOSSIL.has(id);
+// Before a section has its own hall, everything of that kind shares one tank in the main room
+export const MIX_GROUPS = {
+  fish:{ id:'mixfish', kind:'fish', name:'Island Waters', theme:'river', ids:[], slots:8 },
+  bug: { id:'mixbug',  kind:'bug',  name:'Island Critters', theme:'garden', ids:[], slots:8 } };
+export const FOSSIL_CAP = [3, 6, 99], SHELL_CAP = [4, 99];
 
-/* ---------- Layout (room coordinates: door at +z, back wall at -z) ---------- */
-export const MUSEUM_ROOM = [[21,17],[24,19],[28,22],[31,24]];
-export function museumLayout(W, D, tier){
-  const L={ tanks:[], fossils:[], shells:null, blocks:[], benches:[], plants:[], desk:null, keeper:null, center:null };
-  const back=-D/2, front=D/2, z0=back+2.3, z1=front-3.0, slot=(z1-z0)/4, len=Math.min(4.2, slot-0.55);
-  for (const side of [-1,1]){ const kind=side<0?'fish':'bug';
-    TANK_GROUPS[kind].forEach((g,i)=>{ const z=z1-slot*(i+0.5), x=side*(W/2-0.75);
-      L.tanks.push({ kind, group:g, x, z, len, rot:side<0?Math.PI/2:-Math.PI/2, front:[x-side*0.95, z] });
-      L.blocks.push([x-0.62, z-len/2-0.08, x+0.62, z+len/2+0.08]); }); }
-  // fossils: a tall back row against the wall and a lower front row, staggered between
-  const fossilIds=Object.values(ITEMS).filter(i=>i.kind==='fossil').map(i=>i.id), rows=FOSSIL_ROWS.map(r=>r.filter(id=>ITEMS[id]));
-  for (const id of fossilIds) if (!rows.flat().includes(id)) rows[1].push(id);
-  const span=W/2-2.9;
-  rows.forEach((row,ri)=>{ const n=row.length, step=Math.min(3.0, 2*span/n), z=back+(ri===0?1.15:3.05);
-    row.forEach((id,i)=>{ const x=-(n-1)*step/2+i*step, big=BIG_FOSSIL.has(id), r=big?0.62:0.46;
-      L.fossils.push({ id, x, z, h:ri===0?1.05:0.78, big }); L.blocks.push([x-r, z-r, x+r, z+r]); }); });
-  // beach finds: one glass case in the middle of the hall
-  const sz=back+(D-6)*0.52; L.shells={ x:0, z:sz, len:3.6 }; L.blocks.push([-2.0, sz-0.62, 2.0, sz+0.62]);
-  if (tier>=1) for (const s of [-1,1]){ const x=s*2.9; L.plants.push([x, sz]); L.blocks.push([x-0.45,sz-0.45,x+0.45,sz+0.45]); }
-  // the bigger halls get a fountain in the middle, between the door and the case
-  if (tier>=2){ const cz=(sz+front-3)/2+0.6; L.center={ x:0, z:cz }; L.blocks.push([-1.75,cz-1.75,1.75,cz+1.75]); }
-  // Professor Thistle's desk by the door
-  L.desk=[-3.9, front-2.3]; L.keeper=[-3.9, front-3.15]; L.blocks.push([-5.2, front-2.75, -2.6, front-1.85]);
-  // benches facing the tanks, plants in the corners
-  if (tier>=1) for (const s of [-1,1]){ const x=s*(W/2-4.7), z=sz+0.4; L.benches.push([x, z, s<0?Math.PI/2:-Math.PI/2]); L.blocks.push([x-0.45, z-1.0, x+0.45, z+1.0]); }
-  for (const [x,z] of [[-W/2+0.9, front-1.0],[W/2-0.9, front-1.0],[-W/2+0.9, back+0.9],[W/2-0.9, back+0.9]]){ L.plants.push([x,z]); L.blocks.push([x-0.45,z-0.45,x+0.45,z+0.45]); }
+/* ---------- Layout (room coordinates: door at +z, back wall at -z) ----------
+   The museum starts as one small room: a shared fish tank on the left wall, a shared terrarium on the right,
+   three fossil pedestals at the back and a little case of beach finds. Each section grows on its own once it runs
+   out of room: the Aquarium and Insectarium become wings off the sides with one themed tank per group, and the
+   fossils move into a Fossil Hall across the back that gets a second row when it fills.
+   st = { fish:null|[group ids], bug:null|[group ids], fossil:0..2, shell:0..1 } */
+const W0=11, WING=5.4, SLOT=3.9, TLEN=3.4;
+export function museumLayout(st, nFossil){
+  const L={ tanks:[], pedestals:[], shells:null, blocks:[], benches:[], plants:[], cols:[], zones:[], signs:[], sconces:[], lights:[], desk:null, keeper:null, center:null };
+  const wings={ fish:!!st.fish, bug:!!st.bug }, anyWing=wings.fish||wings.bug;
+  const W = W0 + (anyWing ? 2*WING : 0);
+  const nT = Math.max(wings.fish?st.fish.length:0, wings.bug?st.bug.length:0);
+  const D0 = Math.max(10.5, nT*SLOT+3.2);
+  // fossil pedestals: how many rows the back needs
+  const nPed = st.fossil>=2 ? Math.max(FOSSIL_CAP[1]+1, nFossil) : FOSSIL_CAP[st.fossil];
+  const span = (st.fossil ? W/2 : W0/2) - 2.4, perRow = Math.max(3, Math.floor(2*span/1.9)), rows = Math.ceil(nPed/perRow);
+  const fd = st.fossil ? 1.0 + rows*2.0 + 0.6 : 0;
+  const D = D0 + fd, front = D/2, back = -D/2, zLB = back+fd;
+  Object.assign(L, { W, D, front, back, zLB, W0, wings, fd });
+  // floors and colonnades marking each hall
+  L.zones.push({ x0:-W0/2, z0:zLB, x1:W0/2, z1:front, floor:'planks', rug:true });
+  for (const [k,s] of [['fish',-1],['bug',1]]){
+    const x0 = s<0 ? -W/2 : W0/2, x1 = s<0 ? -W0/2 : W/2;
+    if (wings[k]){ L.zones.push({ x0, z0:zLB, x1, z1:front, floor:k }); L.cols.push({ x:s*W0/2, z0:zLB, z1:front-0.4, axis:'z' }); }
+    else if (anyWing) L.zones.push({ x0, z0:zLB, x1, z1:front, floor:'planks' }); }
+  if (st.fossil){ L.zones.push({ x0:-W/2, z0:back, x1:W/2, z1:zLB, floor:'fossil' }); L.cols.push({ z:zLB, x0:-W/2+0.4, x1:W/2-0.4, axis:'x', gap:1.8 }); }
+  // tanks
+  for (const [k,s] of [['fish',-1],['bug',1]]){ const x=s*(W/2-0.75), rot=s<0?Math.PI/2:-Math.PI/2;
+    const add=(group, z, len)=>{ L.tanks.push({ kind:k, group, x, z, len, rot, front:[x-s*0.95, z] }); L.blocks.push([x-0.62, z-len/2-0.08, x+0.62, z+len/2+0.08]);
+      L.sconces.push({ wall:s<0?'L':'R', at:z-len/2-0.3 }, { wall:s<0?'L':'R', at:z+len/2+0.3 }); };
+    if (wings[k]){ const gs=TANK_GROUPS[k].filter(g=>st[k].includes(g.id)), z1=front-2.6;
+      gs.forEach((g,i)=>add(g, z1-SLOT*(i+0.5), TLEN));
+      const zm=z1-SLOT*gs.length/2; L.signs.push({ wall:s<0?'L':'R', at:zm, text:k==='fish'?'Aquarium':'Insectarium', w:3.0 });
+      L.lights.push([s*(W/2-WING/2-0.3), zm]);
+      if (gs.length>=2){ const bx=s*(W/2-3.4); L.benches.push([bx, zm, s<0?Math.PI/2:-Math.PI/2]); L.blocks.push([bx-0.45, zm-1.0, bx+0.45, zm+1.0]); } }
+    else { const z=zLB+(front-zLB)*0.45-0.3; add(MIX_GROUPS[k], z, 2.6); L.signs.push({ wall:s<0?'L':'R', at:z, text:MIX_GROUPS[k].name, w:2.6 }); } }
+  // fossils
+  { const n=nPed, zRow0 = st.fossil ? back+1.2 : zLB+1.15;
+    for (let r=0;r<rows;r++){ const cnt=Math.min(perRow, n-r*perRow), step=Math.min(3.0, 2*span/cnt), z=zRow0+r*2.0;
+      for (let i=0;i<cnt;i++){ const x=-(cnt-1)*step/2+i*step; L.pedestals.push({ x, z, h:r===0?1.05:0.8 }); L.blocks.push([x-0.62, z-0.62, x+0.62, z+0.62]); } }
+    L.signs.push({ wall:'B', at:0, text:st.fossil?'Fossil Hall':'Fossils', w:st.fossil?3.0:2.2 });
+    if (st.fossil) L.lights.push([0, back+fd/2]); }
+  // beach finds
+  { const len=st.shell?3.6:2.0, z=zLB+(front-zLB)*0.45+(st.fossil?-0.6:0.4); L.shells={ x:0, z, len, slots:st.shell?8:4 }; L.blocks.push([-len/2-0.2, z-0.62, len/2+0.2, z+0.62]);
+    // a fountain once the main room is deep enough to hold one
+    const cz=(z+0.8+front-3.6)/2; if (front-3.6-(z+0.8)>3.9){ L.center={ x:0, z:cz }; L.blocks.push([-1.75,cz-1.75,1.75,cz+1.75]); } }
+  L.lights.push([0, zLB+(front-zLB)*0.45]);
+  // Professor Thistle's desk by the door, plants in the front corners
+  L.desk=[-3.3, front-2.3]; L.keeper=[-3.3, front-3.15]; L.blocks.push([-4.6, front-2.75, -2.0, front-1.85]);
+  for (const x of [-W0/2+0.9, W0/2-0.9]){ const z=front-1.0; if (!anyWing && Math.abs(x)>W0/2-1.6){ L.plants.push([x,z]); L.blocks.push([x-0.45,z-0.45,x+0.45,z+0.45]); } }
+  if (anyWing) for (const x of [-W/2+0.9, W/2-0.9]){ const z=front-1.0; L.plants.push([x,z]); L.blocks.push([x-0.45,z-0.45,x+0.45,z+0.45]); }
+  for (const c of L.cols) for (const p of colPoints(c)) L.blocks.push([p[0]-0.26,p[1]-0.26,p[0]+0.26,p[1]+0.26]);
   return L;
 }
+export function colPoints(c){ const out=[];
+  if (c.axis==='z'){ const n=Math.max(2,Math.round((c.z1-c.z0)/2.6)); for (let i=0;i<=n;i++) out.push([c.x, c.z0+(c.z1-c.z0)*i/n]); }
+  else { const n=Math.max(2,Math.round((c.x1-c.x0)/2.6)); for (let i=0;i<=n;i++){ const x=c.x0+(c.x1-c.x0)*i/n; if (Math.abs(x)>c.gap) out.push([x, c.z]); } }
+  return out; }
 
 /* ---------- Small helpers ---------- */
 const TEXC = new Map();
@@ -109,18 +144,23 @@ const panelTex = () => ctex('m:panel', 256, 128, (x,w,h)=>{ const g=x.createLine
   for (let i=0;i<2;i++){ const px=i*128+14, py=16, pw=100, ph=h-32; x.fillStyle='rgba(0,0,0,.22)'; x.fillRect(px,py,pw,ph); x.fillStyle='rgba(255,230,200,.08)'; x.fillRect(px+4,py+4,pw-8,ph-8); x.strokeStyle='rgba(255,220,170,.18)'; x.lineWidth=2; x.strokeRect(px+1,py+1,pw-2,ph-2); } }, true);
 
 /* ---------- The hall ---------- */
-const WALL_C = { left:0x3e6a6c, right:0x56704a, back:0x7c4a3a, front:0x6c5a48 };
-export function buildMuseumHall(W, D, tier){
-  const g=new THREE.Group(), H=3.7, back=-D/2, front=D/2;
+const WALL_C = { left:0x3e6a6c, right:0x56704a, back:0x7c4a3a, front:0x6c5a48, small:0x6a5a4a };
+const tileTex = (key, a, b, line) => ctex('m:tile'+key, 128, 128, (x,w,h)=>{ const r=mulberry32(key.length*17);
+  for (let j=0;j<2;j++) for (let i=0;i<2;i++){ x.fillStyle=(i+j)%2?a:b; x.fillRect(i*64,j*64,64,64); x.globalAlpha=0.12; for (let k=0;k<30;k++){ x.fillStyle=r()<0.5?'#fff':'#000'; x.fillRect(i*64+r()*64, j*64+r()*64, 2+r()*4, 1+r()*2); } x.globalAlpha=1; }
+  x.strokeStyle=line; x.lineWidth=2; for (let k=0;k<=2;k++){ x.beginPath(); x.moveTo(k*64,0); x.lineTo(k*64,h); x.stroke(); x.beginPath(); x.moveTo(0,k*64); x.lineTo(w,k*64); x.stroke(); } }, true);
+const FLOORS = { fish:()=>tileTex('fish','#5f7478','#6a8084','#3e4e52'), bug:()=>tileTex('bug','#a86a4a','#b8785a','#6e4430'), fossil:()=>tileTex('fossil','#cdbf9e','#d8cbac','#9a8a6a') };
+export function buildMuseumHall(L){
+  const g=new THREE.Group(), H=3.7, { W, D, back, front } = L;
   const floor=mk(G.box(W,0.1,D), new THREE.MeshStandardMaterial({ map:rep(floorTex(), W/3.4, D/3.4), roughness:0.55, metalness:0.0 }), 0,-0.05,0,g); floor.castShadow=false;
-  // a marble border around the parquet
-  for (const [w,d,x,z] of [[W,0.5,0,back+0.25],[W,0.5,0,front-0.25],[0.5,D,-W/2+0.25,0],[0.5,D,W/2-0.25,0]]) noShadow(mk(G.box(w,0.012,d), M(0xe8dcc8,{roughness:0.3}), x,0.006,z,g)).receiveShadow=true;
-  const rugLen=D-4.2; const rug=mk(G.box(2.3,0.025,rugLen), new THREE.MeshStandardMaterial({ map:rep(rugTex(),1,Math.max(1,Math.round(rugLen/7))), roughness:0.95 }), 0,0.013,front-0.2-rugLen/2,g); rug.castShadow=false;
+  for (const zn of L.zones){ const w=zn.x1-zn.x0, d=zn.z1-zn.z0, cx=(zn.x0+zn.x1)/2, cz=(zn.z0+zn.z1)/2;
+    if (zn.floor!=='planks'){ const f=noShadow(mk(G.box(w,0.012,d), new THREE.MeshStandardMaterial({ map:rep(FLOORS[zn.floor](), w/1.6, d/1.6), roughness:0.45 }), cx,0.006,cz,g)); f.receiveShadow=true; }
+    if (zn.rug){ const rl=d-1.0; const rug=mk(G.box(2.2,0.025,rl), new THREE.MeshStandardMaterial({ map:rep(rugTex(),1,Math.max(1,Math.round(rl/6))), roughness:0.95 }), 0,0.014,front-0.2-rl/2,g); rug.castShadow=false; } }
+  for (const [w,d,x,z] of [[W,0.4,0,back+0.2],[W,0.4,0,front-0.2],[0.4,D,-W/2+0.2,0],[0.4,D,W/2-0.2,0]]) noShadow(mk(G.box(w,0.014,d), M(0xe8dcc8,{roughness:0.3}), x,0.007,z,g)).receiveShadow=true;
   const cutWalls=[];
   // walls: dark wainscot panels, a painted upper wall, chair rail and crown molding. Each wall is one group so it can drop.
   const wall=(len, color, x, z, ry, nx, nz, door)=>{
     const grp=new THREE.Group(); grp.position.set(x,0,z); grp.rotation.y=ry; g.add(grp); const hide=[];
-    const pieces = door ? [[-(len/2+1.3)/2-0.0, (len/2-1.3)], [(len/2+1.3)/2, (len/2-1.3)]] : [[0,len]];
+    const pieces = door ? [[-(len/2+1.3)/2, (len/2-1.3)], [(len/2+1.3)/2, (len/2-1.3)]] : [[0,len]];
     for (const [cx,l] of pieces){ if (l<=0.01) continue;
       mk(G.box(l,1.05,0.24), new THREE.MeshStandardMaterial({ map:rep(panelTex(), l/1.8, 1), roughness:0.6 }), cx,0.525,0.02,grp);
       mk(G.box(l,H-1.05,0.2), new THREE.MeshStandardMaterial({ map:rep(wallTex(color), l/1.4, (H-1.05)/1.4), roughness:0.9 }), cx,1.05+(H-1.05)/2,0,grp);
@@ -128,31 +168,36 @@ export function buildMuseumHall(W, D, tier){
     if (door){ mk(G.box(2.6,H-2.55,0.22), new THREE.MeshStandardMaterial({ map:rep(wallTex(color), 2, 1), roughness:0.9 }), 0,2.55+(H-2.55)/2,0,grp);
       for (const s of [-1,1]) mk(G.box(0.18,2.6,0.34), trimWood(), s*1.3,1.3,0.04,grp); mk(G.box(2.96,0.22,0.36), trimWood(), 0,2.62,0.04,grp); }
     cutWalls.push({ meshes:[grp], hide, nx, nz }); return { grp, hide }; };
-  const Lw=wall(D+0.4, WALL_C.left, -W/2-0.1, 0, Math.PI/2, -1, 0), Rw=wall(D+0.4, WALL_C.right, W/2+0.1, 0, -Math.PI/2, 1, 0);
-  const Bw=wall(W+0.4, WALL_C.back, 0, back-0.1, 0, 0, -1), Fw=wall(W+0.4, WALL_C.front, 0, front+0.1, Math.PI, 0, 1, true);
+  const small=!L.wings.fish && !L.wings.bug && !L.fd;
+  const WL={ L:wall(D+0.4, L.wings.fish?WALL_C.left:WALL_C.small, -W/2-0.1, 0, Math.PI/2, -1, 0), R:wall(D+0.4, L.wings.bug?WALL_C.right:WALL_C.small, W/2+0.1, 0, -Math.PI/2, 1, 0),
+    B:wall(W+0.4, L.fd?WALL_C.back:WALL_C.small, 0, back-0.1, 0, 0, -1) };
+  wall(W+0.4, WALL_C.front, 0, front+0.1, Math.PI, 0, 1, true);
+  const along=(w, at)=> w==='L' ? -at : w==='R' ? at : at;   // wall-local x for a room coordinate along that wall
   // section signs: dark wood with gold letters
-  const sign=(txt, parentWall, x, y, w=2.6)=>{ const s=new THREE.Group(); s.position.set(x,y,0.16); parentWall.grp.add(s); parentWall.hide.push(s);
-    mk(G.box(w,0.5,0.06), trimWood(), 0,0,0,s); noShadow(mk(plane(w-0.12,0.42), new THREE.MeshStandardMaterial({ map:textPlate(txt,'',512,96,'wood'), roughness:0.5, metalness:0.2 }), 0,0,0.035,s)); return s; };
-  sign('Aquarium', Lw, 0, 3.05, 2.8); sign('Insectarium', Rw, 0, 3.05, 3.0); sign('Fossil Hall', Bw, 0, 3.1, 3.0);
-  // a mural behind the fossils: an old sea, in warm sepia
-  { const mt=ctex('m:mural', 512, 160, (x,w,h)=>{ const gr=x.createLinearGradient(0,0,0,h); gr.addColorStop(0,'#d9b98a'); gr.addColorStop(1,'#b48a5a'); x.fillStyle=gr; x.fillRect(0,0,w,h);
+  for (const sg of L.signs){ const Wl=WL[sg.wall], s=new THREE.Group(); s.position.set(along(sg.wall,sg.at), sg.wall==='B'&&L.fd?3.12:3.0, 0.16); Wl.grp.add(s); Wl.hide.push(s);
+    mk(G.box(sg.w,0.5,0.06), trimWood(), 0,0,0,s); noShadow(mk(plane(sg.w-0.12,0.42), new THREE.MeshStandardMaterial({ map:textPlate(sg.text,'',512,96,'wood'), roughness:0.5, metalness:0.2 }), 0,0,0.035,s)); }
+  // a mural behind the fossils once they have their own hall: an old sea, in warm sepia
+  if (L.fd){ const mt=ctex('m:mural', 512, 160, (x,w,h)=>{ const gr=x.createLinearGradient(0,0,0,h); gr.addColorStop(0,'#d9b98a'); gr.addColorStop(1,'#b48a5a'); x.fillStyle=gr; x.fillRect(0,0,w,h);
       x.fillStyle='rgba(90,55,30,.35)'; x.beginPath(); x.moveTo(0,h); for (let i=0;i<=w;i+=16) x.lineTo(i, h*0.72-Math.sin(i*0.02)*14-Math.sin(i*0.07)*6); x.lineTo(w,h); x.fill();
       x.strokeStyle='rgba(90,55,30,.4)'; x.lineWidth=3; for (const [cx,cy,r] of [[80,70,26],[400,60,20],[250,95,14]]){ x.beginPath(); for (let a=0;a<TAU*2.6;a+=0.1){ const rr=r*a/(TAU*2.6); x.lineTo(cx+Math.cos(a)*rr, cy+Math.sin(a)*rr); } x.stroke(); }
       x.fillStyle='rgba(90,55,30,.3)'; for (const [cx,cy] of [[170,50],[330,40],[460,85]]){ x.beginPath(); x.ellipse(cx,cy,22,8,-0.2,0,TAU); x.fill(); x.beginPath(); x.moveTo(cx-20,cy); x.lineTo(cx-34,cy-9); x.lineTo(cx-34,cy+9); x.fill(); }
       x.strokeStyle='#8a5e2e'; x.lineWidth=8; x.strokeRect(4,4,w-8,h-8); });
-    const mw=Math.min(W-6, 11), mu=new THREE.Group(); mu.position.set(0,2.05,0.13); Bw.grp.add(mu); Bw.hide.push(mu);
-    mk(G.box(mw+0.2,1.55,0.05), M(0xb8904a,{ metalness:0.6, roughness:0.35 }), 0,0,0,mu); noShadow(mk(plane(mw,1.4), new THREE.MeshStandardMaterial({ map:mt, roughness:0.9 }), 0,0,0.03,mu)); }
-  // wall sconces between the tanks, and pilasters in the bigger halls
-  const z0=back+2.3, z1=front-3.0, slot=(z1-z0)/4;
-  for (const [Wl,s] of [[Lw,-1],[Rw,1]]) for (let i=0;i<=4;i++){ const zz=z1-slot*i, lx=s<0? -zz : zz;   // wall-local x along the wall
-    const sc=new THREE.Group(); sc.position.set(lx,2.55,0.14); Wl.grp.add(sc); Wl.hide.push(sc);
-    if (tier>=2){ mk(G.box(0.42,2.3,0.12), M(0xf0e4cc,{roughness:0.5}), 0,-0.35,-0.02,sc); for (const y of [-1.45,0.82]) mk(G.box(0.52,0.12,0.16), M(0xe6d6b8), 0,y,0,sc); }
+    const mw=Math.min(W-6, 11), mu=new THREE.Group(); mu.position.set(0,2.05,0.13); WL.B.grp.add(mu); WL.B.hide.push(mu);
+    mk(G.box(mw+0.2,1.55,0.05), M(0xb8904a,{ metalness:0.6, roughness:0.35 }), 0,0,0,mu); noShadow(mk(plane(mw,1.4), new THREE.MeshStandardMaterial({ map:mt, roughness:0.9 }), 0,0,0.03,mu));
+    L.sconces.push({ wall:'B', at:-mw/2-0.5 }, { wall:'B', at:mw/2+0.5 }); }
+  // brass wall sconces beside the cases
+  const seen=new Set();
+  for (const sc0 of L.sconces){ const key=sc0.wall+Math.round(sc0.at*4); if (seen.has(key)) continue; seen.add(key);
+    const Wl=WL[sc0.wall], sc=new THREE.Group(); sc.position.set(along(sc0.wall,sc0.at),2.55,0.14); Wl.grp.add(sc); Wl.hide.push(sc);
     mk(G.box(0.16,0.24,0.05), brass(), 0,0,0.05,sc); const arm=mk(G.cyl(0.02,0.02,0.22,6), brass(), 0,0.04,0.16,sc); arm.rotation.x=Math.PI/2;
     mk(ocyl(0.06,0.11,0.14,12), new THREE.MeshStandardMaterial({ color:0xfff0d0, emissive:0xffc070, emissiveIntensity:1.2, side:THREE.DoubleSide }), 0,0.12,0.27,sc);
     glowBall(sc, 0,0.12,0.3, 0.9, 0xffc080, 0.55); lightPool(sc, 1.6,1.9, 0,0.1,0.02, 0xffb070, 0.22, true); }
+  // colonnades between the main room and each hall
+  for (const c of L.cols) for (const [x,z] of colPoints(c)){ const p=new THREE.Group(); p.position.set(x,0,z); g.add(p);
+    mk(G.box(0.5,0.22,0.5), M(0xe0d4bc,{roughness:0.4}), 0,0.11,0,p); mk(G.cyl(0.17,0.2,H-0.6,14), M(0xf0e6d2,{roughness:0.35}), 0,0.22+(H-0.6)/2,0,p);
+    mk(G.box(0.48,0.2,0.48), M(0xe0d4bc,{roughness:0.4}), 0,H-0.28,0,p); mk(G.box(0.56,0.08,0.56), M(0xf2e8d4,{roughness:0.5}), 0,H-0.14,0,p); }
   // the room's own lights: warm and low, so the cases glow
-  const pl=(x,y,z,i,d)=>{ const l=new THREE.PointLight(0xffd6a0, i, d, 1.4); l.position.set(x,y,z); g.add(l); };
-  pl(-W/2+3.2, 3.0, 0, 26, 16); pl(W/2-3.2, 3.0, 0, 26, 16); pl(0, 3.2, back+3, 30, 14);
+  for (const [x,z] of L.lights){ const l=new THREE.PointLight(0xffd6a0, small?22:26, small?13:16, 1.4); l.position.set(x,3.0,z); g.add(l); }
   g.userData.cutWalls=cutWalls; return g;
 }
 
@@ -165,7 +210,7 @@ export function buildDesk(){ const g=new THREE.Group();
   mk(ocyl(0.07,0.16,0.14,14), new THREE.MeshStandardMaterial({ color:0x2a6a4a, side:THREE.DoubleSide, roughness:0.4 }), 0,0.38,0,lamp); glowBall(lamp,0,0.3,0,0.8,0xffd090,0.7);
   for (let i=0;i<3;i++) mk(G.box(0.3,0.05,0.22), M([0x8a3a30,0x3a5a8a,0x5a7a3a][i]), -0.7,1.09+i*0.05,0,g).rotation.y=i*0.2;
   mk(G.box(0.42,0.02,0.3), M(0xf4ecd8), -0.15,1.075,0.05,g).rotation.y=-0.2; return g; }
-export function buildCenterpiece(tier){ const g=new THREE.Group();
+export function buildCenterpiece(tier=2){ const g=new THREE.Group();
   mk(G.cyl(1.75,1.85,0.18,32), M(0xe4d8c2,{roughness:0.35}), 0,0.09,0,g); mk(G.cyl(1.6,1.6,0.02,32), brass(), 0,0.19,0,g);
   const f=new THREE.Group(); FURN_BUILDERS.fountain(f); f.scale.setScalar(1.45); f.position.y=0.18; g.add(f);
   for (let i=0;i<(tier>=3?6:4);i++){ const a=i/(tier>=3?6:4)*TAU+Math.PI/4, p=buildPalm(); p.scale.setScalar(0.7); p.position.set(Math.cos(a)*1.45,0.18,Math.sin(a)*1.45); g.add(p); }
@@ -177,22 +222,22 @@ export function buildPalm(){ const g=new THREE.Group(); mk(G.cyl(0.32,0.25,0.5,1
   mk(G.cyl(0.04,0.06,0.9,6), M(0x6a5a3a), 0,0.85,0,g); return g; }
 
 /* Glass case for beach finds: 8 compartments, two rows */
-export function shellSlots(len){ const out=[]; for (let r=0;r<2;r++) for (let i=0;i<4;i++) out.push([-len/2+len/8+i*len/4, r?0.2:-0.2]); return out; }
-export function buildShellCase(len){ const g=new THREE.Group();
+export function shellSlots(len, n=8){ const c=n/2, out=[]; for (let r=0;r<2;r++) for (let i=0;i<c;i++) out.push([-len/2+len/(2*c)+i*len/c, r?0.2:-0.2]); return out; }
+export function buildShellCase(len, n=8){ const g=new THREE.Group();
   mk(G.box(len,0.82,1.0), darkWood(), 0,0.41,0,g); mk(G.box(len+0.06,0.05,1.06), brass(), 0,0.84,0,g);
   mk(G.box(len-0.1,0.02,0.92), M(0x2a4a6a,{roughness:0.95}), 0,0.86,0,g);
-  for (const [x,z] of shellSlots(len)) mk(G.cyl(0.18,0.18,0.02,20), M(0xe8dcc0,{roughness:0.6}), x,0.875,z,g);
+  for (const [x,z] of shellSlots(len,n)) mk(G.cyl(0.18,0.18,0.02,20), M(0xe8dcc0,{roughness:0.6}), x,0.875,z,g);
   const glass=noShadow(mk(G.box(len-0.06,0.42,0.96), glassMat(0xe8f4ff,0.16), 0,1.08,0,g));
   for (const x of [-len/2+0.03, len/2-0.03]) for (const z of [-0.47,0.47]) mk(G.box(0.04,0.44,0.04), brass(), x,1.08,z,g);
   for (const z of [-0.49,0.49]) mk(G.box(len,0.03,0.03), brass(), 0,1.3,z,g); for (const x of [-len/2+0.02,len/2-0.02]) mk(G.box(0.03,0.03,1.0), brass(), x,1.3,0,g);
-  for (const s of [-1,1]) mk(G.box(1.2,0.24,0.02), new THREE.MeshStandardMaterial({ map:textPlate('Beach Finds','Shells, glass and pearls',512,128), metalness:0.6, roughness:0.35 }), 0,0.6,s*0.51,g).rotation.y=s<0?Math.PI:0;
+  for (const s of [-1,1]) mk(G.box(Math.min(1.2,len*0.6),0.24,0.02), new THREE.MeshStandardMaterial({ map:textPlate('Beach Finds','Shells, glass and pearls',512,128), metalness:0.6, roughness:0.35 }), 0,0.6,s*0.51,g).rotation.y=s<0?Math.PI:0;
   lightPool(g, len+1.6, 2.4, 0,0.02,0, 0xffcf8a, 0.32); lightPool(g, len*0.9, 0.8, 0,0.9,0, 0xffe0b0, 0.25); return g; }
 
 /* Fossil pedestal: marble plinth, brass plaque; lit and domed once something is on it */
 export function buildPedestal(id, h, big, filled){ const g=new THREE.Group(), r=big?0.55:0.4, stone=M(0x3e3834,{roughness:0.45}), cap=M(0x524a44,{roughness:0.3});
   mk(G.box(r*2+0.14,0.1,r*2+0.14), M(0x2c2622,{roughness:0.5}), 0,0.05,0,g); mk(G.box(r*2,h-0.18,r*2), stone, 0,0.1+(h-0.18)/2,0,g);
   mk(G.box(r*2+0.1,0.08,r*2+0.1), cap, 0,h-0.04,0,g); mk(G.box(r*2+0.12,0.02,r*2+0.12), brass(), 0,h-0.085,0,g);
-  const it=ITEMS[id]; mk(G.box(r*1.5,0.2,0.02), new THREE.MeshStandardMaterial({ map:textPlate(filled?it.name:'?', filled?'Fossil':'Not yet found',512,128), metalness:0.6, roughness:0.35 }), 0,h*0.6,r+0.011,g);
+  const it=id&&ITEMS[id]; mk(G.box(r*1.5,0.2,0.02), new THREE.MeshStandardMaterial({ map:textPlate(filled?it.name:'?', filled?'Fossil':'Waiting for a fossil',512,128), metalness:0.6, roughness:0.35 }), 0,h*0.6,r+0.011,g);
   if (filled){ mk(G.cyl(r*0.55,r*0.62,0.05,20), brass(), 0,h+0.025,0,g);
     beam(g, 0,3.5,0, 3.5-h, r*1.35, 0xffdcaa, 0.12); lightPool(g, r*2.6, r*2.6, 0,h+0.01,0, 0xffd090, 0.22); lightPool(g, r*4, r*4, 0,0.015,0.2, 0xffcf8a, 0.3); }
   g.userData.top=h+0.05; return g; }
@@ -236,7 +281,7 @@ export function buildTank(group, len, have){
   mk(G.box(len,y0,Dp), darkWood(), 0,y0/2,0,g); mk(G.box(len+0.06,0.1,Dp+0.06), trimWood(), 0,0.05,0,g);
   const np=Math.max(1,Math.round(len/1.2)); for (let i=0;i<np;i++){ const pw=len/np-0.16; mk(G.box(pw,y0-0.3,0.02), woodMat(0x6a4430), -len/2+len/np*(i+0.5),y0/2+0.02,Dp/2+0.01,g); }
   const n=have.length;
-  mk(G.box(Math.min(1.5,len*0.55),0.3,0.03), new THREE.MeshStandardMaterial({ map:textPlate(group.name, `${n} of ${group.ids.length} species`, 512,128), metalness:0.6, roughness:0.35 }), 0,y0*0.56,Dp/2+0.03,g);
+  mk(G.box(Math.min(1.5,len*0.55),0.3,0.03), new THREE.MeshStandardMaterial({ map:textPlate(group.name, group.slots?`${n} of ${group.slots} spaces`:`${n} of ${group.ids.length} species`, 512,128), metalness:0.6, roughness:0.35 }), 0,y0*0.56,Dp/2+0.03,g);
   mk(G.box(len+0.04,0.05,Dp+0.04), brass(), 0,y0+0.0,0,g);
   // inside: floor, painted back, then glass and frame
   const inner=new THREE.Group(); inner.position.y=y0; g.add(inner);

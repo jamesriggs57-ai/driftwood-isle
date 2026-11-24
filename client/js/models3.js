@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { TAU, mulberry32 } from './util.js';
 import { M, MF, mk, G, outline, windowMat, glowMat, addGlow, FURN_BUILDERS } from './models.js';
 import { buildMuseum } from './models2.js';
-import { tbox, tmat, window1, door1, wallLantern, chimney1, cottageRoof, mergeStatic, scallopAwning, bunting, hangingSign, sack, barrel1, flowerBed1, pot, ivy } from './cottage.js';
+import { tbox, tmat, window1, door1, wallLantern, chimney1, cottageRoof, mergeStatic, scallopAwning, bunting, hangingSign, sack, barrel1, flowerBed1, pot, ivy, timberFace, dormer, bayWindow, drapedNet, lobsterTrap, hangingVines, mossTop } from './cottage.js';
 
 const WOOD=0xa8754a, WOOD2=0x8b5e3a, WOODL=0xc99a6a;
 function sign(text, bg='#fff1d6', fg='#5b4336', w=2.4){
@@ -46,17 +46,12 @@ export function buildStand(kind, closed){
   mk(G.box(2.9,0.12,0.98), M(WOOD2), 0,0.06,0,g); mk(G.box(3.0,0.1,1.12), M(WOODL), 0,0.97,0.02,g);
   mk(G.cyl(0.06,0.06,3.0,8), M(WOODL), 0,0.95,0.58,g).rotation.z=Math.PI/2;
   for (const x of [-1.38,1.38]) for (const z of [-0.42,0.42]) turnedPost(g, x, z, 2.3);
-  // peaked canopy, ridge along x, stripes and a scalloped valance front and back
-  const top=2.8, pitch=0.5, len=0.98, n=8, sw=3.1/n;
-  for (const s of [1,-1]){ const pv=new THREE.Group(); pv.position.set(0,top,0); pv.rotation.x=s*pitch; g.add(pv);
-    for (let i=0;i<n;i++) mk(G.box(sw+0.005,0.045,len), M(i%2?alt:col), -1.55+sw*(i+0.5),0,s*len/2,pv);
-  }
-  const tri=new THREE.Shape(), ey=len*Math.sin(pitch), ez=len*Math.cos(pitch);
-  for (const s of [1,-1]) for (let i=0;i<n;i++){ const sc=mk(new THREE.CylinderGeometry(sw/2,sw/2,0.04,12,1,false,0,Math.PI), M(i%2?alt:col), -1.55+sw*(i+0.5),top-ey-0.02,s*(ez+0.01),g); sc.rotation.set(Math.PI/2,0,-Math.PI/2,'ZXY'); sc.castShadow=false; } tri.moveTo(-ez,0); tri.lineTo(ez,0); tri.lineTo(0,ey); tri.lineTo(-ez,0);
-  for (const e of [-1,1]){ const t=mk(new THREE.ShapeGeometry(tri), M(col,{side:THREE.DoubleSide}), e*1.55,top-ey,0,g); t.rotation.y=Math.PI/2; }
-  mk(G.cyl(0.05,0.05,3.2,8), M(WOOD2), 0,top+0.03,0,g).rotation.z=Math.PI/2;
-  const fl=new THREE.Group(); fl.position.set(0,top,0); g.add(fl); mk(G.cyl(0.02,0.02,0.7,5), M(WOOD2), 0,0.35,0,fl); mk(G.sph(0.045,8,6), M(0xf3c35a), 0,0.72,0,fl);
+  // v1.12: a real little roof. Mossy shingles on the Bait Shack, mossy thatch on the Seed Cart.
+  const top=2.3; for (const z of [-0.42,0.42]) mk(G.box(2.95,0.12,0.12), M(WOOD2), 0,top,z,g); for (const x of [-1.38,1.38]) mk(G.box(0.12,0.12,0.96), M(WOOD2), x,top,0,g);
+  const rise=cottageRoof(g, { style: bait?'mossy':'thatch', pitch: bait?0.62:0.72, L:2.8, S:0.96, y:top+0.06, c: bait?0x3a6aa0:0xd8b070, trim: bait?0xffffff:0x6a4a30, gableMat: tmat('board', bait?0x8ac0d4:0xc99a6a,1,1), moss: bait?0.7:0.55, seed: bait?61:62, over: bait?0.3:0.12, rake:0.18, finial:false });
+  const fl=new THREE.Group(); fl.position.set(-1.1,top+rise-0.1,0); g.add(fl); mk(G.cyl(0.02,0.02,0.7,5), M(WOOD2), 0,0.35,0,fl); mk(G.sph(0.045,8,6), M(0xf3c35a), 0,0.72,0,fl);
   const pen=new THREE.Shape(); pen.moveTo(0,0); pen.lineTo(0.4,-0.1); pen.lineTo(0,-0.22); pen.lineTo(0,0); mk(new THREE.ShapeGeometry(pen), M(col,{side:THREE.DoubleSide}), 0.02,0.68,0,fl).castShadow=false;
+  hangingVines(g, -1.45, 1.45, top-0.02, 0.5, bait?71:72, bait?null:0xff9ec4);
   bunting(g, -1.38, 1.38, 2.18, 0.47, 0.14);
   // a lantern hanging from the front right post
   const ln=new THREE.Group(); ln.position.set(1.38,1.95,0.42); g.add(ln); mk(G.box(0.04,0.04,0.3), M(0x3a302a), 0,0.12,0.15,ln); mk(G.box(0.15,0.2,0.15), glowMat(0xffd27a), 0,-0.04,0.3,ln); mk(G.cone(0.13,0.1,4), M(0x3a302a), 0,0.11,0.3,ln).rotation.y=Math.PI/4; addGlow(ln,-0.04,2.0);
@@ -66,12 +61,15 @@ export function buildStand(kind, closed){
     const jar=mk(G.cyl(0.12,0.12,0.26,10), M(0xd8f0e0,{transparent:true,opacity:0.5,roughness:0.1}), 1.6,1.13,0.3,g); jar.castShadow=false; }
   if (bait){ // rope-wrapped posts, a life ring, hanging floats and a bait barrel
     for (const x of [-1.38,1.38]) for (const y of [0.5,1.5]) mk(G.tor(0.08,0.025,5,10), M(0xd8c8a0), x,y,0.42,g).rotation.x=Math.PI/2;
-    const lr=mk(G.tor(0.28,0.07,8,16), M(0xe2483d), -1.52,1.35,0.0,g); lr.rotation.y=Math.PI/2; for (let k=0;k<4;k++){ const w=mk(G.box(0.05,0.1,0.15), M(0xffffff), -1.52,1.35+Math.sin(k*Math.PI/2)*0.28,Math.cos(k*Math.PI/2)*0.28,g); }
+    const lr=mk(G.tor(0.26,0.07,8,16), M(0xe2483d), 0.95,0.52,0.48,g); for (let k=0;k<4;k++){ const an=k*Math.PI/2+Math.PI/4; mk(G.box(0.1,0.15,0.15), M(0xffffff), 0.95+Math.cos(an)*0.26,0.52+Math.sin(an)*0.26,0.48,g).rotation.z=an; }
+    drapedNet(g, -1.46, 2.2, 0, -Math.PI/2, 0.9, 1.1); lobsterTrap(g, -1.9, 0, -0.45, 0.4);
     for (let k=0;k<3;k++){ mk(G.cyl(0.008,0.008,0.3+k*0.12,4), M(0xd8c8a0), 1.5,1.85-(0.15+k*0.06),-0.2+k*0.18,g); mk(G.sph(0.1,10,8), M(k%2?0xffffff:0xe2483d), 1.52,1.7-k*0.12,-0.2+k*0.18,g); }
     barrel1(g, -1.85, 0.35, 0x6a8aa0);
   } else { // wagon wheels and seed sacks
     for (const e of [-1,1]){ const w=new THREE.Group(); w.position.set(e*1.5,0.44,0); w.rotation.y=Math.PI/2; g.add(w); mk(G.tor(0.4,0.05,6,18), M(WOOD2), 0,0,0,w); mk(G.cyl(0.08,0.08,0.14,8), M(WOOD2), 0,0,0,w).rotation.x=Math.PI/2; for (let k=0;k<6;k++){ const sp=mk(G.box(0.04,0.78,0.04), M(WOODL), 0,0,0,w); sp.rotation.z=k*Math.PI/6; } }
     sack(g, 1.95, 0.3, 0xd8c098, 0x7cb85a); sack(g, 1.9, -0.25, 0xc8a878, 0xffd04d); sack(g, -1.95, 0.2, 0xd8c098, 0xff7f7f);
+    for (const x of [-1.38,1.38]){ const pv=new THREE.Group(); pv.position.set(x,0,0.5); g.add(pv); ivy(pv, 0, 0.3, 2.0, x>0?81:82, 0xff7f9f); }
+    for (let k=0;k<3;k++) pot(g, -1.95, 0, -0.35-k*0.45, 0.75, 0x5fae43, [0xffd04d,null,0xc7a0ff][k]);
   }
   const sg=sign(bait?'Bait Shack':'Seed Cart', bait?'#2f6ab0':'#7cb85a', '#ffffff', 1.6); sg.position.set(0,1.62,0.66); g.add(sg);
   for (const x of [-0.6,0.6]) mk(G.cyl(0.01,0.01,0.46,4), M(0x3a302a), x,2.05,0.6,g);
@@ -80,45 +78,53 @@ export function buildStand(kind, closed){
 }
 
 /* ---------- Pemberton's general store (a real shop you walk into). v1.9: cottage shopfront ---------- */
-function shopWindow(g, x, y, z, w, h, goods){
-  const fr=M(0xfff8ea), p=new THREE.Group(); p.position.set(x,y,z); g.add(p);
-  mk(G.box(w+0.18,h+0.18,0.1), M(0x6a8a4a), 0,0,0,p); mk(G.box(w,h,0.06), windowMat, 0,0,0.04,p);
-  for (let i=1;i<3;i++) mk(G.box(0.04,h,0.07), fr, -w/2+i*w/3,0,0.06,p); mk(G.box(w,0.04,0.07), fr, 0,h*0.18,0.06,p);
-  mk(G.box(w+0.4,0.08,0.22), M(0xfff8ea), 0,-h/2-0.12,0.08,p);
-  mk(G.box(w+0.2,0.2,0.26), M(0x8b5e3a), 0,-h/2-0.28,0.16,p); const fc=[0xff7f7f,0xffd04d,0xffffff,0xc7a0ff];
-  for (let k=0;k<6;k++){ mk(G.ico(0.07,1), M(0x5f9a48), -w/2+0.05+k*(w-0.1)/5, -h/2-0.15, 0.22, p).scale.y=0.7; mk(G.ico(0.06,1), M(fc[k%4]), -w/2+0.1+k*(w-0.2)/5, -h/2-0.1+(k%2)*0.04, 0.27, p); }
-  for (let k=0;k<3;k++) mk(k%2?G.cyl(0.1,0.1,0.25,8):G.box(0.2,0.25,0.2), M(goods[k]), -0.4+k*0.4, -h/2+0.2, -0.14, p);
-  return p;
-}
 export function buildStore(tier=0){
+  // v1.12: a storybook village shop. Tier 0 thatched, tier 1 mossy shingles with dormers, tiers 2-3 half-timbered with a mossy roof.
   const g=new THREE.Group(), big=tier>=2, W=big?6.6:5.4, D=big?4.8:4.2, F=0.3, H=big?3.0:2.7;
-  const wallC=tier>=3?0xf4e4c8:0xfff1d6, roofC=tier>=3?0x3a7a5a:0x6a8a4a, trim=big?0xfff8ea:WOOD2;
+  const wallC=big?0xf6efe0:0xfff1d6, roofC=tier>=3?0x5a7a4a:tier>=1?0x8a5a44:0xd8b070, beam=0x4a3226, trim=big?beam:WOOD2;
+  const style = tier===0 ? 'thatch' : 'mossy', pitch = tier===0 ? 0.82 : 0.74, moss = tier===0 ? 0.35 : tier===1 ? 0.6 : 0.75;
   const base=tbox('stone',0xb0aaa0,W+0.3,F+0.6,D+0.3,0.8); base.position.y=(F-0.6)/2; g.add(base);
   const wall=tbox(big?'plaster':'board', wallC, W, H, D, big?1.3:1.0); wall.position.y=F+H/2; g.add(wall);
-  for (const x of [-W/2,W/2]) for (const z of [-D/2,D/2]){
-    if (big) for (let k=0;k<Math.floor(H/0.4);k++) mk(G.box(k%2?0.42:0.3,0.32,k%2?0.3:0.42), tmat('stone',0xd8d0c0,0.4,0.3), x+Math.sign(x)*-0.08, F+0.18+k*0.4, z+Math.sign(z)*-0.08, g);
-    else mk(G.box(0.18,H,0.18), M(WOOD2), x,F+H/2,z,g); }
+  const bayX=W/2-1.35;
+  if (big){
+    const bm=M(beam), holes=[{x:0,y:F+0.95,w:1.2,h:2.2,door:true},{x:-bayX,y:F+1.4,w:1.9,h:1.9},{x:bayX,y:F+1.4,w:1.9,h:1.9}];
+    const fr=new THREE.Group(); fr.position.z=D/2; g.add(fr); timberFace(fr, W, F, H, holes, bm);
+    for (const e of [-1,1]){ const sd=new THREE.Group(); sd.position.x=e*W/2; sd.rotation.y=e*Math.PI/2; g.add(sd); timberFace(sd, D, F, H, [{x:0,y:F+1.3,w:0.95,h:1.0}], bm); window1(sd, 0, F+1.3, 0.03, { type:'cross', shut:0x6a8a4a, box:true, frame:0xf6efe0 }); }
+  } else {
+    for (const x of [-W/2,W/2]) for (const z of [-D/2,D/2]) mk(G.box(0.18,H,0.18), M(WOOD2), x,F+H/2,z,g);
+    for (const e of [-1,1]){ const sd=new THREE.Group(); sd.position.x=e*(W/2+0.01); sd.rotation.y=e*Math.PI/2; g.add(sd); window1(sd, 0, F+1.3, 0.03, { type:'cross', shut:0x6a8a4a, box:true }); }
+  }
   mk(G.box(W+0.12,0.14,D+0.12), M(trim), 0,F+H,0,g);
-  const rise=cottageRoof(g, { style:'gable', pitch: big?0.6:0.66, ridgeZ:true, L:D, S:W, y:F+H, c:roofC, trim, gableMat:tmat(big?'plaster':'board',wallC,1,1), seed:7+tier });   // gable to the front, like a shopfront
-  // shopfront: two display windows with awnings and flower boxes, a Dutch door under its own awning
-  const goods=[0xe2483d,0xf0c040,0x4a7ad8];
-  for (const s of [-1,1]){ const x=s*(W/2-1.3); shopWindow(g, x, F+1.35, D/2+0.02, 1.45, 1.05, goods); scallopAwning(g, x, F+2.25, D/2+0.04, 1.75, 0.75, 0xe8604d, 0xfff4e4); }
-  door1(g, 0, F, D/2+0.02, { type:'dutch', color:0x6a8a4a, hood:'none' });
-  scallopAwning(g, 0, F+2.3, D/2+0.04, 1.35, 0.7, 0xfff4e4, 0xe8604d);
+  const rise=cottageRoof(g, { style, pitch, ridgeZ:true, L:D, S:W, y:F+H, c:roofC, trim: tier===0?0x6a4a30:trim, gableMat:tmat(big?'plaster':'board',wallC,1,1), moss, seed:7+tier, timber:big, beamC:beam });
+  // dormers on both roof slopes
+  if (tier>=1){ const tp=Math.tan(pitch), dx=W/2*0.48;
+    for (const e of [-1,1]) for (const z of (big?[-0.9,0.9]:[0])) dormer(g, e*(dx+0.12), F+H+(W/2-dx)*tp+0.32, z, e*Math.PI/2, { roofC, wallC, wall:big?'plaster':'board', trim, moss:moss*0.8, seed:tier*5+(e>0?1:2)+(z>0?3:0), round: tier>=3 && z<0 }); }
+  // shopfront: bay windows full of goods, a round door with roses climbing round it, an awning
+  const goods=[0xe2483d,0xf0c040,0x4a7ad8,0x7cb85a];
+  for (const e of [-1,1]) bayWindow(g, e*bayX, F, D/2, { w:1.7, h:1.15, d:0.5, roofC, trim:big?beam:0xfff8ea, frame:0xfff8ea, goods, moss:tier>=1, seed:e>0?3:4 });
+  door1(g, 0, F, D/2+0.02, { type:'round', color:0x6a8a4a, hood:'none' });
+  const rose=new THREE.Group(); rose.position.z=D/2+0.05; g.add(rose); ivy(rose, -0.72, 0.4, 2.0, 31, 0xff7f9f); ivy(rose, 0.72, 0.4, 2.0, 37, 0xff7f9f); hangingVines(rose, -0.6, 0.6, F+2.25, 0.04, 41, 0xff9ec4);
+  scallopAwning(g, 0, F+2.45, D/2+0.04, 1.4, 0.6, 0xfff4e4, 0xe8604d);
   const sg=sign(['Corner Shop','General Store','Pemberton\'s','Grand Emporium'][tier]||'Shop', '#fff1d6', '#5b4336', 2.4);
-  sg.position.set(0,F+H+0.62,D/2+0.14); g.add(sg);
-  const ow=new THREE.Group(); ow.position.set(0,F+H+rise*0.62,D/2+0.06); g.add(ow); window1(ow, 0, 0, 0, { type:'round', size:0.8 });
-  const hs=hangingSign(g, W/2+0.02, F+2.0, D/2-0.35, tier>=2?'P':'Shop'); hs.rotation.y=Math.PI/2;
-  chimney1(g, tier>=3 ? W/2-1.0 : -W/2+1.0, -D/4, F+H-0.2, F+H+rise*0.85+0.4, 'brick', -0.03);
-  for (const s of [-1,1]){ const c=new THREE.Group(); c.position.set(s*(W/2+0.5),0,D/2+0.7); g.add(c); FURN_BUILDERS.crate(c); }
-  pot(g, -0.85, 0, D/2+0.45, 1.1, 0x5fae43, 0xff9ec4); pot(g, 0.85, 0, D/2+0.45, 1.1, 0x5fae43, 0xffd04d);
-  barrel1(g, W/2+0.45, D/2-0.4, 0x8a5a34); sack(g, -W/2-0.45, D/2-0.35, 0xd8c098);
-  if (tier>=1){ for (const s of [-1,1]) wallLantern(g, s*0.85, F+1.75, D/2+0.02); }
+  sg.position.set(0,F+H+0.62,D/2+0.16); g.add(sg);
+  const ow=new THREE.Group(); ow.position.set(0,F+H+rise*0.6,D/2+0.06); g.add(ow); window1(ow, 0, 0, 0, { type:'round', size:0.75, frame: big?0xf6efe0:0xffffff });
+  const hs=hangingSign(g, W/2+0.02, F+2.05, D/2-0.35, tier>=2?'P':'Shop'); hs.rotation.y=Math.PI/2;
+  // ivy up the corners, a mossy chimney, a lamp post, bench, barrels, crates, pots and a flower bed
+  for (const e of [-1,1]){ const iv=new THREE.Group(); iv.position.set(e*(W/2+0.02),0,0); iv.rotation.y=e*Math.PI/2; g.add(iv); ivy(iv, e*(D/2-0.4), 0.9, H*0.85, 50+e+tier); }
+  const cx = tier>=3 ? W/2-1.0 : -W/2+1.0, ctop=F+H+rise*0.85+0.4; chimney1(g, cx, -D/4-0.4, F+H-0.2, ctop, 'stone', -0.03); mossTop(g, cx, ctop+0.04, -D/4-0.4, 0.5, 0.5, 3+tier, 5);
+  const lp=new THREE.Group(); lp.position.set(-W/2-0.9,0,D/2+1.1); g.add(lp); FURN_BUILDERS.lantern(lp);
+  const lg=new THREE.Group(); lg.position.set(W/2+0.6,0,-D/2+0.6); g.add(lg); FURN_BUILDERS.logpile(lg);
+  for (const e of [-1,1]){ const c=new THREE.Group(); c.position.set(e*(W/2+0.45),0,D/2+0.75); g.add(c); FURN_BUILDERS.crate(c); }
+  pot(g, -0.95, 0, D/2+0.5, 1.1, 0x5fae43, 0xff9ec4); pot(g, 0.95, 0, D/2+0.5, 1.1, 0x5fae43, 0xffd04d);
+  barrel1(g, W/2+0.45, D/2-0.35, 0x8a5a34); for (let k=0;k<5;k++) mk(G.sph(0.08,8,6), M(0xe2483d), W/2+0.45+Math.cos(k*1.3)*0.12, 0.66, D/2-0.35+Math.sin(k*1.3)*0.12, g);
+  sack(g, -W/2-0.45, D/2-0.35, 0xd8c098, 0xffd04d); flowerBed1(g, -W/2+0.9, -D/2-0.35, 1.4, 9+tier);
+  if (tier>=1){ for (const e of [-1,1]) wallLantern(g, e*0.85, F+1.75, D/2+0.02); bunting(g, -W/2, W/2, F+H+0.02, D/2+0.35, 0.35); }
   if (tier>=3){ const tw=new THREE.Group(); tw.position.set(-W/2+0.8,0,-D/2+0.8); g.add(tw); const th=H+2.2;
-    const tb=tbox('plaster',0xf4e4c8,1.3,th,1.3,1.3); tb.position.y=F+th/2; tw.add(tb); mk(G.box(1.42,0.14,1.42), M(0xfff8ea), 0,F+th,0,tw);
-    const cone=mk(G.cone(1.15,1.6,4), tmat('shingle',roofC,3,2), 0,F+th+0.8,0,tw); cone.rotation.y=Math.PI/4; mk(G.sph(0.09,8,6), M(0xf3c35a,{metalness:0.5,roughness:0.3}), 0,F+th+1.65,0,tw); mk(G.cone(0.05,0.35,6), M(0xf3c35a,{metalness:0.5,roughness:0.3}), 0,F+th+1.85,0,tw);
-    mk(G.cyl(0.38,0.38,0.06,20), M(0xfff8ea), 0,F+H+1.4,0.66,tw).rotation.x=Math.PI/2; mk(G.tor(0.38,0.04,6,20), M(0x6a8a4a), 0,F+H+1.4,0.69,tw);
-    for (const a of [0.4,2.1]){ const hnd=mk(G.box(0.04,0.26,0.03), M(0x3a302a), 0,F+H+1.4,0.71,tw); hnd.geometry.translate(0,0.11,0); hnd.rotation.z=-a; } }
+    const tb=tbox('stone',0xc8c0b0,1.4,th,1.4,0.9); tb.position.y=F+th/2; tw.add(tb); mk(G.box(1.52,0.14,1.52), M(beam), 0,F+th,0,tw);
+    const cone=mk(G.cone(1.2,2.0,8), tmat('shingle',roofC,4,2.2), 0,F+th+1.0,0,tw); mossTop(tw, 0, F+th+0.35, 0, 1.6, 1.6, 77, 10); mk(G.sph(0.09,8,6), M(0xf3c35a,{metalness:0.5,roughness:0.3}), 0,F+th+2.05,0,tw); mk(G.cone(0.05,0.35,6), M(0xf3c35a,{metalness:0.5,roughness:0.3}), 0,F+th+2.25,0,tw);
+    mk(G.cyl(0.4,0.4,0.06,20), M(0xfff8ea), 0,F+H+1.4,0.71,tw).rotation.x=Math.PI/2; mk(G.tor(0.4,0.05,6,20), M(beam), 0,F+H+1.4,0.74,tw);
+    for (const a of [0.4,2.1]){ const hnd=mk(G.box(0.04,0.26,0.03), M(0x3a302a), 0,F+H+1.4,0.76,tw); hnd.geometry.translate(0,0.11,0); hnd.rotation.z=-a; }
+    const ti=new THREE.Group(); ti.position.set(0,0,0.71); tw.add(ti); ivy(ti, -0.3, 0.8, th*0.7, 81); }
   mergeStatic(g);
   g.userData.door=[0,D/2]; g.userData.rects=[[-W/2-0.1,-D/2-0.1,W/2+0.1,D/2+0.1]]; return g;
 }

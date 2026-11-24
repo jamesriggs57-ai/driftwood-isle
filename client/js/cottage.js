@@ -76,7 +76,7 @@ export function cottageRoof(g, o){
   const grp=new THREE.Group(); g.add(grp); if (o.ridgeZ) grp.rotation.y=Math.PI/2;
   const L=o.L, S=o.S, r=mulberry32(o.seed||7), rake=0.32;
   if (o.style==='thatch'){ const h=thatchRoof(grp, o, L, S, r); mergeStatic(grp); return h; }
-  const pitch = o.pitch || (o.style==='steep'||o.style==='mossy' ? 0.92 : 0.62), over=0.42, W=L+2*rake;
+  const pitch = o.pitch || (o.style==='steep'||o.style==='mossy' ? 0.92 : 0.62), over=o.over!=null?o.over:0.42, W=L+2*rake;
   const tr=M(o.trim), ca=tmat('shingle',o.c,W/0.62,1), cb=tmat('shingle',col(o.c,-0.05),W/0.62,1);
   const plane=(s, p, topZ, topY, len, flare)=>{
     const piv=new THREE.Group(); piv.position.set(0,topY,s*topZ); piv.rotation.x=s*p; grp.add(piv);
@@ -140,7 +140,7 @@ function mossRoof(grp, o, L, S, ridgeY, pitch, over, r){
   for (let i=0;i<Math.round(o.moss*L*1.5);i++) clump(grp, (r()-0.5)*L, ridgeY+0.25, (r()-0.5)*0.22, 0.1, r);
 }
 function thatchRoof(grp, o, L, S, r){
-  const pitch=o.pitch||0.8, over=0.5, rake=0.3, W=L+2*rake, ridgeY=o.y+(S/2)*Math.tan(pitch)+0.1, len=(S/2+over)/Math.cos(pitch);
+  const pitch=o.pitch||0.8, over=o.over!=null?o.over:0.5, rake=o.rake!=null?o.rake:0.3, W=L+2*rake, ridgeY=o.y+(S/2)*Math.tan(pitch)+0.1, len=(S/2+over)/Math.cos(pitch);
   const th=tmat('thatch',o.c,W/1.1,len/0.9), thR=tmat('thatch',col(o.c,-0.04),3,1), dark=M(col(o.c,-0.22));
   for (const s of [1,-1]){
     const piv=new THREE.Group(); piv.position.set(0,ridgeY,0); piv.rotation.x=s*pitch; grp.add(piv);
@@ -148,8 +148,8 @@ function thatchRoof(grp, o, L, S, r){
     const ev=mk(G.cyl(0.26,0.26,W,14), thR, 0,0.06,s*len, piv); ev.rotation.z=Math.PI/2;
     for (const e of [-1,1]){ const rr=mk(G.cyl(0.24,0.24,len,12), thR, e*W/2,0.1,s*len/2, piv); rr.rotation.x=Math.PI/2; mk(G.sph(0.27,12,10), thR, e*W/2,0.07,s*len, piv); }
     // ridge band with a scalloped edge
-    for (let i=0, n=Math.round(W/0.34); i<n; i++){ const sc=mk(G.sph(0.17,10,6,0,TAU,0,Math.PI/2), dark, -W/2+0.17+i*(W-0.34)/(n-1), 0.3, s*0.58, piv); sc.scale.set(1,0.5,1.25); sc.castShadow=false; }
-    mk(G.box(W+0.04,0.16,1.12), M(col(o.c,-0.12)), 0,0.33,0, piv);
+    for (let i=0, n=Math.round(W/0.34); i<n; i++){ const sc=mk(G.sph(0.17,10,6,0,TAU,0,Math.PI/2), dark, -W/2+0.17+i*(W-0.34)/(n-1), 0.3, s*Math.min(0.58,len*0.36), piv); sc.scale.set(1,0.5,1.25); sc.castShadow=false; }
+    mk(G.box(W+0.04,0.16,Math.min(1.12,len*0.7)), M(col(o.c,-0.12)), 0,0.33,0, piv);
     if (o.moss){ for (let i=0;i<Math.round(o.moss*L);i++){ const cx=(r()-0.5)*(L+0.2), cu=len*(0.45+r()*0.5); for (let k=0;k<5;k++) clump(piv, cx+(r()-0.5)*0.6, 0.35, s*(cu+(r()-0.5)*0.4), 0.1+r()*0.08, r); } }
   }
   const rc=mk(G.cyl(0.34,0.34,W+0.06,14), tmat('thatch',col(o.c,-0.1),3,1), 0,ridgeY+0.38,0,grp); rc.rotation.z=Math.PI/2;
@@ -227,8 +227,9 @@ export function chimney1(p, x, z, baseY, topY, kind='stone', lean=0.04){
   mk(G.box(0.7,0.12,0.7), M(0x6a5a50), 0,topY,0,c); mk(G.cyl(0.11,0.13,0.26,10), M(0xc0683c), 0.1,topY+0.18,0.06,c); mk(G.cyl(0.09,0.11,0.2,10), M(0xc0683c), -0.12,topY+0.15,-0.06,c);
   return new THREE.Vector3(x+Math.sin(-lean)*(topY+0.3), topY+0.4, z);
 }
-export function ivy(p, x0, w, h, seed){ const r=mulberry32(seed||3), mats=[M(0x4f8a3c),M(0x5f9a48),M(0x3f7a34)];
-  for (let i=0;i<Math.round(w*h*16);i++){ const t=r(), y=Math.pow(t,0.8)*h, spread=w*(1-t*0.55); const m=mk(G.ico(0.07+r()*0.05,0), mats[i%3], x0+(r()-0.5)*spread, 0.2+y, 0.04, p); m.scale.z=0.45; m.castShadow=false; } }
+export function ivy(p, x0, w, h, seed, bloom){ const r=mulberry32(seed||3), mats=[M(0x4f8a3c),M(0x5f9a48),M(0x3f7a34)], bm=bloom?M(bloom):null;
+  for (let i=0;i<Math.round(w*h*16);i++){ const t=r(), y=Math.pow(t,0.8)*h, spread=w*(1-t*0.55); const m=mk(G.ico(0.07+r()*0.05,0), mats[i%3], x0+(r()-0.5)*spread, 0.2+y, 0.04, p); m.scale.z=0.45; m.castShadow=false;
+    if (bm && i%4===0) mk(G.ico(0.055,1), bm, m.position.x+0.03, m.position.y+0.03, 0.08, p).castShadow=false; } }
 function flowerBed(p, x, z, w, r){ mk(G.box(w,0.16,0.42), M(0x6a4a30), x,0.08,z,p); const fc=[0xff7f9f,0xffd04d,0xffffff,0xc7a0ff,0xff9a5a];
   for (let i=0;i<Math.round(w*5);i++){ const fx=x-w/2+0.1+r()*(w-0.2), fz=z+(r()-0.5)*0.28; mk(G.ico(0.08,1), M(0x5f9a48), fx,0.22,fz,p).scale.y=0.8; mk(G.ico(0.06,1), M(fc[Math.floor(r()*fc.length)]), fx,0.3+r()*0.06,fz,p); } }
 function woodpile(p, x, z){ for (let row=0;row<3;row++) for (let i=0;i<4-row;i++){ const l=mk(G.cyl(0.11,0.11,0.6,8), M(i%2?0x9a6a40:0x8a5a34), x+(i-(3-row)/2)*0.22, 0.12+row*0.19, z, p); l.rotation.x=Math.PI/2; mk(G.cyl(0.085,0.085,0.61,8), M(0xd8b080), x+(i-(3-row)/2)*0.22, 0.12+row*0.19, z, p).rotation.x=Math.PI/2; } }
@@ -245,7 +246,7 @@ function logWalls(g, W, H, D, y0, c){
     for (const s of [-1,1]){ const a=mk(G.cyl(rr,rr,W+0.5+sh,10), lm, 0,y,s*D/2,g); a.rotation.z=Math.PI/2; const b=mk(G.cyl(rr,rr,D+0.5-sh,10), lm, s*W/2,y+0.0,0,g); b.rotation.x=Math.PI/2;
       for (const e of [-1,1]){ mk(G.cyl(rr*0.82,rr*0.82,0.02,10), end, e*(W/2+0.25+sh/2+0.005),y,s*D/2,g).rotation.z=Math.PI/2; } } }
 }
-function timberFace(p, len, y0, H, holes, bm){
+export function timberFace(p, len, y0, H, holes, bm){
   const T=0.12, half=len/2; let xs=[-half+0.06, half-0.06];
   for (const h of holes){ xs.push(h.x-h.w/2-0.08, h.x+h.w/2+0.08); }
   xs=xs.filter(x=>x>=-half && x<=half).sort((a,b)=>a-b); const merged=[]; for (const x of xs) if (!merged.length || x-merged[merged.length-1]>0.3) merged.push(x);
@@ -364,3 +365,61 @@ export function barrel1(p, x, z, c){ barrel(p, x, z, c); }
 export function flowerBed1(p, x, z, w, seed=5){ flowerBed(p, x, z, w, mulberry32(seed)); }
 export function pot(p, x, y, z, s=1, leaf=0x5fae43, bloom){ const g=new THREE.Group(); g.position.set(x,y,z); g.scale.setScalar(s); p.add(g); mk(G.cyl(0.18,0.14,0.28,10), M(0xd27a4f), 0,0.14,0,g); mk(G.tor(0.18,0.03,5,12), M(0xc0683c), 0,0.28,0,g).rotation.x=Math.PI/2;
   mk(G.ico(0.24,1), M(leaf), 0,0.44,0,g); if (bloom) for (let k=0;k<3;k++) mk(G.ico(0.07,1), M(bloom), Math.cos(k*2.1)*0.14,0.56,Math.sin(k*2.1)*0.14,g); return g; }
+
+/* ---------- v1.12 shop extras: dormers, bay windows, nets, traps, hanging vines, lush greenhouse plants ---------- */
+// A little gabled dormer. Local frame: origin on the roof surface, +z = out of the slope, faces horizontally.
+export function dormer(p, x, y, z, ry, o={}){
+  const d=new THREE.Group(); d.position.set(x,y,z); d.rotation.y=ry; p.add(d); const w=o.w||1.0, h=o.h||0.85, dp=o.d||1.1;
+  const body=tbox(o.wall||'board', o.wallC||0xfff1d6, w, h+0.9, dp, 0.9); body.position.set(0,(h+0.9)/2-0.9,-dp/2+0.05); d.add(body);
+  for (const e of [-1,1]) mk(G.box(0.1,h+0.9,0.1), M(o.trim||0xfff1d6), e*w/2, (h+0.9)/2-0.9, 0.05, d);
+  window1(d, 0, h*0.45, 0.08, { type:o.round?'round':'cross', size:0.78, box:!o.round, frame:o.frame||0xffffff, seed:o.seed||1 });
+  const rg=new THREE.Group(); rg.position.z=-dp/2+0.12; d.add(rg);
+  cottageRoof(rg, { style:o.style||'gable', ridgeZ:true, L:dp, S:w, y:h, c:o.roofC||0x6a8a4a, trim:o.trim||0xfff1d6, gableMat:tmat('plaster',o.wallC||0xfff1d6,1,1), moss:o.moss||0, seed:(o.seed||1)*13, pitch:o.pitch||0.7, finial:false });
+  return d;
+}
+// A bay window that sticks out of the wall with its own little lean-to roof and a flower box
+export function bayWindow(p, x, y, z, o={}){
+  const b=new THREE.Group(); b.position.set(x,y,z); p.add(b); const w=o.w||1.6, h=o.h||1.15, dp=o.d||0.5, fr=M(o.frame||0xfff8ea), side=w*0.32, mid=w-0.0;
+  const base=tbox(o.baseKind||'stone', o.baseC||0xb0aaa0, w+0.1, 0.75, dp+0.05, 0.6); base.position.set(0,0.375,dp/2); b.add(base);
+  mk(G.box(w+0.2,0.1,dp+0.2), fr, 0,0.8,dp/2+0.02,b);
+  mk(G.box(w,h,0.06), windowMat, 0,0.8+h/2,dp,b); for (const e of [-1,1]){ const sg=mk(G.box(0.06,h,dp), windowMat, e*w/2,0.8+h/2,dp/2,b); }
+  for (let i=0;i<=3;i++) mk(G.box(0.06,h,0.08), fr, -w/2+i*w/3,0.8+h/2,dp+0.01,b); for (const yy of [0.8+h*0.62, 0.8+h]) mk(G.box(w+0.08,0.06,0.08), fr, 0,yy,dp+0.01,b);
+  for (const e of [-1,1]){ mk(G.box(0.08,h,0.08), fr, e*w/2,0.8+h/2,dp,b); mk(G.box(0.08,0.06,dp), fr, e*w/2,0.8+h*0.62,dp/2,b); }
+  if (o.goods) o.goods.forEach((c,k)=>mk(k%2?G.cyl(0.11,0.11,0.26,8):G.box(0.22,0.26,0.22), M(c), -w/2+0.4+k*(w-0.8)/Math.max(1,o.goods.length-1), 0.98, dp*0.5, b));
+  const rf=new THREE.Group(); rf.position.set(0,0.8+h+0.06,0); rf.rotation.x=0.42; b.add(rf);
+  mk(G.box(w+0.34,0.08,dp+0.45), M(o.trim||0xfff8ea), 0,0,(dp+0.45)/2-0.05,rf);
+  for (let k=0;k<3;k++){ const c=mk(G.box(w+0.36,0.07,0.32), tmat('shingle',k%2?o.roofC:col(o.roofC,-0.05),(w+0.36)/0.62,1), 0,0.07,0.1+k*0.24,rf); c.rotation.x=-0.08; }
+  if (o.moss){ const r=mulberry32(o.seed||4); for (let k=0;k<5;k++) clump(rf, (r()-0.5)*w, 0.12, 0.25+r()*0.5, 0.1+r()*0.06, r); }
+  mk(G.box(w+0.1,0.2,0.26), M(0x8b5e3a), 0,0.68,dp+0.16,b); const fc=o.flowers||[0xff7f7f,0xffd04d,0xffffff,0xc7a0ff,0xff9ec4];
+  for (let k=0;k<7;k++){ mk(G.ico(0.08,1), M(0x5f9a48), -w/2+0.08+k*(w-0.16)/6, 0.8, dp+0.2, b).scale.y=0.7; mk(G.ico(0.065,1), M(fc[k%fc.length]), -w/2+0.12+k*(w-0.24)/6, 0.86+(k%2)*0.05, dp+0.25, b);
+    if (k%2===0){ const tr=mk(G.ico(0.06,0), M(0x4f8a3c), -w/2+0.1+k*(w-0.2)/6, 0.52, dp+0.3, b); tr.scale.set(0.8,1.6,0.6); } }
+  return b;
+}
+function netTex(){ if (TX.has('net')) return TX.get('net'); const cv=document.createElement('canvas'); cv.width=cv.height=64; const x=cv.getContext('2d'); x.strokeStyle='#e8dcc0'; x.lineWidth=2.5;
+  for (let i=-64;i<128;i+=16){ x.beginPath(); x.moveTo(i,0); x.lineTo(i+64,64); x.stroke(); x.beginPath(); x.moveTo(i+64,0); x.lineTo(i,64); x.stroke(); }
+  const t=new THREE.CanvasTexture(cv); t.wrapS=t.wrapT=THREE.RepeatWrapping; t.colorSpace=THREE.SRGBColorSpace; TX.set('net',t); return t; }
+// A fishing net draped on a wall with cork floats. Local frame: origin on wall surface, +z out.
+export function drapedNet(p, x, y, z, ry, w=1.6, h=1.3){
+  const n=new THREE.Group(); n.position.set(x,y,z); n.rotation.y=ry; p.add(n); const t=netTex().clone(); t.needsUpdate=true; t.repeat.set(w*1.6,h*1.6);
+  const geo=new THREE.PlaneGeometry(w,h,8,6), pos=geo.attributes.position; for (let i=0;i<pos.count;i++){ const px=pos.getX(i), py=pos.getY(i); pos.setZ(i, 0.04+Math.sin((px/w+0.5)*Math.PI)*0.12*(0.5-py/h)); pos.setY(i, py - Math.sin((px/w+0.5)*Math.PI)*0.18*(0.5+py/h)*0.5); }
+  geo.computeVertexNormals(); const m=new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map:t, transparent:true, alphaTest:0.3, side:THREE.DoubleSide, roughness:1, color:0xffffff })); m.position.y=-h/2; n.add(m);
+  // that texture has no alpha, so draw the net as lines on clear: use the map as alphaMap
+  m.material.alphaMap=t; m.material.map=null; m.material.color.set(0xe8dcc0);
+  for (let i=0;i<5;i++) mk(G.sph(0.07,8,6), M(i%2?0xf0a040:0xe2483d), -w/2+0.1+i*(w-0.2)/4, 0, 0.06, n);
+  mk(G.cyl(0.02,0.02,w,5), M(0xd8c8a0), 0,0,0.05,n).rotation.z=Math.PI/2;
+  return n;
+}
+export function lobsterTrap(p, x, y, z, ry=0){ const t=new THREE.Group(); t.position.set(x,y,z); t.rotation.y=ry; p.add(t); const wd=M(0x9a7a50), dk=M(0x6a5038);
+  mk(G.box(0.7,0.05,0.5), dk, 0,0.03,0,t); for (let i=0;i<5;i++){ mk(G.box(0.04,0.4,0.5), wd, -0.33+i*0.165,0.22,0,t); } for (const yy of [0.42]) mk(G.box(0.72,0.04,0.52), wd, 0,yy,0,t);
+  const hp=mk(G.cyl(0.25,0.25,0.68,10,1,true), M(0x6a5038,{side:THREE.DoubleSide,transparent:true,opacity:0.5}), 0,0.42,0,t); hp.rotation.z=Math.PI/2; hp.scale.set(1,1,0.9); hp.castShadow=false; return t; }
+// Leafy strands hanging from an edge
+export function hangingVines(p, x1, x2, y, z, seed=3, bloom){ const r=mulberry32(seed), mats=[M(0x4f8a3c),M(0x5f9a48),M(0x3f7a34)];
+  for (let x=x1; x<=x2; x+=0.16+r()*0.12){ const len=0.2+r()*0.7; for (let t=0;t<len;t+=0.09){ const m=mk(G.ico(0.065,0), mats[Math.floor(r()*3)], x+(r()-0.5)*0.06, y-t, z+(r()-0.5)*0.05, p); m.scale.z=0.5; m.castShadow=false; }
+    if (bloom && r()<0.35) mk(G.ico(0.05,1), M(bloom), x, y-len, z+0.03, p).castShadow=false; } }
+// Big leafy plants for inside a greenhouse
+export function lushPlants(p, W, D, y, seed=5){ const r=mulberry32(seed), greens=[0x4f9a3a,0x5fae43,0x3f8a34,0x7cc35a];
+  for (let i=0;i<Math.round(W*D*0.9);i++){ const x=(r()-0.5)*(W-0.6), z=(r()-0.5)*(D-0.6), s=0.25+r()*0.35; const m=mk(G.ico(s,1), M(greens[i%4]), x, y+s*0.8+r()*0.6, z, p); m.scale.y=1.2; m.castShadow=false;
+    if (r()<0.4) for (let k=0;k<3;k++) mk(G.ico(0.07,1), M([0xff7f9f,0xffd04d,0xffffff,0xff9a5a][(i+k)%4]), x+Math.cos(k*2.1)*s*0.8, y+s*1.4+r()*0.5, z+Math.sin(k*2.1)*s*0.8, p).castShadow=false; }
+  for (let i=0;i<4;i++){ const pm=new THREE.Group(); pm.position.set((r()-0.5)*(W-1),y,(r()-0.5)*(D-1)); p.add(pm); mk(G.cyl(0.05,0.07,1.6+r(),6), M(0x8a6a40), 0,0.9,0,pm); for (let k=0;k<5;k++){ const l=mk(G.box(0.9,0.03,0.24), M(0x4f9a3a), Math.cos(k*1.26)*0.4,1.75,Math.sin(k*1.26)*0.4,pm); l.rotation.y=-k*1.26; l.rotation.z=-0.35; l.castShadow=false; } }
+}
+export function mossTop(p, x, y, z, w, d, seed=2, amt=6){ const r=mulberry32(seed); for (let i=0;i<amt;i++) clump(p, x+(r()-0.5)*w, y, z+(r()-0.5)*d, 0.1+r()*0.08, r); }

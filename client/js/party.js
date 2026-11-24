@@ -5,7 +5,8 @@
    One player hosts: their game finds an open flat spot, runs the clock, the ball's final say and the scoring,
    and sends the state to everyone through the live room (`game` messages). Everyone else simulates the ball too,
    so hits feel instant, and drifts back to the host's ball when they disagree.
-   Works alone as practice (no prizes). With 2 or more players, the winner gets a cup and everyone gets clams.
+   Practice (v1.14.1): play against islander buddies who run, hit the ball, grab the ring and bonk you. No prizes.
+   With 2 or more real players, the winner gets a cup and everyone gets clams.
    ===================================================================== */
 import * as THREE from 'three';
 import { M, mk, G, addGlow } from './models.js';
@@ -146,7 +147,7 @@ export function createParty(C) {
   function teardown(soft) {
     if (!P || !P.root) return; const Q = P;
     const parts = [Q.root, Q.ball && Q.ball.obj, Q.zone && Q.zone.obj, Q.crown, ...(Q.goalObjs || []).map(g => g.obj)].filter(Boolean);
-    showClutter(Q);
+    showClutter(Q); removeBots(Q);
     if (soft) { C.sparkBurst(new THREE.Vector3(Q.cx, Q.cy + 1, Q.cz), 20, 5, 0xfff0b0); C.Snd.pop(); }
     for (const o of parts) { scene.remove(o); o.traverse(c => { if (c.geometry) c.geometry.dispose(); }); }
     Q.root = null; }
@@ -196,6 +197,7 @@ export function createParty(C) {
     const sp = Math.hypot(b.v.x, b.v.z);
     if (sp > 6.5) {
       for (const e of C.ents) { if (!C.isNpc(e) || e.rag || e.talking || e.removed || e.pos.x > 500) continue; if (Math.hypot(e.pos.x - b.p.x, e.pos.z - b.p.z) < 0.85 && b.p.y - fy < 1.2) { C.launchRag(e, b.v.x / sp, b.v.z / sp, 0.8); b.v.x *= -0.4; b.v.z *= -0.4; } }
+      for (const bt of P.bots || []) if (!bt.rag && P.lh !== bt.id && Math.hypot(bt.pos.x - b.p.x, bt.pos.z - b.p.z) < 0.8 && b.p.y - fy < 1.1) { C.launchRag(bt, b.v.x / sp, b.v.z / sp, 0.75); b.v.x *= -0.35; b.v.z *= -0.35; }
       if (P.lh && P.lh !== myId() && !C.knockedDown() && now - ballHitMe > 1 && inGame() && Math.hypot(player.pos.x - b.p.x, player.pos.z - b.p.z) < 0.8 && b.p.y - fy < 1.1) {
         ballHitMe = now; C.launchRag(C.meBody, b.v.x / sp, b.v.z / sp, 0.75); b.v.x *= -0.35; b.v.z *= -0.35; } }
     // roll
@@ -205,6 +207,11 @@ export function createParty(C) {
   function sendHit() { const b = P.ball; send({ k: 'hit', id: P.id, b: [b.p.x, b.p.y, b.p.z, b.v.x, b.v.y, b.v.z].map(v => +v.toFixed(2)) }); }
   // a swing near the ball hits the ball (called from main.js before bonking people)
   function trySwing(tg) {
+    if (P && P.bots && P.bots.length && inGame() && !C.World.inside) {   // practice: bonk a buddy in front of you
+      let best = null, bd = 2.2; for (const b of P.bots) { if (b.rag) continue; const dx = b.pos.x - player.pos.x, dz = b.pos.z - player.pos.z, d = Math.hypot(dx, dz); if (d >= bd) continue; let a = Math.atan2(dx, dz) - player.face; a = Math.atan2(Math.sin(a), Math.cos(a)); if (Math.abs(a) > 1.15 && d > 0.9) continue; best = b; bd = d; }
+      const ballD = P.ball ? Math.hypot(P.ball.p.x - player.pos.x, P.ball.p.z - player.pos.z) : 99;
+      if (best && bd < ballD && !(tg && tg.d !== undefined && tg.d < bd)) { const dx = best.pos.x - player.pos.x, dz = best.pos.z - player.pos.z, L = Math.hypot(dx, dz) || 1; C.swingAnim(Math.atan2(dx, dz));
+        setTimeout(() => { if (best.rag || !P) return; C.launchRag(best, dx / L, dz / L, C.S.equip ? 1 : 0.8); }, 110); return true; } }
     if (!P || P.game !== 'ball' || !P.ball || !P.root || !inGame() || P.ph === 'count' || P.ph === 'end' || P.ballHold > 0 || C.World.inside) return false;
     const b = P.ball, dx = b.p.x - player.pos.x, dz = b.p.z - player.pos.z, d = Math.hypot(dx, dz);
     if (d > 2.5 || b.p.y - C.groundY(b.p.x, b.p.z) > 2.2) return false;
@@ -218,7 +225,7 @@ export function createParty(C) {
     return true; }
 
   /* ---------- crown ---------- */
-  function posOf(id) { if (id === myId()) return C.knockedDown() || C.World.inside ? null : player.pos; const r = remotes.get(id); if (!r || !r.obj.visible || r.rg) return null; return r.pos; }
+  function posOf(id) { const bt = botOf(id); if (bt) return bt.rag ? null : bt.pos; if (id === myId()) return C.knockedDown() || C.World.inside ? null : player.pos; const r = remotes.get(id); if (!r || !r.obj.visible || r.rg) return null; return r.pos; }
   function crownTick(dt) {
     const Z = P.zone; if (!Z) return;
     const inside = P.players.filter(p => { const q = posOf(p.id); return q && Math.hypot(q.x - Z.x, q.z - Z.z) < ZONE_R + 0.15; });
@@ -230,8 +237,74 @@ export function createParty(C) {
     Z.tx = +x.toFixed(2); Z.tz = +z.toFixed(2); P.zoneT = ZONE_MOVE; P.zoneSeq = (P.zoneSeq || 0) + 1; zoneMoved(); }
   function zoneMoved() { C.Snd.pop(); if (inGame()) bigText('The crown moved!', 1.2, true); }
 
+  /* ---------- practice buddies ---------- */
+  const B_SPEED = 4.3;
+  function addBots(n) {
+    P.bots = C.buddies(n).map((b, i) => { b.away(); b.pos = new THREE.Vector3(P.cx, P.cy, P.cz); b.face = 0; b.jel = {}; b.solid = false; b.cd = 1 + Math.random(); b.think = 0;
+      b.obj.position.copy(b.pos); scene.add(b.obj); const tag = C.nameTag(b.name); tag.position.y = 2.45; b.obj.add(tag);
+      P.players.push({ id: b.id, name: b.name, score: 0, slot: i + 1, bot: true }); return b; });
+    if (P.bots.length < n) for (let i = P.bots.length; i < n; i++) { /* not enough neighbors: fine, fewer buddies */ } }
+  const botOf = id => (P && P.bots || []).find(b => b.id === id);
+  function removeBots(Q) { for (const b of Q.bots || []) { if (b.rag) { if (b.rag.stars) scene.remove(b.rag.stars); b.rag = null; } scene.remove(b.obj); b.back(); } Q.bots = []; }
+  function placeBots() { for (const b of P.bots || []) { const sp = spotFor(b.id); if (b.rag) { if (b.rag.stars) scene.remove(b.rag.stars); b.rag = null; b.obj.quaternion.identity(); }
+      b.pos.set(sp[0], C.groundY(sp[0], sp[1]), sp[1]); b.face = sp[2]; b.obj.rotation.set(0, b.face, 0); b.obj.position.copy(b.pos); b.cd = 0.8 + Math.random() * 0.6; } }
+  function botWalk(b, tx, tz, dt, t, sp = 1) {
+    const dx = tx - b.pos.x, dz = tz - b.pos.z, d = Math.hypot(dx, dz), u = b.obj.userData; let moving = false;
+    if (d > 0.15) { const step = Math.min(d, B_SPEED * sp * dt), nx = b.pos.x + dx / d * step, nz = b.pos.z + dz / d * step;
+      if (C.walkable(nx, nz)) { b.pos.x = nx; b.pos.z = nz; moving = true; } b.face = Math.atan2(dx, dz); }
+    b.pos.y = C.groundY(b.pos.x, b.pos.z); b.obj.position.copy(b.pos);
+    let a = b.face - b.obj.rotation.y; a = Math.atan2(Math.sin(a), Math.cos(a)); b.obj.rotation.y += a * Math.min(1, dt * 10);
+    C.jelly(b.obj, b.jel, dt, moving, t, sp);
+    const ph = t * 11 * sp, k = moving ? 1 : 0; if (u.legs) { u.legs[0].rotation.x = Math.sin(ph) * 0.7 * k; u.legs[1].rotation.x = -Math.sin(ph) * 0.7 * k; }
+    if (u.arms) { u.arms[0].rotation.x = -Math.sin(ph) * 0.6 * k; if (!(b.swingT > 0)) u.arms[1].rotation.x = Math.sin(ph) * 0.6 * k; }
+    return d; }
+  function botSwingAnim(b, dt) { const u = b.obj.userData; if (b.swingT > 0) { b.swingT -= dt; if (u.arms) u.arms[1].rotation.x = -Math.sin(Math.max(0, b.swingT) / 0.35 * Math.PI) * 1.6; } }
+  function botBonk(b, tx, tz, victim) { const dx = tx - b.pos.x, dz = tz - b.pos.z, L = Math.hypot(dx, dz) || 1; b.face = Math.atan2(dx, dz); b.swingT = 0.35; C.Snd.swoosh();
+    setTimeout(() => { if (!P || !P.bots) return; if (victim === 'me') { if (!C.knockedDown()) { C.launchRag(C.meBody, dx / L, dz / L, 0.85); C.toast(`${b.name} bonked you!`); } } else if (victim && !victim.rag) C.launchRag(victim, dx / L, dz / L, 0.9); }, 120); }
+  function botsTick(dt, t) {
+    P.meUpT = C.knockedDown() ? 0 : (P.meUpT || 0) + dt;   // a moment of grace after getting back up
+    for (const b of P.bots || []) { b.keep();
+      if (b.rag) { C.updateRag(b, dt, t); continue; }
+      b.cd -= dt; botSwingAnim(b, dt);
+      if (P.ph !== 'play') { botWalk(b, b.pos.x, b.pos.z, dt, t); continue; }
+      if (P.game === 'ball') ballBot(b, dt, t); else crownBot(b, dt, t); } }
+  function ballBot(b, dt, t) {
+    const B0 = P.ball, mine = (P.goals || []).find(g => g.owner === b.id); if (!mine) { botWalk(b, b.pos.x, b.pos.z, dt, t); return; }
+    if (P.ballHold > 0) { const s = spotFor(b.id); botWalk(b, s[0], s[1], dt, t, 0.6); return; }
+    const others = P.goals.filter(g => g !== mine); if (!b.aim || !others.includes(b.aim) || Math.random() < dt * 0.15) b.aim = others[Math.floor(Math.random() * others.length)];
+    const gx = P.cx + Math.cos(b.aim.a) * P.R, gz = P.cz + Math.sin(b.aim.a) * P.R;     // where I'm shooting
+    const hx = P.cx + Math.cos(mine.a) * P.R, hz = P.cz + Math.sin(mine.a) * P.R;       // the goal I guard
+    const bx = B0.p.x, bz = B0.p.z, dBall = Math.hypot(bx - b.pos.x, bz - b.pos.z), meD = Math.hypot(bx - player.pos.x, bz - player.pos.z);
+    const danger = Math.hypot(bx - hx, bz - hz) < P.R * 1.05;
+    if (danger || dBall < meD + 1.5 || dBall < 3) {
+      // get behind the ball, facing the goal I'm shooting at, then whack it
+      const ux = gx - bx, uz = gz - bz, L = Math.hypot(ux, uz) || 1, ax = bx - ux / L * 0.9, az = bz - uz / L * 0.9;
+      const close = dBall < 1.35, behind = Math.hypot(ax - b.pos.x, az - b.pos.z) < 0.7;
+      botWalk(b, close && !behind && danger ? bx : ax, close && !behind && danger ? bz : az, dt, t, danger ? 1.1 : 1);
+      if (close && b.cd <= 0 && (behind || danger) && B0.p.y - C.groundY(bx, bz) < 1.4) {
+        const spread = (Math.random() - 0.5) * 0.6, a = Math.atan2(uz, ux) + spread, pow = 8.5 + Math.random() * 2.5;
+        b.face = Math.atan2(bx - b.pos.x, bz - b.pos.z); b.swingT = 0.35; b.cd = 0.9 + Math.random() * 0.5;
+        B0.v.set(Math.cos(a) * pow, 3.5 + Math.random() * 1.5, Math.sin(a) * pow); P.lh = b.id; C.Snd.boing(); C.puff(B0.p.clone(), 0xffffff, 6, 0.5, 2, 0.6, 0.35); } }
+    else { // back to guarding: stand between the ball and my goal
+      const ga = Math.atan2(bz - P.cz, bx - P.cx), a = mine.a + clamp(angDiff(ga, mine.a), -0.35, 0.35), d = P.R - 1.8;
+      botWalk(b, P.cx + Math.cos(a) * d, P.cz + Math.sin(a) * d, dt, t, 0.8); } }
+  function crownBot(b, dt, t) {
+    const Z = P.zone; b.think -= dt;
+    if (b.think <= 0 || !b.off) { const a = Math.random() * TAU, r = Math.random() * 0.9; b.off = [Math.cos(a) * r, Math.sin(a) * r]; b.think = 1.5 + Math.random() * 2; }
+    botWalk(b, Z.x + b.off[0], Z.z + b.off[1], dt, t, 0.95);
+    if (b.cd > 0) return;
+    const inZ = (x, z) => Math.hypot(x - Z.x, z - Z.z) < ZONE_R + 0.6;
+    if (!inZ(b.pos.x, b.pos.z)) return;
+    // bonk whoever else is crowding the ring and close by
+    const cands = [];
+    if (!C.knockedDown() && P.meUpT > 1.8 && inZ(player.pos.x, player.pos.z) && Math.hypot(player.pos.x - b.pos.x, player.pos.z - b.pos.z) < 1.5) cands.push(['me', player.pos]);
+    for (const o of P.bots) if (o !== b && !o.rag && inZ(o.pos.x, o.pos.z) && Math.hypot(o.pos.x - b.pos.x, o.pos.z - b.pos.z) < 1.5) cands.push([o, o.pos]);
+    if (!cands.length) return;
+    b.cd = 1.6 + Math.random() * 2.2; if (Math.random() < 0.35) return;   // sometimes they just shove in instead
+    const [v, at] = cands[Math.floor(Math.random() * cands.length)]; botBonk(b, at.x, at.z, v); }
+
   /* ---------- host: running the game ---------- */
-  function hostOpen(game) {
+  function hostOpen(game, practice) {
     if (C.World.inside) { C.toast('Head outside first. Party games need open ground.'); C.Snd.fail(); return; }
     if (C.knockedDown()) return;
     const G0 = GAMES[game], at = findArena(G0.R);
@@ -239,13 +312,15 @@ export function createParty(C) {
     if (P) { if (P.isHost || P.joined) leave(true); if (P) { teardown(false); P = null; } }
     P = { id: Math.random().toString(36).slice(2, 9), game, host: myId(), hostName: myName(), cx: at[0], cz: at[1], R: G0.R, ph: 'lobby', left: LOBBY_MAX,
           players: [{ id: myId(), name: myName(), score: 0, slot: 0 }], isHost: true, joined: true, zoneT: ZONE_MOVE, goalLock: 0, ballHold: 0 };
+    if (practice) { P.practice = true; addBots(game === 'ball' ? practice.ball || 1 : practice.crown || 2); if (!P.bots.length) { P = null; C.toast('No islanders are free to play right now.'); return; } }
     buildArena(); setPartyMode(true); renderUI();
+    if (practice) { C.dialog(G0.name + ' practice', 560, [...G0.how, `Practicing with ${P.bots.map(b => b.name).join(' and ')}. No prizes, just for fun.`], () => { if (P && P.practice && P.ph === 'lobby') startGame(); }); teleportToSpot(true); placeBots(); return; }
     teleportToSpot(true);
-    C.dialog(G0.name, 560, [...G0.how, peersHere() ? 'Friends here can join now. Press Start when everyone is in.' : 'Nobody else is here, so this is practice. Friends who arrive can join before you press Start.'], null);
+    C.dialog(G0.name, 560, [...G0.how, peersHere() ? 'Friends here can join now. Press Start when everyone is in.' : 'Nobody else is here. Friends who arrive can join before you press Start, or pick Practice for islanders to play against.'], null);
     broadcast(true); }
   function peersHere() { let n = 0; for (const r of remotes.values()) if (r.seen) n++; return n; }
   function broadcast(full) {
-    if (!P || !P.isHost) return;
+    if (!P || !P.isHost || P.practice) return;
     const d = { k: 'st', id: P.id, g: P.game, h: P.host, hn: P.hostName, c: [P.cx, P.cz], ph: P.ph, left: +P.left.toFixed(1), pl: P.players.map(p => [p.id, p.name, +p.score.toFixed(1), p.slot]) };
     if (P.ball) d.b = [P.ball.p.x, P.ball.p.y, P.ball.p.z, P.ball.v.x, P.ball.v.y, P.ball.v.z].map(v => +v.toFixed(2)), d.lh = P.lh || '', d.bh = +(P.ballHold || 0).toFixed(2);
     if (P.frozenGoals) d.fg = P.frozenGoals.map(g => [+g.a.toFixed(4), g.owner, g.name, g.slot]);
@@ -254,18 +329,21 @@ export function createParty(C) {
     send(d); }
   function hostTick(dt) {
     P.left -= dt;
+    if (P.practice && P.ph === 'lobby') P.left = LOBBY_MAX;
     if (P.ph === 'lobby' && P.left <= 0) { closeGame('The game was never started, so it was put away.'); return; }
     if (P.ph === 'count' && P.left <= 0) { P.ph = 'play'; P.left = GAMES[P.game].time; onPhase(); }
     else if (P.ph === 'play' && P.left <= 0) endGame();
     else if (P.ph === 'end' && P.left <= 0) { closeGame(null); return; }
     if (P.goalLock > 0) { P.goalLock -= dt; if (P.goalLock <= 0 && P.ph === 'play') resetBall(); }
+    if (P.bots) botsTick(dt, now);
     if (P.game === 'crown' && (P.ph === 'play' || P.ph === 'lobby')) crownTick(dt);
     snapT -= dt; if (snapT <= 0) { snapT = P.ph === 'play' ? 0.1 : 0.4; broadcast(); } }
   function startGame() {
     if (!P || !P.isHost || P.ph !== 'lobby') return;
-    P.ph = 'count'; P.left = COUNT; P.prize = P.players.length >= 2; P.players.forEach(p => p.score = 0); P.winners = null;
+    P.ph = 'count'; P.left = COUNT; P.prize = !P.practice && P.players.filter(p => !p.bot).length >= 2; P.players.forEach(p => p.score = 0); P.winners = null;
     if (P.game === 'ball') { P.frozenGoals = goalAngles(P); syncGoals(); resetBall(true); }
     if (P.game === 'crown') { P.zone.tx = P.cx; P.zone.tz = P.cz; P.zoneT = ZONE_MOVE; P.zoneSeq = (P.zoneSeq || 0) + 1; }
+    if (P.bots) placeBots();
     onPhase(); broadcast(); }
   function resetBall(now0) { const b = P.ball; b.p.set(P.cx, C.groundY(P.cx, P.cz) + 3.2, P.cz); b.v.set(0, 0, 0); P.lh = ''; P.ballHold = now0 ? 0 : 0.01; }
   function scoreGoal(gl) {
@@ -279,8 +357,8 @@ export function createParty(C) {
     if (!P || P.ph === 'end') return;
     const best = Math.max(...P.players.map(p => Math.floor(p.score)));
     P.winners = best > 0 ? P.players.filter(p => Math.floor(p.score) === best).map(p => p.id) : [];
-    P.ph = 'end'; P.left = END_T; onPhase(); broadcast(); }
-  function closeGame(why) { if (!P) return; if (P.isHost) send({ k: 'close', id: P.id }); if (why) C.toast(why); teardown(true); P = null; setPartyMode(false); renderUI(); }
+    P.ph = 'end'; P.left = P.practice ? 60 : END_T; onPhase(); broadcast(); }
+  function closeGame(why) { if (!P) return; if (P.isHost && !P.practice) send({ k: 'close', id: P.id }); if (why) C.toast(why); teardown(true); P = null; setPartyMode(false); renderUI(); }
 
   /* ---------- what everyone does ---------- */
   function inGame() { return !!P && !!P.joined; }
@@ -296,7 +374,7 @@ export function createParty(C) {
     C.Snd.fanfare();
     const c = new THREE.Vector3(P.cx, P.cy + 1.5, P.cz); for (let i = 0; i < 4; i++) setTimeout(() => { for (const col of COLS) C.puff(c.clone().add(new THREE.Vector3((Math.random() - 0.5) * 6, 1.5, (Math.random() - 0.5) * 6)), col, 6, 1.4, 3, 0.9, 1.4); C.sparkBurst(c, 14, 5, 0xfff0b0); }, i * 300);
     if (!inGame() || P.prized) return; P.prized = true;
-    if (!P.prize) { setTimeout(() => C.toast('Practice round. Play with a friend to win prizes.'), 1500); return; }
+    if (!P.prize) { setTimeout(() => C.toast(P.practice ? 'Practice round. Play with friends to win cups and clams.' : 'Play with a friend to win prizes.'), 1500); return; }
     setTimeout(() => {
       if (iWon) { const r = C.addItem(G0.prize); if (r) C.itemToast(G0.prize, r === 'new', 'Won'); else { C.dropNear(G0.prize, player.pos.clone()); C.toast(`Your bag is full, so your ${G0.name} Cup is on the ground next to you.`); } C.addClams(500); }
       else C.addClams(200);
@@ -307,6 +385,10 @@ export function createParty(C) {
     const gx = P.cx + Math.cos(a) * (P.R + 0.6), gz = P.cz + Math.sin(a) * (P.R + 0.6), gp = new THREE.Vector3(gx, C.groundY(gx, gz) + 1, gz);
     C.sparkBurst(gp, 22, 5, 0xfff0b0); for (const col of COLS) C.puff(gp, col, 6, 1, 3, 0.9, 1.1); C.Snd.fanfare();
     bigText(own ? `Own goal! (${name(by)})` : by ? `GOAL! ${name(by)} ${by === myId() ? 'score' : 'scores'}!` : 'GOAL!', 1.8, true); }
+  function spotFor(id) {
+    const me = P.players.find(p => p.id === id) || { slot: 0 };
+    if (P.game === 'ball') { const gl = (P.goals || goalAngles(P)).find(g => g.owner === id); const a = gl ? gl.a : Math.PI / 2, d = gl && gl.owner ? P.R - 1.6 : 3, x = P.cx + Math.cos(a) * d, z = P.cz + Math.sin(a) * d; return [x, z, Math.atan2(P.cx - x, P.cz - z)]; }
+    const n = Math.max(P.players.length, 2), a = Math.PI / 2 + me.slot / n * TAU, x = P.cx + Math.cos(a) * (P.R - 1.2), z = P.cz + Math.sin(a) * (P.R - 1.2); return [x, z, Math.atan2(P.cx - x, P.cz - z)]; }
   function teleportToSpot(join) {
     if (!inGame()) return; const me = P.players.find(p => p.id === myId()); if (!me) return;
     let x, z;
@@ -368,7 +450,7 @@ export function createParty(C) {
     const id = P.id; const wait = setInterval(() => { if (!P || P.id !== id || P.ph !== 'lobby') { clearInterval(wait); return; } if (P.joined) { clearInterval(wait); teleportToSpot(true); C.dialog(GAMES[P.game].name, 560, GAMES[P.game].how, null); } }, 150); setTimeout(() => clearInterval(wait), 6000); }
   function leave(quiet) {
     if (!P) return;
-    if (P.isHost) { closeGame(quiet ? null : 'You put the game away.'); return; }
+    if (P.isHost) { closeGame(quiet || P.practice ? null : 'You put the game away.'); return; }
     if (P.joined) send({ k: 'leave', id: P.id });
     dismissed = P.id; P.joined = false; P.wantJoin = false; setPartyMode(false);
     if (P.ph !== 'lobby') { teardown(false); P = null; }
@@ -393,7 +475,7 @@ export function createParty(C) {
       Z.ring.material.opacity = contest ? 0.5 + Math.abs(Math.sin(t * 12)) * 0.5 : warn ? 0.4 + Math.abs(Math.sin(t * 8)) * 0.6 : 0.85;
       Z.beam.material.opacity = ho && !contest ? 0.65 : 0.35 + Math.sin(t * 2) * 0.08; Z.beam.rotation.y += dt * 0.4;
       // the crown floats over the zone, or sits over the holder's head
-      const hp = ho && ho !== '*' ? (ho === myId() ? player.pos : (remotes.get(ho) || {}).pos) : null;
+      const hp = ho && ho !== '*' ? (ho === myId() ? player.pos : botOf(ho) ? botOf(ho).pos : (remotes.get(ho) || {}).pos) : null;
       const tgt = hp ? new THREE.Vector3(hp.x, hp.y + 2.75 + Math.sin(t * 4) * 0.06, hp.z) : new THREE.Vector3(Z.x, C.groundY(Z.x, Z.z) + 1.9 + Math.sin(t * 2) * 0.15, Z.z);
       P.crown.position.lerp(tgt, Math.min(1, dt * (hp ? 12 : 4))); P.crown.rotation.y += dt * (hp ? 1 : 1.8);
       if (ho && ho !== P.lastHolder && P.ph === 'play' && ho !== '*') { C.Snd.pop(); C.sparkBurst(P.crown.position.clone(), 10, 3, 0xffe08a); }
@@ -446,11 +528,13 @@ body.partyOn #hud.magic #swingBtn{display:none}`;
       else { sub = `${esc(P.hostName)} set up a game`; btns = P.wantJoin ? '<span class="muted">Joining...</span>' : `<button data-a="join">Join</button><button class="alt" data-a="no">No thanks</button>`; } }
     else if (P.ph === 'count') sub = 'Get ready';
     else if (P.ph === 'play') { sub = `<span data-t>${fmtT(P.left)}</span> · first to ${G0.win}`; btns = P.joined ? `<button class="alt" data-a="${P.isHost ? 'cancel' : 'leave'}" style="padding:3px 10px;font-size:12px">${P.isHost ? 'End game' : 'Leave'}</button>` : ''; }
-    else sub = 'Game over';
+    else { sub = 'Game over'; if (P.practice) btns = `<button data-a="again">Play again</button><button class="alt" data-a="cancel">Done</button>`; }
+    if (P.practice && P.ph === 'lobby') { sub = 'Practice'; btns = `<button data-a="start">Start</button><button class="alt" data-a="cancel">Put away</button>`; }
+    if (P.practice && (P.ph === 'play' || P.ph === 'count')) btns = `<button class="alt" data-a="cancel" style="padding:3px 10px;font-size:12px">Stop</button>`;
     b.innerHTML = `<div class="pt">${esc(G0.name)} <small>${sub}</small></div>${P.ph === 'lobby' && !P.joined ? '' : `<div class="chips">${chips}</div>`}${btns ? `<div class="row2">${btns}</div>` : ''}`;
     b.classList.add('show'); bind(); ui.key = P.ph; }
   function bind() { ui.box.querySelectorAll('[data-a]').forEach(el => el.onclick = () => { const a = el.dataset.a;
-    if (a === 'start') startGame(); else if (a === 'cancel') { if (P.ph === 'play' && !confirmEnd()) return; leave(); } else if (a === 'leave') leave(); else if (a === 'join') { dismissed = null; join(); } else if (a === 'no') { dismissed = P.id; renderUI(); } }); }
+    if (a === 'start') startGame(); else if (a === 'again') { P.ph = 'lobby'; P.winners = null; P.prized = false; startGame(); } else if (a === 'cancel') { if (P.ph === 'play' && !P.practice && !confirmEnd()) return; leave(); } else if (a === 'leave') leave(); else if (a === 'join') { dismissed = null; join(); } else if (a === 'no') { dismissed = P.id; renderUI(); } }); }
   function confirmEnd() { return window.confirm ? window.confirm('End the game for everyone?') : true; }
   // cheap per-frame refresh of the clock and scores
   function uiTick() { if (!ui || !P || !ui.box.classList.contains('show')) return; const t = ui.box.querySelector('[data-t]'); if (t) t.textContent = fmtT(P.left);
@@ -463,8 +547,11 @@ body.partyOn #hud.magic #swingBtn{display:none}`;
     if (P && (P.isHost || P.joined)) { C.dialog('Party games', 560, [`You're already in ${GAMES[P.game].name}.`], null, [{ label: 'Leave it', fn: () => leave() }, { label: 'Keep playing', alt: true, fn: () => {} }]); return; }
     if (P && P.ph === 'lobby') { C.dialog('Party games', 560, [`${P.hostName} has a game of ${GAMES[P.game].name} waiting.`], null, [{ label: 'Join', fn: () => { dismissed = null; join(); } }, { label: 'Not now', alt: true, fn: () => {} }]); return; }
     const solo = !online() || !peersHere();
-    C.dialog('Party games', 560, [solo ? 'Pick a game. With nobody else here it\'s practice, and friends who show up can still join before you start.' : 'Pick a game. Everyone on the island gets asked to join.'], null, [
-      { label: 'Bonk Ball', fn: () => hostOpen('ball') }, { label: 'Crown Keeper', fn: () => hostOpen('crown') }, { label: 'Not now', alt: true, fn: () => {} }]); }
+    C.dialog('Party games', 560, [solo ? 'Pick a game. Nobody else is here right now, so Practice puts islanders in to play against you.' : 'Pick a game. Everyone on the island gets asked to join.'], null, [
+      { label: 'Bonk Ball', fn: () => hostOpen('ball') }, { label: 'Crown Keeper', fn: () => hostOpen('crown') }, { label: 'Practice with islanders', fn: practiceMenu }, { label: 'Not now', alt: true, fn: () => {} }]); }
+  function practiceMenu() { setTimeout(() => C.dialog('Practice', 560, ['Islanders will play against you. No prizes, just for trying it out.'], null, [
+      { label: 'Bonk Ball (1 on 1)', fn: () => hostOpen('ball', { ball: 1 }) }, { label: 'Bonk Ball (3 way)', fn: () => hostOpen('ball', { ball: 2 }) },
+      { label: 'Crown Keeper', fn: () => hostOpen('crown', { crown: 2 }) }, { label: 'Back', alt: true, fn: () => setTimeout(open, 30) }]), 30); }
 
-  return { update, trySwing, onNet, onLeave, open, get active() { return !!P; }, get state() { return P; }, inGame, findArena, startGame, join, leave, GAMES };
+  return { practice: (g, o) => hostOpen(g, o || {}), update, trySwing, onNet, onLeave, open, get active() { return !!P; }, get state() { return P; }, inGame, findArena, startGame, join, leave, GAMES };
 }

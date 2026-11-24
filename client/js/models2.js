@@ -102,8 +102,8 @@ export function fixDoor(plan){
   for (let j=0;j<GD;j++) for (let i=0;i<BUILD.GW;i++) if (ok(i,j)){ const s=Math.abs(i-want)*2+(GD-j); if(s<bd){ bd=s; best={i,j}; } }
   plan.door=best;
 }
-export function defaultExt(){ return { wall:'siding', wallC:0xfff1d6, roof:'gable', roofC:0xe0745a, trimC:0xffffff, door:'plank', doorC:0x8a5a3a, win:'square', shutters:true, shutC:0x6a9ad8, boxes:true, found:'stone', porch:'step', chimney:'brick', stories:1, lamps:true }; }
-export function defaultRoom(id,x,z,w,d){ return { id, x, z, w, d, floor:'wood', floorC:0xc99a6a, paper:'stripe', paperC:0xfff0d8 }; }
+export function defaultExt(){ return { wall:'siding', wallC:0xfff1d6, roof:'gable', roofC:0xe0745a, trimC:0xffffff, door:'plank', doorC:0x8a5a3a, win:'square', shutters:false, shutC:0x8a5a3a, boxes:false, found:'stone', porch:'none', chimney:'none', stories:1, lamps:false }; }   // the base model: nothing extra
+export function defaultRoom(id,x,z,w,d){ return { id, x, z, w, d, floor:'wood', floorC:0xc99a6a, paper:'plain', paperC:0xfff1d6 }; }
 
 /* ---------- Roofs ---------- */
 function roofOn(g, style, W, D, baseY, roofC, trimC, wallKind, wallC){

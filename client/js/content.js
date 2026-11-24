@@ -550,7 +550,7 @@ export const KEEPERS = {
     invest:['A partner! I\'ll build a little greenhouse!','More glass, more plants, more bugs! Thank you!','A conservatory. A whole conservatory. I need to sit down.'] },
   clementine:{ id:'clementine', acc:['bow'], accC:0xf08aa8,  name:'Clementine', species:'hedgehog', ears:'round', fur:0xa88a6a, muzzle:0xf4e6d4, shirt:0xe8a040, cheek:0xf0a0a0, voice:520,
     greet:['Town business, town business! What can I do for you?','Good to see you! The island is growing every day.','Oh! Hello! I was just sorting the mail by smell. Long story.'],
-    first:['Oh, you must be the new face everyone is talking about! I\'m Clementine. I run the town.','Well, I run the tent. It\'s a very official tent.','New neighbors come to me first, and so do the island\'s big projects. Chip in a few clams and we\'ll turn this tent into a proper town hall!'] },
+    first:['Oh, you must be the new face everyone is talking about! I\'m Clementine. I run the town.','Well, I run the tent. It\'s a very official tent.','New neighbors come to me first, and so do the island\'s big projects. Chip in a few clams and we\'ll turn this tent into a proper town hall!','I also do home loans. When you\'re ready to move out of your tent, come talk to me.'] },
   thistle:{ id:'thistle', acc:['glasses'],  name:'Professor Thistle', species:'tortoise', ears:'none', fur:0x9ab07a, muzzle:0xd8e0b8, shirt:0x8a6a4a, cheek:0xe0b0a0, voice:200,
     greet:['Ah, welcome, welcome. Slowly now. Everything in here is very old. Including me.','Hello again! Have you brought something for the collection?'],
     night:['Mm? Oh. I was resting my eyes. The museum never closes. Neither do I, apparently.'],
@@ -562,10 +562,11 @@ export const MUSEUM = { kinds:['fish','bug','fossil','shell'], gifts:[[10,'globe
 
 /* ---------- Home builder ----------
    The house is a set of rectangular rooms on a 7 x 6 grid. Outside, each cell is 1.25 m; inside, 2.4 m (cozy logic).
-   Cells cost clams the first time you build them; styles you already own are free to switch. */
+   Floor squares are bought with a home loan from Clementine at the town hall (one loan open at a time).
+   The first 9 squares are the base-model house, 50,000 clams. Styles you already own are free to switch. */
 export const BUILD = {
   GW:7, GD:6, EC:1.25, IC:2.4,
-  cellCost:n => n<=9 ? 1000 : n<=12 ? 3000 : n<=24 ? 10000 : 25000,   // a 9-square starter fits a guest wallet; big houses are a long-term goal
+  cellCost:n => n<=9 ? (n===1?5560:5555) : n<=12 ? 12000 : n<=24 ? 25000 : 40000,   // first 9 squares add up to 50,000 (the base-model house)
   walls:[['siding','Siding'],['plank','Board & batten'],['shingle','Shingles'],['brick','Brick'],['stone','Stone'],['stucco','Stucco'],['log','Log cabin'],['timber','Half-timbered']],
   roofs:[['gable','Gable'],['steep','Steep gable'],['hip','Hip'],['shed','Lean-to'],['flat','Flat'],['thatch','Thatch'],['mossy','Mossy shingles'],['gambrel','Gambrel']],
   doors:[['plank','Plank'],['arched','Arched'],['glass','French'],['dutch','Dutch']],
@@ -574,6 +575,7 @@ export const BUILD = {
   porches:[['none','None'],['step','Steps'],['deck','Deck'],['covered','Covered porch']],
   chimneys:[['none','None'],['brick','Brick'],['stone','Stone']],
   stories:[[1,'One story'],[2,'Two stories']],
+  shutters:[[false,'No shutters'],[true,'Shutters']], boxes:[[false,'No flower boxes'],[true,'Flower boxes']], lamps:[[false,'No lamps'],[true,'Door lamps']],
   floors:[['wood','Wood planks'],['parquet','Parquet'],['tile','Checker tile'],['stone','Flagstone'],['carpet','Carpet']],
   papers:[['plain','Plain'],['stripe','Stripes'],['dots','Dots'],['check','Check'],['wainscot','Wainscot'],['brick','Brick']],
   wallColors:[0xfff1d6,0xffffff,0xf6e0c8,0xe8d0b0,0xf2c9b0,0xf0b8b0,0xd8e8c8,0xbfe0d8,0xc8d8f0,0xd8c8e8,0xa8b8c8,0x8a6a50,0x5a6a7a,0x3a4a3a],

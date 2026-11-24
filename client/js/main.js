@@ -1637,6 +1637,7 @@ function talkHall(){
   const k=KEEPERS.clementine, v=k.voice, T=S.town, t=T.hall||0;
   const menu=()=>dialog(k.name, v, [], null, [
     { label:'Town projects', fn:()=>openHallPanel() },
+    ...(VISIT?[]:[{ label: !S.home.built ? 'A house?' : loanOpen() ? 'Pay my loan' : 'Home loan', fn:()=>talkLoan(menu) }]),
     { label:'New neighbors?', fn:()=>{ const nxt=T.next && RESIDENTS.find(R=>R.id===T.next.id), cap=HALL_CAP[t];
         const lines = nxt ? [`${nxt.name} is moving in ${dayNum(T.next.day)<=dayNum(today())?'today':'tomorrow'}! The boxes are already on the plot.`]
           : T.res.length>=RESIDENTS.length ? ['Every plot on the island is taken. What a town we have!']
@@ -2971,7 +2972,8 @@ function openShop(which, startTab){
       // quick sell-everything-they-want button for specialists
       if (which!=='stall' && which!=='rare'){ const total=S.inv.reduce((a,x)=>{ const p=sellPrice(x,which); return a+(p===null?0:p*x.n); },0); if(total>0) h+=`<button class="btn" id="sAllShop" style="margin-top:10px">Sell all ${buysText(SHOPS[sid])} for ${fmt(total)}</button>`; } }
     if (tab==='home'){ const st=homeStock();
-      if (!st.length) h+='<div class="notice">You own every style Pemberton can get. Impressive!</div>';
+      if (GUEST) h+='<div class="notice">Home goods are for homeowners. Make an account to get a house.</div>';
+      else if (!st.length) h+='<div class="notice">You own every style Pemberton can get. Impressive!</div>';
       st.forEach((it,i)=>{ const own=homeOwned(it), p=homePrice(it); h+=`<div class="row">${homeSwatch(it)}<div class="grow"><div class="nm">${homeName(it.list,it.v)}</div><div class="sub">${fmt(p)} clams · ${homeWhere(it)}</div></div><div style="display:flex;flex-direction:column;gap:4px"><button class="btn alt sm" data-ht="${i}">Try it on</button><button class="btn sm" data-hb="${i}" ${own||S.clams<p?'disabled':''}>${own?'Owned':'Buy'}</button></div></div>`; });
       }
     if (tab==='invest') h+=investBox(sid);
@@ -2980,7 +2982,7 @@ function openShop(which, startTab){
     const bp=pBody.querySelector('#buyPlan'); if (bp) bp.onclick=()=>{ const pl=S.day.pplan; if (!pl || knowsPlan(ITEMS[pl].learns) || S.clams<PLAN_PRICE) return; S.clams-=PLAN_PRICE; updateHUD(); Snd.coin(); learnPlan(pl); save(); render(); };
     pBody.querySelectorAll('[data-ht]').forEach(b=>b.onclick=()=>{ const it=homeStock()[+b.dataset.ht];
       if (VISIT){ toast('You can try styles on your own house when you\'re home.'); return; }
-      if (!S.home.built){ toast('Build your house first.'); Snd.fail(); return; }
+      if (!S.home.built){ toast('Get a house first. Clementine at the town hall does home loans.'); Snd.fail(); return; }
       panelClose=null; closePanel(); openBuild({ tryItem:it }); });
     pBody.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>{ tab=b.dataset.t; sel=-1; Snd.click(); render(); pBody.scrollTop=0; });
     pBody.querySelectorAll('.slot[data-i]').forEach(el=>el.onclick=()=>{ sel=+el.dataset.i; Snd.click(); render(); });
@@ -3119,6 +3121,8 @@ const lotMarker = (()=>{ const q=lotRect(), pts=[]; const P=(x,z)=>pts.push(new 
   const l=new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineDashedMaterial({ color:0xffffff, dashSize:0.4, gapSize:0.25, transparent:true, opacity:0.9 })); l.computeLineDistances(); l.visible=false; OUT.add(l); return l; })();
 
 function openBuild(opts){ if (VISIT){ toast('You can only build on your own island for now.'); Snd.fail(); return; }
+  if (GUEST){ toast('Guests can\'t build. Make an account to get a house.'); Snd.fail(); return; }
+  if (!S.home.built){ toast('Your first house comes from a home loan.', null, '', 'Talk to Clementine at the town hall.'); Snd.fail(); return; }
   if (buildMode || dlgState) return; if (placing) endPlacing(); stopMove(); endCatchMeter(); if (Fishing.state!=='idle') reel();
   const draft=JSON.parse(JSON.stringify(S.home)); const first=!draft.built; draft.built=true; fixDoor(draft.plan);
   buildMode={ draft, first, tab:'layout', floor:'down', sel:draft.plan.rooms[0]?draft.plan.rooms[0].id:null, mode:'rooms', yaw:0.55, prevInside:World.inside, prevDist:camDist, view:null, camT:new THREE.Vector3(), dist:25 }; $('#hud').classList.add('building'); buildEl.classList.add('show'); Snd.click();
@@ -3135,31 +3139,85 @@ function setBuildView(v){
 }
 function previewBuild(which){ const d=buildMode.draft; if (which!=='room') buildPlayerHouse(d); if (which!=='house'){ rebuildHomeRoom(d); ROOMS.home.cutState=null; if (ROOMS.home2) ROOMS.home2.cutState=null;
   if (buildMode.view==='in2' && !(ROOMS.home2&&ROOMS.home2.shell)){ buildMode.view=null; setBuildView('in'); } else if (buildMode.view && buildMode.view!=='out'){ const id=World.inside; for(const k in ROOMS) ROOMS[k].group.visible=(k===id); } } }
+/* Put a new or changed house in place (the builder's preview, or the base model). Returns how much furniture went
+   back to the bag, or -1 if something is standing where the walls go. RECTS must already show the new house. */
+function applyHome(d){
+  const hr=RECTS.filter(q=>q[4]==='home'); const inHouse=(x,z,r=0.15)=>hr.some(q=>x>q[0]-r&&x<q[2]+r&&z>q[1]-r&&z<q[3]+r);
+  const inWay=[];
+  for (const e of ents.slice()){ if (e.removed || e.pos.x>500 || e===houseEnt || !inHouse(e.pos.x,e.pos.z, e.r*0.6)) continue;
+    if (e instanceof Furniture) inWay.push(ITEMS[e.rec.id].name); else if (e instanceof Plant) inWay.push(PLANTS[e.rec.sp].name); else if (e instanceof Tree) inWay.push('a tree'); else if (e instanceof Stump) inWay.push('a stump'); else if (e instanceof Rock) inWay.push('a rock'); }
+  if (inWay.length){ toast(`Move ${inWay.slice(0,3).join(', ')}${inWay.length>3?' and more':''} first.`); Snd.fail(); return -1; }
+  for (const e of ents.slice()){ if (e.removed || e.pos.x>500 || !inHouse(e.pos.x,e.pos.z)) continue;
+    if (e instanceof Weed){ S.day.weeds[e.i].pulled=true; e.remove(); } else if (e instanceof DigSpot){ S.day.digs[e.i].dug=true; e.remove(); }
+    else if (e instanceof GroundItem){ const ex=houseEnt.doorPt; e.rec.x=ex[0]+(Math.random()-0.5)*2; e.rec.z=ex[1]+1.2+Math.random(); e.remove(); new GroundItem(e.rec); }
+    else if (e instanceof Bug) e.despawn(); }
+  for (const res of residents){ if (res.loc==='out' && inHouse(res.pos.x,res.pos.z,0.4)){ res.pos.set(houseEnt.doorPt[0]+1.5,0,houseEnt.doorPt[1]+1.5); res.pos.y=groundY(res.pos.x,res.pos.z); res.obj.position.copy(res.pos); } }
+  const cells=planCells(d.plan); S.home=d; S.home.paid=Math.max(S.home.paid||0, cells); save(); updateHUD();
+  buildPlayerHouse(); rebuildHomeRoom();
+  // furniture inside that no longer fits goes back to your bag
+  let back=0; const R=ROOMS.home;
+  for (const rec of S.placed.slice()){ const inHome=[roomOrigin(0),roomOrigin(13)].some(([ox,oz])=>Math.abs(rec.x-ox)<=14 && Math.abs(rec.z-oz)<=14); if (!inHome || walkable(rec.x,rec.z)) continue; const e=ents.find(x=>x instanceof Furniture && x.rec===rec);
+    if (addItem(rec.id)){ S.placed.splice(S.placed.indexOf(rec),1); if(e) e.remove(); back++; } else { rec.x=R.entry[0]; rec.z=R.entry[1]-1; if(e){ e.pos.set(rec.x,0,rec.z); e.obj.position.copy(e.pos); } } }
+  save(); Snd.fanfare(); sparkle(new THREE.Vector3(LOT.x, groundY(LOT.x,LOT.z)+3, LOT.z));
+  return back;
+}
+/* ---------- Home loans (Clementine at the town hall) ----------
+   The first house is the base model: one 3 x 3 room with nothing extra, built the moment you take the loan.
+   Later, new floor squares go on a loan too. One loan at a time: pay it off before borrowing again. No interest. */
+const loanOpen = () => !!(S.loan && S.loan.owed>0);
+function buildBaseHouse(){
+  if (S.home.built || GUEST || VISIT) return;
+  const d={ built:true, paid:0, plan:{ rooms:[defaultRoom('r1',2,2,3,3)], links:{}, door:{i:3,j:4} }, ext:defaultExt() }; fixDoor(d.plan);
+  buildPlayerHouse(d);
+  if (applyHome(d)<0){ buildPlayerHouse(S.home); rebuildHomeRoom(S.home); return; }
+  const cost=houseCost(planCells(d.plan),0); S.loan={ owed:cost, total:cost }; save(); updateHUD();
+  if (!World.inside && inRects(player.pos.x,player.pos.z,0.4)){ const e=ROOMS.home.exit; player.pos.set(e[0],0,e[1]+0.8); player.pos.y=groundY(player.pos.x,player.pos.z); player.obj.position.copy(player.pos); }
+  toast('Your house is built! Welcome home.', null, 'new', `You owe Clementine ${fmt(cost)} clams. Pay it back at the town hall, any amount at a time.`);
+}
+function talkLoan(back){
+  const k=KEEPERS.clementine, v=k.voice;
+  if (GUEST) return dialog(k.name, v, ['Home loans are for islanders with an account. Make one and I can set you up with a house!'], back);
+  if (!S.home.built) return dialog(k.name, v, ['Ready to trade that tent for a real house? I can loan you a base-model house: one room, 9 floor squares, plain and sturdy.',
+      `It's ${fmt(houseCost(9,0))} clams. Pay it back whenever you like, a little at a time. No interest!`, 'Paint, porches, shutters and bigger rooms all cost extra later on.'], null,
+    [{ label:'Build it!', fn:()=>buildBaseHouse() }, { label:'Not yet', alt:true, fn:back }]);
+  if (loanOpen()) return openLoanPanel();
+  dialog(k.name, v, ['Your house is all paid off! Want more room? Draw new rooms in the builder and I\'ll put the new floor on a loan. One loan at a time, mind you.'], back);
+}
+function openLoanPanel(){
+  const render=()=>{ const L=S.loan; let h;
+    if (!loanOpen()) h='<div class="notice"><b>All paid off!</b><br>Your house is yours, free and clear. Draw new rooms in the builder to take out a new loan for more floor.</div>';
+    else h=`<div class="notice"><b>Home loan</b><br><b>${fmt(L.owed)}</b> of ${fmt(L.total)} clams left to pay<div class="bar" style="margin:6px 0"><div style="width:${Math.max(0,(1-L.owed/L.total)*100)}%"></div></div><span class="muted">No interest and no due date. Until it's paid off you can't borrow for more floor.</span></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">${[1000,10000].filter(n=>n<L.owed).map(n=>`<button class="btn alt" data-pay="${n}" ${S.clams<n?'disabled':''}>Pay ${fmt(n)}</button>`).join('')}<button class="btn" data-pay="${L.owed}" ${S.clams<1?'disabled':''}>${S.clams>=L.owed?`Pay it all off (${fmt(L.owed)})`:`Pay ${fmt(S.clams)}`}</button></div>`;
+    pBody.innerHTML=h;
+    pBody.querySelectorAll('[data-pay]').forEach(b=>b.onclick=()=>{ if (noEdit() || !loanOpen()) return; const n=Math.min(+b.dataset.pay, S.loan.owed, S.clams); if (n<=0) return;
+      S.clams-=n; S.loan.owed-=n; Snd.coin(); if (S.loan.owed<=0){ S.loan=null; Snd.fanfare(); toast('Home loan paid off!', null, 'new', 'Want more room? Draw new rooms in the builder.'); } updateHUD(); save(); render(); });
+  };
+  openPanel('Home Loan'); render();
+}
+/* Layout changes cost a small remodel fee each: a room added, removed, moved or resized, a doorway changed,
+   a window added or taken out, the front door or the stairs moved. Compared against the saved house, so undoing a change is free. */
+const REMODEL_FEE=50;
+function remodelEdits(a, b){ let n=0;
+  const floors=p=>[[p.rooms||[], p.links||{}], [(p.up&&p.up.rooms)||[], (p.up&&p.up.links)||{}]], A=floors(a), Bf=floors(b);
+  for (let f=0;f<2;f++){ const [ra,la]=A[f], [rb,lb]=Bf[f];
+    for (const id of new Set([...ra.map(r=>r.id), ...rb.map(r=>r.id)])){ const x=ra.find(r=>r.id===id), y=rb.find(r=>r.id===id); if (!x || !y || x.x!==y.x || x.z!==y.z || x.w!==y.w || x.d!==y.d) n++; }
+    const has=new Set(rb.map(r=>r.id)); for (const k of new Set([...Object.keys(la), ...Object.keys(lb)])){ const [p,q]=k.split('|'); if (has.has(p) && has.has(q) && (la[k]||'door')!==(lb[k]||'door')) n++; } }
+  for (const k of new Set([...Object.keys(a.win||{}), ...Object.keys(b.win||{})])){ const [row,rest]=k.split(':'), [i,j,sd]=rest.split(',').map(Number); if (winAt(a,i,j,sd,+row)!==winAt(b,i,j,sd,+row)) n++; }
+  if (a.door && b.door && (a.door.i!==b.door.i || a.door.j!==b.door.j)) n++;
+  if (a.stairs && b.stairs && (a.stairs.i!==b.stairs.i || a.stairs.j!==b.stairs.j)) n++;
+  return n; }
+const remodelFee = (a, b) => remodelEdits(a, b)*REMODEL_FEE;
 function closeBuild(commit){
   const B=buildMode; if (!B) return;
   if (commit){
     const d=B.draft, prob=planProblem(d.plan); if (prob){ toast(prob); Snd.fail(); return; }
     const un=draftUnowned(d); if (un.length){ toast(`You're only trying on ${un.map(u=>u.list==='mixer'?'a mixed color':homeName(u.list,u.v)).join(', ')}.`, null, '', 'Buy it, or put it back, to finish.'); Snd.fail(); renderBuild(); bBody.scrollTop=0; return; }
-    const cells=planCells(d.plan), cost=houseCost(cells, S.home.paid); if (GUEST && cells>GUEST_CAP.cells){ toast(`Guest houses can be up to ${GUEST_CAP.cells} floor squares. Make an account to build bigger.`); Snd.fail(); return; } if (cost>S.clams){ toast(`That much new floor costs ${fmt(cost)} clams. You have ${fmt(S.clams)}.`); Snd.fail(); return; }
-    // anything standing where the new walls go?
-    const hr=RECTS.filter(q=>q[4]==='home'); const inHouse=(x,z,r=0.15)=>hr.some(q=>x>q[0]-r&&x<q[2]+r&&z>q[1]-r&&z<q[3]+r);
-    const inWay=[];
-    for (const e of ents.slice()){ if (e.removed || e.pos.x>500 || e===houseEnt || !inHouse(e.pos.x,e.pos.z, e.r*0.6)) continue;
-      if (e instanceof Furniture) inWay.push(ITEMS[e.rec.id].name); else if (e instanceof Plant) inWay.push(PLANTS[e.rec.sp].name); else if (e instanceof Tree) inWay.push('a tree'); else if (e instanceof Stump) inWay.push('a stump'); else if (e instanceof Rock) inWay.push('a rock'); }
-    if (inWay.length){ toast(`Move ${inWay.slice(0,3).join(', ')}${inWay.length>3?' and more':''} first.`); Snd.fail(); return; }
-    for (const e of ents.slice()){ if (e.removed || e.pos.x>500 || !inHouse(e.pos.x,e.pos.z)) continue;
-      if (e instanceof Weed){ S.day.weeds[e.i].pulled=true; e.remove(); } else if (e instanceof DigSpot){ S.day.digs[e.i].dug=true; e.remove(); }
-      else if (e instanceof GroundItem){ const ex=houseEnt.doorPt; e.rec.x=ex[0]+(Math.random()-0.5)*2; e.rec.z=ex[1]+1.2+Math.random(); e.remove(); new GroundItem(e.rec); }
-      else if (e instanceof Bug) e.despawn(); }
-    for (const res of residents){ if (res.loc==='out' && inHouse(res.pos.x,res.pos.z,0.4)){ res.pos.set(houseEnt.doorPt[0]+1.5,0,houseEnt.doorPt[1]+1.5); res.pos.y=groundY(res.pos.x,res.pos.z); res.obj.position.copy(res.pos); } }
-    const firstBuild=!S.home.built; S.clams-=cost; S.home=d; S.home.paid=Math.max(S.home.paid||0, cells); save(); updateHUD();
-    buildPlayerHouse(); rebuildHomeRoom();
-    // furniture inside that no longer fits goes back to your bag
-    let back=0; const R=ROOMS.home;
-    for (const rec of S.placed.slice()){ const inHome=[roomOrigin(0),roomOrigin(13)].some(([ox,oz])=>Math.abs(rec.x-ox)<=14 && Math.abs(rec.z-oz)<=14); if (!inHome || walkable(rec.x,rec.z)) continue; const e=ents.find(x=>x instanceof Furniture && x.rec===rec);
-      if (addItem(rec.id)){ S.placed.splice(S.placed.indexOf(rec),1); if(e) e.remove(); back++; } else { rec.x=R.entry[0]; rec.z=R.entry[1]-1; if(e){ e.pos.set(rec.x,0,rec.z); e.obj.position.copy(e.pos); } } }
-    save(); Snd.fanfare(); sparkle(new THREE.Vector3(LOT.x, groundY(LOT.x,LOT.z)+3, LOT.z));
-    toast(firstBuild ? 'Your house is built! Welcome home.' : 'Remodel done!', null, 'new', `${cost>0?`Spent ${fmt(cost)} clams. `:''}${back?`${back} piece${back>1?'s':''} of furniture went back to your bag.`:''}`);
+    const cells=planCells(d.plan), cost=houseCost(cells, S.home.paid), fee=remodelFee(S.home.plan, d.plan);
+    if (cost>0 && loanOpen()){ toast(`Pay off your home loan before adding floor. You still owe ${fmt(S.loan.owed)} clams.`, null, '', 'Clementine at the town hall takes payments.'); Snd.fail(); return; }
+    if (fee>S.clams){ toast(`The remodel fee is ${fmt(fee)} clams. You have ${fmt(S.clams)}.`); Snd.fail(); return; }
+    const back=applyHome(d); if (back<0) return;
+    S.clams-=fee; if (cost>0) S.loan={ owed:cost, total:cost }; save(); updateHUD();
+    toast('Remodel done!', null, 'new', [fee?`Remodel fee: ${fmt(fee)} clams.`:'', cost>0?`${fmt(cost)} clams of new floor went on a home loan. Pay Clementine back at the town hall.`:'', back?`${back} piece${back>1?'s':''} of furniture went back to your bag.`:''].filter(Boolean).join(' '));
   } else { buildPlayerHouse(S.home); rebuildHomeRoom(S.home); Snd.click(); }
   buildMode=null; camera.clearViewOffset(); camDist=B.prevDist; buildEl.classList.remove('show'); $('#hud').classList.remove('building'); lotMarker.visible=false;
   World.inside=B.prevInside; OUT.visible=!World.inside; for(const k in ROOMS) ROOMS[k].group.visible=(k===World.inside);
@@ -3173,14 +3231,14 @@ $('#bBuild').onclick=()=>openBuild();
 function renderBuild(keepScroll){
   const B=buildMode; if(!B) return; const plan=B.draft.plan; const st=bBody.scrollTop;
   $('#bTabs').querySelectorAll('[data-bt]').forEach(b=>{ b.classList.toggle('on', b.dataset.bt===B.tab); b.onclick=()=>{ if(B.tab===b.dataset.bt) return; B.tab=b.dataset.bt; Snd.click(); setBuildView(B.tab==='int'?(B.floor==='up'?'in2':'in'):'out'); renderBuild(); }; });
-  const cells=planCells(plan), cost=houseCost(cells,S.home.paid);
-  $('#bCost').innerHTML=`${plan.rooms.length} room${plan.rooms.length>1?'s':''} · ${cells} floor squares · ${cost>0?`new floor: <b>${fmt(cost)}</b> clams (you have ${fmt(S.clams)})`:'no cost'}`;
+  const cells=planCells(plan), cost=houseCost(cells,S.home.paid), fee=remodelFee(S.home.plan, plan), lo=loanOpen();
+  $('#bCost').innerHTML=`${plan.rooms.length} room${plan.rooms.length>1?'s':''} · ${cells} floor squares · ${cost>0 ? (lo ? `<b style="color:#c0503a">new floor needs a loan, but you still owe ${fmt(S.loan.owed)}</b>` : `new floor: <b>${fmt(cost)}</b> clams on a home loan`) : 'no new floor'} · ${fee ? `remodel fee: <b>${fmt(fee)}</b> (you have ${fmt(S.clams)})` : 'no remodel fee'}`;
   const prob=planProblem(plan);
   $('#bMsg').innerHTML = prob ? `<b style="color:#c0503a">${prob}</b>` : B.tab==='layout' ? ({ rooms: B.floor==='up' ? 'Draw upstairs rooms over the rooms below. Tap a room to move or resize it.' : 'Drag an empty square to add a room. Tap a room, then drag it to move or drag an edge to resize.',
       doors: B.floor==='up' ? 'Tap a wall between upstairs rooms: doorway, open, or solid.' : 'Tap a wall between rooms: doorway, open, or solid. Tap a front-facing wall to move the front door.',
       windows: 'Tap an outside wall to add or remove a window. Windows show inside and out.', stairs:'Tap a square that has a room upstairs and downstairs to put the stairs there.' })[B.mode] : B.tab==='ext' ? 'Drag the picture above to look around your house.' : 'Pick a room on the plan, then its floor and wallpaper.';
   const trying=draftUnowned(B.draft).length>0; if (trying && !prob) $('#bMsg').innerHTML='<b style="color:#3a7ab0">Trying on a new style. Buy it or put it back to finish.</b>';
-  $('#bDone').disabled = !!prob || cost>S.clams || trying; $('#bDone').textContent = B.first ? 'Build it' : 'Done';
+  $('#bDone').disabled = !!prob || (cost>0 && lo) || fee>S.clams || trying; $('#bDone').textContent = B.first ? 'Build it' : 'Done';
   if (B.tab==='layout') renderLayoutTab(); else if (B.tab==='ext') renderExtTab(); else renderIntTab();
   renderTryBar();
   if (keepScroll) bBody.scrollTop=st;
@@ -3289,17 +3347,19 @@ function doorTap(fx,fz){
 /* ---- House style unlocks ----
    Every paint, material and style has to be unlocked once (buy it here, find a swatch while digging,
    or get one from a neighbor who likes you). After that, switching to it is always free. */
-const STYLE_LIST={ wall:'walls', roof:'roofs', door:'doors', win:'windows', porch:'porches', found:'founds', chimney:'chimneys', stories:'stories', floor:'floors', paper:'papers',
+const STYLE_LIST={ wall:'walls', roof:'roofs', door:'doors', win:'windows', porch:'porches', found:'founds', chimney:'chimneys', stories:'stories', floor:'floors', paper:'papers', shutters:'shutters', boxes:'boxes', lamps:'lamps',
   wallC:'wallColors', roofC:'roofColors', trimC:'trimColors', doorC:'doorColors', shutC:'doorColors', floorC:'floorColors', paperC:'wallColors' };
-const STYLE_NAMES={ walls:'walls', roofs:'roof', doors:'door', windows:'windows', porches:'porch', founds:'foundation', chimneys:'chimney', stories:'height', floors:'floor', papers:'wallpaper',
+const STYLE_NAMES={ walls:'walls', roofs:'roof', doors:'door', windows:'windows', porches:'porch', founds:'foundation', chimneys:'chimney', stories:'height', floors:'floor', papers:'wallpaper', shutters:'shutters', boxes:'flower boxes', lamps:'door lamps',
   wallColors:'wall paint', roofColors:'roof paint', trimColors:'trim paint', doorColors:'door paint', floorColors:'floor stain' };
-const STYLE_BASE={ walls:4500, roofs:3600, doors:1800, windows:2100, porches:5400, founds:1500, chimneys:4200, stories:40000, floors:2700, papers:2100 };
+const STYLE_BASE={ walls:4500, roofs:3600, doors:1800, windows:2100, porches:3000, founds:1500, chimneys:4200, stories:40000, floors:2700, papers:2100, shutters:1500, boxes:1200, lamps:900 };
 const isColorList = list => /Colors$/.test(list);
-const freeCount = list => isColorList(list) ? 4 : list==='stories' ? 1 : 2;
-function styleCost(list, i){ if (i<freeCount(list)) return 0; if (list==='stories') return STYLE_BASE.stories; if (isColorList(list)) return 800 + (i-freeCount(list))*300; return Math.round(STYLE_BASE[list]*(1+(i-2)*0.75)/50)*50; }
+const TOGGLE_LISTS = new Set(['shutters','boxes','lamps']);   // add-ons that are either on or off
+// v1.15: only the base model's own option in each list is free (the first one). Everything else is bought or found.
+const freeCount = list => 1;
+function styleCost(list, i){ if (i<freeCount(list)) return 0; if (list==='stories') return STYLE_BASE.stories; if (isColorList(list)) return 800 + (i-1)*300; return Math.round(STYLE_BASE[list]*(1+(i-1)*0.75)/50)*50; }
 function styleOwned(list, v){ const opts=BUILD[list]; const i=opts.findIndex(o=>String(Array.isArray(o)?o[0]:o)===String(v)); return i<0 || i<freeCount(list) || !!(S.styles&&S.styles[list+':'+v]); }
 function unlockStyle(list, v){ (S.styles=S.styles||{})[list+':'+v]=true; save(); }
-const styleLabel = (list, v) => { const o=BUILD[list].find(o=>String(Array.isArray(o)?o[0]:o)===String(v)); return Array.isArray(o) ? `${o[1]} (${STYLE_NAMES[list]})` : `a new ${STYLE_NAMES[list]} color`; };
+const styleLabel = (list, v) => { const o=BUILD[list].find(o=>String(Array.isArray(o)?o[0]:o)===String(v)); return TOGGLE_LISTS.has(list) ? o[1] : Array.isArray(o) ? `${o[1]} (${STYLE_NAMES[list]})` : `a new ${STYLE_NAMES[list]} color`; };
 // A random locked style, for swatches you find or get as gifts
 function grantRandomStyle(){
   const all=[]; for (const list of Object.keys(STYLE_NAMES)){ BUILD[list].forEach((o,i)=>{ const v=Array.isArray(o)?o[0]:o; if(!styleOwned(list,v) && (!GUEST || list in GUEST_BUILD && (GUEST_BUILD[list]||[]).some(x=>String(Array.isArray(x)?x[0]:x)===String(v)))) all.push([list,v,i]); }); }
@@ -3310,26 +3370,30 @@ function grantRandomStyle(){
 function ownCurrentStyles(){ const h=S.home; if(!h) return; S.styles=S.styles||{}; const own=(key,val)=>{ const l=STYLE_LIST[key]; if(l && val!==undefined && val!==null) S.styles[l+':'+val]=true; };
   if (h.ext) for (const k in h.ext) own(k, h.ext[k]); if (h.plan && h.plan.rooms) for (const r of h.plan.rooms) for (const k of ['floor','floorC','paper','paperC']) own(k, r[k]); }
 if (!S.stylesGrandfathered){ ownCurrentStyles(); S.stylesGrandfathered=1; }
+// v1.15: options that used to come free (first 2 styles, first 4 colors, shutters, flower boxes, door lamps) stay unlocked for houses already built
+if (!S.stylesV115){ ownCurrentStyles(); if (S.home && S.home.built){ S.styles=S.styles||{};
+  for (const list of Object.keys(STYLE_NAMES)){ const n = TOGGLE_LISTS.has(list) ? 2 : isColorList(list) ? 4 : list==='stories' ? 1 : 2; BUILD[list].slice(0,n).forEach(o=>{ S.styles[list+':'+(Array.isArray(o)?o[0]:o)]=true; }); } }
+  S.stylesV115=1; }
 /* ---------- Home goods ----------
    New styles, paints and materials aren't for sale all the time. Pemberton's Home Goods rack gets a few in each day
    (more once the store is bigger), and now and then the paint mixer. Anything on the rack can be tried on your house
    in the builder before you buy it. Locked styles in the builder can still be previewed; they just can't be kept
    until they're yours (bought from the rack, dug up as a swatch book, or given by a neighbor). */
-const HOME_KEY={ walls:'wall', roofs:'roof', doors:'door', windows:'win', porches:'porch', founds:'found', chimneys:'chimney', stories:'stories', floors:'floor', papers:'paper', wallColors:'wallC', roofColors:'roofC', trimColors:'trimC', doorColors:'doorC', floorColors:'floorC' };
+const HOME_KEY={ walls:'wall', roofs:'roof', doors:'door', windows:'win', porches:'porch', founds:'found', chimneys:'chimney', stories:'stories', floors:'floor', papers:'paper', shutters:'shutters', boxes:'boxes', lamps:'lamps', wallColors:'wallC', roofColors:'roofC', trimColors:'trimC', doorColors:'doorC', floorColors:'floorC' };
 const INSIDE_LISTS=new Set(['floors','papers','floorColors']);
 const styleIndex = (list, v) => BUILD[list].findIndex(o=>String(Array.isArray(o)?o[0]:o)===String(v));
 const MIXER_COST=15000, hasMixer=()=>!!(S.styles&&S.styles.mixer);
 const homeOwned = it => it.list==='mixer' ? hasMixer() : styleOwned(it.list, it.v);
 const homePrice = it => it.list==='mixer' ? MIXER_COST : styleCost(it.list, styleIndex(it.list, it.v));
 function homeName(list, v){ if (list==='mixer') return 'Paint mixer'; const o=BUILD[list].find(o=>String(Array.isArray(o)?o[0]:o)===String(v)), nm=STYLE_NAMES[list];
-  if (!Array.isArray(o)) return nm[0].toUpperCase()+nm.slice(1); return list==='stories' ? o[1] : `${o[1]} ${nm}`; }
+  if (!Array.isArray(o)) return nm[0].toUpperCase()+nm.slice(1); return list==='stories' || TOGGLE_LISTS.has(list) ? o[1] : `${o[1]} ${nm}`; }
 const homeWhere = it => it.list==='mixer' ? 'mix any color for any paint, inside or out' : INSIDE_LISTS.has(it.list) ? 'for the rooms inside' : 'for the outside of your house';
 function homeSwatch(it){ if (it.list==='mixer') return `<div class="hgsw" style="background:conic-gradient(#e2604d,#f3c35a,#7cc35a,#7fd3e8,#8a6ad8,#e2604d)"></div>`;
   if (isColorList(it.list)) return `<div class="hgsw" style="background:${hexs(it.v)}"></div>`;
   const o=BUILD[it.list].find(o=>String(o[0])===String(it.v)); return `<div class="hgsw">${o?o[1]:''}</div>`; }
 // Today's rack, rolled once a day and kept in the day's save so buying one doesn't reshuffle the rest
 function homeStock(){
-  if (!S.day) return []; if (S.day.home) return S.day.home;
+  if (!S.day || GUEST) return []; if (S.day.home) return S.day.home;   // guests can't build, so no home goods
   const r=mulberry32(hashStr(S.day.key+':home:'+S.seed)), BL=GUEST?GUEST_BUILD:BUILD, pool=[];
   for (const list of Object.keys(STYLE_NAMES)) (BL[list]||[]).forEach(o=>{ const v=Array.isArray(o)?o[0]:o; if (!styleOwned(list,v)) pool.push({ list, v, w:(isColorList(list)?1.3:1)/(1+0.35*Math.max(0,styleIndex(list,v)-freeCount(list))) }); });
   const n=3+(shopTier('general')>=2?1:0)+(shopTier('general')>=3?1:0), out=[];
@@ -3365,7 +3429,7 @@ function renderTryBar(){ const B=buildMode; if (!B) return; const un=draftUnowne
   bar.querySelectorAll('[data-tb]').forEach(b=>b.onclick=()=>{ if (buyHome(st[+b.dataset.tb])) renderBuild(true); });
   $('#tbBack').onclick=()=>{ putBack(B.draft); Snd.click(); previewBuild(); renderBuild(true); }; }
 const lockTag = (list, v) => { const it=homeStock().find(s=>s.list===list && String(s.v)===String(v) && !homeOwned(s)); return `<span class="lk">${it?'on the rack':'try it'}</span>`; };
-const chipRow = (obj, key, opts, type='s') => { const list=type==='b'?null:STYLE_LIST[key]; return `<div class="chips">${opts.map(([v,n],i)=>{ const locked=list && !styleOwned(list,v); return `<button class="chip${obj[key]===v?' on':''}${locked?' locked':''}" data-k="${key}" data-v="${v}" data-ty="${type}" ${locked?`data-lock="${list}" data-i="${i}"`:''}>${n}${locked?lockTag(list,v):''}</button>`; }).join('')}</div>`; };
+const chipRow = (obj, key, opts, type='s') => { const list=STYLE_LIST[key]; return `<div class="chips">${opts.map(([v,n],i)=>{ const locked=list && !styleOwned(list,v); return `<button class="chip${obj[key]===v?' on':''}${locked?' locked':''}" data-k="${key}" data-v="${v}" data-ty="${type}" ${locked?`data-lock="${list}" data-i="${i}"`:''}>${n}${locked?lockTag(list,v):''}</button>`; }).join('')}</div>`; };
 /* The paint mixer: once you own it, any color works for walls, roof, trim, doors, shutters, floors and wallpaper. Before that you can still mix one to try it. */
 const swatchRow = (obj, key, cols) => { const list=STYLE_LIST[key], custom=!cols.includes(obj[key]);
   return `<div class="sws">${cols.map((c,i)=>{ const locked=list && !styleOwned(list,c); return `<div class="sw${obj[key]===c?' on':''}${locked?' locked':''}" style="background:${hexs(c)}" data-k="${key}" data-v="${c}" data-ty="n" ${locked?`data-lock="${list}" data-i="${i}" title="Not yours yet: tap to try it"`:''}></div>`; }).join('')}<label class="sw mix${custom?' on':''}${hasMixer()?'':' locked'}" title="${hasMixer()?'Mix any color':'Paint mixer: tap to try it'}" style="${custom?`background:${hexs(obj[key])}`:''}"><input type="color" data-mix="${key}" value="${hexs(obj[key])}"></label></div>`; };
@@ -3394,7 +3458,7 @@ class HomeRack extends Ent {
   constructor(x,z){ super('rack',x,z,0.7); this.solid=true; this.reach=1.9; this.key=null; this.attach(new THREE.Group()); this.hitSphere(0.9,1.1); this.refresh(); }
   refresh(){ this.key=S.day&&S.day.key; const g=homeRackModel(); while (this.obj.children.length>1) this.obj.remove(this.obj.children[1]); g.children.slice().forEach(c=>this.obj.add(c)); this.obj.traverse(c=>{ c.userData.ent=this; }); }
   label(){ return 'Home goods'; }
-  act(){ const k=KEEPERS.pemberton; dialog(k.name, k.voice, [homeStock().some(s=>!homeOwned(s)) ? 'Fresh in for the home today. Take one home and try it on before you buy, no charge for looking.' : 'All sold out of home goods today. More comes in tomorrow!'], ()=>openShop('stall','home')); }
+  act(){ const k=KEEPERS.pemberton; if (GUEST){ dialog(k.name, k.voice, ['Home goods are for homeowners. Make an account and Clementine can set you up with a house!']); return; } dialog(k.name, k.voice, [homeStock().some(s=>!homeOwned(s)) ? 'Fresh in for the home today. Take one home and try it on before you buy, no charge for looking.' : 'All sold out of home goods today. More comes in tomorrow!'], ()=>openShop('stall','home')); }
   update(){ if (S.day && this.key!==S.day.key) this.refresh(); }
 }
 function refreshHomeRack(){ if (homeRack && !homeRack.removed) homeRack.refresh(); }
@@ -3436,13 +3500,13 @@ function openBoard(){
     h+=`<div class="notice">Ripe fruit trees: ${trees.filter(t=>!t.removed&&t.fruit&&t.fruitLeft()>0).length}. Cracks to dig: ${S.day.digs.filter(x=>!x.dug).length}. Islanders: ${residents.length}.</div>`;
     h+=`<div class="notice"><b>Your progress</b><br>Critters caught: ${S.caught} · Items discovered: ${discovered()} · Best friends: ${bestFriends()}</div>`;
     h+=`<div class="notice"><b>Your home</b><br>`;
-    if (!S.home.built) h+=`You're still in a tent! Design a real house: draw the rooms, pick the walls, roof, windows, door and porch, then lay out the inside. A starter house of 9 floor squares costs ${fmt(houseCost(9,0))} clams. <br><button class="btn" id="bdOpen" style="margin-top:8px">Design my house</button>`;
-    else h+=`${S.home.plan.rooms.length} room${S.home.plan.rooms.length>1?'s':''} · ${planCells(S.home.plan)} floor squares. Restyling with styles you've unlocked is free; new styles and new floor space cost clams. You can also tap <b>Build</b> near your house.<br><button class="btn" id="bdOpen" style="margin-top:8px">Open build mode</button>`;
+    if (!S.home.built) h+= GUEST ? `You're living in a tent. Houses are for islanders with an account.` : `You're still in a tent! Clementine at the town hall can loan you a base-model house: one room of 9 floor squares for ${fmt(houseCost(9,0))} clams, paid back a little at a time.`;
+    else h+=`${S.home.plan.rooms.length} room${S.home.plan.rooms.length>1?'s':''} · ${planCells(S.home.plan)} floor squares.${loanOpen()?` Home loan: <b>${fmt(S.loan.owed)}</b> of ${fmt(S.loan.total)} clams left.`:''} New styles, add-ons and paint cost clams (switching between ones you own is free), new floor goes on a home loan, and each layout change costs ${REMODEL_FEE} clams.${GUEST?'':`<br><button class="btn" id="bdOpen" style="margin-top:8px">Open build mode</button>`}`;
     h+=`</div><div class="notice"><b>Museum</b><br>${donatedCount()} of ${MUSEUM_TOTAL} displays filled. Professor Thistle is just south of the plaza.</div>`;
     if (!VISIT) h+=`<div class="notice"><b>Favors</b> <span class="muted">· ${Q.done||0} done so far</span>${favorsHTML()}</div>`;
     if (S.magic.tower) h+=`<div class="notice"><b>Wendell the wizard</b><br>Potions any time. ${moveUnlocked()?'Moving buildings: ready.':`Moving buildings opens with a house of ${MAGIC.unlockMove.cells} squares and ${MAGIC.unlockMove.shops} shops backed.`} ${landUnlocked()?'Shaping land: ready.':`Shaping land opens with a house of ${MAGIC.unlockLand.cells} squares and all 3 shops backed.`}</div>`;
     pBody.innerHTML=h;
-    pBody.querySelector('#bdOpen').onclick=()=>{ panelClose=null; closePanel(); openBuild(); };
+    const bdo=pBody.querySelector('#bdOpen'); if (bdo) bdo.onclick=()=>{ panelClose=null; closePanel(); openBuild(); };
   };
   openPanel('Island Board'); render();
 }

@@ -2,7 +2,7 @@
 import { mulberry32, clamp, Time } from './util.js';
 
 
-/* The ten songs. root: MIDI note, scale: steps above the root, prog: chord roots (semitones) per bar,
+/* The songs. root: MIDI note, scale: steps above the root, prog: chord roots (semitones) per bar,
    voicing: chord tones, rest: chance of a gap, hold/trill: share of held and trilled notes, leap: how far the melody wanders. */
 const SONGS = [
   { name:'Sea Glass', bpm:68, root:50, scale:[0,2,4,6,7,9,11], prog:[0,7,2,7], voicing:[0,7,16], bars:8, start:4, rest:0.55, hold:0.45, trill:0.12, leap:3,
@@ -25,7 +25,25 @@ const SONGS = [
     drone:0.065, padVol:0.024, padType:'sine', padAtt:3, padCut:700, melVol:0.06, melType:'sine', melDecay:1.6, bell:0.05, bellVol:0.045 },
   { name:'Kettle Steam', bpm:78, root:53, scale:[0,2,4,5,7,9], prog:[0,-3,2,-5], voicing:[0,4,7,9], bars:8, start:5, rest:0.48, hold:0.3, trill:0.1, leap:3,
     drone:0, padVol:0.022, padType:'triangle', padAtt:1.0, padCut:1300, arp:[0,null,2,null,1,null,3,null], arpVol:0.035, melVol:0.07, melType:'triangle', melDecay:0.7, bell:0.05, bellVol:0.04 },
+  { name:'Tide Pools', bpm:84, root:52, scale:[0,2,4,7,9], prog:[0,-3,5,-5], voicing:[0,7,14,16], bars:8, start:5, rest:0.5, hold:0.3, trill:0.12, leap:3,
+    drone:0, padVol:0.022, padType:'sine', padAtt:1.1, padCut:1500, arp:[0,null,2,1,null,3,null,2], arpVol:0.035, melVol:0.075, melType:'sine', melDecay:0.8, bell:0.05, bellVol:0.04 },
+  { name:'Cloud Shadows', bpm:72, root:55, scale:[0,2,4,6,7,9,11], prog:[0,2,0,-5], voicing:[0,7,11,16], bars:8, start:4, rest:0.55, hold:0.45, trill:0.1, leap:3,
+    drone:0.035, padVol:0.025, padType:'sine', padAtt:1.6, padCut:1300, trem:0.025, tremRate:5, melVol:0.07, melType:'sine', melDecay:1.0, bell:0.05, bellVol:0.04 },
+  { name:'Salt Breeze', bpm:88, root:50, scale:[0,2,4,5,7,9,10], prog:[0,-2,5,0], voicing:[0,4,7,14], bars:8, start:5, rest:0.45, hold:0.3, trill:0.1, leap:3,
+    drone:0, padVol:0.022, padType:'triangle', padAtt:0.9, padCut:1600, arp:[0,1,2,null,1,null,3,null], arpVol:0.035, melVol:0.075, melType:'triangle', melDecay:0.6, bell:0.03, bellVol:0.035 },
+  { name:'Firefly Field', bpm:66, root:49, scale:[0,2,3,5,7,9,10], prog:[0,5,-2,3], voicing:[0,7,10,15], bars:8, start:4, rest:0.58, hold:0.4, trill:0.2, leap:2,
+    drone:0.045, padVol:0.025, padType:'sine', padAtt:2.0, padCut:1000, melVol:0.07, melType:'sine', melDecay:1.2, bell:0.06, bellVol:0.045 },
+  { name:'Starlit Dock', bpm:54, root:47, scale:[0,2,4,7,9], prog:[0,5,-3,5], voicing:[0,7,16], bars:8, start:3, rest:0.7, hold:0.55, trill:0.1, leap:2,
+    drone:0.055, padVol:0.024, padType:'sine', padAtt:2.6, padCut:750, melVol:0.065, melType:'sine', melDecay:1.5, bell:0.07, bellVol:0.045 },
+  { name:'Window Seat', bpm:74, root:55, scale:[0,2,4,5,7,9,11], prog:[0,-5,-3,5], voicing:[0,4,7,11], bars:8, start:5, rest:0.5, hold:0.35, trill:0.08, leap:3,
+    drone:0, padVol:0.022, padType:'triangle', padAtt:1.2, padCut:1200, arp:[0,null,1,null,2,null,1,null], arpVol:0.03, melVol:0.07, melType:'triangle', melDecay:0.7, bell:0.04, bellVol:0.04 },
 ];
+/* Which songs fit each part of the day. The game rotates through the pool, a new song every 3 to 5 minutes,
+   never the same one twice in a row. Indexes into SONGS. */
+const POOLS = {
+  dawn:[0,10,11], morning:[1,10,2], late:[2,12,1], noon:[3,11,12], afternoon:[4,12,11], evening:[5,13,4],
+  dusk:[6,13,5], night:[7,14,6], deep:[8,14,7], inDay:[9,15,4], inNight:[9,15,6],
+};
 // overall level, and a lift for the lighter daytime songs so every song sits at about the same loudness
 for (const S of SONGS){ const k=1.5*(S.arp?1.35:1); for (const key of ['drone','padVol','melVol','bellVol','arpVol','trem']) if (S[key]) S[key]*=k; }
 export const SONG_NAMES = SONGS.map(s=>s.name);
@@ -45,14 +63,28 @@ export const Snd = {
     const len=c.sampleRate*2, buf=c.createBuffer(1,len,c.sampleRate), d=buf.getChannelData(0);
     for(let i=0;i<len;i++) d[i]=Math.random()*2-1;
     this.noise=buf;
-    const ns=c.createBufferSource(); ns.buffer=buf; ns.loop=true;
-    const olp=c.createBiquadFilter(); olp.type='lowpass'; olp.frequency.value=420;
-    this.oceanG=c.createGain(); this.oceanG.gain.value=0.05;
-    const lfo=c.createOscillator(); lfo.frequency.value=0.09; const lg=c.createGain(); lg.gain.value=0.035; lfo.connect(lg); lg.connect(this.oceanG.gain); lfo.start();
-    ns.connect(olp); olp.connect(this.oceanG); this.oceanG.connect(this.master); ns.start();
-    const rs=c.createBufferSource(); rs.buffer=buf; rs.loop=true;
+    const src=()=>{ const n=c.createBufferSource(); n.buffer=buf; n.loop=true; n.start(0, Math.random()*2); return n; };
+    // Ocean: a low bed plus separate swells that roll in at uneven times and sizes (see waves()).
+    this.oceanOut=c.createGain(); this.oceanOut.gain.value=1; this.oceanOut.connect(this.master);
+    this.oceanLP=c.createBiquadFilter(); this.oceanLP.type='lowpass'; this.oceanLP.frequency.value=380;
+    this.oceanG=c.createGain(); this.oceanG.gain.value=0.035;
+    src().connect(this.oceanLP); this.oceanLP.connect(this.oceanG); this.oceanG.connect(this.oceanOut);
+    this.foamHP=c.createBiquadFilter(); this.foamHP.type='bandpass'; this.foamHP.frequency.value=2200; this.foamHP.Q.value=0.5;
+    this.foamG=c.createGain(); this.foamG.gain.value=0; src().connect(this.foamHP); this.foamHP.connect(this.foamG); this.foamG.connect(this.oceanOut);
+    // Wind, all into one bus that gets muffled indoors: a breeze that wanders in pitch and strength,
+    // gusts that swell and sweep, and now and then a thin whistle.
+    this.windOut=c.createGain(); this.windOut.gain.value=1; this.windLP=c.createBiquadFilter(); this.windLP.type='lowpass'; this.windLP.frequency.value=3000;
+    this.windOut.connect(this.windLP); this.windLP.connect(this.master);
+    this.breezeBP=c.createBiquadFilter(); this.breezeBP.type='bandpass'; this.breezeBP.frequency.value=500; this.breezeBP.Q.value=0.8;
+    this.breezeG=c.createGain(); this.breezeG.gain.value=0; src().connect(this.breezeBP); this.breezeBP.connect(this.breezeG); this.breezeG.connect(this.windOut);
+    this.gustBP=c.createBiquadFilter(); this.gustBP.type='bandpass'; this.gustBP.frequency.value=400; this.gustBP.Q.value=1.1;
+    this.gustG=c.createGain(); this.gustG.gain.value=0; src().connect(this.gustBP); this.gustBP.connect(this.gustG); this.gustG.connect(this.windOut);
+    this.whistleBP=c.createBiquadFilter(); this.whistleBP.type='bandpass'; this.whistleBP.frequency.value=900; this.whistleBP.Q.value=22;
+    this.whistleG=c.createGain(); this.whistleG.gain.value=0; src().connect(this.whistleBP); this.whistleBP.connect(this.whistleG); this.whistleG.connect(this.windOut);
+    this.breeze={ v:0.3, drift:0 }; this.nextGust=c.currentTime+6+Math.random()*10; this.nextWave=c.currentTime+2; this.lastOut=null;
+    const rs=src();
     const rbp=c.createBiquadFilter(); rbp.type='bandpass'; rbp.frequency.value=2600; rbp.Q.value=0.4;
-    this.rainG=c.createGain(); this.rainG.gain.value=0; rs.connect(rbp); rbp.connect(this.rainG); this.rainG.connect(this.master); rs.start();
+    this.rainG=c.createGain(); this.rainG.gain.value=0; rs.connect(rbp); rbp.connect(this.rainG); this.rainG.connect(this.master);
     this.nextT=c.currentTime+0.3;
     setInterval(()=>this.tick(), 90);
   },
@@ -91,17 +123,24 @@ export const Snd = {
   rumble(){ const t=this.t; this.burst(t,2.2,0.45,'lowpass',140,0.7); this.burst(t+0.6,1.6,0.3,'lowpass',90,0.7); this.tone(55,t,2.2,0.18,'sine',null,40); },
   boing(){ const t=this.t; this.tone(440,t,0.4,0.28,'sine',null,150); this.tone(300,t+0.06,0.32,0.14,'triangle',null,620); this.burst(t,0.08,0.18,'lowpass',700); },
   swoosh(){ this.burst(this.t,0.25,0.2,'bandpass',900,1.2); },
-  /* ---------- Music: ten ambient songs, one for each part of the day (and one for indoors) ----------
+  /* ---------- Music: sixteen ambient songs, grouped by part of the day (plus indoors), rotating every few minutes ----------
      Each song is a few slow layers: a low drone, long pad chords that overlap, a sparse melody of held notes
      with vibrato, little trills, glassy bells, soft plucks and tremolo tones. Phrases are regenerated from a
      seed every loop, so a song drifts instead of repeating note for note. */
-  songFor(h, inside){
-    if (inside) return 9;
-    if (h>=5 && h<7) return 0; if (h<10 && h>=7) return 1; if (h<12 && h>=10) return 2; if (h<14 && h>=12) return 3;
-    if (h<17 && h>=14) return 4; if (h<19 && h>=17) return 5; if (h<21 && h>=19) return 6; if (h>=21) return 7; return 8;
+  poolFor(h, inside){
+    if (inside) return (h>=19 || h<6) ? 'inNight' : 'inDay';
+    if (h>=5 && h<7) return 'dawn'; if (h>=7 && h<10) return 'morning'; if (h>=10 && h<12) return 'late'; if (h>=12 && h<14) return 'noon';
+    if (h>=14 && h<17) return 'afternoon'; if (h>=17 && h<19) return 'evening'; if (h>=19 && h<21) return 'dusk'; if (h>=21) return 'night'; return 'deep';
+  },
+  // pick the next song from a pool, not the one that just played
+  pickSong(pool){ const opts=POOLS[pool].filter(i=>!this.song || i!==this.song.idx); return opts[Math.floor(Math.random()*opts.length)]; },
+  startSong(idx, gap){
+    const c=this.ctx; this.loop=0; this.seed=Math.floor(Math.random()*100000); this.song=this.makeSong(idx, 0); this.step=0;
+    this.songEnd=c.currentTime+180+Math.random()*120;   // 3 to 5 minutes, then the next song at the end of a phrase
+    this.nextT=Math.max(this.nextT, c.currentTime+gap);
   },
   makeSong(idx, loop){
-    const S=SONGS[idx], r=mulberry32(idx*1013+loop*7919+5), steps=S.bars*8, mel=new Array(steps).fill(null);
+    const S=SONGS[idx], r=mulberry32(idx*1013+loop*7919+(this.seed||0)*31+5), steps=S.bars*8, mel=new Array(steps).fill(null);
     let deg=S.start, i=0;
     while (i<steps){
       if (r()<S.rest){ i+=1+Math.floor(r()*3); continue; }
@@ -141,10 +180,15 @@ export const Snd = {
     o.connect(base); base.connect(g); g.connect(this.mus); o.start(t); lfo.start(t); o.stop(t+dur+1.3); lfo.stop(t+dur+1.3); },
   tick(){
     if(!this.ctx || this.ctx.state!=='running') return;
-    const W=this.world, c=this.ctx, want=this.songFor(Math.floor(Time.hour()), !!W.inside);
-    if (!this.song || want!==this.song.idx){ this.loop=0; this.song=this.makeSong(want, 0); this.step=0; this.nextT=Math.max(this.nextT, c.currentTime+0.6); }
+    const W=this.world, c=this.ctx, pool=this.poolFor(Time.hour(), !!W.inside);
+    // new part of the day (or went in or out): switch now, unless the current song also fits there
+    if (!this.song || pool!==this.pool){ const keep=this.song && POOLS[pool].includes(this.song.idx); this.pool=pool; if (!keep) this.startSong(this.pickSong(pool), 0.6); }
     while(this.nextT < c.currentTime+0.4){
-      let P=this.song; if (this.step>=P.steps){ this.step=0; this.loop++; P=this.song=this.makeSong(P.idx, this.loop); }
+      let P=this.song;
+      if (this.step>=P.steps){
+        if (c.currentTime>=this.songEnd){ this.startSong(this.pickSong(pool), 0); this.nextT+=3+Math.random()*3; continue; }   // a short breath between songs
+        this.step=0; this.loop++; P=this.song=this.makeSong(P.idx, this.loop);
+      }
       const S=P.S, t=this.nextT, i=this.step, sd=60/S.bpm/2, bar=Math.floor(i/8), chord=S.root+S.prog[bar%S.prog.length];
       // drone: root and fifth, re-struck every 2 bars and overlapping, so it never stops
       if (S.drone && i%16===0){ this.pad(this.hz(chord-12), t, sd*16, S.drone, 'sine', 2.5, 3, 500); this.pad(this.hz(chord-5), t+0.3, sd*16, S.drone*0.55, 'sine', 3, 3, 600); }
@@ -167,6 +211,52 @@ export const Snd = {
     if(out && Math.random()<0.012 && hr>5.5 && hr<18.5 && W.weather==='sunny'){ const t=c.currentTime; const b=2400+Math.random()*1400; for(let k=0;k<2+(Math.random()*3|0);k++) this.tone(b,t+k*0.11,0.08,0.05,'sine',null,b*1.25); }
     if(out && Math.random()<0.02 && (hr>20||hr<5) && W.season!=='winter'){ const t=c.currentTime; for(let k=0;k<3;k++) this.tone(4600,t+k*0.05,0.025,0.02,'sine'); }
     this.rainG.gain.value = (W.weather==='rain') ? (out?0.07:0.025) : 0;
-    this.oceanG.gain.value = out ? 0.05 : 0.008;
+    if (out!==this.lastOut){ this.lastOut=out; const n=c.currentTime;
+      this.oceanOut.gain.setTargetAtTime(out?1:0.16, n, 0.4); this.windOut.gain.setTargetAtTime(out?1:0.35, n, 0.4); this.windLP.frequency.setTargetAtTime(out?3000:420, n, 0.4); }
+    this.wind(W, hr);
+    if (c.currentTime>=this.nextWave) this.wave();
+  },
+  // how windy it is right now, 0 to 1, from weather, season and time of night
+  windiness(W, hr){
+    let w = W.weather==='rain' ? 0.62 : W.weather==='snow' ? 0.5 : W.weather==='cloudy' ? 0.42 : 0.25;
+    if (W.season==='winter') w+=0.12; else if (W.season==='autumn') w+=0.06;
+    if (hr>=22 || hr<5) w-=0.08;
+    return clamp(w,0.1,0.9);
+  },
+  wind(W, hr){
+    const c=this.ctx, n=c.currentTime, B=this.breeze, base=this.windiness(W, hr);
+    // slow random walk around the weather's level, so the breeze rises and settles on its own
+    B.drift = clamp(B.drift*0.985 + (Math.random()-0.5)*0.04, -0.25, 0.25);
+    B.v += (clamp(base+B.drift,0.05,1)-B.v)*0.03;
+    this.breezeG.gain.setTargetAtTime(0.012+B.v*0.05, n, 0.8);
+    this.breezeBP.frequency.setTargetAtTime(280+B.v*520+B.drift*300, n, 1.2);
+    if (n<this.nextGust) return;
+    // a gust: swells in, the pitch climbs and falls back, then trails off. Size and length vary.
+    const big=Math.random(), dur=2.5+Math.random()*4.5, peak=(0.03+big*0.09)*(0.6+base), up=dur*(0.3+Math.random()*0.25);
+    const f0=250+Math.random()*200, f1=f0+300+big*700;
+    const g=this.gustG.gain, f=this.gustBP.frequency;
+    g.cancelScheduledValues(n); g.setValueAtTime(Math.max(0.0001,g.value),n); g.linearRampToValueAtTime(peak,n+up); g.linearRampToValueAtTime(peak*0.55,n+up+dur*0.2); g.linearRampToValueAtTime(0.0001,n+dur);
+    f.cancelScheduledValues(n); f.setValueAtTime(f0,n); f.linearRampToValueAtTime(f1,n+up); f.exponentialRampToValueAtTime(f0*0.9,n+dur);
+    // sometimes the gust whistles: a thin tone that slides around (more often in cold, cloudy or stormy weather)
+    const whistleOdds = 0.15 + (W.season==='winter'?0.25:0) + (W.weather==='snow'||W.weather==='rain'?0.15:W.weather==='cloudy'?0.08:0);
+    if (Math.random()<whistleOdds){
+      const wg=this.whistleG.gain, wf=this.whistleBP.frequency, w0=600+Math.random()*700, t0=n+up*0.4, wd=dur*0.8;
+      wg.cancelScheduledValues(n); wg.setValueAtTime(0.0001,n); wg.linearRampToValueAtTime(0.0001,t0); wg.linearRampToValueAtTime(0.18+big*0.25,t0+wd*0.4); wg.linearRampToValueAtTime(0.0001,t0+wd);
+      wf.cancelScheduledValues(n); wf.setValueAtTime(w0,t0); wf.linearRampToValueAtTime(w0*(1.15+Math.random()*0.35),t0+wd*0.45); wf.linearRampToValueAtTime(w0*(0.85+Math.random()*0.2),t0+wd);
+    }
+    // leaves rustle as a bigger gust passes (no leaves in winter); nothing indoors
+    if (this.lastOut && W.season!=='winter' && big>0.35){ const k=2+Math.floor(big*5); for (let i=0;i<k;i++) this.burst(n+up*0.6+Math.random()*dur*0.6, 0.18+Math.random()*0.3, 0.05+big*0.07, 'bandpass', 2800+Math.random()*2400, 0.9); }
+    // stormy weather gusts more often
+    const gap = W.weather==='rain'||W.weather==='snow' ? 8+Math.random()*18 : W.weather==='cloudy' ? 12+Math.random()*25 : 18+Math.random()*40;
+    this.nextGust = n+dur+gap;
+  },
+  // one ocean swell: rolls in (louder, brighter), sometimes with a foamy wash, then draws back. Uneven timing and size.
+  wave(){
+    const c=this.ctx, n=c.currentTime, size=Math.random(), rise=1.6+Math.random()*1.8, fall=2.5+Math.random()*3, peak=0.045+size*0.05;
+    const g=this.oceanG.gain, f=this.oceanLP.frequency;
+    g.cancelScheduledValues(n); g.setValueAtTime(Math.max(0.0001,g.value),n); g.linearRampToValueAtTime(peak,n+rise); g.linearRampToValueAtTime(0.03,n+rise+fall);
+    f.cancelScheduledValues(n); f.setValueAtTime(Math.max(200,f.value),n); f.linearRampToValueAtTime(420+size*450,n+rise); f.linearRampToValueAtTime(330,n+rise+fall);
+    if (size>0.45){ const fg=this.foamG.gain; fg.cancelScheduledValues(n); fg.setValueAtTime(0.0001,n+rise*0.8); fg.linearRampToValueAtTime(0.01+size*0.015,n+rise+0.4); fg.linearRampToValueAtTime(0.0001,n+rise+fall*0.8); }
+    this.nextWave = n+rise+fall*(0.6+Math.random()*0.5)+(size<0.2?2+Math.random()*3:0);
   },
 };

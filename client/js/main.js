@@ -24,7 +24,10 @@ import { createParty } from './party.js';
 import { buildPlot, buildStand, buildStore, buildTownHall, buildMuseumTier, buildCrop, buildStairs } from './models3.js';
 import { buildCottage } from './cottage.js';
 import { MIX_GROUPS, FOSSIL_CAP, SHELL_CAP, TANK_GROUPS, tankOf, isBigFossil, museumLayout, buildMuseumHall, buildDesk, buildBench, buildPalm, buildCenterpiece, buildShellCase, shellSlots, buildPedestal, fossilModel, shellModel, buildTank, buildTankView } from './museum.js';
-import { hasUpstairs, winAt, winKey, buildCustomHouse, buildHomeInterior, buildShopBuilding, buildMuseum, buildKeeper, buildMossby, buildExhibit, buildTower, buildWizard, planGrid, planCells, planProblem, fixDoor, linkKey, linkOf, defaultExt, defaultRoom } from './models2.js';
+import { buildShopBuilding, buildMuseum, buildKeeper, buildMossby, buildExhibit, buildTower, buildWizard } from './models2.js';
+import { hasUpstairs, winAt, winKey, trelAt, balcAt, buildCustomHouse, buildHomeInterior, planGrid, planCells, planProblem, fixDoor, linkKey, linkOf, defaultExt, defaultRoom,
+  NFLOORS, FLOOR_KEYS, STAIR_KEYS, FLOOR_NAME, FLOOR_SHORT, floorOf, floorHas, topFloor, stairsOf, shiftPlan, ex as hex_, ez as hez_, ix as hix_, iz as hiz_, cellInside, ridgeOf, cellRects,
+  buildMossLayer, defaultMoss, mossCellAt, roofHit, roofPick, roofHalfCells, MOSS_GRID, balconyList, SIDES, LT } from './house.js';
 
 const $ = s => document.querySelector(s);
 const World = { weather:'sunny', season:seasonOf(Time.month()), night:0, inside:null };
@@ -54,6 +57,9 @@ function migrate(s){
       s.home={ built:true, paid:planCells(plan), plan, ext:Object.assign(defaultExt(), lv===3?{ porch:'covered', roofC:0x4a7ad8, stories:2 }:lv===2?{ porch:'deck' }:{}) }; }
     if (s.fund>0){ s.clams=(s.clams||0)+s.fund; s.fund=0; }
   }
+  // v1.25: the house grid grew from 7 x 6 to 20 x 20 (the old lot is its front middle). Porch lamps became porch lights.
+  if (s.home && !s.home.g2){ shiftPlan(s.home.plan, BUILD.SHIFT[0], BUILD.SHIFT[1]); s.home.g2=1; }
+  if (s.home && s.home.ext && s.home.ext.light===undefined){ s.home.ext.light = s.home.ext.lamps ? 'lantern' : 'none'; if (s.home.ext.lamps){ s.styles=s.styles||{}; s.styles['lights:lantern']=true; } }
   for (const k of ['general','aquarium','garden']) if (!s.shops[k]) s.shops[k]={ tier:0, trade:0 };
   if (!s.museum.items) s.museum={ items:{}, met:false, gifts:0 };
   return s;
@@ -288,7 +294,7 @@ if (S.magic.tower){ if (!S.magic.at) S.magic.at = LAY.places.tower ? LAY.places.
 // (dry, fairly flat, clear of every building and the dock); trees standing there just don't grow any more.
 const HALL_FOOT=4.6;
 function findHallSpot(){
-  const r=mulberry32((S.seed|0)+4242), lr=[LOT0.x-BUILD.GW*BUILD.EC/2-5, LOT0.z-BUILD.GD*BUILD.EC/2-5, LOT0.x+BUILD.GW*BUILD.EC/2+5, LOT0.z+BUILD.GD*BUILD.EC/2+7];
+  const r=mulberry32((S.seed|0)+4242), lr=[LOT0.x-BUILD.LW*BUILD.EC/2-5, LOT0.z-BUILD.LD*BUILD.EC/2-5, LOT0.x+BUILD.LW*BUILD.EC/2+5, LOT0.z+BUILD.LD*BUILD.EC/2+7];
   const tw = S.magic.at || LAY.places.tower;
   for (let k=0;k<2000;k++){ const a=r()*TAU, d=(10+r()*14)*Math.min(SC,1.2)+k*0.01, x=Math.cos(a)*d, z=Math.sin(a)*d;
     if (Math.hypot(x,z)/islandR(a)>0.68 || polyDist(x,z,RIVER)<10 || Math.hypot(x-POND.x,z-POND.z)<POND.r+9 || nearFall(x,z,5)) continue;
@@ -312,7 +318,7 @@ function findPortalSpot(){
   for (let k=0;k<2500;k++){ const a=r()*TAU, d=(9+r()*16)*Math.min(SC,1.2)+k*0.01, x=Math.cos(a)*d, z=Math.sin(a)*d;
     if (Math.hypot(x,z)/islandR(a)>0.66 || polyDist(x,z,RIVER)<8 || Math.hypot(x-POND.x,z-POND.z)<POND.r+7 || nearFall(x,z,5)) continue;
     if (x>DOCK.x0-12 && Math.abs(z-DOCK.z)<10) continue;
-    if (Math.abs(x-LOT0.x)<BUILD.GW*BUILD.EC/2+6 && z>LOT0.z-BUILD.GD*BUILD.EC/2-6 && z<LOT0.z+BUILD.GD*BUILD.EC/2+8) continue;
+    if (Math.abs(x-LOT0.x)<BUILD.LW*BUILD.EC/2+6 && z>LOT0.z-BUILD.LD*BUILD.EC/2-6 && z<LOT0.z+BUILD.LD*BUILD.EC/2+8) continue;
     if (Object.entries(PLACES).some(([kk,p])=>kk!=='board' && Math.hypot(x-p[0],z-p[1]) < (kk==='plaza'?8:kk==='museum'?9.5:kk==='hall'?HALL_FOOT+3.5:6.5)+PORT_FOOT)) continue;
     if (tw && Math.hypot(x-tw[0],z-tw[1])<PORT_FOOT+7) continue;
     let lo=99, hi=-99, bad=false; for (let i=0;i<=10;i++){ const aa=i/10*TAU, rr=i===10?0:PORT_FOOT+0.6, h=baseHeight(x+Math.cos(aa)*rr, z+Math.sin(aa)*rr); if (h<0.6){ bad=true; break; } lo=Math.min(lo,h); hi=Math.max(hi,h); }
@@ -395,7 +401,7 @@ const BLOCK_R = k => k==='portal'?2.4 : k==='museum'?6.4 : k==='home'?0 : k==='a
 function genPathsGrid(P, only){
   const ST=1.25, R0=Math.ceil(66*SC), n=Math.ceil(R0*2/ST), N=n*n, X=i=>-R0+(i+0.5)*ST;
   const blk=new Uint8Array(N), near=new Float32Array(N);
-  const lr=[LOT.x-BUILD.GW*BUILD.EC/2-0.8, LOT.z-BUILD.GD*BUILD.EC/2-0.8, LOT.x+BUILD.GW*BUILD.EC/2+0.8, LOT.z+BUILD.GD*BUILD.EC/2+0.6];
+  const lr=[LOT.x-BUILD.LW*BUILD.EC/2-0.8, LOT.z-BUILD.LD*BUILD.EC/2-0.8, LOT.x+BUILD.LW*BUILD.EC/2+0.8, LOT.z+BUILD.LD*BUILD.EC/2+0.6];
   const bl=Object.entries(P).filter(([k])=>k!=='plaza'&&k!=='board'&&k!=='home').map(([k,p])=>[p[0], p[1]+(k==='museum'?1:0), BLOCK_R(k)]);
   for (let j=0;j<n;j++) for (let i=0;i<n;i++){ const x=X(i), z=X(j), c=j*n+i;
     if (onBridge(x,z) || onDock(x,z)) continue;
@@ -441,7 +447,7 @@ let layoutPhase=true;   // true while the original trees and rocks are being pla
 const pathDist = (x,z) => { let m=1e9; for(const p of (layoutPhase?PATHS_V4:PATHS)) m=Math.min(m, polyDist(x,z,p)); return m; };
 const newPathDist = (x,z) => { let m=1e9; for(const p of PATHS_NEW) m=Math.min(m, polyDist(x,z,p)); return m; };
 
-{ const { GW, GD, EC }=BUILD, lot=[LOT.x-GW*EC/2, LOT.z-GD*EC/2, LOT.x+GW*EC/2, LOT.z+GD*EC/2+2.2];
+{ const { LW:GW, LD:GD, EC }=BUILD, lot=[LOT.x-GW*EC/2, LOT.z-GD*EC/2, LOT.x+GW*EC/2, LOT.z+GD*EC/2+2.2];
   const n=HG.n, h=new Float32Array(n*n);
   const lotDist=(x,z)=>Math.hypot(Math.max(lot[0]-x,0,x-lot[2]), Math.max(lot[1]-z,0,z-lot[3]));
   // where terrain may change at all: inland, away from the river, pond and coast
@@ -1409,34 +1415,39 @@ function makeRoom(id, idx, spec, W, D, exit){
   return R;
 }
 const DECOR_R = { counter:1.25, shelfstock:0.95, seedtable:1.15 };
-function rebuildHomeRoom(home=S.home){ rebuildFloor(home, false); rebuildFloor(home, true); placeStairs(home); }
-function rebuildFloor(home, upper){
-  const id = upper ? 'home2' : 'home', [gx,gz]=roomOrigin(upper?13:0); let R=ROOMS[id];
-  if (upper && !(home.built && hasUpstairs(home.plan))){ if (R){ if (R.shell) R.group.remove(R.shell); R.shell=null; R.ox=gx; R.oz=gz; R.w=0; R.d=0; R.walk=()=>false; } return; }
-  if (!R){ const container=new THREE.Group(); container.visible=false; scene.add(container); R=ROOMS[id]={ id, group:container, bed:[gx-2,gz-2], exit:[0,0] }; if (upper) R.exit=null; }
-  if (R.shell) R.group.remove(R.shell);
-  if (!home.built){ const W=6, D=6; R.shell=buildRoom(HOME_ROOM,W,D); R.shell.position.set(gx,0,gz); Object.assign(R,{ ox:gx, oz:gz, w:W, d:D, entry:[gx,gz+D/2-1.2], walk:null, exitCheck:null, walls:null }); }
+// The player's home: one interior per floor ('home', 'home2', 'home3', 'home4'), each in its own spot far from the island
+const HOME_IDS=['home','home2','home3','home4'], HOME_SLOT=[0,13,14,15];
+const homeFloorOf = id => HOME_IDS.indexOf(id);   // -1 if not a home floor
+function rebuildHomeRoom(home=S.home){ for (let n=0;n<NFLOORS;n++) rebuildFloor(home, n); placeStairs(home); }
+function rebuildFloor(home, n){
+  if (n===true) n=1; else if (n===false) n=0;
+  const id = HOME_IDS[n], [gx,gz]=roomOrigin(HOME_SLOT[n]); let R=ROOMS[id];
+  if (n>0 && !(home.built && floorHas(home.plan,n) && n<=topFloor(home.plan))){ if (R){ if (R.shell) R.group.remove(R.shell); R.shell=null; R.ox=gx; R.oz=gz; R.w=0; R.d=0; R.walk=()=>false; R.stairsUp=R.stairsDown=null; } return; }
+  if (!R){ const container=new THREE.Group(); container.visible=false; scene.add(container); R=ROOMS[id]={ id, group:container, bed:[gx-2,gz-2], exit:[0,0], floor:n }; if (n>0) R.exit=null; }
+  if (R.shell){ R.group.remove(R.shell); R.shell.traverse(o=>{ if (o.isPointLight) o.dispose && o.dispose(); }); }
+  if (!home.built){ const W=6, D=6; R.shell=buildRoom(HOME_ROOM,W,D); R.shell.position.set(gx,0,gz); Object.assign(R,{ ox:gx, oz:gz, w:W, d:D, entry:[gx,gz+D/2-1.2], walk:null, exitCheck:null, walls:null, stairsUp:null, stairsDown:null }); }
   else {
-    const sh=buildHomeInterior(home, upper); sh.position.set(gx,0,gz); const u=sh.userData, bb=u.bbox, occ=u.occ, { GW, GD, IC }=BUILD;
+    const sh=buildHomeInterior(home, n); sh.position.set(gx,0,gz); const u=sh.userData, bb=u.bbox, occ=u.occ;
     const segs=u.segs.map(q=>[q[0]+gx,q[1]+gz,q[2]+gx,q[3]+gz]); const dr=[u.door[0]+gx, u.door[1]+gz];
-    Object.assign(R,{ shell:sh, ox:gx+(bb[0]+bb[2])/2, oz:gz+(bb[1]+bb[3])/2, w:bb[2]-bb[0], d:bb[3]-bb[1], entry:upper?null:[dr[0], dr[1]-1.1], walls:u.walls, gz, gx, cutState:null, stairs:u.stairs?[u.stairs[0]+gx,u.stairs[1]+gz]:null,
-      walk:(x,z)=>{ const i=Math.floor((x-gx)/IC+GW/2), j=Math.floor((z-gz)/IC+GD/2); if(!(occ[j]?.[i]>=0)) return false; for(const q of segs){ if(segDist(x,z,q[0],q[1],q[2],q[3])<0.33) return false; } return true; },
-      exitCheck: upper ? (()=>false) : (x,z)=>z>dr[1]-0.42 && Math.abs(x-dr[0])<0.75 });
+    const at=p=>p?[p[0]+gx,p[1]+gz]:null;
+    Object.assign(R,{ shell:sh, ox:gx+(bb[0]+bb[2])/2, oz:gz+(bb[1]+bb[3])/2, w:bb[2]-bb[0], d:bb[3]-bb[1], entry:n?null:[dr[0], dr[1]-1.1], walls:u.walls, gz, gx, cutState:null, stairsUp:at(u.stairsUp), stairsDown:at(u.stairsDown), floor:n,
+      walk:(x,z)=>{ const [i,j]=cellInside(x-gx, z-gz); if(!(occ[j]?.[i]>=0)) return false; for(const q of segs){ if(segDist(x,z,q[0],q[1],q[2],q[3])<0.33) return false; } return true; },
+      exitCheck: n ? (()=>false) : (x,z)=>z>dr[1]-0.42 && Math.abs(x-dr[0])<0.75 });
   }
   R.group.add(R.shell);
 }
-/* Stairs: walk up to them and press the action button to go to the other floor */
+/* Stairs: walk up to them and press the action button to go to the next floor up or down */
 class Stairs extends Ent {
-  constructor(x,z,upper){ super('stairs',x,z,0.95); this.upper=upper; this.solid=!upper; this.reach=1.9; this.attach(buildStairs(upper)); }
-  label(){ return this.upper ? 'Go down' : 'Go up'; }
-  act(){ const to = this.upper ? 'home' : 'home2', R=ROOMS[to]; if (!R || !R.stairs) return; Snd.door();
+  constructor(x,z,down,floor){ super('stairs',x,z,0.95); this.down=down; this.floor=floor; this.solid=!down; this.reach=1.9; this.attach(buildStairs(down)); }
+  label(){ return this.down ? 'Go down' : 'Go up'; }
+  act(){ const to = HOME_IDS[this.floor + (this.down?-1:1)], R=ROOMS[to]; const spot = R && (this.down ? R.stairsUp : R.stairsDown); if (!spot) return; Snd.door();
     fade(()=>{ World.inside=to; for(const k in ROOMS) ROOMS[k].group.visible=(k===to); stopMove();
-      let p=null; for (const [ox,oz] of [[0,2.0],[0,-2.0],[2.0,0],[-2.0,0],[1.6,1.6],[-1.6,1.6]]){ const x=R.stairs[0]+ox, z=R.stairs[1]+oz; if (walkable(x,z) && !blocked(x,z,0.35)){ p=[x,z]; break; } }
-      p=p||R.stairs; player.pos.set(p[0],0,p[1]); camTarget.copy(player.pos); R.cutState=null; updateSky(); updateCamera(1); }); }
+      let p=null; for (const [ox,oz] of [[0,2.0],[0,-2.0],[2.0,0],[-2.0,0],[1.6,1.6],[-1.6,1.6],[1.6,-1.6],[-1.6,-1.6]]){ const x=spot[0]+ox, z=spot[1]+oz; if (walkable(x,z) && !blocked(x,z,0.35)){ p=[x,z]; break; } }
+      p=p||spot; player.pos.set(p[0],0,p[1]); camTarget.copy(player.pos); R.cutState=null; updateSky(); updateCamera(1); }); }
 }
 let stairEnts=[];
 function placeStairs(home){ for (const e of stairEnts) e.remove(); stairEnts=[]; if (!home.built || !hasUpstairs(home.plan)) return;
-  for (const [id,up] of [['home',false],['home2',true]]){ const R=ROOMS[id]; if (R && R.stairs) stairEnts.push(new Stairs(R.stairs[0], R.stairs[1], up)); } }
+  HOME_IDS.forEach((id,n)=>{ const R=ROOMS[id]; if (!R || !R.shell) return; if (R.stairsUp) stairEnts.push(new Stairs(R.stairsUp[0], R.stairsUp[1], false, n)); if (R.stairsDown) stairEnts.push(new Stairs(R.stairsDown[0], R.stairsDown[1], true, n)); }); }
 // Walls between you and the camera drop down so you can see into every room (like a dollhouse).
 // Works for any camera direction: a wall drops when it faces the camera and sits between you and the camera.
 const _wv=new THREE.Vector3();
@@ -1462,7 +1473,7 @@ const HOUSE_R=[1.9,2.6,3.1,3.9];
 let houseEnt=null; const residentHomes=[];
 function doorOf(ent){ const s=ent.obj.userData.size||{D:3.4}; return [ent.pos.x, ent.pos.z+s.D/2+1.3]; }
 function setRects(owner, list){ for(let i=RECTS.length-1;i>=0;i--) if(RECTS[i][4]===owner) RECTS.splice(i,1); for(const q of list) RECTS.push([q[0],q[1],q[2],q[3],owner]); }
-const lotRect = () => { const { GW, GD, EC }=BUILD; return [LOT.x-GW*EC/2, LOT.z-GD*EC/2, LOT.x+GW*EC/2, LOT.z+GD*EC/2+2.2]; };
+const lotRect = () => { const { LW:GW, LD:GD, EC }=BUILD; return [LOT.x-GW*EC/2, LOT.z-GD*EC/2, LOT.x+GW*EC/2, LOT.z+GD*EC/2+2.2]; };
 const inLotZone = (x,z,m=1) => { const q=lotRect(); return x>q[0]-m && x<q[2]+m && z>q[1]-m && z<q[3]+m; };
 // Put a building model so its door faces the path. The entity sits at the door; the walls are solid rectangles.
 function placeBuilding(kind, cx, cz, model, label, act){
@@ -1476,7 +1487,7 @@ function placeBuilding(kind, cx, cz, model, label, act){
 function buildPlayerHouse(home=S.home){
   if (houseEnt) houseEnt.remove(); setRects('home',[]);
   if (!home.built){ const [x,z]=PLACES.home; houseEnt=new Building('home',x,z,1.9,buildHouse(0),'Enter',()=>enterRoom('home')); houseEnt.doorPt=[x,z+3.0]; }
-  else houseEnt=placeBuilding('home', LOT.x, LOT.z, buildCustomHouse(home), 'Enter', ()=>enterRoom('home'));
+  else { houseEnt=placeBuilding('home', LOT.x, LOT.z, buildCustomHouse(home), 'Enter', ()=>enterRoom('home')); }
   if (ROOMS.home) ROOMS.home.exit=[houseEnt.doorPt[0], houseEnt.doorPt[1]+0.2];
   refreshSmoke();
 }
@@ -2239,7 +2250,9 @@ function openAchievements(){
 let magicMode=null;   // { kind:'move'|'land', ... }
 const MOVABLE = () => [['home','Your house',MAGIC.moveHome], ['shop','Pemberton\'s shop',MAGIC.moveOther], ['museum','Museum',MAGIC.moveOther], ['aquarium','Tidepool Aquarium Supply',MAGIC.moveOther], ['garden','Bug & Bloom',MAGIC.moveOther], ...(PLACES.tower?[['tower','Wizard tower',MAGIC.moveOther]]:[]), ...(PLACES.hall?[['hall','Town hall',MAGIC.moveOther]]:[]), ...residents.map(r=>[r.spec.id, r.spec.name+'\'s house', MAGIC.moveOther])];
 const FOOTR = { home:6, shop:4.5, museum:7.5, aquarium:6, garden:6.5, tower:3.5, hall:HALL_FOOT, portal:PORT_FOOT };
-const footOf = k => FOOTR[k] || 4.2;
+const footOf = k => k==='home' ? homeFoot() : (FOOTR[k] || 4.2);
+// How far the player's house reaches from its lot center (it can grow well past the original lot)
+function homeFoot(){ if (!S.home || !S.home.built) return FOOTR.home; let m=0; for (const r of S.home.plan.rooms) for (const [i,j] of [[r.x,r.z],[r.x+r.w,r.z],[r.x,r.z+r.d],[r.x+r.w,r.z+r.d]]) m=Math.max(m, Math.hypot(hex_(i), hez_(j))); return Math.max(FOOTR.home, m+1.2); }
 function openMoveList(){
   let h='';
   for (const [k,nm,cost] of MOVABLE()) h+=`<div class="row"><div class="grow"><div class="nm">${nm}</div><div class="sub">${fmt(cost)} clams</div></div><button class="btn" data-mv="${k}" ${S.clams<cost?'disabled':''}>Move</button></div>`;
@@ -2764,6 +2777,7 @@ function updateSky(){
   if (World.inside){
     sky.visible=stars.visible=moon.visible=false; scene.background=new THREE.Color(0x2e2420); scene.fog.color.setHex(0x2e2420); scene.fog.near=60; scene.fog.far=200;
     hemi.color.setHex(0xfff0dc); hemi.groundColor.setHex(0x8a6a50); hemi.intensity=1.6-World.night*0.35; sun.color.setHex(0xfff0dc); sun.intensity=1.3; sunDir.set(0.3,1,0.45).normalize();
+    if (homeFloorOf(World.inside)>=0 && S.home && S.home.built){ hemi.color.setHex(0xfff0dc); hemi.groundColor.setHex(0x6a5040); hemi.intensity=LT.amb-World.night*0.2; sun.color.setHex(0xfff0dc); sun.intensity=LT.sun; sunDir.set(0.3,1,0.45).normalize(); }
     if (World.inside==='museum'){ hemi.color.setHex(0xffe4c4); hemi.groundColor.setHex(0x5a3e2c); hemi.intensity=0.85; sun.color.setHex(0xffdcb0); sun.intensity=0.6; sunDir.set(0.15,1,0.35).normalize(); }
     renderer.toneMappingExposure = 1.15*(S.settings.bright||1); return; }
   sky.visible=stars.visible=true; scene.background=null; scene.fog.near=42; scene.fog.far=150;
@@ -3262,7 +3276,7 @@ function openShop(which, startTab){
     if (tab==='home'){ const st=homeStock();
       if (GUEST) h+='<div class="notice">Home goods are for homeowners. Make an account to get a house.</div>';
       else if (!st.length) h+='<div class="notice">You own every style Pemberton can get. Impressive!</div>';
-      st.forEach((it,i)=>{ const own=homeOwned(it), p=homePrice(it); h+=`<div class="row">${homeSwatch(it)}<div class="grow"><div class="nm">${homeName(it.list,it.v)}</div><div class="sub">${fmt(p)} clams · ${homeWhere(it)}</div></div><div style="display:flex;flex-direction:column;gap:4px"><button class="btn alt sm" data-ht="${i}">Try it on</button><button class="btn sm" data-hb="${i}" ${own||S.clams<p?'disabled':''}>${own?'Owned':'Buy'}</button></div></div>`; });
+      st.forEach((it,i)=>{ const own=homeOwned(it), p=homePrice(it); h+=`<div class="row">${homeSwatch(it)}<div class="grow"><div class="nm">${homeName(it.list,it.v)}</div><div class="sub">${fmt(p)} clams · ${homeWhere(it)}</div></div><div style="display:flex;flex-direction:column;gap:4px">${own?'':`<button class="btn alt sm" data-ht="${i}">Try it on</button>`}<button class="btn sm" data-hb="${i}" ${own||S.clams<p?'disabled':''}>${own?'Owned':'Buy'}</button></div></div>`; });
       }
     if (tab==='clothes'){ const L=clothesStock();
       h+=`<div class="muted" style="margin-bottom:8px">New clothes every day. They go straight into your wardrobe: wear them from Menu, Change my look.</div>`;
@@ -3479,37 +3493,80 @@ function spawnMossby(pos, mood){
 }
 
 /* ---------- Build mode (Sims-style home builder) ----------
-   Layout: draw rooms on a 7 x 6 lot, move and resize them, choose doorways, open walls and where the front door goes.
-   Outside: wall material and color, roof style and color, trim, door, windows, shutters, flower boxes, porch,
-   foundation, chimney, height. Inside: floor and wallpaper per room. Everything previews live in 3D.
-   New floor squares cost clams (cheap at first, pricier as the house grows). Restyling is free. */
+   Layout: draw rooms on a 20 x 20 grid (up to four floors), move and resize them, choose doorways, open walls and where the
+   front door goes; place windows, ivy trellises and balconies; turn each room's roof and give it its own roof style.
+   Outside: wall material and color, roof style and color, moss you paint on, trim, door, windows, shutters, flower boxes,
+   porch, porch lights, trellis and balcony styles, foundation, chimney, height. Inside: floor, wallpaper and lighting per room.
+   Everything previews live in 3D. Zoom the plan with a pinch, the mouse wheel or + and -; turn, tilt and zoom the 3D view too.
+   New floor squares cost clams on every floor alike (cheap at first, pricier as the house grows). Restyling is free. */
 const costUpTo = n => { let c=0; for(let k=1;k<=n;k++) c+=BUILD.cellCost(k); return c; };
 const houseCost = (cells, paid) => Math.max(0, costUpTo(cells)-costUpTo(paid||0));
 const hexs = c => '#'+new THREE.Color(c).getHexString();
 const buildEl=$('#build'), bBody=$('#bBody');
-const lotMarker = (()=>{ const q=lotRect(), pts=[]; const P=(x,z)=>pts.push(new THREE.Vector3(x,groundY(x,z)+0.08,z)); const N=16;
-  for(let i=0;i<=N;i++) P(q[0]+(q[2]-q[0])*i/N, q[1]); for(let i=0;i<=N;i++) P(q[2], q[1]+(q[3]-2.2-q[1])*i/N); for(let i=N;i>=0;i--) P(q[0]+(q[2]-q[0])*i/N, q[3]-2.2); for(let i=N;i>=0;i--) P(q[0], q[1]+(q[3]-2.2-q[1])*i/N);
-  const l=new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineDashedMaterial({ color:0xffffff, dashSize:0.4, gapSize:0.25, transparent:true, opacity:0.9 })); l.computeLineDistances(); l.visible=false; OUT.add(l); return l; })();
+const ROOM_KEYS=['floor','floorC','paper','paperC','ceil','sconce','accent','roof'];
+const allRooms = plan => { const out=[]; for (let n=0;n<NFLOORS;n++) out.push(...floorOf(plan,n).rooms); return out; };
+
+/* Where the house can grow: squares on dry, fairly level land, clear of water, paths, street lamps and other buildings.
+   The original lot always counts. Trees, rocks and furniture in the way are checked when you press Done. */
+let landCache=null;
+function homeBlocked(){
+  const key=[LOT.x,LOT.z,RECTS.filter(q=>q[4]!=='home').length,Object.keys((S.terra&&S.terra.cells)||{}).length,LAMPS.length].join('|'); if (landCache && landCache.key===key) return landCache.set;
+  const { GW, GD, EC, LW, LD, SHIFT }=BUILD, set=new Set(), base=groundY(LOT.x,LOT.z), others=RECTS.filter(q=>q[4]!=='home');
+  const places=Object.entries(PLACES).filter(([k])=>k!=='home'&&k!=='board').map(([k,p])=>[p[0], p[1]+(k==='museum'?1:0), k==='plaza'?6.5:BLOCK_R(k)+0.4]);
+  for (const R of RESIDENTS) if (R.home) places.push([R.home[0],R.home[1],3.4]);
+  for (let j=0;j<GD;j++) for (let i=0;i<GW;i++){
+    if (i>=SHIFT[0] && i<SHIFT[0]+LW && j>=SHIFT[1] && j<SHIFT[1]+LD) continue;
+    const x0=LOT.x+hex_(i), z0=LOT.z+hez_(j); let bad=false;
+    for (const [u,v] of [[0.5,0.5],[0.1,0.1],[0.9,0.1],[0.1,0.9],[0.9,0.9]]){ const x=x0+u*EC, z=z0+v*EC;
+      if (Math.hypot(x,z)/islandR(Math.atan2(z,x))>0.9 || rawHeight(x,z)<SAND_H+0.1 || onDock(x,z) || onBridge(x,z)){ bad=true; break; }
+      if (polyDist(x,z,RIVER)<3.2 || Math.hypot(x-POND.x,z-POND.z)<POND.r+0.8 || (FALLS.length && nearFall(x,z,-3))){ bad=true; break; }
+      const dh=groundY(x,z)-base; if (dh>0.3 || dh<-0.75){ bad=true; break; }
+      if (others.some(q=>x>q[0]-0.6&&x<q[2]+0.6&&z>q[1]-0.6&&z<q[3]+0.6) || places.some(([px,pz,pr])=>Math.hypot(x-px,z-pz)<pr)){ bad=true; break; }
+      if (visPathDist(x,z)<1.05 || LAMPS.some(([lx,lz])=>Math.hypot(x-lx,z-lz)<0.7)){ bad=true; break; } }
+    if (bad) set.add(i+','+j); }
+  landCache={ key, set }; return set; }
+function landProblem(plan){ const set=homeBlocked(); for (const r of plan.rooms) for (let j=r.z;j<r.z+r.d;j++) for (let i=r.x;i<r.x+r.w;i++) if (set.has(i+','+j)) return 'Part of that room is on land you can\'t build on (water, a path, a slope or another building).'; return ''; }
+const planIssue = plan => planProblem(plan) || landProblem(plan);
+// Free squares, shown on the ground while you build
+let landMesh=null;
+function showLand(on){ if (landMesh){ OUT.remove(landMesh); landMesh.geometry.dispose(); landMesh=null; } if (!on) return;
+  const set=homeBlocked(), { GW, GD, EC }=BUILD, pos=[]; const y=(x,z)=>groundY(x,z)+0.07;
+  for (let j=0;j<GD;j++) for (let i=0;i<GW;i++){ if (set.has(i+','+j)) continue; const x0=LOT.x+hex_(i)+0.07, x1=x0+EC-0.14, z0=LOT.z+hez_(j)+0.07, z1=z0+EC-0.14;
+    pos.push(x0,y(x0,z0),z0, x0,y(x0,z1),z1, x1,y(x1,z1),z1, x0,y(x0,z0),z0, x1,y(x1,z1),z1, x1,y(x1,z0),z0); }
+  const g=new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos,3));
+  landMesh=new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color:0xfff4d0, transparent:true, opacity:0.22, depthWrite:false })); landMesh.renderOrder=1; OUT.add(landMesh); }
+// Middle, height and reach of the house, for the camera
+function houseFrame(d){ const plan=d.plan; let x0=1e9,z0=1e9,x1=-1e9,z1=-1e9; for (const r of plan.rooms){ x0=Math.min(x0,hex_(r.x)); x1=Math.max(x1,hex_(r.x+r.w)); z0=Math.min(z0,hez_(r.z)); z1=Math.max(z1,hez_(r.z+r.d)); }
+  if (x0>x1){ x0=-3; x1=3; z0=-3; z1=3; } return { x:LOT.x+(x0+x1)/2, z:LOT.z+(z0+z1)/2, h:2.7+topFloor(plan)*2.2, r:Math.max(x1-x0, z1-z0)/2 }; }
+// Floors you may build: as many as your height style allows (or the one you're trying on), never fewer than you have
+const ownedFloors = () => { let m=1; for (const [v] of BUILD.stories) if (styleOwned('stories', v)) m=Math.max(m, v); return m; };
+function maxFloors(){ const B=buildMode, d=B.draft; let m=ownedFloors(); if (d.ext.stories>m) m=d.ext.stories; return Math.min(NFLOORS, Math.max(m, topFloor(d.plan)+1)); }
 
 function openBuild(opts){ if (VISIT){ toast('You can only build on your own island for now.'); Snd.fail(); return; }
   if (GUEST){ toast('Guests can\'t build. Make an account to get a house.'); Snd.fail(); return; }
   if (!S.home.built){ toast('Your first house comes from a home loan.', null, '', 'Talk to Clementine at the town hall.'); Snd.fail(); return; }
   if (buildMode || dlgState) return; if (placing) endPlacing(); stopMove(); endCatchMeter(); if (Fishing.state!=='idle') reel();
-  const draft=JSON.parse(JSON.stringify(S.home)); const first=!draft.built; draft.built=true; fixDoor(draft.plan);
-  buildMode={ draft, first, tab:'layout', floor:'down', sel:draft.plan.rooms[0]?draft.plan.rooms[0].id:null, mode:'rooms', yaw:0.55, prevInside:World.inside, prevDist:camDist, view:null, camT:new THREE.Vector3(), dist:25 }; $('#hud').classList.add('building'); buildEl.classList.add('show'); Snd.click();
+  const draft=JSON.parse(JSON.stringify(S.home)); const first=!draft.built; draft.built=true; draft.ext=Object.assign(defaultExt(), draft.ext); fixDoor(draft.plan);
+  buildMode={ draft, first, tab:'layout', floor:0, sel:draft.plan.rooms[0]?draft.plan.rooms[0].id:null, mode:'rooms', yaw:0.55, pitch:0.6, prevInside:World.inside, prevDist:camDist, view:null, camT:new THREE.Vector3(), pan:new THREE.Vector3(), dist:25, pv:null, brush:null, bsize:1, stroke:null, tall:false, tryMixer:false };
+  $('#hud').classList.add('building'); buildEl.classList.add('show'); Snd.click();
   const tr=opts&&opts.tryItem;
-  if (tr){ if (tr.list==='mixer'){ buildMode.tab='ext'; }
-    else { const key=HOME_KEY[tr.list]; if (INSIDE_LISTS.has(tr.list)){ for (const r of [...draft.plan.rooms, ...(hasUpstairs(draft.plan)?draft.plan.up.rooms:[])]) r[key]=tr.v; buildMode.tab='int'; } else { draft.ext[key]=tr.v; buildMode.tab='ext'; } } }
-  previewBuild(); setBuildView(buildMode.tab==='int'?'in':'out'); renderBuild();
+  if (tr){ if (tr.list==='mixer'){ buildMode.tab='ext'; buildMode.tryMixer=true; }
+    else { const key=HOME_KEY[tr.list]; if (INSIDE_LISTS.has(tr.list)){ for (const r of allRooms(draft.plan)) r[key]=tr.v; buildMode.tab='int'; } else { draft.ext[key]=tr.v; buildMode.tab='ext'; } } }
+  previewBuild(); setBuildView(buildMode.tab==='int'?'in0':'out'); renderBuild();
 }
 function setBuildView(v){
-  const B=buildMode; if (!B || B.view===v) return; B.view=v;
-  if (v==='out'){ World.inside=null; OUT.visible=true; for(const k in ROOMS) ROOMS[k].group.visible=false; B.camT.set(LOT.x, groundY(LOT.x,LOT.z)+1.4, LOT.z+0.6); lotMarker.visible=true; B.dist=25; }
-  else { const id = v==='in2' && ROOMS.home2 && ROOMS.home2.shell ? 'home2' : 'home'; World.inside=id; OUT.visible=false; for(const k in ROOMS) ROOMS[k].group.visible=(k===id); const R=ROOMS[id]; B.camT.set(R.ox,0.4,R.oz+0.8); R.cutState=null; B.yaw=0; B.dist=Math.max(18, Math.max(R.w,R.d)*1.45); }
-  camTarget.copy(B.camT); updateSky();
+  const B=buildMode; if (!B || B.view===v) return; B.view=v; B.pan.set(0,0,0);
+  if (v==='out'){ World.inside=null; OUT.visible=true; for(const k in ROOMS) ROOMS[k].group.visible=false; const f=houseFrame(B.draft), ak=clamp(1.25*innerHeight/innerWidth,1,2.2); B.camT.set(f.x, groundY(LOT.x,LOT.z)+1.2+f.h*0.35, f.z); showLand(true); B.dist=clamp((f.r*2.3+f.h*1.4+10)*ak,22,140); B.pitch=0.6; }
+  else { const n=+v.slice(2)||0, id = ROOMS[HOME_IDS[n]] && ROOMS[HOME_IDS[n]].shell ? HOME_IDS[n] : 'home'; showLand(false); World.inside=id; OUT.visible=false; for(const k in ROOMS) ROOMS[k].group.visible=(k===id);
+    const R=ROOMS[id], ak=clamp(1.25*innerHeight/innerWidth,1,2.2); B.camT.set(R.ox,0.4,R.oz+0.8); R.cutState=null; B.yaw=0; B.pitch=1.05; B.dist=clamp(Math.max(R.w,R.d)*1.45*ak, 18, 140); }
+  camTarget.copy(B.camT); updateSky(); renderViewBar();
 }
-function previewBuild(which){ const d=buildMode.draft; if (which!=='room') buildPlayerHouse(d); if (which!=='house'){ rebuildHomeRoom(d); ROOMS.home.cutState=null; if (ROOMS.home2) ROOMS.home2.cutState=null;
-  if (buildMode.view==='in2' && !(ROOMS.home2&&ROOMS.home2.shell)){ buildMode.view=null; setBuildView('in'); } else if (buildMode.view && buildMode.view!=='out'){ const id=World.inside; for(const k in ROOMS) ROOMS[k].group.visible=(k===id); } } }
+function previewBuild(which){ const B=buildMode, d=B.draft;
+  if (which!=='room' && typeof which!=='number') buildPlayerHouse(d);
+  if (which!=='house'){ if (typeof which==='number'){ rebuildFloor(d, which); placeStairs(d); } else rebuildHomeRoom(d); for (const id of HOME_IDS) if (ROOMS[id]) ROOMS[id].cutState=null;
+    if (B.view && B.view!=='out'){ const n=+B.view.slice(2)||0; if (!(ROOMS[HOME_IDS[n]] && ROOMS[HOME_IDS[n]].shell)){ B.view=null; setBuildView('in0'); } else { const id=World.inside; for(const k in ROOMS) ROOMS[k].group.visible=(k===id); } } } }
+// Rebuild at most once a frame while a slider or brush is moving
+let previewQ=null; function previewSoon(which){ if (previewQ!==null){ previewQ = previewQ===which ? which : undefined; return; } previewQ=which; requestAnimationFrame(()=>{ const w=previewQ; previewQ=null; if (buildMode) previewBuild(w); }); }
 /* Put a new or changed house in place (the builder's preview, or the base model). Returns how much furniture went
    back to the bag, or -1 if something is standing where the walls go. RECTS must already show the new house. */
 function applyHome(d){
@@ -3517,7 +3574,7 @@ function applyHome(d){
   const inWay=[];
   for (const e of ents.slice()){ if (e.removed || e.pos.x>500 || e===houseEnt || !inHouse(e.pos.x,e.pos.z, e.r*0.6)) continue;
     if (e instanceof Furniture) inWay.push(ITEMS[e.rec.id].name); else if (e instanceof Plant) inWay.push(PLANTS[e.rec.sp].name); else if (e instanceof Tree) inWay.push('a tree'); else if (e instanceof Stump) inWay.push('a stump'); else if (e instanceof Rock) inWay.push('a rock'); }
-  if (inWay.length){ toast(`Move ${inWay.slice(0,3).join(', ')}${inWay.length>3?' and more':''} first.`); Snd.fail(); return -1; }
+  if (inWay.length){ toast(`Move ${inWay.slice(0,3).join(', ')}${inWay.length>3?' and more':''} first.`, null, '', 'They\'re standing where the new walls go.'); Snd.fail(); return -1; }
   for (const e of ents.slice()){ if (e.removed || e.pos.x>500 || !inHouse(e.pos.x,e.pos.z)) continue;
     if (e instanceof Weed){ S.day.weeds[e.i].pulled=true; e.remove(); } else if (e instanceof DigSpot){ S.day.digs[e.i].dug=true; e.remove(); }
     else if (e instanceof GroundItem){ const ex=houseEnt.doorPt; e.rec.x=ex[0]+(Math.random()-0.5)*2; e.rec.z=ex[1]+1.2+Math.random(); e.remove(); new GroundItem(e.rec); }
@@ -3527,18 +3584,18 @@ function applyHome(d){
   buildPlayerHouse(); rebuildHomeRoom();
   // furniture inside that no longer fits goes back to your bag
   let back=0; const R=ROOMS.home;
-  for (const rec of S.placed.slice()){ const inHome=[roomOrigin(0),roomOrigin(13)].some(([ox,oz])=>Math.abs(rec.x-ox)<=14 && Math.abs(rec.z-oz)<=14); if (!inHome || walkable(rec.x,rec.z)) continue; const e=ents.find(x=>x instanceof Furniture && x.rec===rec);
+  for (const rec of S.placed.slice()){ const inHome=HOME_SLOT.some(k=>{ const [ox,oz]=roomOrigin(k); return rec.x>ox-BUILD.OX*BUILD.IC-2 && rec.x<ox+(BUILD.GW-BUILD.OX)*BUILD.IC+2 && rec.z>oz-BUILD.OZ*BUILD.IC-2 && rec.z<oz+(BUILD.GD-BUILD.OZ)*BUILD.IC+2; }); if (!inHome || walkable(rec.x,rec.z)) continue; const e=ents.find(x=>x instanceof Furniture && x.rec===rec);
     if (addItem(rec.id)){ S.placed.splice(S.placed.indexOf(rec),1); if(e) e.remove(); back++; } else { rec.x=R.entry[0]; rec.z=R.entry[1]-1; if(e){ e.pos.set(rec.x,0,rec.z); e.obj.position.copy(e.pos); } } }
   save(); Snd.fanfare(); sparkle(new THREE.Vector3(LOT.x, groundY(LOT.x,LOT.z)+3, LOT.z));
   return back;
 }
 /* ---------- Home loans (Clementine at the town hall) ----------
    The first house is the base model: one 3 x 3 room with nothing extra, built the moment you take the loan.
-   Later, new floor squares go on a loan too. One loan at a time: pay it off before borrowing again. No interest. */
+   Later, new floor squares go on a loan too, on any floor. One loan at a time: pay it off before borrowing again. No interest. */
 const loanOpen = () => !!(S.loan && S.loan.owed>0);
 function buildBaseHouse(){
   if (S.home.built || GUEST || VISIT) return;
-  const d={ built:true, paid:0, plan:{ rooms:[defaultRoom('r1',2,2,3,3)], links:{}, door:{i:3,j:4} }, ext:defaultExt() }; fixDoor(d.plan);
+  const d={ built:true, g2:1, paid:0, plan:{ rooms:[defaultRoom('r1',2+BUILD.SHIFT[0],2+BUILD.SHIFT[1],3,3)], links:{}, door:{i:3+BUILD.SHIFT[0],j:4+BUILD.SHIFT[1]} }, ext:defaultExt() }; fixDoor(d.plan);
   buildPlayerHouse(d);
   if (applyHome(d)<0){ buildPlayerHouse(S.home); rebuildHomeRoom(S.home); return; }
   const cost=houseCost(planCells(d.plan),0); S.loan={ owed:cost, total:cost }; save(); updateHUD();
@@ -3552,7 +3609,7 @@ function talkLoan(back){
       `It's ${fmt(houseCost(9,0))} clams. Pay it back whenever you like, a little at a time. No interest!`, 'Paint, porches, shutters and bigger rooms all cost extra later on.'], null,
     [{ label:'Build it!', fn:()=>buildBaseHouse() }, { label:'Not yet', alt:true, fn:back }]);
   if (loanOpen()) return openLoanPanel();
-  dialog(k.name, v, ['Your house is all paid off! Want more room? Draw new rooms in the builder and I\'ll put the new floor on a loan. One loan at a time, mind you.'], back);
+  dialog(k.name, v, ['Your house is all paid off! Want more room? Draw new rooms in the builder, on any floor, and I\'ll put the new floor on a loan. One loan at a time, mind you.'], back);
 }
 function openLoanPanel(){
   const render=()=>{ const L=S.loan; let h;
@@ -3565,23 +3622,24 @@ function openLoanPanel(){
   };
   openPanel('Home Loan'); render();
 }
-/* Layout changes cost a small remodel fee each: a room added, removed, moved or resized, a doorway changed,
-   a window added or taken out, the front door or the stairs moved. Compared against the saved house, so undoing a change is free. */
+/* Layout changes cost a small remodel fee each: a room added, removed, moved or resized (on any floor), a doorway changed,
+   a window or balcony added or taken out, the front door or any stairs moved. Compared against the saved house, so undoing a change is free.
+   Trellises, roof direction and roof style per room, moss and lighting are styling, so they're free. */
 const REMODEL_FEE=50;
 function remodelEdits(a, b){ let n=0;
-  const floors=p=>[[p.rooms||[], p.links||{}], [(p.up&&p.up.rooms)||[], (p.up&&p.up.links)||{}]], A=floors(a), Bf=floors(b);
-  for (let f=0;f<2;f++){ const [ra,la]=A[f], [rb,lb]=Bf[f];
+  for (let f=0;f<NFLOORS;f++){ const A=floorOf(a,f), Bf=floorOf(b,f), ra=A.rooms||[], rb=Bf.rooms||[], la=A.links||{}, lb=Bf.links||{};
     for (const id of new Set([...ra.map(r=>r.id), ...rb.map(r=>r.id)])){ const x=ra.find(r=>r.id===id), y=rb.find(r=>r.id===id); if (!x || !y || x.x!==y.x || x.z!==y.z || x.w!==y.w || x.d!==y.d) n++; }
     const has=new Set(rb.map(r=>r.id)); for (const k of new Set([...Object.keys(la), ...Object.keys(lb)])){ const [p,q]=k.split('|'); if (has.has(p) && has.has(q) && (la[k]||'door')!==(lb[k]||'door')) n++; } }
   for (const k of new Set([...Object.keys(a.win||{}), ...Object.keys(b.win||{})])){ const [row,rest]=k.split(':'), [i,j,sd]=rest.split(',').map(Number); if (winAt(a,i,j,sd,+row)!==winAt(b,i,j,sd,+row)) n++; }
+  for (const k of new Set([...Object.keys(a.balc||{}), ...Object.keys(b.balc||{})])) if (!!(a.balc&&a.balc[k]) !== !!(b.balc&&b.balc[k])) n++;
   if (a.door && b.door && (a.door.i!==b.door.i || a.door.j!==b.door.j)) n++;
-  if (a.stairs && b.stairs && (a.stairs.i!==b.stairs.i || a.stairs.j!==b.stairs.j)) n++;
+  for (const k of STAIR_KEYS.slice(1)) if (a[k] && b[k] && (a[k].i!==b[k].i || a[k].j!==b[k].j)) n++;
   return n; }
 const remodelFee = (a, b) => remodelEdits(a, b)*REMODEL_FEE;
 function closeBuild(commit){
   const B=buildMode; if (!B) return;
   if (commit){
-    const d=B.draft, prob=planProblem(d.plan); if (prob){ toast(prob); Snd.fail(); return; }
+    const d=B.draft, prob=planIssue(d.plan); if (prob){ toast(prob); Snd.fail(); return; }
     const un=draftUnowned(d); if (un.length){ toast(`You're only trying on ${un.map(u=>u.list==='mixer'?'a mixed color':homeName(u.list,u.v)).join(', ')}.`, null, '', 'Buy it, or put it back, to finish.'); Snd.fail(); renderBuild(); bBody.scrollTop=0; return; }
     const cells=planCells(d.plan), cost=houseCost(cells, S.home.paid), fee=remodelFee(S.home.plan, d.plan);
     if (cost>0 && loanOpen()){ toast(`Pay off your home loan before adding floor. You still owe ${fmt(S.loan.owed)} clams.`, null, '', 'Clementine at the town hall takes payments.'); Snd.fail(); return; }
@@ -3590,144 +3648,234 @@ function closeBuild(commit){
     S.clams-=fee; if (cost>0) S.loan={ owed:cost, total:cost }; save(); updateHUD();
     toast('Remodel done!', null, 'new', [fee?`Remodel fee: ${fmt(fee)} clams.`:'', cost>0?`${fmt(cost)} clams of new floor went on a home loan. Pay Clementine back at the town hall.`:'', back?`${back} piece${back>1?'s':''} of furniture went back to your bag.`:''].filter(Boolean).join(' '));
   } else { buildPlayerHouse(S.home); rebuildHomeRoom(S.home); Snd.click(); }
-  buildMode=null; camera.clearViewOffset(); camDist=B.prevDist; buildEl.classList.remove('show'); $('#hud').classList.remove('building'); lotMarker.visible=false;
-  World.inside=B.prevInside; OUT.visible=!World.inside; for(const k in ROOMS) ROOMS[k].group.visible=(k===World.inside);
-  if (World.inside==='home'){ const R=ROOMS.home; if (commit || !walkable(player.pos.x,player.pos.z)) player.pos.set(R.entry[0],0,R.entry[1]); }
+  buildMode=null; camera.clearViewOffset(); camDist=B.prevDist; buildEl.classList.remove('show','tall'); $('#hud').classList.remove('building'); showLand(false); renderViewBar();
+  World.inside=B.prevInside; if (homeFloorOf(World.inside)>0 && !(ROOMS[World.inside] && ROOMS[World.inside].shell)) World.inside='home';
+  OUT.visible=!World.inside; for(const k in ROOMS) ROOMS[k].group.visible=(k===World.inside);
+  if (homeFloorOf(World.inside)>=0){ const R=ROOMS[World.inside]; if (commit || !walkable(player.pos.x,player.pos.z)){ const p=R.entry || R.stairsDown || [R.ox,R.oz]; player.pos.set(p[0],0,p[1]+(R.entry?0:1.6)); if (!walkable(player.pos.x,player.pos.z) && R.stairsDown) player.pos.set(R.stairsDown[0],0,R.stairsDown[1]-1.6); } }
   else if (!World.inside && inRects(player.pos.x,player.pos.z,0.4)){ const e=ROOMS.home.exit; player.pos.set(e[0],0,e[1]+0.8); player.pos.y=groundY(player.pos.x,player.pos.z); }
-  player.obj.position.copy(player.pos); camTarget.copy(player.pos); ROOMS.home.cutState=null; updateSky(); updateCamera(1);
+  player.obj.position.copy(player.pos); camTarget.copy(player.pos); for (const id of HOME_IDS) if (ROOMS[id]) ROOMS[id].cutState=null; updateSky(); updateCamera(1);
 }
 $('#bCancel').onclick=()=>closeBuild(false); $('#bDone').onclick=()=>closeBuild(true);
 $('#bBuild').onclick=()=>openBuild();
 
 function renderBuild(keepScroll){
   const B=buildMode; if(!B) return; const plan=B.draft.plan; const st=bBody.scrollTop;
-  $('#bTabs').querySelectorAll('[data-bt]').forEach(b=>{ b.classList.toggle('on', b.dataset.bt===B.tab); b.onclick=()=>{ if(B.tab===b.dataset.bt) return; B.tab=b.dataset.bt; Snd.click(); setBuildView(B.tab==='int'?(B.floor==='up'?'in2':'in'):'out'); renderBuild(); }; });
-  const cells=planCells(plan), cost=houseCost(cells,S.home.paid), fee=remodelFee(S.home.plan, plan), lo=loanOpen();
-  $('#bCost').innerHTML=`${plan.rooms.length} room${plan.rooms.length>1?'s':''} · ${cells} floor squares · ${cost>0 ? (lo ? `<b style="color:#c0503a">new floor needs a loan, but you still owe ${fmt(S.loan.owed)}</b>` : `new floor: <b>${fmt(cost)}</b> clams on a home loan`) : 'no new floor'} · ${fee ? `remodel fee: <b>${fmt(fee)}</b> (you have ${fmt(S.clams)})` : 'no remodel fee'}`;
-  const prob=planProblem(plan);
-  $('#bMsg').innerHTML = prob ? `<b style="color:#c0503a">${prob}</b>` : B.tab==='layout' ? ({ rooms: B.floor==='up' ? 'Draw upstairs rooms over the rooms below. Tap a room to move or resize it.' : 'Drag an empty square to add a room. Tap a room, then drag it to move or drag an edge to resize.',
-      doors: B.floor==='up' ? 'Tap a wall between upstairs rooms: doorway, open, or solid.' : 'Tap a wall between rooms: doorway, open, or solid. Tap a front-facing wall to move the front door.',
-      windows: 'Tap an outside wall to add or remove a window. Windows show inside and out.', stairs:'Tap a square that has a room upstairs and downstairs to put the stairs there.' })[B.mode] : B.tab==='ext' ? 'Drag the picture above to look around your house.' : 'Pick a room on the plan, then its floor and wallpaper.';
+  $('#bTabs').querySelectorAll('[data-bt]').forEach(b=>{ b.classList.toggle('on', b.dataset.bt===B.tab); b.onclick=()=>{ if(B.tab===b.dataset.bt) return; B.tab=b.dataset.bt; B.brush=null; Snd.click(); if (B.tab==='int' && !floorHas(plan,B.floor)) B.floor=0; setBuildView(B.tab==='int'?'in'+B.floor:'out'); renderBuild(); }; });
+  const cells=planCells(plan), cost=houseCost(cells,S.home.paid), fee=remodelFee(S.home.plan, plan), lo=loanOpen(), nr=allRooms(plan).length, fl=topFloor(plan)+1;
+  $('#bCost').innerHTML=`${nr} room${nr>1?'s':''}${fl>1?` on ${fl} floors`:''} · ${cells} floor squares · ${cost>0 ? (lo ? `<b style="color:#c0503a">new floor needs a loan, but you still owe ${fmt(S.loan.owed)}</b>` : `new floor: <b>${fmt(cost)}</b> clams on a home loan`) : 'no new floor'} · ${fee ? `remodel fee: <b>${fmt(fee)}</b> (you have ${fmt(S.clams)})` : 'no remodel fee'}`;
+  const prob=planIssue(plan), up=B.floor>0;
+  $('#bMsg').innerHTML = prob ? `<b style="color:#c0503a">${prob}</b>` : B.tab==='layout' ? ({ rooms: up ? `Draw ${FLOOR_NAME[B.floor]} rooms over the rooms below. Tap a room to move or resize it.` : 'Drag an empty square to add a room. Tap a room, then drag it to move or drag an edge to resize. Shaded squares can\'t be built on.',
+      doors: up ? 'Tap a wall between rooms on this floor: doorway, open, or solid.' : 'Tap a wall between rooms: doorway, open, or solid. Tap a front-facing wall to move the front door.',
+      windows: 'Tap an outside wall to add or remove a window.', trellis: 'Tap an outside wall to add or remove a trellis. Two go by the front door until you place your own.',
+      balcony: 'Tap an outside wall on this floor to add or remove a balcony. One goes over the front door until you place your own.',
+      roof: 'Tap a room to pick how its roof points and what kind it is.', stairs:`Tap a square that has a room on this floor and the one below to put the stairs up to the ${FLOOR_NAME[B.floor]} there.` })[B.mode]
+    : B.tab==='ext' ? (B.brush ? `Drag on the roof to ${B.brush==='moss'?'paint moss on. Go over a spot again for thicker moss':'scrub moss off'}.` : 'Drag the picture to look around. Use the buttons on the right to zoom and tilt.') : 'Pick a room on the plan, then its floor, wallpaper and lighting.';
   const trying=draftUnowned(B.draft).length>0; if (trying && !prob) $('#bMsg').innerHTML='<b style="color:#3a7ab0">Trying on a new style. Buy it or put it back to finish.</b>';
   $('#bDone').disabled = !!prob || (cost>0 && lo) || fee>S.clams || trying; $('#bDone').textContent = B.first ? 'Build it' : 'Done';
+  buildEl.classList.toggle('tall', !!B.tall && B.tab!=='ext');
   if (B.tab==='layout') renderLayoutTab(); else if (B.tab==='ext') renderExtTab(); else renderIntTab();
-  renderTryBar();
+  renderTryBar(); renderViewBar();
   if (keepScroll) bBody.scrollTop=st;
 }
-// ---- the blueprint ----
-// Which floor the builder is editing: the plan itself (downstairs) or plan.up
-const upOK = () => styleOwned('stories', 2) || hasUpstairs(buildMode.draft.plan);
-function FP(){ const B=buildMode, plan=B.draft.plan; if (B.floor!=='up') return plan; if (!plan.up) plan.up={ rooms:[], links:{} }; plan.up.links=plan.up.links||{}; return plan.up; }
-function planCanvas(maxH){ const { GW, GD }=BUILD; const pad=12; const cs=Math.max(30, Math.min((Math.min(bBody.clientWidth-4,520)-pad*2)/GW, ((maxH||bBody.clientHeight-56)-pad*2-18)/GD)); const w=Math.round(cs*GW+pad*2), h=Math.round(cs*GD+pad*2+18);
-  return `<canvas id="bp" width="${Math.round(w*devicePixelRatio)}" height="${Math.round(h*devicePixelRatio)}" style="width:${w}px;height:${h}px"></canvas>`; }
-function bpGeom(cv){ const { GW }=BUILD; const w=cv.clientWidth, pad=12, cs=(w-pad*2)/GW; return { pad, cs }; }
+
+// ---- the blueprint: zoom with a pinch, the mouse wheel or the + and - buttons; pan with two fingers, or drag in the tools that tap ----
+const FP = () => floorOf(buildMode.draft.plan, buildMode.floor, true);
+const PV_MIN=8, PV_MAX=76;
+function planCanvas(maxH){ const w=Math.round(Math.min(bBody.clientWidth-4, 760)), h=Math.round(clamp(maxH || (bBody.clientHeight-64), 200, 900));
+  return `<div class="bpwrap"><canvas id="bp" width="${Math.round(w*devicePixelRatio)}" height="${Math.round(h*devicePixelRatio)}" style="width:${w}px;height:${h}px"></canvas>
+    <div class="bpz"><button data-z="in" title="Zoom in">+</button><button data-z="out" title="Zoom out">&minus;</button><button data-z="fit" title="Fit the house">Fit</button>${maxH?'':`<button data-z="tall" title="${buildMode.tall?'Smaller panel':'Bigger panel'}">${buildMode.tall?'Less':'More'}</button>`}</div></div>`; }
+// Size the plan to the room left in the panel below the tool buttons (or maxH)
+function sizePlan(cv, maxH){ const bb=bBody.getBoundingClientRect(), top=cv.getBoundingClientRect().top; let h = maxH || Math.floor(bb.bottom - top - 8);
+  h=Math.round(clamp(h, 200, 900)); const w=Math.round(Math.min(bBody.clientWidth-4, 760)); cv.style.width=w+'px'; cv.style.height=h+'px'; cv.width=Math.round(w*devicePixelRatio); cv.height=Math.round(h*devicePixelRatio); }
+function planFit(cv){ const B=buildMode, plan=B.draft.plan, { GW, GD }=BUILD; let x0=GW,z0=GD,x1=0,z1=0;
+  for (const r of allRooms(plan)){ x0=Math.min(x0,r.x); z0=Math.min(z0,r.z); x1=Math.max(x1,r.x+r.w); z1=Math.max(z1,r.z+r.d); }
+  if (x0>x1){ x0=BUILD.SHIFT[0]; z0=BUILD.SHIFT[1]; x1=x0+BUILD.LW; z1=z0+BUILD.LD; }
+  x0=Math.max(0,x0-2); z0=Math.max(0,z0-2); x1=Math.min(GW,x1+2); z1=Math.min(GD,z1+1);
+  const W=cv.clientWidth-16, H=cv.clientHeight-34; B.pv={ cs:clamp(Math.min(W/(x1-x0), H/(z1-z0)), PV_MIN, PV_MAX), ox:(x0+x1)/2, oz:(z0+z1)/2 }; }
+function bpGeom(cv){ const pv=buildMode.pv, W=cv.clientWidth, H=cv.clientHeight-20; return { cs:pv.cs, X:i=>W/2+(i-pv.ox)*pv.cs, Y:j=>H/2+(j-pv.oz)*pv.cs, W, H }; }
+function bpPoint(cv, e){ const r=cv.getBoundingClientRect(), pv=buildMode.pv, W=cv.clientWidth, H=cv.clientHeight-20; return [(e.clientX-r.left-W/2)/pv.cs+pv.ox, (e.clientY-r.top-H/2)/pv.cs+pv.oz]; }
+function bpZoom(cv, k, sx, sy){ const pv=buildMode.pv, W=cv.clientWidth, H=cv.clientHeight-20; if (sx===undefined){ sx=W/2; sy=H/2; }
+  const gx=(sx-W/2)/pv.cs+pv.ox, gz=(sy-H/2)/pv.cs+pv.oz; pv.cs=clamp(pv.cs*k, PV_MIN, PV_MAX); pv.ox=gx-(sx-W/2)/pv.cs; pv.oz=gz-(sy-H/2)/pv.cs; bpClamp(); }
+function bpClamp(){ const pv=buildMode.pv; pv.ox=clamp(pv.ox,-2,BUILD.GW+2); pv.oz=clamp(pv.oz,-2,BUILD.GD+2); }
+// Roofs over the open parts of each room on a floor, as rectangles with their ridge direction
+function roofParts(plan, n){ const above = n+1<NFLOORS && floorHas(plan,n+1) ? planGrid(floorOf(plan,n+1)) : null, out=[];
+  for (const r of floorOf(plan,n).rooms){ const open=new Set(); for (let j=r.z;j<r.z+r.d;j++) for (let i=r.x;i<r.x+r.w;i++) if (!(above && above[j][i]>=0)) open.add(i+','+j);
+    const parts = open.size===r.w*r.d ? [{ x:r.x, z:r.z, w:r.w, d:r.d }] : cellRects(open); for (const q of parts) out.push({ r, q, dir:ridgeOf(r, q.w*BUILD.EC, q.d*BUILD.EC) }); }
+  return out; }
+const HATCH = (()=>{ const c=document.createElement('canvas'); c.width=c.height=12; const x=c.getContext('2d'); x.fillStyle='#c9c2b2'; x.fillRect(0,0,12,12); x.strokeStyle='rgba(120,100,80,.35)'; x.lineWidth=2; x.beginPath(); x.moveTo(-2,14); x.lineTo(14,-2); x.stroke(); return c; })();
 function drawPlan(cv, drawRect){
-  const B=buildMode, full=B.draft.plan, plan=FP(), up=B.floor==='up', row=up?1:0, { GW, GD }=BUILD; const x=cv.getContext('2d'); const dpr=devicePixelRatio; x.setTransform(dpr,0,0,dpr,0,0);
-  const { pad, cs }=bpGeom(cv); const W=cv.clientWidth, H=cv.clientHeight; x.clearRect(0,0,W,H);
-  x.fillStyle='#cfe3b8'; x.fillRect(pad,pad,cs*GW,cs*GD);
-  if (up){ x.fillStyle='rgba(91,67,50,.16)'; for (const r of full.rooms) x.fillRect(pad+r.x*cs,pad+r.z*cs,r.w*cs,r.d*cs); }   // downstairs footprint
-  x.strokeStyle='rgba(90,120,70,.35)'; x.lineWidth=1; for(let i=0;i<=GW;i++){ x.beginPath(); x.moveTo(pad+i*cs,pad); x.lineTo(pad+i*cs,pad+cs*GD); x.stroke(); } for(let j=0;j<=GD;j++){ x.beginPath(); x.moveTo(pad,pad+j*cs); x.lineTo(pad+cs*GW,pad+j*cs); x.stroke(); }
-  const occ=planGrid(plan);
-  plan.rooms.forEach(r=>{ x.fillStyle=hexs(new THREE.Color(r.floorC).lerp(new THREE.Color(0xffffff),0.35).getHex()); x.fillRect(pad+r.x*cs,pad+r.z*cs,r.w*cs,r.d*cs); });
+  const B=buildMode, full=B.draft.plan, n=B.floor, plan=FP(), up=n>0, row=n, { GW, GD }=BUILD; const x=cv.getContext('2d'); const dpr=devicePixelRatio; x.setTransform(dpr,0,0,dpr,0,0);
+  const { cs, X, Y, W, H }=bpGeom(cv); x.clearRect(0,0,cv.clientWidth,cv.clientHeight); x.fillStyle='#b9cfa4'; x.fillRect(0,0,W,H);
+  const i0=Math.max(0,Math.floor((0-X(0))/cs)), i1=Math.min(GW,Math.ceil((W-X(0))/cs)), j0=Math.max(0,Math.floor((0-Y(0))/cs)), j1=Math.min(GD,Math.ceil((H-Y(0))/cs));
+  x.save(); x.beginPath(); x.rect(0,0,W,H); x.clip();
+  x.fillStyle='#cfe3b8'; x.fillRect(X(0),Y(0),cs*GW,cs*GD);
+  const blk=homeBlocked(), pat=x.createPattern(HATCH,'repeat'); x.fillStyle=pat; for (let j=j0;j<j1;j++) for (let i=i0;i<i1;i++) if (blk.has(i+','+j)) x.fillRect(X(i),Y(j),cs+0.5,cs+0.5);
+  if (up){ x.fillStyle='rgba(91,67,50,.18)'; for (const r of floorOf(full,n-1).rooms) x.fillRect(X(r.x),Y(r.z),r.w*cs,r.d*cs); }   // the floor below
+  x.strokeStyle='rgba(90,120,70,.3)'; x.lineWidth=1; for(let i=i0;i<=i1;i++){ x.beginPath(); x.moveTo(X(i),Y(j0)); x.lineTo(X(i),Y(j1)); x.stroke(); } for(let j=j0;j<=j1;j++){ x.beginPath(); x.moveTo(X(i0),Y(j)); x.lineTo(X(i1),Y(j)); x.stroke(); }
+  x.strokeStyle='rgba(91,67,50,.55)'; x.lineWidth=2; x.setLineDash([6,4]); x.strokeRect(X(0),Y(0),cs*GW,cs*GD); x.setLineDash([]);
+  const occ=planGrid(plan), LW=clamp(cs/9,1.6,5);
+  plan.rooms.forEach(r=>{ x.fillStyle=hexs(new THREE.Color(r.floorC).lerp(new THREE.Color(0xffffff),0.35).getHex()); x.fillRect(X(r.x),Y(r.z),r.w*cs,r.d*cs); });
   const line=(x1,y1,x2,y2,w,c,dash)=>{ x.beginPath(); x.setLineDash(dash||[]); x.strokeStyle=c; x.lineWidth=w; x.moveTo(x1,y1); x.lineTo(x2,y2); x.stroke(); x.setLineDash([]); };
-  const mids={};
-  const pairs={}; for(let j=0;j<GD;j++) for(let i=0;i<GW;i++){ const k=occ[j][i]; if(k<0) continue; for(const [di,dj] of [[1,0],[0,1]]){ const n=occ[j+dj]?.[i+di]; if(n===undefined||n<0||n===k) continue; const key=linkKey(plan.rooms[k].id,plan.rooms[n].id)+(dj?'h':'v'); (pairs[key]=pairs[key]||[]).push([i,j,di,dj]); } }
+  const mids={}, pairs={}; for(let j=0;j<GD;j++) for(let i=0;i<GW;i++){ const k=occ[j][i]; if(k<0) continue; for(const [di,dj] of [[1,0],[0,1]]){ const nb=occ[j+dj]?.[i+di]; if(nb===undefined||nb<0||nb===k) continue; const key=linkKey(plan.rooms[k].id,plan.rooms[nb].id)+(dj?'h':'v'); (pairs[key]=pairs[key]||[]).push([i,j,di,dj]); } }
   for (const key in pairs){ const L=pairs[key]; L.sort((a,b)=>a[0]-b[0]||a[1]-b[1]); const m=L[Math.floor((L.length-1)/2)]; mids[m.join(',')]=true; }
-  for(let j=0;j<GD;j++) for(let i=0;i<GW;i++){ const k=occ[j][i]; if(k<0) continue; const X=pad+i*cs, Y=pad+j*cs;
-    [[0,1,X,Y+cs,X+cs,Y+cs,0],[0,-1,X,Y,X+cs,Y,1],[1,0,X+cs,Y,X+cs,Y+cs,2],[-1,0,X,Y,X,Y+cs,3]].forEach(([di,dj,x1,y1,x2,y2,wk])=>{ const n=occ[j+dj]?.[i+di];
-      if (n===undefined||n<0){ const isDoor = !up && dj===1 && full.door && full.door.i===i && full.door.j===j; line(x1,y1,x2,y2,5,'#5b4332');
-        if(isDoor){ line(x1+cs*0.25,y1,x2-cs*0.25,y2,7,'#e0745a'); x.fillStyle='#5b4332'; x.font='600 10px Fredoka, sans-serif'; x.textAlign='center'; x.fillText('door',(x1+x2)/2,y1+13); }
-        else if (winAt(full,i,j,wk,row)){ const mx=(x1+x2)/2, my=(y1+y2)/2, hl=cs*0.22, hz=x1===x2; line(mx-(hz?0:hl),my-(hz?hl:0),mx+(hz?0:hl),my+(hz?hl:0),B.mode==='windows'?6:4,'#7cc8f0'); }
+  const E=B.draft.ext, balcs=new Set(balconyList(full, E, Array.from({length:topFloor(full)+1},(_,q)=>planGrid(floorOf(full,q))), topFloor(full)).map(q=>winKey(q[1],q[2],q[3],q[0])));
+  for(let j=Math.max(0,j0-1);j<Math.min(GD,j1+1);j++) for(let i=Math.max(0,i0-1);i<Math.min(GW,i1+1);i++){ const k=occ[j][i]; if(k<0) continue; const X0=X(i), Y0=Y(j);
+    [[0,1,X0,Y0+cs,X0+cs,Y0+cs,0],[0,-1,X0,Y0,X0+cs,Y0,1],[1,0,X0+cs,Y0,X0+cs,Y0+cs,2],[-1,0,X0,Y0,X0,Y0+cs,3]].forEach(([di,dj,x1,y1,x2,y2,wk])=>{ const nb=occ[j+dj]?.[i+di];
+      if (nb===undefined||nb<0){ const isDoor = !up && dj===1 && full.door && full.door.i===i && full.door.j===j; line(x1,y1,x2,y2,LW+1,'#5b4332');
+        const mx=(x1+x2)/2, my=(y1+y2)/2, hz=x1===x2, along=(a,c)=>line(mx-(hz?0:a),my-(hz?a:0),mx+(hz?0:a),my+(hz?a:0),c[0],c[1]);
+        if(isDoor){ line(x1+cs*0.25,y1,x2-cs*0.25,y2,LW+3,'#e0745a'); if (cs>22){ x.fillStyle='#5b4332'; x.font='600 10px Fredoka, sans-serif'; x.textAlign='center'; x.fillText('door',mx,y1+13); } }
+        else if (balcs.has(winKey(i,j,wk,row))){ along(cs*0.36,[LW+4,'#b07a4a']); const ox=hz?(di>0?1:-1):0, oz=hz?0:(dj>0?1:-1); x.strokeStyle='#b07a4a'; x.lineWidth=2; x.strokeRect(mx-cs*0.36*(hz?0.3:1)+ox*cs*0.06, my-cs*0.36*(hz?1:0.3)+oz*cs*0.06, cs*0.72*(hz?0.3:1), cs*0.72*(hz?1:0.3)); }
+        else if (winAt(full,i,j,wk,row)) along(cs*0.22,[B.mode==='windows'?LW+3:LW+1,'#7cc8f0']);
+        if (!up && trelAt(full,i,j,wk)){ const ox=hz?(di>0?4:-4):0, oy=hz?0:(dj>0?4:-4); x.strokeStyle='#4f9a3a'; x.lineWidth=LW+2; x.beginPath(); x.moveTo(mx-(hz?0:cs*0.3)+ox,my-(hz?cs*0.3:0)+oy); x.lineTo(mx+(hz?0:cs*0.3)+ox,my+(hz?cs*0.3:0)+oy); x.stroke(); }
         return; }
-      if (n===k || di<0 || dj<0) return; const t=linkOf(plan,plan.rooms[k].id,plan.rooms[n].id);
-      if (t==='wall') line(x1,y1,x2,y2,4,'#5b4332'); else if (t==='open') line(x1,y1,x2,y2,2,'rgba(91,67,50,.45)',[4,4]);
-      else { line(x1,y1,x2,y2,3,'#5b4332'); if (mids[[i,j,di,dj].join(',')]){ const mx=(x1+x2)/2, my=(y1+y2)/2, hl=cs*0.27; line(mx-(dj?hl:0),my-(di?hl:0),mx+(dj?hl:0),my+(di?hl:0),5,'#fff8ea'); } } }); }
-  // stairs
-  const st=full.stairs; if (st && (hasUpstairs(full) || B.mode==='stairs')){ const X=pad+st.i*cs, Y=pad+st.j*cs; x.fillStyle='rgba(139,107,80,.85)'; for (let k=0;k<4;k++) x.fillRect(X+cs*0.18, Y+cs*(0.18+k*0.17), cs*0.64, cs*0.1); x.fillStyle='#5b4336'; x.font='600 10px Fredoka, sans-serif'; x.textAlign='center'; x.fillText('stairs', X+cs/2, Y+cs-3); }
-  const sel=plan.rooms.find(r=>r.id===B.sel); if (sel && (B.tab!=='layout' || B.mode==='rooms')){ x.strokeStyle='#4f9a3a'; x.lineWidth=3; x.setLineDash([6,4]); x.strokeRect(pad+sel.x*cs+3,pad+sel.z*cs+3,sel.w*cs-6,sel.d*cs-6); x.setLineDash([]);
-    if (B.tab==='layout') for(const [hx,hy] of [[sel.x+sel.w/2,sel.z],[sel.x+sel.w/2,sel.z+sel.d],[sel.x,sel.z+sel.d/2],[sel.x+sel.w,sel.z+sel.d/2]]){ x.fillStyle='#4f9a3a'; x.beginPath(); x.arc(pad+hx*cs,pad+hy*cs,6,0,TAU); x.fill(); x.fillStyle='#fff'; x.beginPath(); x.arc(pad+hx*cs,pad+hy*cs,2.5,0,TAU); x.fill(); } }
-  if (drawRect){ const [a,b]=drawRect; x.fillStyle='rgba(124,195,90,.45)'; x.strokeStyle='#4f9a3a'; x.lineWidth=2; const X0=Math.min(a[0],b[0]), Z0=Math.min(a[1],b[1]), w=Math.abs(a[0]-b[0])+1, d=Math.abs(a[1]-b[1])+1; x.fillRect(pad+X0*cs,pad+Z0*cs,w*cs,d*cs); x.strokeRect(pad+X0*cs,pad+Z0*cs,w*cs,d*cs); }
-  x.fillStyle='#8b6b50'; x.font='600 12px Fredoka, sans-serif'; x.textAlign='center'; x.fillText(up?'upstairs (shaded: rooms below)':'front of the lot (path side)', W/2, pad+cs*GD+15);
+      if (nb===k || di<0 || dj<0) return; const t=linkOf(plan,plan.rooms[k].id,plan.rooms[nb].id);
+      if (t==='wall') line(x1,y1,x2,y2,LW,'#5b4332'); else if (t==='open') line(x1,y1,x2,y2,Math.max(1.5,LW/2),'rgba(91,67,50,.45)',[4,4]);
+      else { line(x1,y1,x2,y2,LW,'#5b4332'); if (mids[[i,j,di,dj].join(',')]){ const mx=(x1+x2)/2, my=(y1+y2)/2, hl=cs*0.27; line(mx-(dj?hl:0),my-(di?hl:0),mx+(dj?hl:0),my+(di?hl:0),LW+2,'#fff8ea'); } } }); }
+  // roofs (ridge lines) in the roof tool
+  if (B.mode==='roof' && B.tab==='layout') for (const { r, q, dir } of roofParts(full, n)){ const cx=X(q.x+q.w/2), cy=Y(q.z+q.d/2), sel=r.id===B.sel;
+    const hx = dir==='x' ? (q.w/2-0.25)*cs : 0, hy = dir==='z' ? (q.d/2-0.25)*cs : 0; line(cx-hx,cy-hy,cx+hx,cy+hy, sel?LW+3:LW+1, sel?'#c0503a':'#8b5e3a');
+    x.fillStyle=sel?'#c0503a':'#8b5e3a'; for (const s of [-1,1]){ x.beginPath(); x.arc(cx+s*hx, cy+s*hy, Math.max(2.5,LW), 0, TAU); x.fill(); }
+    if (cs*Math.min(q.w,q.d)>34){ x.font='600 10px Fredoka, sans-serif'; x.textAlign='center'; x.fillText(r.roof ? BUILD.roofs.find(o=>o[0]===r.roof)[1] : (dir==='z'?'gable front':'gable side'), cx, cy+(dir==='x'?14:4)); } }
+  // stairs: up to the next floor, and the ones you came up
+  const stairsMark=(st, label, c)=>{ const X0=X(st.i), Y0=Y(st.j); x.fillStyle=c; for (let k=0;k<4;k++) x.fillRect(X0+cs*0.18, Y0+cs*(0.18+k*0.17), cs*0.64, cs*0.1); if (cs>26){ x.fillStyle='#5b4336'; x.font='600 10px Fredoka, sans-serif'; x.textAlign='center'; x.fillText(label, X0+cs/2, Y0+cs-3); } };
+  { const su=stairsOf(full,n+1); if (su && (floorHas(full,n+1) || (B.mode==='stairs' && B.floor===n+1))) stairsMark(su, 'up', 'rgba(139,107,80,.85)'); const sd=n>0?stairsOf(full,n):null; if (sd) stairsMark(sd, 'down', 'rgba(90,120,170,.75)'); }
+  const sel=plan.rooms.find(r=>r.id===B.sel); if (sel && (B.tab!=='layout' || B.mode==='rooms' || B.mode==='roof')){ x.strokeStyle='#4f9a3a'; x.lineWidth=3; x.setLineDash([6,4]); x.strokeRect(X(sel.x)+3,Y(sel.z)+3,sel.w*cs-6,sel.d*cs-6); x.setLineDash([]);
+    if (B.tab==='layout' && B.mode==='rooms') for(const [hx,hy] of [[sel.x+sel.w/2,sel.z],[sel.x+sel.w/2,sel.z+sel.d],[sel.x,sel.z+sel.d/2],[sel.x+sel.w,sel.z+sel.d/2]]){ x.fillStyle='#4f9a3a'; x.beginPath(); x.arc(X(hx),Y(hy),7,0,TAU); x.fill(); x.fillStyle='#fff'; x.beginPath(); x.arc(X(hx),Y(hy),3,0,TAU); x.fill(); } }
+  if (drawRect){ const [a,b]=drawRect; x.fillStyle='rgba(124,195,90,.45)'; x.strokeStyle='#4f9a3a'; x.lineWidth=2; const X0=Math.min(a[0],b[0]), Z0=Math.min(a[1],b[1]), w=Math.abs(a[0]-b[0])+1, d=Math.abs(a[1]-b[1])+1; x.fillRect(X(X0),Y(Z0),w*cs,d*cs); x.strokeRect(X(X0),Y(Z0),w*cs,d*cs); }
+  x.restore();
+  x.fillStyle='#8b6b50'; x.font='600 12px Fredoka, sans-serif'; x.textAlign='center'; x.fillText(up?`${FLOOR_NAME[n]} (shaded: rooms below) · front is at the bottom`:'front of the lot (path side) is at the bottom', W/2, H+15);
 }
-function bpPoint(cv, e){ const r=cv.getBoundingClientRect(), { pad, cs }=bpGeom(cv); return [(e.clientX-r.left-pad)/cs, (e.clientY-r.top-pad)/cs]; }
+// Pointer handling for the plan: one finger or the mouse uses the current tool, two fingers pinch and pan, the wheel zooms
+function bindPlan(cv, tool){
+  const ptr=new Map(); let pinch=null, drag=null;
+  cv.onwheel=e=>{ e.preventDefault(); const r=cv.getBoundingClientRect(); bpZoom(cv, Math.exp(-(e.ctrlKey?e.deltaY*3:e.deltaY)*0.0015), e.clientX-r.left, e.clientY-r.top); drawPlan(cv); };
+  cv.onpointerdown=e=>{ e.preventDefault(); cv.setPointerCapture(e.pointerId); ptr.set(e.pointerId,{ x:e.clientX, y:e.clientY });
+    if (ptr.size===2){ if (drag && tool.cancel) tool.cancel(drag); drag=null; const [a,b]=[...ptr.values()]; pinch={ d:Math.hypot(a.x-b.x,a.y-b.y), mx:(a.x+b.x)/2, my:(a.y+b.y)/2 }; return; }
+    if (ptr.size>2) return;
+    if (e.button===1 || e.button===2){ drag={ pan:true, x:e.clientX, y:e.clientY }; return; }
+    drag={ x:e.clientX, y:e.clientY, sx:e.clientX, sy:e.clientY, moved:false, t:tool.down ? tool.down(bpPoint(cv,e), e) : null }; };
+  cv.onpointermove=e=>{ const p=ptr.get(e.pointerId); if (!p) return; p.x=e.clientX; p.y=e.clientY;
+    if (pinch && ptr.size===2){ const [a,b]=[...ptr.values()], d=Math.hypot(a.x-b.x,a.y-b.y), mx=(a.x+b.x)/2, my=(a.y+b.y)/2, r=cv.getBoundingClientRect(), pv=buildMode.pv;
+      bpZoom(cv, d/pinch.d, mx-r.left, my-r.top); pv.ox-=(mx-pinch.mx)/pv.cs; pv.oz-=(my-pinch.my)/pv.cs; bpClamp(); pinch={ d, mx, my }; drawPlan(cv); return; }
+    if (!drag) return; const pv=buildMode.pv;
+    if (drag.pan || (!drag.t && Math.hypot(e.clientX-drag.sx,e.clientY-drag.sy)>6)){ drag.pan=true; pv.ox-=(e.clientX-drag.x)/pv.cs; pv.oz-=(e.clientY-drag.y)/pv.cs; bpClamp(); drag.x=e.clientX; drag.y=e.clientY; drawPlan(cv); return; }
+    if (Math.hypot(e.clientX-drag.sx,e.clientY-drag.sy)>4) drag.moved=true; if (drag.t && tool.move) tool.move(drag.t, bpPoint(cv,e)); };
+  const end=e=>{ if (!ptr.has(e.pointerId)) return; ptr.delete(e.pointerId); if (ptr.size<2) pinch=null; const d=drag; if (ptr.size===0) drag=null; else return;
+    if (!d || d.pan) return; if (d.t && tool.up) tool.up(d.t, bpPoint(cv,e), d.moved); else if (!d.moved && tool.tap) tool.tap(bpPoint(cv,e)); };
+  cv.onpointerup=end; cv.onpointercancel=e=>{ if (drag && drag.t && tool.cancel) tool.cancel(drag.t); drag=null; ptr.delete(e.pointerId); pinch=null; };
+  cv.oncontextmenu=e=>e.preventDefault();
+  cv.parentNode.querySelectorAll('[data-z]').forEach(b=>b.onclick=()=>{ const z=b.dataset.z; Snd.click();
+    if (z==='in') bpZoom(cv,1.3); else if (z==='out') bpZoom(cv,1/1.3); else if (z==='fit') planFit(cv); else if (z==='tall'){ buildMode.tall=!buildMode.tall; buildMode.pv=null; renderBuild(true); return; } drawPlan(cv); });
+}
 function roomAtCell(plan,i,j){ return plan.rooms.find(r=>i>=r.x&&i<r.x+r.w&&j>=r.z&&j<r.z+r.d); }
-function applyOrRevert(fn, revert){ const plan=buildMode.draft.plan; fn(); fixDoor(plan); const p=planProblem(plan); if (p){ revert(); fixDoor(plan); toast(p); Snd.fail(); return false; } return true; }
-const floorChips = () => upOK() ? `<div class="chips" style="margin-right:6px"><button class="chip${buildMode.floor!=='up'?' on':''}" data-fl="down">Downstairs</button><button class="chip${buildMode.floor==='up'?' on':''}" data-fl="up">Upstairs</button></div>` : '';
-function bindFloorChips(){ bBody.querySelectorAll('[data-fl]').forEach(b=>b.onclick=()=>{ const B=buildMode; if (B.floor===b.dataset.fl) return; B.floor=b.dataset.fl; const F=FP(); B.sel=F.rooms[0]?F.rooms[0].id:null; Snd.click(); if (B.tab==='int') setBuildView(B.floor==='up'?'in2':'in'); renderBuild(); }); }
+function applyOrRevert(fn, revert){ const plan=buildMode.draft.plan; fn(); fixDoor(plan); const p=planIssue(plan); if (p){ revert(); fixDoor(plan); toast(p); Snd.fail(); return false; } return true; }
+const floorChips = (onlyBuilt) => { const B=buildMode, plan=B.draft.plan, m=onlyBuilt ? topFloor(plan)+1 : maxFloors(); if (m<2) return '';
+  let h='<div class="chips" style="margin-right:6px">'; for (let n=0;n<m;n++){ const can = n===0 || floorHas(plan,n-1); h+=`<button class="chip${B.floor===n?' on':''}" data-fl="${n}" ${can?'':'disabled'}>${FLOOR_SHORT[n]}</button>`; } return h+'</div>'; };
+function bindFloorChips(){ bBody.querySelectorAll('[data-fl]').forEach(b=>b.onclick=()=>{ const B=buildMode, n=+b.dataset.fl; if (B.floor===n) return; B.floor=n; const F=FP(); B.sel=F.rooms[0]?F.rooms[0].id:null; Snd.click();
+  if (B.mode==='trellis' && n>0) B.mode='rooms'; if ((B.mode==='balcony'||B.mode==='stairs') && n===0) B.mode='rooms'; if (B.tab==='int') setBuildView('in'+n); renderBuild(); }); }
 function renderLayoutTab(){
-  const B=buildMode, full=B.draft.plan, plan=FP(), { GW, GD }=BUILD; const sel=plan.rooms.find(r=>r.id===B.sel), up=B.floor==='up';
-  if (B.mode==='stairs' && !upOK()) B.mode='rooms';
-  const modes=[['rooms','Rooms'],['doors','Doors & walls'],['windows','Windows'],...(upOK()?[['stairs','Stairs']]:[])];
-  bBody.innerHTML=`<div class="brow" style="flex-wrap:wrap;gap:6px">${floorChips()}<div class="chips">${modes.map(([k,n])=>`<button class="chip${B.mode===k?' on':''}" data-m="${k}">${n}</button>`).join('')}</div>
-    ${B.mode==='rooms'&&sel&&(plan.rooms.length>1||up)?'<button class="btn alt" id="bDel" style="padding:4px 12px;font-size:13px">Remove room</button>':''}</div>`+planCanvas();
+  const B=buildMode, full=B.draft.plan, plan=FP(), { GW, GD }=BUILD, up=B.floor>0, E=B.draft.ext; let sel=plan.rooms.find(r=>r.id===B.sel);
+  const modes=[['rooms','Rooms'],['doors','Doors & walls'],['windows','Windows'],...(up?[['balcony','Balconies'],['stairs','Stairs']]:[['trellis','Trellises']]),['roof','Roofs']];
+  if (!modes.some(m=>m[0]===B.mode)) B.mode='rooms';
+  bBody.innerHTML=`<div class="brow tools">${floorChips()}<div class="chips">${modes.map(([k,n])=>`<button class="chip${B.mode===k?' on':''}" data-m="${k}">${n}</button>`).join('')}</div></div>`
+    + (B.mode==='roof' ? roofPanel(sel) : '') + planCanvas();
+  if (B.mode==='rooms'&&sel&&(plan.rooms.length>1||up)) bBody.querySelector('.bpwrap').insertAdjacentHTML('beforeend','<button class="btn alt bpdel" id="bDel">Remove room</button>');
   bBody.querySelectorAll('[data-m]').forEach(b=>b.onclick=()=>{ B.mode=b.dataset.m; Snd.click(); renderBuild(); }); bindFloorChips();
-  const del=$('#bDel'); if (del) del.onclick=()=>{ const i=plan.rooms.indexOf(sel), saved=JSON.stringify(full); if (applyOrRevert(()=>{ plan.rooms.splice(i,1); if (up && !plan.rooms.length) delete full.stairs; }, ()=>{ const p=JSON.parse(saved); Object.assign(full, p); if (!p.up) delete full.up; })){ B.sel=plan.rooms[0]?plan.rooms[0].id:null; previewBuild(); } renderBuild(); };
-  const cv=$('#bp'); drawPlan(cv); let drag=null;
-  cv.onpointerdown=e=>{ e.preventDefault(); cv.setPointerCapture(e.pointerId); const [fx,fz]=bpPoint(cv,e), i=Math.floor(fx), j=Math.floor(fz);
-    if (B.mode!=='rooms'){ drag={ type:'tap' }; return; }
-    const r=roomAtCell(plan,i,j), m=0.32;
-    if (r && r.id===B.sel){ const d={ l:fx-r.x, r:r.x+r.w-fx, t:fz-r.z, b:r.z+r.d-fz }; const side=Object.entries(d).sort((a,b)=>a[1]-b[1])[0]; drag={ type: side[1]<m ? 'resize':'move', side:side[0], r, orig:{...r}, fx, fz, saved:JSON.stringify(full) }; }
-    else if (r){ B.sel=r.id; Snd.click(); drawPlan(cv); drag={ type:'move', r, orig:{...r}, fx, fz, saved:JSON.stringify(full), justSel:true }; }
-    else if (i>=0&&j>=0&&i<GW&&j<GD){ drag={ type:'draw', a:[i,j], b:[i,j] }; drawPlan(cv, [drag.a,drag.b]); } };
-  cv.onpointermove=e=>{ if(!drag) return; const [fx,fz]=bpPoint(cv,e);
-    if (drag.type==='draw'){ drag.b=[clamp(Math.floor(fx),0,GW-1), clamp(Math.floor(fz),0,GD-1)]; drawPlan(cv,[drag.a,drag.b]); return; }
-    if (drag.type==='move'){ const o=drag.orig; drag.r.x=clamp(o.x+Math.round(fx-drag.fx),0,GW-o.w); drag.r.z=clamp(o.z+Math.round(fz-drag.fz),0,GD-o.d); drawPlan(cv); return; }
-    if (drag.type==='resize'){ const o=drag.orig, r=drag.r, s=drag.side;
-      if (s==='r') r.w=clamp(Math.round(fx)-o.x,1,GW-o.x); if (s==='b') r.d=clamp(Math.round(fz)-o.z,1,GD-o.z);
-      if (s==='l'){ const nx=clamp(Math.round(fx),0,o.x+o.w-1); r.x=nx; r.w=o.x+o.w-nx; } if (s==='t'){ const nz=clamp(Math.round(fz),0,o.z+o.d-1); r.z=nz; r.d=o.z+o.d-nz; }
-      drawPlan(cv); } };
-  cv.onpointerup=e=>{ const d=drag; drag=null; if(!d) return; const [fx,fz]=bpPoint(cv,e);
-    if (d.type==='tap'){ if (B.mode==='doors') doorTap(fx,fz); else if (B.mode==='windows') windowTap(fx,fz); else stairsTap(fx,fz); return; }
-    if (d.type==='draw'){ const X0=Math.min(d.a[0],d.b[0]), Z0=Math.min(d.a[1],d.b[1]), w=Math.abs(d.a[0]-d.b[0])+1, dd=Math.abs(d.a[1]-d.b[1])+1;
-      const like=plan.rooms.find(r=>r.id===B.sel)||plan.rooms[0]||full.rooms[0]; const nr=Object.assign(defaultRoom('r'+Date.now().toString(36),X0,Z0,w,dd), like?{ floor:like.floor, floorC:like.floorC, paper:like.paper, paperC:like.paperC }:{});
-      const touches = !plan.rooms.length || plan.rooms.some(r=>(X0<r.x+r.w && r.x<X0+w && (Z0===r.z+r.d || r.z===Z0+dd)) || (Z0<r.z+r.d && r.z<Z0+dd && (X0===r.x+r.w || r.x===X0+w)));
-      if (!touches){ toast('New rooms need to touch the house.'); Snd.fail(); drawPlan(cv); return; }
-      const hadStairs=full.stairs; const firstUp = up && !plan.rooms.length;
-      if (applyOrRevert(()=>{ plan.rooms.push(nr); if (firstUp && !full.stairs){ const g0=planGrid(full); for (let j=Z0;j<Z0+dd&&!full.stairs;j++) for (let i=X0;i<X0+w&&!full.stairs;i++) if (g0[j][i]>=0 && !(full.door&&full.door.i===i&&full.door.j===j)) full.stairs={i,j}; } }, ()=>{ plan.rooms.pop(); full.stairs=hadStairs; if (!hadStairs) delete full.stairs; })){ B.sel=nr.id; Snd.pop(); previewBuild(); if (firstUp) toast('Stairs added. Use the Stairs tool to move them.'); }
-      renderBuild(); return; }
-    const changed = d.r.x!==d.orig.x||d.r.z!==d.orig.z||d.r.w!==d.orig.w||d.r.d!==d.orig.d;
-    if (!changed){ drawPlan(cv); if(d.justSel) renderBuild(true); return; }
-    if (applyOrRevert(()=>{}, ()=>{ const p=JSON.parse(d.saved); full.rooms=p.rooms; full.door=p.door; full.links=p.links; full.up=p.up; full.stairs=p.stairs; })){ Snd.click(); previewBuild(); }
-    renderBuild(); };
+  if (B.mode==='roof') bindRoofPanel(sel);
+  const del=$('#bDel'); if (del) del.onclick=()=>{ const i=plan.rooms.indexOf(sel), saved=JSON.stringify(full); if (applyOrRevert(()=>{ plan.rooms.splice(i,1); if (up && !plan.rooms.length) delete full[STAIR_KEYS[B.floor]]; }, ()=>{ const p=JSON.parse(saved); for (const k of Object.keys(full)) delete full[k]; Object.assign(full, p); })){ B.sel=plan.rooms[0]?plan.rooms[0].id:null; previewBuild(); } renderBuild(); };
+  const cv=$('#bp'); sizePlan(cv); if (!B.pv) planFit(cv); drawPlan(cv);
+  const handle = (cs) => Math.min(0.45, Math.max(0.3, 12/cs));
+  bindPlan(cv, {
+    down:([fx,fz])=>{ const i=Math.floor(fx), j=Math.floor(fz);
+      if (B.mode==='roof'){ const r=roomAtCell(plan,i,j); if (r){ B.sel=r.id; Snd.click(); renderBuild(true); } return null; }
+      if (B.mode!=='rooms') return null;
+      const r=roomAtCell(plan,i,j), m=handle(B.pv.cs);
+      if (r && r.id===B.sel){ const d={ l:fx-r.x, r:r.x+r.w-fx, t:fz-r.z, b:r.z+r.d-fz }; const side=Object.entries(d).sort((a,b)=>a[1]-b[1])[0]; return { type: side[1]<m ? 'resize':'move', side:side[0], r, orig:{...r}, fx, fz, saved:JSON.stringify(full) }; }
+      if (r){ B.sel=r.id; Snd.click(); drawPlan(cv); return { type:'move', r, orig:{...r}, fx, fz, saved:JSON.stringify(full), justSel:true }; }
+      if (i>=0&&j>=0&&i<GW&&j<GD){ const t={ type:'draw', a:[i,j], b:[i,j] }; drawPlan(cv,[t.a,t.b]); return t; }
+      return null; },
+    move:(t,[fx,fz])=>{
+      if (t.type==='draw'){ t.b=[clamp(Math.floor(fx),0,GW-1), clamp(Math.floor(fz),0,GD-1)]; drawPlan(cv,[t.a,t.b]); return; }
+      if (t.type==='move'){ const o=t.orig; t.r.x=clamp(o.x+Math.round(fx-t.fx),0,GW-o.w); t.r.z=clamp(o.z+Math.round(fz-t.fz),0,GD-o.d); drawPlan(cv); return; }
+      if (t.type==='resize'){ const o=t.orig, r=t.r, s=t.side;
+        if (s==='r') r.w=clamp(Math.round(fx)-o.x,1,GW-o.x); if (s==='b') r.d=clamp(Math.round(fz)-o.z,1,GD-o.z);
+        if (s==='l'){ const nx=clamp(Math.round(fx),0,o.x+o.w-1); r.x=nx; r.w=o.x+o.w-nx; } if (s==='t'){ const nz=clamp(Math.round(fz),0,o.z+o.d-1); r.z=nz; r.d=o.z+o.d-nz; }
+        drawPlan(cv); } },
+    cancel:(t)=>{ if (t.type==='move'||t.type==='resize') Object.assign(t.r, t.orig); drawPlan(cv); },
+    up:(t,[fx,fz],moved)=>{
+      if (t.type==='draw'){ const X0=Math.min(t.a[0],t.b[0]), Z0=Math.min(t.a[1],t.b[1]), w=Math.abs(t.a[0]-t.b[0])+1, dd=Math.abs(t.a[1]-t.b[1])+1;
+        const like=plan.rooms.find(r=>r.id===B.sel)||plan.rooms[0]||full.rooms[0]; const nr=Object.assign(defaultRoom('r'+Date.now().toString(36),X0,Z0,w,dd), like?Object.fromEntries(ROOM_KEYS.filter(k=>k!=='roof').map(k=>[k,like[k]]).concat([['bright',like.bright??0.75],['warm',like.warm??0.5]])):{});
+        const touches = !plan.rooms.length || plan.rooms.some(r=>(X0<r.x+r.w && r.x<X0+w && (Z0===r.z+r.d || r.z===Z0+dd)) || (Z0<r.z+r.d && r.z<Z0+dd && (X0===r.x+r.w || r.x===X0+w)));
+        if (!touches){ toast('New rooms need to touch the house.'); Snd.fail(); drawPlan(cv); return; }
+        const sk=STAIR_KEYS[B.floor], hadStairs=up?full[sk]:null, firstUp = up && !plan.rooms.length;
+        if (applyOrRevert(()=>{ plan.rooms.push(nr); if (firstUp && !full[sk]){ const g0=planGrid(floorOf(full,B.floor-1)), below=B.floor>1?stairsOf(full,B.floor-1):null;
+            for (let j=Z0;j<Z0+dd&&!full[sk];j++) for (let i=X0;i<X0+w&&!full[sk];i++) if (g0[j][i]>=0 && !(B.floor===1&&full.door&&full.door.i===i&&full.door.j===j) && !(below&&below.i===i&&below.j===j)) full[sk]={i,j}; } },
+          ()=>{ plan.rooms.pop(); if (up){ if (hadStairs) full[sk]=hadStairs; else delete full[sk]; } })){ B.sel=nr.id; Snd.pop(); previewBuild(); if (firstUp) toast('Stairs added. Use the Stairs tool to move them.'); }
+        renderBuild(true); return; }
+      const changed = t.r.x!==t.orig.x||t.r.z!==t.orig.z||t.r.w!==t.orig.w||t.r.d!==t.orig.d;
+      if (!changed){ drawPlan(cv); if(t.justSel) renderBuild(true); return; }
+      if (applyOrRevert(()=>{}, ()=>{ const p=JSON.parse(t.saved); for (const k of Object.keys(full)) delete full[k]; Object.assign(full, p); })){ Snd.click(); previewBuild(); }
+      renderBuild(true); },
+    tap:([fx,fz])=>{ if (B.mode==='doors') doorTap(fx,fz); else if (B.mode==='windows') edgeTap(fx,fz,'win'); else if (B.mode==='trellis') edgeTap(fx,fz,'trel'); else if (B.mode==='balcony') edgeTap(fx,fz,'balc'); else if (B.mode==='stairs') stairsTap(fx,fz); }
+  });
 }
-// tap an outside wall to add or remove a window there
-function windowTap(fx,fz){
-  const B=buildMode, full=B.draft.plan, plan=FP(), occ=planGrid(plan), row=B.floor==='up'?1:0, i=Math.floor(fx), j=Math.floor(fz), u=fx-i, v=fz-j;
+// The roof tool: direction and style for the picked room's roof
+function roofPanel(r){ if (!r) return '<div class="muted" style="margin:4px 0">Tap a room on the plan.</div>';
+  const B=GUEST?GUEST_BUILD:BUILD, dir=r.pitch||'auto', styles=[['', 'Same as the house'], ...B.roofs.filter(([v])=>styleOwned('roofs',v) || r.roof===v)];
+  return `<div class="bsec" style="margin-top:2px"><b>This room's roof</b><div class="chips scroll">${[['auto','Automatic'],['z','Gable to the front'],['x','Gable to the side']].map(([v,n])=>`<button class="chip${dir===v?' on':''}" data-rp="${v}">${n}</button>`).join('')}</div>
+    <div class="chips scroll" style="margin-top:6px">${styles.map(([v,n])=>`<button class="chip${(r.roof||'')===v?' on':''}" data-rs="${v}">${n}</button>`).join('')}</div></div>`; }
+function bindRoofPanel(r){ if (!r) return;
+  bBody.querySelectorAll('[data-rp]').forEach(b=>b.onclick=()=>{ const v=b.dataset.rp; if (v==='auto') delete r.pitch; else r.pitch=v; Snd.click(); previewBuild('house'); renderBuild(true); });
+  bBody.querySelectorAll('[data-rs]').forEach(b=>b.onclick=()=>{ const v=b.dataset.rs; if (!v) delete r.roof; else r.roof=v; Snd.click(); previewBuild('house'); renderBuild(true); }); }
+// Tap an outside wall: a window, a trellis (ground floor) or a balcony (upper floors) goes on or comes off
+function edgeTap(fx,fz,kind){
+  const B=buildMode, full=B.draft.plan, plan=FP(), occ=planGrid(plan), row=B.floor, i=Math.floor(fx), j=Math.floor(fz), u=fx-i, v=fz-j, E=B.draft.ext;
   if (!(occ[j]?.[i]>=0)){ toast('Tap near an outside wall of a room.'); return; }
-  const d=[[1-v,0],[v,1],[1-u,2],[u,3]].sort((a,b)=>a[0]-b[0]); const k=d[0][1], [di,dj]=[[0,1],[0,-1],[1,0],[-1,0]][k];
-  if (occ[j+dj]?.[i+di]>=0){ toast('Windows go on outside walls.'); return; }
+  const d=[[1-v,0],[v,1],[1-u,2],[u,3]].sort((a,b)=>a[0]-b[0]); const k=d[0][1], [di,dj]=SIDES[k];
+  if (occ[j+dj]?.[i+di]>=0){ toast({ win:'Windows', trel:'Trellises', balc:'Balconies' }[kind]+' go on outside walls.'); return; }
   if (row===0 && k===0 && full.door && full.door.i===i && full.door.j===j){ toast('That\'s where the front door is.'); return; }
-  full.win=full.win||{}; const key=winKey(i,j,k,row); full.win[key]=winAt(full,i,j,k,row)?0:1; Snd.click(); previewBuild(); renderBuild(true); }
+  if (kind==='win'){ full.win=full.win||{}; full.win[winKey(i,j,k,row)]=winAt(full,i,j,k,row)?0:1; Snd.click(); previewBuild(); }
+  else if (kind==='trel'){ if (!E.trellis || E.trellis==='none'){ toast('Pick a trellis in the Outside tab first.'); Snd.fail(); return; }
+    if (winAt(full,i,j,k,0)){ toast('There\'s a window on that wall. Take it out first, or pick another wall.'); Snd.fail(); return; }
+    full.trel=full.trel||{}; const key=winKey(i,j,k,0); if (full.trel[key]) delete full.trel[key]; else full.trel[key]=1; Snd.click(); previewBuild('house'); }
+  else { if (!E.balc || E.balc==='none'){ toast('Pick a balcony in the Outside tab first.'); Snd.fail(); return; }
+    full.balc=full.balc||{}; const key=winKey(i,j,k,row); if (full.balc[key]) delete full.balc[key]; else full.balc[key]=1; Snd.click(); previewBuild(); }
+  renderBuild(true); }
 function stairsTap(fx,fz){
-  const B=buildMode, full=B.draft.plan, i=Math.floor(fx), j=Math.floor(fz), old=full.stairs;
-  if (!hasUpstairs(full)){ toast('Add a room upstairs first, then place the stairs.'); return; }
-  if (applyOrRevert(()=>{ full.stairs={i,j}; }, ()=>{ full.stairs=old; })){ Snd.pop(); previewBuild(); } renderBuild(true); }
+  const B=buildMode, full=B.draft.plan, n=B.floor, sk=STAIR_KEYS[n], i=Math.floor(fx), j=Math.floor(fz), old=full[sk];
+  if (!n || !floorHas(full,n)){ toast(`Add a room on the ${FLOOR_NAME[n]} first, then place the stairs.`); return; }
+  if (applyOrRevert(()=>{ full[sk]={i,j}; }, ()=>{ full[sk]=old; })){ Snd.pop(); previewBuild(); } renderBuild(true); }
 function doorTap(fx,fz){
-  const B=buildMode, full=B.draft.plan, plan=FP(), occ=planGrid(plan); const ex=fx-Math.round(fx), ez=fz-Math.round(fz);
+  const B=buildMode, full=B.draft.plan, plan=FP(), occ=planGrid(plan); const ex=fx-Math.round(fx), ez=fz-Math.round(fz); const m=Math.min(0.42, Math.max(0.32, 10/B.pv.cs));
   let A,Bn,front=null;
-  if (Math.abs(ex)<Math.abs(ez) && Math.abs(ex)<0.32){ const L=Math.round(fx), j=Math.floor(fz); A=occ[j]?.[L-1]; Bn=occ[j]?.[L]; }
-  else if (Math.abs(ez)<0.32){ const L=Math.round(fz), i=Math.floor(fx); A=occ[L-1]?.[i]; Bn=occ[L]?.[i]; if (A>=0 && !(Bn>=0) && B.floor!=='up') front={ i, j:L-1 }; }
+  if (Math.abs(ex)<Math.abs(ez) && Math.abs(ex)<m){ const L=Math.round(fx), j=Math.floor(fz); A=occ[j]?.[L-1]; Bn=occ[j]?.[L]; }
+  else if (Math.abs(ez)<m){ const L=Math.round(fz), i=Math.floor(fx); A=occ[L-1]?.[i]; Bn=occ[L]?.[i]; if (A>=0 && !(Bn>=0) && B.floor===0) front={ i, j:L-1 }; }
   else return;
   if (front){ const old=full.door; if (applyOrRevert(()=>{ full.door=front; }, ()=>{ full.door=old; })){ Snd.pop(); previewBuild(); toast('Front door moved.'); } renderBuild(true); return; }
-  if (!(A>=0) || !(Bn>=0) || A===Bn){ toast(B.floor==='up'?'Tap a wall between two upstairs rooms.':'Tap a wall between two rooms, or a front-facing outside wall.'); return; }
+  if (!(A>=0) || !(Bn>=0) || A===Bn){ toast(B.floor?'Tap a wall between two rooms on this floor.':'Tap a wall between two rooms, or a front-facing outside wall.'); return; }
   const key=linkKey(plan.rooms[A].id, plan.rooms[Bn].id), cur=plan.links[key]||'door', nxt={ door:'open', open:'wall', wall:'door' }[cur];
   if (applyOrRevert(()=>{ plan.links[key]=nxt; }, ()=>{ plan.links[key]=cur; })){ Snd.click(); previewBuild(); toast({ door:'Doorway', open:'Open (no wall)', wall:'Solid wall' }[nxt]); }
   renderBuild(true);
 }
 // ---- outside ----
 /* ---- House style unlocks ----
-   Every paint, material and style has to be unlocked once (buy it here, find a swatch while digging,
-   or get one from a neighbor who likes you). After that, switching to it is always free. */
+   Every paint, material and style has to be unlocked once (buy it from Pemberton's Home Goods rack, find a swatch while digging,
+   or get one from a neighbor who likes you). After that, switching to it is always free. The builder only shows what you own;
+   trying things on happens from the rack in the store. */
 const STYLE_LIST={ wall:'walls', roof:'roofs', door:'doors', win:'windows', porch:'porches', found:'founds', chimney:'chimneys', stories:'stories', floor:'floors', paper:'papers', shutters:'shutters', boxes:'boxes', lamps:'lamps',
+  light:'lights', trellis:'trellises', balc:'balconies', ceil:'ceilings', sconce:'sconces', accent:'accents',
   wallC:'wallColors', roofC:'roofColors', trimC:'trimColors', doorC:'doorColors', shutC:'doorColors', floorC:'floorColors', paperC:'wallColors' };
-const STYLE_NAMES={ walls:'walls', roofs:'roof', doors:'door', windows:'windows', porches:'porch', founds:'foundation', chimneys:'chimney', stories:'height', floors:'floor', papers:'wallpaper', shutters:'shutters', boxes:'flower boxes', lamps:'door lamps',
+const STYLE_NAMES={ walls:'walls', roofs:'roof', doors:'door', windows:'windows', porches:'porch', founds:'foundation', chimneys:'chimney', stories:'height', floors:'floor', papers:'wallpaper', shutters:'shutters', boxes:'flower boxes',
+  lights:'porch light', trellises:'trellis', balconies:'balcony', ceilings:'ceiling light', sconces:'wall lights', accents:'accent lighting',
   wallColors:'wall paint', roofColors:'roof paint', trimColors:'trim paint', doorColors:'door paint', floorColors:'floor stain' };
-const STYLE_BASE={ walls:6800, roofs:5400, doors:2700, windows:3200, porches:4500, founds:2300, chimneys:6300, stories:60000, floors:4000, papers:3200, shutters:2300, boxes:1800, lamps:1400 };   // v1.18: about 1.5x
+const STYLE_BASE={ walls:6800, roofs:5400, doors:2700, windows:3200, porches:4500, founds:2300, chimneys:6300, stories:60000, floors:4000, papers:3200, shutters:2300, boxes:1800, lamps:1400,
+  lights:2400, trellises:3200, balconies:7500, ceilings:2600, sconces:2200, accents:3400 };   // v1.18: about 1.5x
+const STORY_COST=[0, 60000, 120000, 200000];
 const isColorList = list => /Colors$/.test(list);
 const TOGGLE_LISTS = new Set(['shutters','boxes','lamps']);   // add-ons that are either on or off
 // v1.15: only the base model's own option in each list is free (the first one). Everything else is bought or found.
 const freeCount = list => 1;
-function styleCost(list, i){ if (i<freeCount(list)) return 0; if (list==='stories') return STYLE_BASE.stories; if (isColorList(list)) return 1200 + (i-1)*450; return Math.round(STYLE_BASE[list]*(1+(i-1)*0.75)/50)*50; }
+function styleCost(list, i){ if (i<freeCount(list)) return 0; if (list==='stories') return STORY_COST[i]||STORY_COST[STORY_COST.length-1]; if (isColorList(list)) return 1200 + (i-1)*450; return Math.round(STYLE_BASE[list]*(1+(i-1)*0.75)/50)*50; }
 function styleOwned(list, v){ const opts=BUILD[list]; const i=opts.findIndex(o=>String(Array.isArray(o)?o[0]:o)===String(v)); return i<0 || i<freeCount(list) || !!(S.styles&&S.styles[list+':'+v]); }
 function unlockStyle(list, v){ (S.styles=S.styles||{})[list+':'+v]=true; save(); }
 const styleLabel = (list, v) => { const o=BUILD[list].find(o=>String(Array.isArray(o)?o[0]:o)===String(v)); return TOGGLE_LISTS.has(list) ? o[1] : Array.isArray(o) ? `${o[1]} (${STYLE_NAMES[list]})` : `a new ${STYLE_NAMES[list]} color`; };
@@ -3739,26 +3887,29 @@ function grantRandomStyle(){
 }
 // Grandfather: anything an existing house already uses counts as owned
 function ownCurrentStyles(){ const h=S.home; if(!h) return; S.styles=S.styles||{}; const own=(key,val)=>{ const l=STYLE_LIST[key]; if(l && val!==undefined && val!==null) S.styles[l+':'+val]=true; };
-  if (h.ext) for (const k in h.ext) own(k, h.ext[k]); if (h.plan && h.plan.rooms) for (const r of h.plan.rooms) for (const k of ['floor','floorC','paper','paperC']) own(k, r[k]); }
+  if (h.ext) for (const k in h.ext) own(k, h.ext[k]); if (h.plan && h.plan.rooms) for (const r of allRooms(h.plan)) for (const k of ROOM_KEYS) own(k, r[k]); }
 if (!S.stylesGrandfathered){ ownCurrentStyles(); S.stylesGrandfathered=1; }
 // v1.15: options that used to come free (first 2 styles, first 4 colors, shutters, flower boxes, door lamps) stay unlocked for houses already built
 if (!S.stylesV115){ ownCurrentStyles(); if (S.home && S.home.built){ S.styles=S.styles||{};
-  for (const list of Object.keys(STYLE_NAMES)){ const n = TOGGLE_LISTS.has(list) ? 2 : isColorList(list) ? 4 : list==='stories' ? 1 : 2; BUILD[list].slice(0,n).forEach(o=>{ S.styles[list+':'+(Array.isArray(o)?o[0]:o)]=true; }); } }
+  for (const list of Object.keys(STYLE_NAMES)){ if (['lights','trellises','balconies','ceilings','sconces','accents'].includes(list)) continue; const n = TOGGLE_LISTS.has(list) ? 2 : isColorList(list) ? 4 : list==='stories' ? 1 : 2; BUILD[list].slice(0,n).forEach(o=>{ S.styles[list+':'+(Array.isArray(o)?o[0]:o)]=true; }); }
+  S.styles['lights:lantern']=true; }
   S.stylesV115=1; }
 /* ---------- Home goods ----------
    New styles, paints and materials aren't for sale all the time. Pemberton's Home Goods rack gets a few in each day
    (more once the store is bigger), and now and then the paint mixer. Anything on the rack can be tried on your house
-   in the builder before you buy it. Locked styles in the builder can still be previewed; they just can't be kept
-   until they're yours (bought from the rack, dug up as a swatch book, or given by a neighbor). */
-const HOME_KEY={ walls:'wall', roofs:'roof', doors:'door', windows:'win', porches:'porch', founds:'found', chimneys:'chimney', stories:'stories', floors:'floor', papers:'paper', shutters:'shutters', boxes:'boxes', lamps:'lamps', wallColors:'wallC', roofColors:'roofC', trimColors:'trimC', doorColors:'doorC', floorColors:'floorC' };
-const INSIDE_LISTS=new Set(['floors','papers','floorColors']);
+   in the builder before you buy it. In the builder you only see what's yours (bought from the rack, dug up as a swatch book,
+   or given by a neighbor), plus whatever you're trying on. */
+const HOME_KEY={ walls:'wall', roofs:'roof', doors:'door', windows:'win', porches:'porch', founds:'found', chimneys:'chimney', stories:'stories', floors:'floor', papers:'paper', shutters:'shutters', boxes:'boxes', lamps:'lamps',
+  lights:'light', trellises:'trellis', balconies:'balc', ceilings:'ceil', sconces:'sconce', accents:'accent',
+  wallColors:'wallC', roofColors:'roofC', trimColors:'trimC', doorColors:'doorC', floorColors:'floorC' };
+const INSIDE_LISTS=new Set(['floors','papers','floorColors','ceilings','sconces','accents']);
 const styleIndex = (list, v) => BUILD[list].findIndex(o=>String(Array.isArray(o)?o[0]:o)===String(v));
 const MIXER_COST=22500, hasMixer=()=>!!(S.styles&&S.styles.mixer);
 const homeOwned = it => it.list==='mixer' ? hasMixer() : styleOwned(it.list, it.v);
 const homePrice = it => it.list==='mixer' ? MIXER_COST : styleCost(it.list, styleIndex(it.list, it.v));
-function homeName(list, v){ if (list==='mixer') return 'Paint mixer'; const o=BUILD[list].find(o=>String(Array.isArray(o)?o[0]:o)===String(v)), nm=STYLE_NAMES[list];
-  if (!Array.isArray(o)) return nm[0].toUpperCase()+nm.slice(1); return list==='stories' || TOGGLE_LISTS.has(list) ? o[1] : `${o[1]} ${nm}`; }
-const homeWhere = it => it.list==='mixer' ? 'mix any color for any paint, inside or out' : INSIDE_LISTS.has(it.list) ? 'for the rooms inside' : 'for the outside of your house';
+function homeName(list, v){ if (list==='mixer') return 'Paint mixer'; const o=BUILD[list].find(o=>String(Array.isArray(o)?o[0]:o)===String(v)), nm=STYLE_NAMES[list]||list;
+  if (!Array.isArray(o)) return nm[0].toUpperCase()+nm.slice(1); return list==='stories' || TOGGLE_LISTS.has(list) || ['lights','trellises','balconies','ceilings','sconces','accents'].includes(list) ? o[1] : `${o[1]} ${nm}`; }
+const homeWhere = it => it.list==='mixer' ? 'mix any color for any paint, inside or out' : INSIDE_LISTS.has(it.list) ? 'for the rooms inside' : it.list==='stories' ? 'build this many floors' : 'for the outside of your house';
 function homeSwatch(it){ if (it.list==='mixer') return `<div class="hgsw" style="background:conic-gradient(#e2604d,#f3c35a,#7cc35a,#7fd3e8,#8a6ad8,#e2604d)"></div>`;
   if (isColorList(it.list)) return `<div class="hgsw" style="background:${hexs(it.v)}"></div>`;
   const o=BUILD[it.list].find(o=>String(o[0])===String(it.v)); return `<div class="hgsw">${o?o[1]:''}</div>`; }
@@ -3777,19 +3928,20 @@ function buyHome(it){ if (homeOwned(it)){ toast('You already have that one.'); r
   toast(`${homeName(it.list,it.v)} is yours!`, null, 'new'); refreshHomeRack(); return true; }
 // Styles the builder draft uses that you don't own yet (previews)
 function draftUnowned(d){ const out=[], saved=new Set(), seen=new Set();
-  const savedOf=(k,v)=>saved.add(k+':'+v); const de=defaultExt(), dr=defaultRoom('x',0,0,1,1); for (const k in de) savedOf(k,de[k]); for (const k of ['floor','floorC','paper','paperC']) savedOf(k,dr[k]);
-  if (S.home.ext) for (const k in S.home.ext) savedOf(k,S.home.ext[k]); for (const r of [...(S.home.plan.rooms||[]), ...((S.home.plan.up&&S.home.plan.up.rooms)||[])]) for (const k of ['floor','floorC','paper','paperC']) savedOf(k,r[k]);
+  const savedOf=(k,v)=>saved.add(k+':'+v); const de=defaultExt(), dr=defaultRoom('x',0,0,1,1); for (const k in de) savedOf(k,de[k]); for (const k of ROOM_KEYS) savedOf(k,dr[k]);
+  if (S.home.ext) for (const k in S.home.ext) savedOf(k,S.home.ext[k]); for (const r of allRooms(S.home.plan)) for (const k of ROOM_KEYS) savedOf(k,r[k]);
   const chk=(key,val)=>{ const list=STYLE_LIST[key]; if (!list || val===undefined || val===null || saved.has(key+':'+val)) return; const i=styleIndex(list,val);
     const u = i<0 ? (isColorList(list) && !hasMixer() ? { list:'mixer', v:null } : null) : (!styleOwned(list,val) ? { list, v:val } : null);
     if (u && !seen.has(u.list+':'+u.v)){ seen.add(u.list+':'+u.v); out.push(u); } };
-  for (const k in d.ext) chk(k, d.ext[k]); for (const r of [...d.plan.rooms, ...(hasUpstairs(d.plan)?d.plan.up.rooms:[])]) for (const k of ['floor','floorC','paper','paperC']) chk(k, r[k]);
+  for (const k in d.ext) chk(k, d.ext[k]); for (const r of allRooms(d.plan)) for (const k of ROOM_KEYS) chk(k, r[k]);
   return out; }
 // Put previewed styles back to what the house had (or the first free option)
 function putBack(d){ const un=draftUnowned(d), bad=(key,val)=>{ const list=STYLE_LIST[key]; return list && un.some(u=>u.list==='mixer' ? (isColorList(list) && styleIndex(list,val)<0) : (u.list===list && String(u.v)===String(val))); };
   const first=list=>{ const o=BUILD[list][0]; return Array.isArray(o)?o[0]:o; };
   for (const k in d.ext) if (bad(k,d.ext[k])) d.ext[k] = S.home.ext && S.home.ext[k]!==undefined && !bad(k,S.home.ext[k]) ? S.home.ext[k] : first(STYLE_LIST[k]);
-  const old=[...(S.home.plan.rooms||[]), ...((S.home.plan.up&&S.home.plan.up.rooms)||[])];
-  for (const r of [...d.plan.rooms, ...(hasUpstairs(d.plan)?d.plan.up.rooms:[])]){ const o=old.find(x=>x.id===r.id); for (const k of ['floor','floorC','paper','paperC']) if (bad(k,r[k])) r[k] = o && !bad(k,o[k]) ? o[k] : first(STYLE_LIST[k]); } }
+  const old=allRooms(S.home.plan);
+  for (const r of allRooms(d.plan)){ const o=old.find(x=>x.id===r.id); for (const k of ROOM_KEYS) if (bad(k,r[k])){ if (k==='roof'){ if (o && o.roof && !bad(k,o.roof)) r.roof=o.roof; else delete r.roof; } else r[k] = o && !bad(k,o[k]) ? o[k] : first(STYLE_LIST[k]); } }
+  if (buildMode) buildMode.tryMixer=false; }
 function renderTryBar(){ const B=buildMode; if (!B) return; const un=draftUnowned(B.draft); let bar=$('#tryBar'); if (bar) bar.remove(); if (!un.length) return;
   const st=homeStock(), onRack=u=>st.find(s=>!homeOwned(s) && s.list===u.list && String(s.v)===String(u.v));
   bar=document.createElement('div'); bar.id='tryBar';
@@ -3799,15 +3951,16 @@ function renderTryBar(){ const B=buildMode; if (!B) return; const un=draftUnowne
   bBody.prepend(bar);
   bar.querySelectorAll('[data-tb]').forEach(b=>b.onclick=()=>{ if (buyHome(st[+b.dataset.tb])) renderBuild(true); });
   $('#tbBack').onclick=()=>{ putBack(B.draft); Snd.click(); previewBuild(); renderBuild(true); }; }
-const lockTag = (list, v) => { const it=homeStock().find(s=>s.list===list && String(s.v)===String(v) && !homeOwned(s)); return `<span class="lk">${it?'on the rack':'try it'}</span>`; };
-const chipRow = (obj, key, opts, type='s') => { const list=STYLE_LIST[key]; return `<div class="chips">${opts.map(([v,n],i)=>{ const locked=list && !styleOwned(list,v); return `<button class="chip${obj[key]===v?' on':''}${locked?' locked':''}" data-k="${key}" data-v="${v}" data-ty="${type}" ${locked?`data-lock="${list}" data-i="${i}"`:''}>${n}${locked?lockTag(list,v):''}</button>`; }).join('')}</div>`; };
-/* The paint mixer: once you own it, any color works for walls, roof, trim, doors, shutters, floors and wallpaper. Before that you can still mix one to try it. */
-const swatchRow = (obj, key, cols) => { const list=STYLE_LIST[key], custom=!cols.includes(obj[key]);
-  return `<div class="sws">${cols.map((c,i)=>{ const locked=list && !styleOwned(list,c); return `<div class="sw${obj[key]===c?' on':''}${locked?' locked':''}" style="background:${hexs(c)}" data-k="${key}" data-v="${c}" data-ty="n" ${locked?`data-lock="${list}" data-i="${i}" title="Not yours yet: tap to try it"`:''}></div>`; }).join('')}<label class="sw mix${custom?' on':''}${hasMixer()?'':' locked'}" title="${hasMixer()?'Mix any color':'Paint mixer: tap to try it'}" style="${custom?`background:${hexs(obj[key])}`:''}"><input type="color" data-mix="${key}" value="${hexs(obj[key])}"></label></div>`; };
-const toggle = (obj, key, on, off) => chipRow(obj, key, [[true,on],[false,off]], 'b');
-function bindStyle(obj, after){
+// Options you own, plus whatever is on the house right now (so something you're trying on shows as picked)
+const chipRow = (obj, key, opts, type='s') => { const list=STYLE_LIST[key]; const shown=opts.filter(([v])=>!list || styleOwned(list,v) || obj[key]===v);
+  return `<div class="chips">${shown.map(([v,n])=>{ const trying=list && !styleOwned(list,v); return `<button class="chip${obj[key]===v?' on':''}" data-k="${key}" data-v="${v}" data-ty="${type}">${n}${trying?'<span class="lk">trying on</span>':''}</button>`; }).join('')}</div>`; };
+/* The paint mixer: once you own it, any color works for walls, roof, trim, doors, shutters, floors and wallpaper. */
+const swatchRow = (obj, key, cols) => { const list=STYLE_LIST[key], custom=!cols.includes(obj[key]), mix=hasMixer() || (buildMode&&buildMode.tryMixer) || custom;
+  return `<div class="sws">${cols.filter(c=>!list || styleOwned(list,c) || obj[key]===c).map(c=>`<div class="sw${obj[key]===c?' on':''}" style="background:${hexs(c)}" data-k="${key}" data-v="${c}" data-ty="n"></div>`).join('')}${mix?`<label class="sw mix${custom?' on':''}" title="Mix any color" style="${custom?`background:${hexs(obj[key])}`:''}"><input type="color" data-mix="${key}" value="${hexs(obj[key])}"></label>`:''}</div>`; };
+const toggle = (obj, key, on, off) => { const list=STYLE_LIST[key]; if (list && !styleOwned(list,true) && obj[key]!==true) return ''; return chipRow(obj, key, [[true,on],[false,off]], 'b'); };
+function bindStyle(obj, after, which){
   bBody.querySelectorAll('[data-mix]').forEach(inp=>{ const key=inp.dataset.mix;
-    inp.oninput=()=>{ obj[key]=parseInt(inp.value.slice(1),16); inp.parentNode.style.background=inp.value; previewBuild(buildMode.tab==='int'?'room':'house'); };
+    inp.oninput=()=>{ obj[key]=parseInt(inp.value.slice(1),16); inp.parentNode.style.background=inp.value; previewSoon(which || (buildMode.tab==='int'?buildMode.floor:'house')); };
     inp.onchange=()=>after(); });
   bBody.querySelectorAll('[data-k]').forEach(el=>el.onclick=()=>{ const t=el.dataset.ty, v=el.dataset.v;
     obj[el.dataset.k] = t==='n'?+v : t==='b'?v==='true' : v; Snd.click(); after(); }); }
@@ -3818,7 +3971,8 @@ function homeRackModel(){ const g=new THREE.Group(), W=M(0x8b5e3a), st=homeStock
   mk(G.box(1.3,1.0,0.05), M(0xf4e6c8), 0,1.2,-0.02,g); mk(G.box(1.42,0.08,0.1), W, 0,1.74,0,g); mk(G.box(1.36,0.05,0.34), W, 0,0.42,0.1,g);
   const cv=document.createElement('canvas'); cv.width=256; cv.height=64; const x=cv.getContext('2d'); x.fillStyle='#6a8a4a'; x.fillRect(0,0,256,64); x.fillStyle='#fff8ea'; x.font='700 34px Fredoka, sans-serif'; x.textAlign='center'; x.textBaseline='middle'; x.fillText('Home Goods',128,34);
   const tx=new THREE.CanvasTexture(cv); tx.colorSpace=THREE.SRGBColorSpace; mk(G.box(1.1,0.28,0.04), new THREE.MeshStandardMaterial({ map:tx, roughness:0.8 }), 0,1.95,0,g);
-  const TILE={ walls:0xd8b890, roofs:0xb85a4a, doors:0x8a5a3a, windows:0xbfe0f0, porches:0xc8a070, founds:0x9a9a98, chimneys:0xa05a40, stories:0xe8d8b8, floors:0xc89a6a, papers:0xe8d0d8 };
+  const TILE={ walls:0xd8b890, roofs:0xb85a4a, doors:0x8a5a3a, windows:0xbfe0f0, porches:0xc8a070, founds:0x9a9a98, chimneys:0xa05a40, stories:0xe8d8b8, floors:0xc89a6a, papers:0xe8d0d8,
+    lights:0xffd27a, trellises:0x6a9a4a, balconies:0xc8a878, ceilings:0xfff0c8, sconces:0xd8b060, accents:0xffe0a0 };
   st.forEach((it,i)=>{ if (i>=6) return; const c=i%3, rr=Math.floor(i/3), px=-0.4+c*0.4, py=1.42-rr*0.42, sold=homeOwned(it);
     if (it.list==='mixer'){ ['#e2604d','#f3c35a','#7cc35a','#7fd3e8'].forEach((h,k)=>{ if (!sold) mk(G.cyl(0.07,0.07,0.14,12), M(new THREE.Color(h).getHex()), -0.5+k*0.18+0.1,0.52,0.12,g); }); return; }
     const col=isColorList(it.list)?it.v:TILE[it.list]||0xd8c8a8;
@@ -3834,30 +3988,74 @@ class HomeRack extends Ent {
 }
 function refreshHomeRack(){ if (homeRack && !homeRack.removed) homeRack.refresh(); }
 // Guests get a smaller set of house styles
-const GUEST_BUILD = Object.assign({}, BUILD, { walls:BUILD.walls.slice(0,3), roofs:BUILD.roofs.slice(0,2), doors:BUILD.doors.slice(0,2), windows:BUILD.windows.slice(0,2), porches:BUILD.porches.slice(0,2), chimneys:BUILD.chimneys.slice(0,1), stories:BUILD.stories.slice(0,1) });
+const GUEST_BUILD = Object.assign({}, BUILD, { walls:BUILD.walls.slice(0,3), roofs:BUILD.roofs.slice(0,2), doors:BUILD.doors.slice(0,2), windows:BUILD.windows.slice(0,2), porches:BUILD.porches.slice(0,2), chimneys:BUILD.chimneys.slice(0,1), stories:BUILD.stories.slice(0,1),
+  lights:BUILD.lights.slice(0,1), trellises:BUILD.trellises.slice(0,1), balconies:BUILD.balconies.slice(0,1), ceilings:BUILD.ceilings.slice(0,1), sconces:BUILD.sconces.slice(0,1), accents:BUILD.accents.slice(0,1) });
+/* Moss you paint on: free once you own the Mossy shingles roof. Works on any roof style. */
+const mossOK = () => styleOwned('roofs','mossy');
+// A Mossy shingles roof you haven't painted yet starts from the moss it already shows, so the first stroke doesn't wipe it
+function mossStart(){ const B=buildMode, E=B.draft.ext; if (E.moss) return; E.moss=defaultMoss(B.draft)||{}; }
+let mossQ=false;
+function mossPaintAt(cx, cy){ const B=buildMode, model=houseEnt && houseEnt.model; if (!B || !B.brush || !model) return;
+  const rect=canvas.getBoundingClientRect(); ndc.set((cx-rect.left)/rect.width*2-1, -(cy-rect.top)/rect.height*2+1); ray.setFromCamera(ndc,camera);
+  const cell=roofPick(model, ray.ray); if (!cell) return; mossStart();
+  const [a,b]=cell, R=B.bsize, E=B.draft.ext; let changed=false; B.stroke=B.stroke||new Set();
+  for (let da=-R;da<=R;da++) for (let db=-R;db<=R;db++){ if (da*da+db*db>R*R+0.6) continue; const k=(a+da)+','+(b+db); if (B.stroke.has(k)) continue; B.stroke.add(k);
+    const cur=E.moss[k]||0, nv = B.brush==='moss' ? Math.min(3,cur+1) : Math.max(0,cur-1); if (nv===cur) continue; if (nv) E.moss[k]=nv; else delete E.moss[k]; changed=true; }
+  if (changed && !mossQ){ mossQ=true; requestAnimationFrame(()=>{ mossQ=false; if (buildMode && houseEnt && houseEnt.model) buildMossLayer(houseEnt.model, buildMode.draft.ext.moss); }); } }
 function renderExtTab(){
-  const E=buildMode.draft.ext, B=GUEST ? GUEST_BUILD : BUILD; const sec=(t,h)=>`<div class="bsec"><b>${t}</b>${h}</div>`;
-  bBody.innerHTML = sec('Walls', chipRow(E,'wall',B.walls)+'<div style="height:6px"></div>'+swatchRow(E,'wallC',B.wallColors))
-    + sec('Roof', chipRow(E,'roof',B.roofs)+'<div style="height:6px"></div>'+swatchRow(E,'roofC',B.roofColors))
+  const E=buildMode.draft.ext, B=GUEST ? GUEST_BUILD : BUILD, BM=buildMode; const sec=(t,h)=>`<div class="bsec"><b>${t}</b>${h}</div>`;
+  const moss = mossOK() ? sec('Moss', `<div class="chips"><button class="chip${BM.brush==='moss'?' on':''}" data-brush="moss">Paint moss</button><button class="chip${BM.brush==='scrub'?' on':''}" data-brush="scrub">Scrub moss</button>${BM.brush?'<button class="chip" data-brush="">Stop painting</button>':''}</div>
+      <div class="chips" style="margin-top:6px"><span class="muted" style="align-self:center">Brush</span>${[[0,'Small'],[1,'Medium'],[2,'Large']].map(([v,n])=>`<button class="chip${BM.bsize===v?' on':''}" data-bsize="${v}">${n}</button>`).join('')}<button class="chip" id="mossClear">Clear all moss</button></div>
+      <div class="muted" style="margin-top:4px">${BM.brush?'Drag on the roof in the picture. Go over a spot again for thicker moss. Two fingers (or the buttons) still turn and zoom.':'Paint moss on any roof, as thick or thin as you like. It\'s free.'}</div>`) : '';
+  bBody.innerHTML = `<div class="muted" style="margin:2px 0 4px">Only styles you own show here. New ones turn up on Pemberton's Home Goods rack, where you can try them on.</div>`
+    + sec('Walls', chipRow(E,'wall',B.walls)+'<div style="height:6px"></div>'+swatchRow(E,'wallC',B.wallColors))
+    + sec('Roof', chipRow(E,'roof',B.roofs)+'<div style="height:6px"></div>'+swatchRow(E,'roofC',B.roofColors)+'<div class="muted" style="margin-top:4px">Turn a room\'s roof, or give it its own style, in Layout &gt; Roofs.</div>') + moss
     + sec('Trim and window frames', swatchRow(E,'trimC',B.trimColors))
     + sec('Front door', chipRow(E,'door',B.doors)+'<div style="height:6px"></div>'+swatchRow(E,'doorC',B.doorColors))
-    + sec('Windows', chipRow(E,'win',B.windows)+'<div style="height:6px"></div>'+toggle(E,'shutters','Shutters','No shutters')+'<div style="height:6px"></div>'+swatchRow(E,'shutC',B.doorColors)+'<div style="height:6px"></div>'+toggle(E,'boxes','Flower boxes','No flower boxes'))
-    + sec('Porch', chipRow(E,'porch',B.porches)) + sec('Foundation', chipRow(E,'found',B.founds)) + sec('Chimney', chipRow(E,'chimney',B.chimneys))
-    + sec('Height', chipRow(E,'stories',B.stories,'n')+`<div class="muted" style="margin-top:4px">${hasUpstairs(buildMode.draft.plan)?'Your upstairs rooms set the height.':styleOwned('stories',2)?'Add real upstairs rooms in the Layout tab (Upstairs).':'Unlock two stories to build rooms upstairs.'}</div>`) + sec('Door lamps', toggle(E,'lamps','On','Off'));
-  bindStyle(E, ()=>{ previewBuild('house'); renderBuild(true); });
+    + sec('Windows', chipRow(E,'win',B.windows)+'<div style="height:6px"></div>'+toggle(E,'shutters','Shutters','No shutters')+(E.shutters?'<div style="height:6px"></div>'+swatchRow(E,'shutC',B.doorColors):'')+'<div style="height:6px"></div>'+toggle(E,'boxes','Flower boxes','No flower boxes'))
+    + sec('Porch', chipRow(E,'porch',B.porches)) + sec('Porch light', chipRow(E,'light',B.lights))
+    + sec('Trellis', chipRow(E,'trellis',B.trellises)+(E.trellis&&E.trellis!=='none'?'<div class="muted" style="margin-top:4px">Place them on any outside wall in Layout &gt; Trellises.</div>':''))
+    + (topFloor(buildMode.draft.plan)>0 || E.balc!=='none' ? sec('Balcony', chipRow(E,'balc',B.balconies)+(E.balc&&E.balc!=='none'?'<div class="muted" style="margin-top:4px">Place them on upper floors in Layout &gt; Balconies.</div>':'')) : '')
+    + sec('Foundation', chipRow(E,'found',B.founds)) + sec('Chimney', chipRow(E,'chimney',B.chimneys))
+    + sec('Height', chipRow(E,'stories',B.stories,'n')+`<div class="muted" style="margin-top:4px">${topFloor(buildMode.draft.plan)>0?`You can build up to ${maxFloors()} floors. Your upstairs rooms set the height.`:ownedFloors()>1?`You can build up to ${ownedFloors()} floors: add rooms upstairs in the Layout tab.`:'Unlock more stories to build rooms upstairs.'}</div>`);
+  bindStyle(E, ()=>{ previewBuild('house'); renderBuild(true); }, 'house');
+  bBody.querySelectorAll('[data-brush]').forEach(b=>b.onclick=()=>{ BM.brush=b.dataset.brush||null; Snd.click(); renderBuild(true); });
+  bBody.querySelectorAll('[data-bsize]').forEach(b=>b.onclick=()=>{ BM.bsize=+b.dataset.bsize; Snd.click(); renderBuild(true); });
+  const mc=$('#mossClear'); if (mc) mc.onclick=()=>{ E.moss={}; Snd.click(); if (houseEnt && houseEnt.model) buildMossLayer(houseEnt.model, E.moss); previewBuild('house'); renderBuild(true); };
 }
 // ---- inside ----
 function renderIntTab(){
-  const B=buildMode, BD=BUILD; if (B.floor==='up' && !hasUpstairs(B.draft.plan)) B.floor='down'; const plan=FP(); let r=plan.rooms.find(x=>x.id===B.sel)||plan.rooms[0]; B.sel=r.id;
-  const sec=(t,h)=>`<div class="bsec"><b>${t}</b>${h}</div>`;
-  bBody.innerHTML = `<div class="brow">${hasUpstairs(B.draft.plan)?floorChips():''}</div>`+planCanvas(190)
+  const B=buildMode, BD=GUEST?GUEST_BUILD:BUILD; if (!floorHas(B.draft.plan,B.floor)) B.floor=0; const plan=FP(); let r=plan.rooms.find(x=>x.id===B.sel)||plan.rooms[0]; B.sel=r.id;
+  const sec=(t,h)=>`<div class="bsec"><b>${t}</b>${h}</div>`, bright=Math.round((r.bright??0.75)*100), warm=Math.round((r.warm??0.5)*100);
+  bBody.innerHTML = `<div class="brow">${floorChips(true)}</div>`+planCanvas(Math.max(200, Math.min(320, bBody.clientHeight*0.48)))
     + sec('Floor', chipRow(r,'floor',BD.floors)+'<div style="height:6px"></div>'+swatchRow(r,'floorC',BD.floorColors))
     + sec('Wallpaper', chipRow(r,'paper',BD.papers)+'<div style="height:6px"></div>'+swatchRow(r,'paperC',BD.wallColors))
-    + `<button class="btn alt" id="bAll" style="margin-top:8px">Use this style in every room</button>`;
-  const cv=$('#bp'); drawPlan(cv);
-  cv.onpointerdown=e=>{ const [fx,fz]=bpPoint(cv,e); const hit=roomAtCell(plan,Math.floor(fx),Math.floor(fz)); if(hit){ B.sel=hit.id; Snd.click(); renderBuild(true); } };
-  bindStyle(r, ()=>{ previewBuild('room'); renderBuild(true); }); bindFloorChips();
-  $('#bAll').onclick=()=>{ for(const o of [...B.draft.plan.rooms, ...(hasUpstairs(B.draft.plan)?B.draft.plan.up.rooms:[])]){ o.floor=r.floor; o.floorC=r.floorC; o.paper=r.paper; o.paperC=r.paperC; } Snd.pop(); previewBuild('room'); renderBuild(true); };
+    + `<button class="btn alt" id="bAll" style="margin-top:8px">Use this floor and wallpaper in every room</button>`
+    + sec('Lighting', `<div class="slrow"><span>Brightness</span><input type="range" min="0" max="100" value="${bright}" id="lBright"><b id="lBv">${bright}%</b></div>
+      <div class="slrow"><span>Warmth</span><input type="range" min="0" max="100" value="${warm}" id="lWarm" class="warmth"><b id="lWv">${warm<35?'Cool':warm>65?'Warm':'Soft'}</b></div>
+      <div class="muted" style="margin:2px 0 6px">The overhead light is free in every room. Lamps and fixtures you've bought show below.</div>
+      <div class="sub2">Ceiling light</div>${chipRow(r,'ceil',BD.ceilings)}<div class="sub2">Wall lights</div>${chipRow(r,'sconce',BD.sconces)}<div class="sub2">Accent light</div>${chipRow(r,'accent',BD.accents)}`)
+    + `<button class="btn alt" id="bAllL" style="margin-top:8px">Use this lighting in every room</button>`;
+  const cv=$('#bp'); sizePlan(cv, Math.max(200, Math.min(320, bBody.clientHeight*0.48))); if (!B.pv) planFit(cv); drawPlan(cv);
+  bindPlan(cv, { tap:([fx,fz])=>{ const hit=roomAtCell(plan,Math.floor(fx),Math.floor(fz)); if(hit){ B.sel=hit.id; Snd.click(); renderBuild(true); } } });
+  bindStyle(r, ()=>{ previewBuild(B.floor); renderBuild(true); }, B.floor); bindFloorChips();
+  const sl=(id, key, lab)=>{ const el=$(id); el.oninput=()=>{ r[key]=+el.value/100; $(lab).textContent = key==='bright' ? el.value+'%' : (+el.value<35?'Cool':+el.value>65?'Warm':'Soft'); previewSoon(B.floor); }; };
+  sl('#lBright','bright','#lBv'); sl('#lWarm','warm','#lWv');
+  $('#bAll').onclick=()=>{ for(const o of allRooms(B.draft.plan)){ o.floor=r.floor; o.floorC=r.floorC; o.paper=r.paper; o.paperC=r.paperC; } Snd.pop(); previewBuild('room'); renderBuild(true); };
+  $('#bAllL').onclick=()=>{ for(const o of allRooms(B.draft.plan)){ o.bright=r.bright??0.75; o.warm=r.warm??0.5; o.ceil=r.ceil; o.sconce=r.sconce; o.accent=r.accent; } Snd.pop(); previewBuild('room'); renderBuild(true); };
+}
+/* The 3D view while building: turn, tilt and zoom buttons (hold to keep going), on top of drag, pinch and the wheel */
+let viewBar=null, viewHold=null;
+const VB_ICONS={ rl:'<path d="M7 5 3 9l4 4M3 9h10a5 5 0 0 1 0 10h-3"/>', rr:'<path d="M17 5l4 4-4 4M21 9H11a5 5 0 0 0 0 10h3"/>', zi:'<path d="M12 5v14M5 12h14"/>', zo:'<path d="M5 12h14"/>', tu:'<path d="M6 15l6-6 6 6"/>', td:'<path d="M6 9l6 6 6-6"/>', re:'<path d="M4 12a8 8 0 1 0 3-6.2M4 4v4h4"/>' };
+function renderViewBar(){ const B=buildMode;
+  if (!B){ if (viewBar) viewBar.style.display='none'; return; }
+  if (!viewBar){ viewBar=document.createElement('div'); viewBar.id='bView'; document.body.appendChild(viewBar);
+    viewBar.innerHTML=[['rl','Turn left'],['rr','Turn right'],['zi','Zoom in'],['zo','Zoom out'],['tu','Tilt up'],['td','Tilt down'],['re','Reset view']].map(([k,t])=>`<button data-vb="${k}" title="${t}" aria-label="${t}"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">${VB_ICONS[k]}</svg></button>`).join('');
+    const step=k=>{ const B=buildMode; if (!B) return; if (k==='rl') B.yaw+=0.05; else if (k==='rr') B.yaw-=0.05; else if (k==='zi') B.dist=clamp(B.dist*0.96,6,140); else if (k==='zo') B.dist=clamp(B.dist/0.96,6,140); else if (k==='tu') B.pitch=clamp(B.pitch+0.03,0.12,1.4); else if (k==='td') B.pitch=clamp(B.pitch-0.03,0.12,1.4); };
+    viewBar.querySelectorAll('[data-vb]').forEach(b=>{ const k=b.dataset.vb;
+      b.onpointerdown=e=>{ e.preventDefault(); if (k==='re'){ const v=buildMode&&buildMode.view; if (buildMode){ buildMode.view=null; setBuildView(v||'out'); } Snd.click(); return; } step(k); clearInterval(viewHold); viewHold=setInterval(()=>step(k), 30); };
+      for (const ev of ['pointerup','pointerleave','pointercancel']) b.addEventListener(ev, ()=>{ clearInterval(viewHold); viewHold=null; }); }); }
+  viewBar.style.display='flex'; viewBar.style.bottom=(buildEl.offsetHeight+10)+'px'; viewBar.classList.toggle('painting', !!B.brush);
 }
 
 /* Island board */
@@ -4318,9 +4516,15 @@ addEventListener('pointermove', e=>{ if(rotPtr && e.pointerId===rotPtr.id){ camY
 addEventListener('pointerup', e=>{ if(rotPtr && e.pointerId===rotPtr.id) rotPtr=null; });
 function groundAtScreen(cx,cy){ const rect=canvas.getBoundingClientRect(); ndc.set((cx-rect.left)/rect.width*2-1, -(cy-rect.top)/rect.height*2+1); ray.setFromCamera(ndc,camera); return rayGround(ray.ray); }
 canvas.addEventListener('pointerdown', e=>{ canvas.focus(); ptrs.set(e.pointerId,{ x:e.clientX, y:e.clientY, t:performance.now(), sx:e.clientX, sy:e.clientY, held:false }); if(ptrs.size===2){ const [a,b]=[...ptrs.values()]; pinch0=Math.hypot(a.x-b.x,a.y-b.y); dist0=camDist; twist0=Math.atan2(b.y-a.y,b.x-a.x); yaw0=camYaw; if(placing) placing.drag=null; }
+  if (buildMode && ptrs.size===1 && buildMode.brush && buildMode.view==='out'){ buildMode.stroke=new Set(); mossPaintAt(e.clientX,e.clientY); }
+  if (buildMode && ptrs.size===2){ const [a,b]=[...ptrs.values()]; buildMode.mid=[(a.x+b.x)/2,(a.y+b.y)/2]; buildMode.stroke=null; }
   if (placing && ptrs.size===1 && !dlgState){ const g=groundAtScreen(e.clientX,e.clientY); if(g){ const m=placing.m.position; const near=Math.hypot(g.x-m.x,g.z-m.z)<2.2; placing.drag={ id:e.pointerId, ox:near?m.x-g.x:0, oz:near?m.z-g.z:0 }; placing.dragged=false; } } });
-canvas.addEventListener('pointermove', e=>{ const p=ptrs.get(e.pointerId); if(!p) return; const px=p.x; p.x=e.clientX; p.y=e.clientY; if(ptrs.size===2){ const [a,b]=[...ptrs.values()]; const pd=Math.hypot(a.x-b.x,a.y-b.y); if(buildMode){ if(p.pd) buildMode.dist=clamp(buildMode.dist*p.pd/pd,12,40); p.pd=pd; } else if(magicMode){ if(p.pd) magicMode.dist=clamp(magicMode.dist*p.pd/pd,14,60); p.pd=pd; } else { camDist=clamp(dist0*pinch0/pd,11,36); let da=Math.atan2(b.y-a.y,b.x-a.x)-twist0; da=Math.atan2(Math.sin(da),Math.cos(da)); camYaw=yaw0-da; } return; }
-  if (buildMode && ptrs.size===1){ if (buildMode.view==='out') buildMode.yaw -= (e.clientX-px)*0.008; p.held=true; return; }
+canvas.addEventListener('pointermove', e=>{ const p=ptrs.get(e.pointerId); if(!p) return; const px=p.x; p.x=e.clientX; p.y=e.clientY; if(ptrs.size===2){ const [a,b]=[...ptrs.values()]; const pd=Math.hypot(a.x-b.x,a.y-b.y); if(buildMode){ const B=buildMode; if(p.pd) B.dist=clamp(B.dist*p.pd/pd,6,140); p.pd=pd; const mid=[(a.x+b.x)/2,(a.y+b.y)/2]; if (B.mid) buildPan(mid[0]-B.mid[0], mid[1]-B.mid[1]); B.mid=mid; } else if(magicMode){ if(p.pd) magicMode.dist=clamp(magicMode.dist*p.pd/pd,14,60); p.pd=pd; } else { camDist=clamp(dist0*pinch0/pd,11,36); let da=Math.atan2(b.y-a.y,b.x-a.x)-twist0; da=Math.atan2(Math.sin(da),Math.cos(da)); camYaw=yaw0-da; } return; }
+  if (buildMode && ptrs.size===1){ const B=buildMode, py=p.py??p.sy; p.py=e.clientY;
+    if (B.brush && B.view==='out') mossPaintAt(e.clientX,e.clientY);
+    else if (B.view==='out'){ B.yaw -= (e.clientX-px)*0.008; B.pitch=clamp(B.pitch+(e.clientY-py)*0.004,0.12,1.4); }
+    else buildPan(e.clientX-px, e.clientY-py);
+    p.held=true; return; }
   if (magicMode && ptrs.size===1){ const py=p.py??p.sy; p.py=e.clientY; if (Math.hypot(p.x-p.sx,p.y-p.sy)>8){
       // moving a building: drag the ghost if you grabbed it, otherwise look around
       if (p.mg===undefined){ const g0=groundAtScreen(p.sx,p.sy), M=magicMode; p.mg = M.kind==='move' && g0 && M.at && Math.hypot(g0.x-M.at[0], g0.z-M.at[1]) < footOf(M.key)+1.5; }
@@ -4329,14 +4533,19 @@ canvas.addEventListener('pointermove', e=>{ const p=ptrs.get(e.pointerId); if(!p
   if (placing && placing.drag && placing.drag.id===e.pointerId && Math.hypot(p.x-p.sx,p.y-p.sy)>4){ const g=groundAtScreen(e.clientX,e.clientY); if(g){ const x=g.x+placing.drag.ox, z=g.z+placing.drag.oz; placing.m.position.set(x, World.inside?0:groundY(x,z), z); placing.dragged=true; p.held=true; checkPlace(); } } });
 function endPtr(e){ const p=ptrs.get(e.pointerId); if(!p) return; ptrs.delete(e.pointerId); const moved=Math.hypot(p.x-p.sx,p.y-p.sy), dt=performance.now()-p.t;
   if(ptrs.size===0 && !p.held && moved<14 && dt<450 && !dlgState && !scrim.classList.contains('show') && !layoutMode) handleTap(e.clientX,e.clientY);
+  if (buildMode && ptrs.size<2){ buildMode.mid=null; if (ptrs.size===0) buildMode.stroke=null; }
   if(p.held && !placing && !buildMode) stopMove(); if(placing && placing.drag && placing.drag.id===e.pointerId){ placing.drag=null; setTimeout(()=>{ if(placing) placing.dragged=false; },0); } }
 canvas.addEventListener('pointerup', endPtr); canvas.addEventListener('pointercancel', endPtr);
 // Wheel: zoom. Trackpad: two-finger swipe left/right turns the view, pinch zooms.
 canvas.addEventListener('wheel', e=>{ e.preventDefault(); const dz=e.ctrlKey ? e.deltaY*3 : e.deltaY;
-  if(buildMode){ buildMode.dist=clamp(buildMode.dist+dz*0.02,12,40); if (buildMode.view==='out') buildMode.yaw-=e.deltaX*0.006; }
+  if(buildMode){ const B=buildMode; if (e.shiftKey) B.pitch=clamp(B.pitch-dz*0.002,0.12,1.4); else B.dist=clamp(B.dist*Math.exp(dz*0.0012),6,140); if (B.view==='out') B.yaw-=e.deltaX*0.006; else buildPan(-e.deltaX*0.5,0); }
   else if(magicMode) magicMode.dist=clamp(magicMode.dist+dz*0.03,14,60);
   else { if (Math.abs(e.deltaX)>Math.abs(e.deltaY)*0.6 && !e.ctrlKey){ camYaw-=e.deltaX*0.006; lookDragT=performance.now(); } else camDist=clamp(camDist+dz*0.02,11,36); } }, { passive:false });
 let lookDragT=0;
+const _bt=new THREE.Vector3();
+// Slide the builder's view across the ground (screen pixels)
+function buildPan(dx, dy){ const B=buildMode; if (!B) return; const k=B.dist*0.0019, c=Math.cos(B.yaw), s=Math.sin(B.yaw);
+  B.pan.x += (-dx*c - dy*s)*k; B.pan.z += (dx*s - dy*c)*k; const lim=Math.max(14, B.dist*0.8); B.pan.x=clamp(B.pan.x,-lim,lim); B.pan.z=clamp(B.pan.z,-lim,lim); }
 let holdAcc=0;
 function updateHold(dt){ if(CT().move!=='tap') return; holdAcc+=dt; if(holdAcc<0.08) return; holdAcc=0; if(ptrs.size!==1 || dlgState || placing || Fishing.state!=='idle') return; const p=[...ptrs.values()][0]; if(performance.now()-p.t<220 && Math.hypot(p.x-p.sx,p.y-p.sy)<14) return; p.held=true;
   const rect=canvas.getBoundingClientRect(); ndc.set((p.x-rect.left)/rect.width*2-1, -(p.y-rect.top)/rect.height*2+1); ray.setFromCamera(ndc,camera); const g=rayGround(ray.ray); if(g){ player.target=new THREE.Vector3(g.x,0,g.z); player.targetEnt=null; player.cb=null; marker.visible=false; } }
@@ -4389,7 +4598,8 @@ function movePlayer(dt,t){
 const camTarget=new THREE.Vector3(), _tzl=new THREE.Vector3();
 function updateCamera(dt){
   if (tankZoom){ tankZoom.t=Math.min(1, tankZoom.t+dt/0.42); const k=1-(1-tankZoom.t)**3; camera.position.lerpVectors(tankZoom.from, tankZoom.to, k); camera.lookAt(_tzl.lerpVectors(tankZoom.lookFrom, tankZoom.look, k)); return; }
-  if (buildMode){ camTarget.lerp(buildMode.camT, Math.min(1,dt*5)); const dist=buildMode.dist, pitch=buildMode.view==='in'?1.05:0.6, yaw=buildMode.yaw;
+  if (buildMode){ _bt.copy(buildMode.camT).add(buildMode.pan); camTarget.lerp(_bt, Math.min(1,dt*5)); const dist=buildMode.dist, pitch=buildMode.pitch, yaw=buildMode.yaw;
+    if (World.inside){ scene.fog.near=Math.max(60,dist*1.2); scene.fog.far=Math.max(200,dist*3.5); }
     camera.position.set(camTarget.x+Math.sin(yaw)*Math.cos(pitch)*dist, camTarget.y+Math.sin(pitch)*dist, camTarget.z+Math.cos(yaw)*Math.cos(pitch)*dist); camera.lookAt(camTarget);
     camera.setViewOffset(innerWidth, innerHeight, 0, buildEl.offsetHeight*0.5, innerWidth, innerHeight);
     sky.position.copy(camera.position); stars.position.copy(camera.position); sun.target.position.copy(camTarget); sun.position.copy(camTarget).addScaledVector(sunDir,50); return; }
@@ -4414,7 +4624,7 @@ let actLabel='';
 function updateActButton(){
   $('#hud').classList.toggle('uihide', !!(dlgState || placing || buildMode || (scrim.classList.contains('show') && !menuOpen)));
   if (magicMode) return;
-  const nearHome = World.inside==='home' || World.inside==='home2' || (!World.inside && Math.hypot(player.pos.x-LOT.x, player.pos.z-LOT.z)<12);
+  const nearHome = homeFloorOf(World.inside)>=0 || (!World.inside && Math.hypot(player.pos.x-LOT.x, player.pos.z-LOT.z)<12);
   if (nearHome!==updateActButton.nh){ updateActButton.nh=nearHome; $('#bBuild').style.display=nearHome?'':'none'; }
   if (layoutMode) return;
   let lab=''; if(!dlgState && !placing && !buildMode && !scrim.classList.contains('show')){ if(CatchMeter.bug) lab='Swing!'; else if(Fishing.state!=='idle') lab='Reel';  else { const e=nearestEnt(); if(e) lab=e.label(); else if(facingWater()) lab='Fish'; } }
@@ -4793,4 +5003,6 @@ const PARTY = createParty({ scene, player, meBody, remotes, groundY, walkable, r
     back:()=>{ const a=r.partyAway; if (!a) return; delete r.partyAway; r.solid=a.solid; if (a.parent && !r.obj.parent) a.parent.add(r.obj); } })),
   swingAnim:(face)=>{ stopMove(); player.face=face; player.obj.rotation.y=face; player.act=0.4; bonkCool=0.35; Snd.swoosh(); } });
 window.__game = { v123:{ toolPitch, pitchTool, buyTool, talkShop, get storeVisit(){ return storeVisit; } }, v120:{ track, checkAch, achValue, grantWear, ownsWear, openAchievements, makeFavor, rollFavors, favorChoices, npcOf, clothesStock, wardrobeOwned, get Q(){ return Q; } }, party:PARTY, v119:{ tierPick, openChest, townCap:()=>townCap() }, v13:{ shopStock:w=>shopStock(w), learnPlan, rareRoll, knowsPlan, unfoundPlans, stockWeight, RARE_WORK, GroundItem, ShopItem, Furniture }, v1:{ scene, camera, OUT, updateSky, updateHUD, snowPass, SNOW_U, townNewDay, applyTown, talkHall, openHallPanel, buildPlaza, refreshStoreItems, buildStoreAll, buildShop, buildMuseumAll, spawnExhibits, mentorMoment, teachWoodworking, openCraft, doCook, nearStation, toggleSled, setSled, get sledding(){ return sledding; }, sledV, eatFood, Plant, fullBagCatch, KB, landSeaTap, terraLand, LAMPS:()=>LAMPS, hasUpstairs, ShopItem, Stairs, get exhibits(){ return exhibits; }, onDisplay, museumNeeds, museumExpand, museumFitState, museumTanks, renderer, nearestEnt:()=>nearestEnt(), doAction:()=>doAction(), openTankView, closeTankView, get tankView(){ return tankView; }, KEEPOUT, dayKeyOf, World, startPlacing, checkPlace, get placing(){ return placing; }, FX, homeStock, buyHome, draftUnowned, get homeRack(){ return homeRack; }, openShop, openBuild:(o)=>openBuild(o), closeBuild, get buildMode(){ return buildMode; }, ents, Tree, Stump, Weed, Bug, bugs, player, interact, layoutBar, pickNote, itemToast, reel, Fishing, fishes, spawnFish, WU, relayout, enterRoom:(id)=>enterRoom(id), trees }, get S(){ return S; }, dbg:{ setCine:(c)=>{ cine=c; }, showChoices:(t,c)=>showChoices(t,c), dialog:(...a)=>dialog(...a), setRiding:(v)=>setRiding(v), enterRoom:(id)=>enterRoom(id), openBuild:()=>openBuild(), rooms:()=>Object.keys(ROOMS), get yaw(){ return camYaw; }, set yaw(v){ camYaw=v; }, get riding(){ return riding; }, get snow(){ return SNOW_U.value; }, setWeather:(w)=>{ weatherOverride=w; World.weather=w; snowT=0; }, get dlg(){ return !!dlgState; } }, walkable, blocked, groundY, launchRag, ragdolls, swing, meBody, refreshPortals, portalArches, get portalEnt(){ return portalEnt; }, enterRoom, PLACES, net:{ party:(id,d)=>PARTY.onNet(id,d), bonked, visibleRemotes:()=>[...remotes.values()].filter(r=>r.obj.visible).map(r=>[r.name,+r.pos.x.toFixed(1),+r.pos.z.toFixed(1)]), remoteUpsert, remotePos, remoteLeave, remoteEmote, playerState, setInventory, toast:(m)=>toast(m), updateHUD:()=>updateHUD(), get started(){ return started; } }, ITEMS, itemThumb:(id)=>thumb(id), layoutInfo:()=>({ id:LAYOUT_ID, PLACES, PATHS, LOT, rects:RECTS.map(r=>r.slice(0,4)), lot:lotRect() }), terrainH:(x,z)=>rawHeight(x,z), terrainSlope:(x,z)=>hillSlope(x,z), interact, spawnBug:(id,x,z)=>new Bug(id,x,z), tapOdds:()=>Object.fromEntries(Object.keys(TAP_BASE).map(k=>[k, +tapChance({rarity:k}).toFixed(2)])), placingObj:()=>placing&&placing.m, toScreen:v=>{ const p=v.clone().project(camera); return [(p.x*0.5+0.5)*innerWidth, (-p.y*0.5+0.5)*innerHeight]; }, rebuildHome:()=>{ buildPlayerHouse(); rebuildHomeRoom(); }, openBuild, closeBuild, get buildMode(){ return buildMode; }, talkShop, openDonate, talkCurator, spawnMossby, onFelled, findPath, startPlacing, LOT, RECTS, shopEnts, museumEnt, houseEnt:()=>houseEnt, Time, player, ents, ITEMS, residents, World, ROOMS, goTo, handleTap, doAction, updateSky, rollDay, spawnDaily, castAt, Fishing, fishes, bugs, openBag, openBook, openShop, openBoard, openMenu, openCraft, doCraft, WOODWORK, enterRoom, exitRoom, equip, startLayout, endLayout, trees, applyControls, magic:{ startMagic, endMagic, landTap, magicPlace, castMagic, get mode(){ return magicMode; }, raiseTower, talkWizard, drinkPotion, potionOn, luckW, rollFavors, Q, favorChoices, findTowerSpot, get tower(){ return towerEnt; }, PLACES, TERRA, FALLS } };
+// v1.25 test hooks for the house builder
+window.__game.house = { LT, previewBuild:(w)=>previewBuild(w), renderBuild:(k)=>renderBuild(k), homeBlocked, planIssue, setBuildView:(v)=>setBuildView(v), mossPaintAt, buildMossLayer, roofHit, houseFrame, rebuildFloor, HOME_IDS, get houseEnt(){ return houseEnt; }, edgeTap, stairsTap, landProblem, closeBuild };
 window.__game.farm = { openPlantPanel, startGridPlacing, plantGrid, checkGrid, openGarden, rebuildGardens, gardenAtXZ, islandSeeds, harvestRec, perimeter, get fenceSegs(){ return FENCE_SEGS; }, fenceHit, get placing(){ return placing; }, plantEnts, gardenEnts, CELL };

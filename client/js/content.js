@@ -565,21 +565,29 @@ export const KEEPERS = {
 export const MUSEUM = { kinds:['fish','bug','fossil','shell'], gifts:[[10,'globe'],[30,'skeleton'],[60,'statue']] };
 
 /* ---------- Home builder ----------
-   The house is a set of rectangular rooms on a 7 x 6 grid. Outside, each cell is 1.25 m; inside, 2.4 m (cozy logic).
-   Floor squares are bought with a home loan from Clementine at the town hall (one loan open at a time).
+   The house is a set of rectangular rooms on a 20 x 20 grid, up to four floors high. Outside, each cell is 1.25 m; inside, 2.4 m (cozy logic).
+   The island was laid out around the original 7 x 6 lot (LW x LD); the grid sits so that lot is its front middle (OX, OZ: the grid
+   square at the lot's center), and the house can only grow onto land that is free (no water, paths, other buildings or steep drops).
+   Floor squares are bought with a home loan from Clementine at the town hall (one loan open at a time), on every floor alike.
    The first 9 squares are the base-model house, 50,000 clams. Styles you already own are free to switch. */
 export const BUILD = {
-  GW:7, GD:6, EC:1.25, IC:2.4,
+  GW:20, GD:20, LW:7, LD:6, OX:9.5, OZ:17, SHIFT:[6,14], EC:1.25, IC:2.4,
   cellCost:n => n<=9 ? (n===1?5560:5555) : n<=12 ? 12000 : n<=24 ? 25000 : 40000,   // first 9 squares add up to 50,000 (the base-model house)
   walls:[['siding','Siding'],['plank','Board & batten'],['shingle','Shingles'],['brick','Brick'],['stone','Stone'],['stucco','Stucco'],['log','Log cabin'],['timber','Half-timbered']],
   roofs:[['gable','Gable'],['steep','Steep gable'],['hip','Hip'],['shed','Lean-to'],['flat','Flat'],['thatch','Thatch'],['mossy','Mossy shingles'],['gambrel','Gambrel']],
   doors:[['plank','Plank'],['arched','Arched'],['glass','French'],['dutch','Dutch']],
   windows:[['square','Square'],['tall','Tall'],['round','Round'],['arched','Arched'],['wide','Picture']],
   founds:[['stone','Stone'],['brick','Brick'],['wood','Wood lattice'],['none','None']],
-  porches:[['none','None'],['step','Steps'],['deck','Deck'],['covered','Covered porch']],
-  chimneys:[['none','None'],['brick','Brick'],['stone','Stone']],
-  stories:[[1,'One story'],[2,'Two stories']],
+  porches:[['none','None'],['step','Steps'],['deck','Deck'],['covered','Covered porch'],['veranda','Wide veranda']],
+  chimneys:[['none','None'],['brick','Brick'],['stone','Stone'],['crooked','Crooked stone'],['wonky','Wonky brick'],['pipe','Bent stovepipe']],
+  stories:[[1,'One story'],[2,'Two stories'],[3,'Three stories'],[4,'Four stories']],
   shutters:[[false,'No shutters'],[true,'Shutters']], boxes:[[false,'No flower boxes'],[true,'Flower boxes']], lamps:[[false,'No lamps'],[true,'Door lamps']],
+  lights:[['none','No porch light'],['lantern','Carriage lanterns'],['sconce','Brass sconces'],['hanging','Hanging lantern'],['post','Lamp posts'],['string','String lights']],
+  trellises:[['none','No trellis'],['ivy','Ivy trellis'],['rose','Climbing roses'],['wisteria','Wisteria'],['pea','Sweet peas']],
+  balconies:[['none','No balcony'],['wood','Wood balcony'],['iron','Iron balcony'],['flower','Flower balcony'],['juliet','Juliet balcony']],
+  ceilings:[['bulb','Simple bulb'],['pendant','Glass pendant'],['paper','Paper lantern'],['bulbs','Hanging bulbs'],['chandelier','Brass chandelier']],
+  sconces:[['none','No wall lights'],['brass','Brass sconces'],['candle','Candle sconces'],['iron','Iron lanterns']],
+  accents:[['none','No accent light'],['cove','Picture-rail glow'],['spots','Gallery spotlights'],['fairy','Fairy lights']],
   floors:[['wood','Wood planks'],['parquet','Parquet'],['tile','Checker tile'],['stone','Flagstone'],['carpet','Carpet']],
   papers:[['plain','Plain'],['stripe','Stripes'],['dots','Dots'],['check','Check'],['wainscot','Wainscot'],['brick','Brick']],
   wallColors:[0xfff1d6,0xffffff,0xf6e0c8,0xe8d0b0,0xf2c9b0,0xf0b8b0,0xd8e8c8,0xbfe0d8,0xc8d8f0,0xd8c8e8,0xa8b8c8,0x8a6a50,0x5a6a7a,0x3a4a3a],

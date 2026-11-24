@@ -235,6 +235,24 @@ body.compact #bMore{display:flex;position:relative}
 }
 @media (max-height:500px){ #toasts{bottom:calc(env(safe-area-inset-bottom) + 120px)} #hint{bottom:calc(env(safe-area-inset-bottom) + 96px)} #picks{top:calc(env(safe-area-inset-top) + 62px)} }
 /* home goods preview banner in the builder */
+#build.tall{height:min(88vh,980px)}
+.bpwrap{position:relative;display:inline-block;touch-action:none}
+.bpwrap canvas{display:block;touch-action:none;border-radius:12px}
+.bpz{position:absolute;right:6px;top:6px;display:flex;flex-direction:column;gap:5px}
+.bpz button{min-width:38px;height:34px;border-radius:11px;border:3px solid var(--line);background:#fff;font-family:inherit;font-weight:700;font-size:15px;color:var(--brown);cursor:pointer;padding:0 6px;box-shadow:0 2px 0 rgba(0,0,0,.08)}
+.bpz button:active{transform:translateY(1px)}
+#bView{position:fixed;right:10px;z-index:23;display:none;flex-direction:row;gap:6px}
+#bView button{width:42px;height:42px;border-radius:14px;border:3px solid var(--line);background:rgba(255,250,240,.94);color:var(--brown);display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 3px 8px rgba(0,0,0,.12);touch-action:none}
+#bView.painting{outline:3px dashed #6a9a4a;outline-offset:4px;border-radius:16px}
+@media (max-width:420px){ #bView{right:6px;gap:4px} #bView button{width:38px;height:38px;border-radius:12px} }
+.slrow{display:flex;align-items:center;gap:8px;margin:4px 0}.slrow span{width:82px;font-size:13px;font-weight:600}.slrow b{width:44px;font-size:13px;text-align:right}
+.slrow input[type=range]{flex:1;accent-color:#e0a040;height:28px}
+.slrow input.warmth{accent-color:#e08a40}
+.sub2{font-size:12px;font-weight:700;color:var(--brown2);margin:8px 0 4px}
+.chip[disabled]{opacity:.4;cursor:default}
+.brow.tools{flex-wrap:nowrap;overflow-x:auto;gap:6px;margin:6px 0;scrollbar-width:none;-webkit-overflow-scrolling:touch}.brow.tools::-webkit-scrollbar,.chips.scroll::-webkit-scrollbar{display:none}
+.brow.tools .chips,.chips.scroll{flex-wrap:nowrap}.chips.scroll{overflow-x:auto;scrollbar-width:none}.brow.tools .chip,.chips.scroll .chip{white-space:nowrap;flex:none}
+.bpdel{position:absolute;left:6px;top:6px;padding:4px 12px!important;font-size:13px!important}
 #tryBar{background:#eef7ff;border:3px solid #7ab0d8;border-radius:14px;padding:8px 10px;margin:4px 0 8px;font-size:14px}
 .hgsw{width:56px;height:56px;border-radius:14px;border:3px solid var(--line);flex:none;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;text-align:center;line-height:1.1;background:#fff;color:var(--brown2)}
 </style>

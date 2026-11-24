@@ -236,6 +236,28 @@ function globeTex(){ const cv=document.createElement('canvas'); cv.width=512; cv
   x.strokeStyle='rgba(255,255,255,0.35)'; x.lineWidth=1; for (let i=1;i<6;i++){ x.beginPath(); x.moveTo(0,i*256/6); x.lineTo(512,i*256/6); x.stroke(); } for (let i=0;i<12;i++){ x.beginPath(); x.moveTo(i*512/12,0); x.lineTo(i*512/12,256); x.stroke(); }
   const t=new THREE.CanvasTexture(cv); t.colorSpace=THREE.SRGBColorSpace; t.anisotropy=4; return t; }
 
+// v1.25: planters you place outside, with real leaves, petals and trailing ivy
+function plantBed(g, W, D, y, seed, flowers){ let a=seed|0; const r=()=>{ a=(a*1103515245+12345)&0x7fffffff; return a/0x7fffffff; };
+  const greens=[0x4f9a3a,0x5fae43,0x3f8a34,0x6cbf50];
+  mk(G.box(W,0.03,D), felt(0x4a3426), 0,y,0,g).castShadow=false;
+  for (let k=0;k<Math.round(W*D*60);k++){ const l=mk(G.sph(0.07+r()*0.04,8,6), shellMat(greens[k%4],{roughness:0.6,clearcoat:0.2}), (r()-0.5)*W*0.92, y+0.06+r()*0.1, (r()-0.5)*D*0.85, g); l.scale.set(1.3,0.55,0.9); l.rotation.y=r()*TAU; l.castShadow=false; }
+  for (let k=0;k<Math.round(W*10);k++){ const fx=(r()-0.5)*W*0.85, fz=(r()-0.5)*D*0.7, fy=y+0.2+r()*0.12, c=ceramic(flowers[Math.floor(r()*flowers.length)]);
+    mk(G.cyl(0.008,0.01,0.16,4), shellMat(0x4f8a3a), fx,fy-0.08,fz,g).castShadow=false;
+    for (let q=0;q<5;q++){ const b=q/5*TAU+r(); const pt=mk(G.sph(0.035,8,5), c, fx+Math.cos(b)*0.036, fy, fz+Math.sin(b)*0.036, g); pt.scale.set(1,0.42,1); pt.castShadow=false; }
+    mk(G.sph(0.02,6,5), ceramic(0xf2c440), fx,fy+0.014,fz,g).castShadow=false; }
+  for (let k=0;k<Math.round(W*4);k++){ const tx=(r()-0.5)*W, len=2+Math.floor(r()*3); for (let q=0;q<len;q++){ const l=mk(G.sph(0.04,6,4), shellMat(greens[(k+q)%4],{roughness:0.6}), tx+(r()-0.5)*0.05, y-0.02-q*0.07, D/2+0.03+q*0.01, g); l.scale.set(1,0.85,0.5); l.castShadow=false; } } }
+Object.assign(FURN_BUILDERS, {
+  planter(g){ const W=1.3, D=0.5, wd=woodMat(0x8b5e3a), dk=woodMat(0x6a4a3a);
+    mk(G.box(W,0.4,D), wd, 0,0.24,0,g); for (const y of [0.13,0.29]) mk(G.box(W+0.02,0.015,D+0.02), dk, 0,y,0,g);
+    for (const s of [-1,1]) for (const t of [-1,1]) mk(G.box(0.07,0.46,0.07), dk, s*(W/2-0.02),0.23,t*(D/2-0.02),g);
+    mk(G.box(W+0.06,0.05,D+0.06), dk, 0,0.45,0,g); plantBed(g, W-0.1, D-0.1, 0.44, 7, [0xff8fa8,0xffd04d,0xffffff,0xc7a0ff,0xff9a5a]); },
+  planterbox(g){ const W=1.0, D=0.6, wd=woodMat(0xa8754a), dk=woodMat(0x8b5e3a);
+    mk(G.box(W,0.42,D), wd, 0,0.21,0,g); for (const y of [0.1,0.24,0.38]) mk(G.box(W+0.02,0.012,D+0.02), dk, 0,y,0,g);
+    for (const s of [-1,1]) for (const t of [-1,1]) mk(G.box(0.06,0.46,0.06), dk, s*(W/2),0.23,t*(D/2),g);
+    mk(G.box(W+0.06,0.04,D+0.06), dk, 0,0.44,0,g); plantBed(g, W-0.1, D-0.1, 0.43, 3, [0xfff0f4,0xe8506a,0xffb0d0]);
+    for (let k=0;k<3;k++){ const st=new THREE.Group(); st.position.set(-0.3+k*0.3,0.45,-0.1+(k%2)*0.2); g.add(st); for (let q=0;q<6;q++){ const lf=mk(G.sph(0.09,8,6), shellMat(q%2?0x5fae43:0x4f9a3a,{roughness:0.55}), Math.cos(q)*0.05,0.12+q*0.05,Math.sin(q)*0.05,st); lf.scale.set(0.45,1,0.18); lf.rotation.y=q*1.1; lf.rotation.z=0.4; lf.castShadow=false; } } },
+});
+
 // Upgrade plain materials in every other builder: wood gets grain, glass becomes glass, the rest gets a soft glaze.
 const POL=new Map();
 function polishMat(m){

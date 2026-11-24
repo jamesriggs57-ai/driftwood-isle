@@ -219,8 +219,16 @@ export function door1(p, x, y, z, o={}){
 }
 
 /* ---------- Bits ---------- */
-export function wallLantern(p, x, y, z){ const l=new THREE.Group(); l.position.set(x,y,z); p.add(l); const iron=M(0x3a302a);
-  mk(G.box(0.05,0.05,0.24), iron, 0,0.16,0.1,l); mk(G.box(0.17,0.22,0.17), glowMat(0xffd27a), 0,0,0.22,l); mk(G.cone(0.15,0.12,4), iron, 0,0.17,0.22,l).rotation.y=Math.PI/4; mk(G.box(0.2,0.03,0.2), iron, 0,-0.12,0.22,l); addGlow(l,0,2.4); return l; }
+// v1.25: an iron lantern with glass panes, a flame inside, a curled bracket and a finial
+export function wallLantern(p, x, y, z){ const l=new THREE.Group(); l.position.set(x,y,z); p.add(l); const iron=M(0x2e2824,{ roughness:0.55, metalness:0.4 });
+  mk(G.box(0.12,0.28,0.035), iron, 0,0.05,0.02,l); mk(G.box(0.03,0.03,0.2), iron, 0,0.16,0.12,l); mk(G.tor(0.05,0.012,5,10,Math.PI), iron, 0,0.08,0.12,l).rotation.y=Math.PI/2;
+  const h=new THREE.Group(); h.position.set(0,0,0.22); l.add(h);
+  for (const [a,b] of [[1,1],[1,-1],[-1,1],[-1,-1]]) mk(G.box(0.022,0.3,0.022), iron, a*0.085,0,b*0.085,h);
+  mk(G.box(0.16,0.27,0.16), new THREE.MeshStandardMaterial({ color:0xfff6dc, roughness:0.15, transparent:true, opacity:0.45 }), 0,0,0,h).castShadow=false;
+  const core=mk(G.sph(0.045,10,8), glowMat(0xffc860), 0,-0.02,0,h); core.scale.y=1.35;
+  mk(G.box(0.2,0.03,0.2), iron, 0,-0.145,0,h); mk(G.cone(0.1,0.09,4), iron, 0,-0.2,0,h).rotation.set(Math.PI,Math.PI/4,0);
+  mk(G.box(0.21,0.03,0.21), iron, 0,0.15,0,h); mk(G.cone(0.15,0.13,4), iron, 0,0.23,0,h).rotation.y=Math.PI/4; mk(G.sph(0.028,8,6), M(0xc9a050,{ metalness:0.7, roughness:0.35 }), 0,0.32,0,h);
+  addGlow(h,0,2.4); return l; }
 export function chimney1(p, x, z, baseY, topY, kind='stone', lean=0.04){
   const c=new THREE.Group(); c.position.set(x,0,z); c.rotation.z=lean; p.add(c); const h=topY-baseY;
   const body=tbox(kind==='brick'?'stone':'stone', kind==='brick'?0xb5643f:0xa8a49a, 0.56,h,0.56,0.7); body.position.y=baseY+h/2; c.add(body);
@@ -363,8 +371,19 @@ export function sack(p, x, z, c=0xc8a878, label){ const s=new THREE.Group(); s.p
   mk(G.cyl(0.08,0.12,0.12,8), M(col(c,-0.06)), 0,0.48,0,s); mk(G.tor(0.08,0.02,5,10), M(0x8b6a40), 0,0.46,0,s).rotation.x=Math.PI/2; if (label) mk(G.ico(0.08,1), M(label), 0,0.56,0,s); return s; }
 export function barrel1(p, x, z, c){ barrel(p, x, z, c); }
 export function flowerBed1(p, x, z, w, seed=5){ flowerBed(p, x, z, w, mulberry32(seed)); }
-export function pot(p, x, y, z, s=1, leaf=0x5fae43, bloom){ const g=new THREE.Group(); g.position.set(x,y,z); g.scale.setScalar(s); p.add(g); mk(G.cyl(0.18,0.14,0.28,10), M(0xd27a4f), 0,0.14,0,g); mk(G.tor(0.18,0.03,5,12), M(0xc0683c), 0,0.28,0,g).rotation.x=Math.PI/2;
-  mk(G.ico(0.24,1), M(leaf), 0,0.44,0,g); if (bloom) for (let k=0;k<3;k++) mk(G.ico(0.07,1), M(bloom), Math.cos(k*2.1)*0.14,0.56,Math.sin(k*2.1)*0.14,g); return g; }
+// v1.25: a terracotta pot with a rolled rim, soil, a full plant of real leaves, and flowers with petals
+const POT_GEO = new THREE.LatheGeometry([[0,0],[0.12,0],[0.135,0.015],[0.165,0.22],[0.2,0.235],[0.205,0.3],[0.185,0.305],[0.18,0.29]].map(([a,b])=>new THREE.Vector2(a,b)), 18);
+export function pot(p, x, y, z, s=1, leaf=0x5fae43, bloom){ const g=new THREE.Group(); g.position.set(x,y,z); g.scale.setScalar(s); p.add(g); const r=mulberry32((Math.round(x*131+z*71)|0)+17);
+  mk(POT_GEO, M(0xd27a4f,{ roughness:0.85 }), 0,0,0,g); mk(G.tor(0.168,0.012,5,18), M(0xb8603a), 0,0.215,0,g).rotation.x=Math.PI/2;
+  mk(G.cyl(0.18,0.18,0.02,14), M(0x4a3426), 0,0.285,0,g).castShadow=false;
+  const lc=[leaf, col(leaf,0.06), col(leaf,-0.07)];
+  for (let k=0;k<3;k++){ const m=mk(G.sph(0.11,10,8), M(lc[k]), (r()-0.5)*0.08,0.38+k*0.04,(r()-0.5)*0.08,g); m.scale.set(1,0.8,1); }
+  const n=11; for (let k=0;k<n;k++){ const a=k/n*TAU+r()*0.3, st=new THREE.Group(); st.position.set(0,0.34+r()*0.08,0); st.rotation.y=a; g.add(st); const tilt=new THREE.Group(); tilt.rotation.z=-(0.45+r()*0.55); st.add(tilt);
+    const lf=mk(G.sph(0.085,8,6), M(lc[k%3]), 0,0.12,0,tilt); lf.scale.set(0.42,1,0.16); lf.castShadow=false; }
+  if (bloom) for (let k=0;k<4;k++){ const a=k*1.7+r(), fx=Math.cos(a)*0.11, fz=Math.sin(a)*0.11, fy=0.5+r()*0.06, pc=M(bloom);
+    for (let q=0;q<5;q++){ const b=q/5*TAU; const pt=mk(G.sph(0.03,6,4), pc, fx+Math.cos(b)*0.032, fy, fz+Math.sin(b)*0.032, g); pt.scale.set(1,0.45,1); pt.castShadow=false; }
+    mk(G.sph(0.018,6,4), M(0xf2c440), fx,fy+0.012,fz,g).castShadow=false; }
+  return g; }
 
 /* ---------- v1.12 shop extras: dormers, bay windows, nets, traps, hanging vines, lush greenhouse plants ---------- */
 // A little gabled dormer. Local frame: origin on the roof surface, +z = out of the slope, faces horizontally.

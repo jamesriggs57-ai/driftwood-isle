@@ -3351,12 +3351,12 @@ const STYLE_LIST={ wall:'walls', roof:'roofs', door:'doors', win:'windows', porc
   wallC:'wallColors', roofC:'roofColors', trimC:'trimColors', doorC:'doorColors', shutC:'doorColors', floorC:'floorColors', paperC:'wallColors' };
 const STYLE_NAMES={ walls:'walls', roofs:'roof', doors:'door', windows:'windows', porches:'porch', founds:'foundation', chimneys:'chimney', stories:'height', floors:'floor', papers:'wallpaper', shutters:'shutters', boxes:'flower boxes', lamps:'door lamps',
   wallColors:'wall paint', roofColors:'roof paint', trimColors:'trim paint', doorColors:'door paint', floorColors:'floor stain' };
-const STYLE_BASE={ walls:4500, roofs:3600, doors:1800, windows:2100, porches:3000, founds:1500, chimneys:4200, stories:40000, floors:2700, papers:2100, shutters:1500, boxes:1200, lamps:900 };
+const STYLE_BASE={ walls:6800, roofs:5400, doors:2700, windows:3200, porches:4500, founds:2300, chimneys:6300, stories:60000, floors:4000, papers:3200, shutters:2300, boxes:1800, lamps:1400 };   // v1.18: about 1.5x
 const isColorList = list => /Colors$/.test(list);
 const TOGGLE_LISTS = new Set(['shutters','boxes','lamps']);   // add-ons that are either on or off
 // v1.15: only the base model's own option in each list is free (the first one). Everything else is bought or found.
 const freeCount = list => 1;
-function styleCost(list, i){ if (i<freeCount(list)) return 0; if (list==='stories') return STYLE_BASE.stories; if (isColorList(list)) return 800 + (i-1)*300; return Math.round(STYLE_BASE[list]*(1+(i-1)*0.75)/50)*50; }
+function styleCost(list, i){ if (i<freeCount(list)) return 0; if (list==='stories') return STYLE_BASE.stories; if (isColorList(list)) return 1200 + (i-1)*450; return Math.round(STYLE_BASE[list]*(1+(i-1)*0.75)/50)*50; }
 function styleOwned(list, v){ const opts=BUILD[list]; const i=opts.findIndex(o=>String(Array.isArray(o)?o[0]:o)===String(v)); return i<0 || i<freeCount(list) || !!(S.styles&&S.styles[list+':'+v]); }
 function unlockStyle(list, v){ (S.styles=S.styles||{})[list+':'+v]=true; save(); }
 const styleLabel = (list, v) => { const o=BUILD[list].find(o=>String(Array.isArray(o)?o[0]:o)===String(v)); return TOGGLE_LISTS.has(list) ? o[1] : Array.isArray(o) ? `${o[1]} (${STYLE_NAMES[list]})` : `a new ${STYLE_NAMES[list]} color`; };
@@ -3382,7 +3382,7 @@ if (!S.stylesV115){ ownCurrentStyles(); if (S.home && S.home.built){ S.styles=S.
 const HOME_KEY={ walls:'wall', roofs:'roof', doors:'door', windows:'win', porches:'porch', founds:'found', chimneys:'chimney', stories:'stories', floors:'floor', papers:'paper', shutters:'shutters', boxes:'boxes', lamps:'lamps', wallColors:'wallC', roofColors:'roofC', trimColors:'trimC', doorColors:'doorC', floorColors:'floorC' };
 const INSIDE_LISTS=new Set(['floors','papers','floorColors']);
 const styleIndex = (list, v) => BUILD[list].findIndex(o=>String(Array.isArray(o)?o[0]:o)===String(v));
-const MIXER_COST=15000, hasMixer=()=>!!(S.styles&&S.styles.mixer);
+const MIXER_COST=22500, hasMixer=()=>!!(S.styles&&S.styles.mixer);
 const homeOwned = it => it.list==='mixer' ? hasMixer() : styleOwned(it.list, it.v);
 const homePrice = it => it.list==='mixer' ? MIXER_COST : styleCost(it.list, styleIndex(it.list, it.v));
 function homeName(list, v){ if (list==='mixer') return 'Paint mixer'; const o=BUILD[list].find(o=>String(Array.isArray(o)?o[0]:o)===String(v)), nm=STYLE_NAMES[list];

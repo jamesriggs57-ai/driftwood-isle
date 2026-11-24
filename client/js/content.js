@@ -256,6 +256,9 @@ furn('stumptable','Stump Side Table',1400,0.55,{shop:'craft'});
 furn('stumpplanter','Hollow Stump Planter',1500,0.5,{shop:'craft'});
 furn('stumplamp','Mushroom Stump Lamp',2600,0.45,{shop:'craft',glow:true});
 furn('stumpbench','Split Stump Bench',2400,0.9,{shop:'craft'});
+// v1.14 party game prizes (never sold in shops)
+furn('bonkcup','Bonk Ball Cup',4000,0.4,{shop:'party',rarity:FR.r});
+furn('crowncup','Crown Keeper Cup',4000,0.4,{shop:'party',rarity:FR.r});
 
 /* ---------- v1.13 Rare woodworking ----------
    Showpiece furniture. You need the plan (found, never bought in a shop except from Fennick now and then)

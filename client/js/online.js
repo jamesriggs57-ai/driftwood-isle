@@ -107,11 +107,12 @@ const send = m => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(m)); }
 function onLive(m) {
   const net = G().net;
   switch (m.t) {
-    case 'hello': for (const p of m.peers) { peers.set(p.id, p); net.remoteUpsert(p.id, p.name, p.st); } renderHere(); break;
+    case 'hello': if (m.you) { myId = m.you; B.myId = m.you; } for (const p of m.peers) { peers.set(p.id, p); net.remoteUpsert(p.id, p.name, p.st); } renderHere(); break;
     case 'join': peers.set(m.id, m); net.remoteUpsert(m.id, m.name); net.toast(`${m.name} ${m.id === liveOwner() ? 'is home' : 'arrived'}!`); renderHere(); break;
     case 'leave': { const p = peers.get(m.id); peers.delete(m.id); net.remoteLeave(m.id); if (p) net.toast(`${p.name} left.`); if (trade && trade.with === m.id) trade = null; renderHere(); break; }
     case 'pos': { const p = peers.get(m.id); if (p) { p.st = m; net.remoteUpsert(m.id, p.name, m); } break; }
     case 'emote': net.remoteEmote(m.id === myId ? 'me' : m.id, m.e); break;
+    case 'game': if (m.id !== myId && m.d) net.party(m.id, m.d); break;   // party games (v1.14)
     case 'bonk': if (m.id === myId) break; if (m.to === myId) net.bonked('me', m.id, +m.dx || 0, +m.dz || 0); else if (peers.has(m.to)) net.bonked(m.to, m.id, +m.dx || 0, +m.dz || 0); break;
     case 'world': banner(`${peers.get(m.id)?.name || 'Someone'} changed the island. Reload to see it.`, 'Reload', async () => { await flush(); location.reload(); }); break;
     case 'gift': openMail(true, m.name); break;
@@ -226,9 +227,10 @@ function renderHere() {
     return;
   }
   const list = [...peers.values()];
-  body.innerHTML = `<b>Say something</b><div class="emotes">${EMOTES.map(([k, t]) => `<button class="btn sm alt" data-e="${k}">${t}</button>`).join('')}</div>
+  body.innerHTML = `<button class="btn" id="partyGo" style="margin-bottom:10px">Party games</button><br><b>Say something</b><div class="emotes">${EMOTES.map(([k, t]) => `<button class="btn sm alt" data-e="${k}">${t}</button>`).join('')}</div>
     <b style="display:block;margin-top:10px">On this island now</b>${list.length ? list.map(p => `<div class="row"><span><b>${esc(p.name)}</b><br><span class="muted">${p.role === 'owner' ? 'lives here' : p.role}</span></span><span><button class="btn sm" data-give="${p.id}" data-name="${esc(p.name)}">Give</button> <button class="btn sm alt" data-trade="${p.id}">Trade</button></span></div>`).join('') : `<div class="muted">Nobody else is here right now.${B.mode === 'account' ? ' Friends you invite show up here when they visit.' : ''}</div>`}`;
   body.querySelectorAll('[data-e]').forEach(b => b.onclick = () => { send({ t: 'emote', e: b.dataset.e }); });
+  $('#partyGo').onclick = () => { closePanel(); G().party.open(); };
   body.querySelectorAll('[data-give]').forEach(b => b.onclick = () => pickGift(b.dataset.give, b.dataset.name, true));
   body.querySelectorAll('[data-trade]').forEach(b => b.onclick = () => { send({ t: 'trade-ask', to: b.dataset.trade }); G().net.toast('Asked to trade...'); });
 }
@@ -288,7 +290,7 @@ export function afterGame() {
     home: async () => { await flush(); location.href = location.pathname; },
     invite: () => openPanel('friends'), friends: () => openPanel('friends'), account: () => openPanel('island') };
   if (online()) {
-    api('/api/me').then(r => { if (r.ok) myId = r.user.id; });
+    api('/api/me').then(r => { if (r.ok) { myId = r.user.id; B.myId = myId; } });
     connect(); posTimer = setInterval(tickPos, 200);
     // mail check
     setTimeout(async () => { const r = await api('/api/mail'); const n = (r.mail || []).length; if (n) G().net.toast(`You have ${n} gift${n > 1 ? 's' : ''} in your mailbox.`); }, 6000);

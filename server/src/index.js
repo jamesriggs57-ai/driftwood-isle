@@ -387,6 +387,10 @@ export class IslandRoom {
         const to = String(m.to); if (to === me.id || ![...this.peers.values()].some(p => p.id === to)) return;
         const dx = Math.max(-1, Math.min(1, +m.dx || 0)), dz = Math.max(-1, Math.min(1, +m.dz || 0));
         this.broadcast({ t: 'bonk', id: me.id, to, dx, dz }, ws); break; }
+      case 'game': {   // party games (v1.14): the host's game state, ball hits, join/leave. Relayed as-is; nothing here touches saves.
+        const now = Date.now(); if (now - (me.gameT || 0) < 40) return; me.gameT = now;
+        if (!m.d || typeof m.d !== 'object' || Array.isArray(m.d) || JSON.stringify(m.d).length > 1500) return;
+        this.broadcast({ t: 'game', id: me.id, d: m.d }, ws); break; }
       case 'world': if (me.role === 'owner' || me.role === 'resident') this.broadcast({ t: 'world', id: me.id, v: m.v | 0 }, ws); break;   // "island changed, refresh when ready"
       case 'gift': this.sendTo(String(m.to), { t: 'gift', from: me.id, name: me.name }); break;      // the gift itself went through /api/mail
       case 'trade-ask': { const to = String(m.to); if (to === me.id || ![...this.peers.values()].some(p => p.id === to)) return;

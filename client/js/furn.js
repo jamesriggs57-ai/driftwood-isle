@@ -212,6 +212,21 @@ Object.assign(FURN_BUILDERS, {
     anim(g,t=>caps.forEach((m,i)=>{ const k=1+Math.sin(t*1.6+i*2)*0.03; m.scale.set(k,1/k,k); })); },
 });
 
+// Party game cups (v1.14): a gold cup on a wooden plinth, topped with a tiny beach ball or a tiny crown
+function cup(g, top){ const gold=shellMat(0xf0c04a,{ metalness:0.8, roughness:0.22, clearcoat:0.8 });
+  mk(G.box(0.46,0.16,0.46), woodMat(0x6a4a3a), 0,0.08,0,g); mk(G.box(0.36,0.1,0.36), woodMat(0x8b5e3a), 0,0.21,0,g);
+  mk(G.box(0.2,0.05,0.012), brass(), 0,0.11,0.232,g);
+  mk(lathe([[0,0.26],[0.12,0.26],[0.12,0.29],[0.04,0.32],[0.035,0.42],[0.06,0.46],[0.16,0.52],[0.2,0.66],[0.19,0.74],[0.17,0.74],[0.18,0.66],[0.14,0.54],[0,0.5]],28), gold, 0,0,0,g);
+  for (const s of [-1,1]){ const h=mk(G.tor(0.08,0.018,8,14,Math.PI*1.3), gold, s*0.21,0.62,0,g); h.rotation.z=s>0?-Math.PI*0.65:Math.PI*0.35; }
+  const t=new THREE.Group(); t.position.y=0.86; g.add(t); top(t, gold);
+  anim(g,tt=>{ t.rotation.y=tt*0.8; t.position.y=0.86+Math.sin(tt*2)*0.015; }); }
+Object.assign(FURN_BUILDERS, {
+  bonkcup(g){ cup(g, t=>{ const cols=[0xe8503a,0xffffff,0x3a8ad8,0xf7c948,0xffffff,0x4fb05a];
+    for (let i=0;i<6;i++) mk(new THREE.SphereGeometry(0.11,8,10,i/6*TAU,TAU/6), shellMat(cols[i],{ roughness:0.3, clearcoat:0.8 }), 0,0,0,t); }); },
+  crowncup(g){ cup(g, (t,gold)=>{ mk(CYL(0.11,0.1,0.07,16,1,true), gold, 0,0,0,t).material.side=THREE.DoubleSide;
+    for (let i=0;i<5;i++){ const a=i/5*TAU; mk(new THREE.ConeGeometry(0.03,0.08,5), gold, Math.cos(a)*0.1,0.07,Math.sin(a)*0.1,t); mk(G.sph(0.018,6,5), shellMat([0xe8503a,0x3a8ad8,0x4fb05a][i%3],{ roughness:0.1, clearcoat:1 }), Math.cos(a+0.6)*0.105,0,Math.sin(a+0.6)*0.105,t); } }); },
+});
+
 // Painted globe texture
 function globeTex(){ const cv=document.createElement('canvas'); cv.width=512; cv.height=256; const x=cv.getContext('2d');
   const gg=x.createLinearGradient(0,0,0,256); gg.addColorStop(0,'#bfe0f0'); gg.addColorStop(0.5,'#5a9ad8'); gg.addColorStop(1,'#bfe0f0'); x.fillStyle=gg; x.fillRect(0,0,512,256);

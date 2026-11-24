@@ -35,10 +35,12 @@ MODEL.season = World.season; MODEL.month = Time.month();
 const SAVE_KEY = 'driftwood-isle-save-v1';
 function freshState(){
   return { v:2, player:'', island:'', seed:(Math.random()*1e9)|0, clams:1000, inv:[], seen:{}, rec:{}, placed:[], ground:[], plants:[], cut:{},
-    friend:{}, house:0, fund:0, home:null, shops:{}, museum:{}, pack:-1, tools:{}, toolEver:{}, equip:null, stats:{ bugs:0, fish:0, dug:0, chopped:0, watered:0 }, craft:null, craftHint:false, day:null, nativeFruit:null, caught:0,
+    friend:{}, house:0, fund:0, home:null, shops:{}, museum:{}, pack:-1, tools:{}, toolEver:{}, toolOffer:{}, equip:null, stats:{ bugs:0, fish:0, dug:0, chopped:0, watered:0 }, craft:null, craftHint:false, day:null, nativeFruit:null, caught:0,
     settings:{ sound:true, music:0.6, bright:1 }, layout:'classic', styles:{}, gardens:[] };
 }
 function migrate(s){
+  // v1.23: better tools are offered by Pemberton. Old saves count what they already owned as offered.
+  if (s.toolOffer===undefined) s.toolOffer=Object.assign({}, s.toolEver||{});
   if (s.v===1){ s.v=2; s.day=null; s.ground=[]; s.clams=(s.clams||0)+500; s.migratedFrom1=true; }
   const base=freshState(); for (const k in base) if (s[k]===undefined) s[k]=base[k];
   for (const k in base.stats) if (s.stats[k]===undefined) s.stats[k]=0;
@@ -1733,7 +1735,7 @@ function talkHall(){
     { label:'New neighbors?', fn:()=>{ const nxt=T.next && RESIDENTS.find(R=>R.id===T.next.id), cap=townCap();
         const lines = nxt ? [`${nxt.name} is moving in ${dayNum(T.next.day)<=dayNum(today())?'today':'tomorrow'}! The boxes are already on the plot.`]
           : T.res.length>=RESIDENTS.length ? ['Every plot on the island is taken. What a town we have!']
-          : T.res.length>=cap ? (t===0 ? ['Nobody moves to an island whose town hall is a tent, dear.','Fix the place up. A real town hall, a bigger museum, a shop or two. Folks hear about that sort of thing.']
+          : T.res.length>=cap ? (t===0 ? ['Nobody moves to an island whose town hall is a tent, dear.','Fix the place up a bit. Folks hear about that sort of thing.']
               : [`Nobody new is looking at us right now. Every big town project makes the island a little more tempting to newcomers.`])
           : ['Word is getting around about this island. Someone new might turn up one of these weeks, but folks out here take their time.'];
         dialog(k.name, v, lines, menu); } },
@@ -1747,11 +1749,10 @@ function openHallPanel(){
     if (T.hallPend) h+=`<div class="notice"><b>Building the ${HALL_NAMES[t+1]}</b><br>The builders work overnight. Check back tomorrow!</div>`;
     else if (t>=2) h+='<div class="notice">The Grand Town Hall is as grand as it gets. The whole island thanks you!</div>';
     else { const cost=HALL_COST[t+1], rq=hallReqs(t+1), ok=rq.every(r=>r[1]), fund=T.fund||0, left=Math.max(0,cost-fund);
-      h+=`<div class="notice"><b>Next: ${HALL_NAMES[t+1]}</b><br><span class="muted">${t===0?'A real town hall. Newcomers start to take notice of the island, and the plaza gets flower beds and benches.':'A grand hall with a clock tower, a fountain in the plaza, and Wendell learns to raise new land from the sea.'}</span>
-        <div style="margin-top:6px">${rq.map(r=>`<div>${r[1]?'✓':'·'} ${r[0]} <span class="muted">(${r[2]})</span></div>`).join('')}</div>
+      h+=`<div class="notice"><b>Next: ${HALL_NAMES[t+1]}</b><br><span class="muted">Clementine is saving up for something bigger. Who knows what it'll bring.</span>
         <div style="margin-top:8px"><b>${fmt(fund)}</b> of ${fmt(cost)} clams raised</div><div class="bar" style="margin:6px 0"><div style="width:${Math.min(100,fund/cost*100)}%"></div></div>
         ${left>0?`<div style="display:flex;gap:6px;flex-wrap:wrap">${[1000,10000].map(n=>`<button class="btn alt" data-fund="${n}" ${S.clams<Math.min(n,left)?'disabled':''}>Chip in ${fmt(Math.min(n,left))}</button>`).join('')}<button class="btn" data-fund="${left}" ${S.clams<1?'disabled':''}>Chip in ${fmt(Math.min(left,S.clams))}</button></div>`
-          : `<button class="btn" id="hallGo" ${ok?'':'disabled'}>${ok?'Start building':'Fully funded. Waiting on the list above.'}</button>`}</div>`; }
+          : `<button class="btn" id="hallGo" ${ok?'':'disabled'}>${ok?'Start building':'Fully funded. Clementine says the island isn\'t quite ready for it yet.'}</button>`}</div>`; }
     pBody.innerHTML=h;
     pBody.querySelectorAll('[data-fund]').forEach(b=>b.onclick=()=>{ if (noEdit()) return; const left=HALL_COST[S.town.hall+1]-(S.town.fund||0), n=Math.min(+b.dataset.fund, left, S.clams); if (n<=0) return; S.clams-=n; S.town.fund=(S.town.fund||0)+n; Snd.coin(); updateHUD(); save(); render(); });
     const go=pBody.querySelector('#hallGo'); if (go) go.onclick=()=>{ if (noEdit()) return; S.town.hallPend=true; save(); Snd.fanfare(); toast('The builders start tonight!', null, 'new', `The ${HALL_NAMES[S.town.hall+1]} will be ready tomorrow.`); render(); };
@@ -2001,8 +2002,8 @@ function talkWizard(){
   const menu=()=>dialog(W.name, v, [], null, [
     ...favorChoices(npcOf('wendell'), ()=>menu()),
     { label:'Potions', fn:()=>openPotionShop() },
-    { label:'Move a building', fn:()=>{ if (noEdit()) return; if (!moveUnlocked()){ dialog(W.name, v, [W.moveLock.replace('{cells}',MAGIC.unlockMove.cells).replace('{shops}',MAGIC.unlockMove.shops), `Right now: a house of ${cellsBuilt()} squares, ${shopsBacked()} of 3 shops backed.`], menu); return; } openMoveList(); } },
-    { label:'Shape the land', fn:()=>{ if (noEdit()) return; if (!landUnlocked()){ dialog(W.name, v, [W.landLock.replace('{cells}',MAGIC.unlockLand.cells), `Right now: a house of ${cellsBuilt()} squares, ${shopsBacked()} of 3 shops backed.`], menu); return; } startMagic('land'); } },
+    { label:'Move a building', fn:()=>{ if (noEdit()) return; if (!moveUnlocked()){ dialog(W.name, v, [W.moveLock], menu); return; } openMoveList(); } },
+    { label:'Shape the land', fn:()=>{ if (noEdit()) return; if (!landUnlocked()){ dialog(W.name, v, [W.landLock], menu); return; } startMagic('land'); } },
     { label:'Bye!', alt:true, fn:()=>{} } ]);
   if (!S.magic.met){ S.magic.met=true; save(); dialog(W.name, v, W.first, menu); return; }
   const h=Time.hour(); dialog(W.name, v, [(h>=21||h<5) ? W.night[0] : W.greet[Math.floor(Math.random()*W.greet.length)]], menu);
@@ -2341,7 +2342,7 @@ const LAND_COST=4000, SEA_COST=2500;
 const landMagicOK = () => (DEV&&S.devMagic) || (S.town.hall||0)>=2;
 function landSeaTap(k, cx, cz, cur, pend, tool, no){
   const M=magicMode, isLand=(x,z)=>{ const kk=terraKey(x,z), c=TERRA[kk], p=M.pend[kk]; if (p && p.L!==undefined) return !!p.L; return (c&&c.L) || rawHeight(x,z)>0.25; };
-  if (!landMagicOK()) return no('Making land needs the Grand Town Hall. Clementine can tell you more.');
+  if (!landMagicOK()) return no('Wendell can\'t raise land from the sea yet. Maybe someday.');
   if (tool==='sea'){ if (pend.L===1){ delete pend.L; } else if (cur.L){ if (S.plants.some(p=>terraKey(p.x,p.z)===k) || S.placed.some(p=>p.x<500&&terraKey(p.x,p.z)===k)) return no('Move the plants or furniture there first.'); if (cur.d) return no('Lower it back down first.'); pend.L=0; } else return no('Only land Wendell made can go back to the sea.'); }
   else { if (cur.L && pend.L!==0) return no('That\'s already land.'); if (pend.L===0){ delete pend.L; }
     else { if (rawHeight(cx,cz)>0.25) return no('That\'s already land. Raise it instead.'); if (Math.hypot(cx,cz)>HGR-5) return no('That\'s as far out as the magic reaches.');
@@ -2785,6 +2786,7 @@ function updateSky(){
 const fadeEl=$('#fade');
 function fade(cb){ fadeEl.classList.add('show'); setTimeout(()=>{ cb(); setTimeout(()=>fadeEl.classList.remove('show'), 60); }, 260); }
 function enterRoom(id){
+  if (id==='store') storeVisit++;
   if (id==='portal') setTimeout(()=>refreshPortals(), 400);
   fade(()=>{ const R=ROOMS[id]; World.inside=id; camYaw=0; OUT.visible=false; for(const k in ROOMS) ROOMS[k].group.visible=(k===id);
     if (Fishing.state!=='idle') reel(); stopMove(); player.pos.set(R.entry[0],0,R.entry[1]); player.face=Math.PI; player.obj.rotation.y=Math.PI; camTarget.copy(player.pos); updateSky(); updateCamera(1);
@@ -3047,13 +3049,13 @@ function doCraft(r, k){
 const RARE_MATS = ['heartwood','goldsap','starstone','moonpearl','glimmermoss'];
 function rareCraftSection(){
   const found=S.rare.plans.length, any=found || RARE_MATS.some(m=>countItem(m));
-  let h=`<div class="notice" style="border-color:${RARITY_COLORS.Legendary}"><b>Rare plans</b> <span class="muted">· ${found} of ${RARE_WORK.length} found${S.rare.made?` · ${S.rare.made} made`:''}</span>`;
-  if (!any) h+=`<br><span class="muted">Showpiece plans turn up in odd places: dig spots, bottles on the beach, and now and then on Fennick's cart. Each needs rare ingredients you'll only find by chance.</span>`;
+  if (!any) return '';   // v1.24: the rare section stays secret until you find your first plan or rare ingredient
+  let h=`<div class="notice" style="border-color:${RARITY_COLORS.Legendary}"><b>Rare plans</b> <span class="muted">· ${found} found${S.rare.made?` · ${S.rare.made} made`:''}</span>`;
   RARE_WORK.forEach((r,i)=>{ const it=ITEMS[r.id], known=knowsPlan(r.id);
-    if (!known){ h+=`<div class="row" style="margin:8px 0 0;opacity:.75"><img src="${thumb(r.id)}" style="filter:brightness(0) opacity(.45)"><div class="grow"><div class="nm">??? ${rarityTag(it)}</div><div class="sub">Plan not found yet</div></div></div>`; return; }
+    if (!known) return;
     const mx=craftMax(r), mats=Object.entries(r.mats).map(([m,n])=>{ const have=countItem(m), ok=have>=n, rare=ITEMS[m].rare; return `<span style="color:${ok?'inherit':'#c0503a'};font-weight:${ok&&!rare?400:700}">${ITEMS[m].name} ${have}/${n}</span>`; }).join(' · ');
     h+=`<div class="row" style="margin:8px 0 0"><img src="${thumb(r.id)}"><div class="grow"><div class="nm">${it.name} ${rarityTag(it)}</div><div class="sub">${mats}${bagBlocked(r)?'<br><b>Your bag is full.</b> Make room first.':''}</div></div><button class="btn" data-rc="${i}" ${mx<=0?'disabled':''}>Make</button></div>`; });
-  if (any) h+=`<div style="margin-top:10px"><b style="font-size:13px">Rare ingredients</b>`+RARE_MATS.map(m=>`<div class="sub" style="margin-top:4px"><b>${ITEMS[m].name} ${countItem(m)}</b> <span class="muted">· ${ITEMS[m].how}</span></div>`).join('')+'</div>';
+  if (any) h+=`<div style="margin-top:10px"><b style="font-size:13px">Rare ingredients</b>`+RARE_MATS.filter(m=>countItem(m)).map(m=>`<div class="sub" style="margin-top:4px"><b>${ITEMS[m].name} ${countItem(m)}</b></div>`).join('')+'</div>';
   return h+'</div>'; }
 function openCraft(start){
   if (!S.craft && !S.cook) return;
@@ -3064,15 +3066,16 @@ function openCraft(start){
     if (tab==='cook'){ pTitle.textContent='Cooking'; pBody.innerHTML=cookTab(tabsH); bindTabs(); bindCook(render); return; }
     pTitle.textContent='Woodworking';
     const kd=kindsMade(), next=WOODWORK.map(r=>r.unlock).filter(u=>u>kd).sort((a,b)=>a-b)[0];
-    let h=tabsH+`<div class="notice"><b>Woodworking</b> <span class="muted">· ${kd} of ${WOODWORK.length} plans made · ${fmt(S.craft.made)} crafted</span>`;
-    h+= next!==undefined ? `<div class="bar" style="margin:8px 0 4px"><div style="width:${Math.min(100,kd/next*100)}%"></div></div><span class="muted">Make ${next-kd} more different thing${next-kd>1?'s':''} to unlock new plans.</span>` : `<br><span class="muted">You know every plan. Bramble would be proud.</span>`;
+    // v1.24: no progress bar or locked plans. New plans just turn up as you make things.
+    let h=tabsH+`<div class="notice"><b>Woodworking</b> <span class="muted">· ${kd} different things made · ${fmt(S.craft.made)} crafted</span>`;
+    h+= next!==undefined ? '' : `<br><span class="muted">You know every plan. Bramble would be proud.</span>`;
     h+=`<div class="muted" style="margin-top:6px">Your materials: ${Object.keys(MAT_NAMES).map(m=>`${MAT_NAMES[m]} ${countItem(m)}`).join(' · ')}</div></div>`;
     h+=rareCraftSection();
     h+='<div class="tabs">'+[['all','All plans'],['now','Can make now']].map(([k,n])=>`<button class="tab${k===filter?' on':''}" data-f="${k}">${n}</button>`).join('')+'</div>';
     let shown=0;
     WOODWORK.forEach((r,i)=>{ const it=ITEMS[r.id], open=recipeOpen(r), mx=open?craftMax(r):0;
       if (filter==='now' && mx<=0) return; shown++;
-      if (!open){ h+=`<div class="row" style="opacity:.6"><img src="${thumb(r.id)}" style="filter:grayscale(1)"><div class="grow"><div class="nm">${it.name}</div><div class="sub">Unlocks after making ${r.unlock} different things (${r.unlock-kd} to go)<br>${Object.entries(r.mats).map(([m,n])=>`${MAT_NAMES[m]} ${n}`).join(' · ')}</div></div></div>`; return; }
+      if (!open){ shown--; return; }
       const q=Math.max(1, Math.min(qty[i]||1, Math.max(1,mx)));
       const mats=Object.entries(r.mats).map(([m,n])=>{ const have=countItem(m), ok=have>=n*q; return `<span style="color:${ok?'inherit':'#c0503a'};font-weight:${ok?400:700}">${MAT_NAMES[m]} ${have}/${n*q}</span>`; }).join(' · ');
       const out=recipeOut(r)*q;
@@ -3115,6 +3118,45 @@ function openBook(tab='fish'){
 /* Shops. Skyrim-style: Pemberton's General Store buys anything at the standard price. Specialists (Marlo's aquarium
    shop for fish, Sprig's Bug & Bloom for bugs and flowers) pay a lot more for what they love and refuse everything else.
    Later in the game you can invest in a shop: bigger building, more and rarer stock, cheaper prices, better sell prices. */
+/* v1.23: better tools aren't on the shelf the moment you buy the one below. On a later visit, once you can use the next tier
+   and have the clams for it, Pemberton brings it out from the back himself. One pitch per visit. After that it stays on the Tools tab. */
+let storeVisit=0; const toolBoughtAt={}, PITCH_ORDER=['axe','shovel','rod','net','can'];
+function buyTool(t, k, which='stall'){
+  const tr=TOOLS[t].tiers[k]; if (S.clams<tr.cost) return false;
+  S.clams-=tr.cost; addTrade(which,tr.cost); S.tools[t]={ tier:k, uses:tr.forever?0:tr.uses }; S.toolEver[t]=Math.max(S.toolEver[t]??-1, k); S.toolOffer[t]=Math.max(S.toolOffer[t]??-1, k);
+  toolBoughtAt[t]=storeVisit; Snd.coin(); equip(t); updateHUD(); toast(`You got the ${tr.name}! It's in your hand now.`, toolThumb(t,k)); save(); return true;
+}
+let pitchedVisit=-1;
+function toolPitch(){
+  if (pitchedVisit===storeVisit) return null;
+  for (const t of PITCH_ORDER){ const T=TOOLS[t], own=S.tools[t], ever=Math.max(own?own.tier:-1, S.toolEver[t]??-1), k=ever+1;
+    if (ever<0 || k>=T.tiers.length || k<=(S.toolOffer[t]??-1)) continue;
+    if (toolBoughtAt[t]===storeVisit) continue;            // bought the last one this visit: give it a chance first
+    if (!reqMet(t,k) || S.clams<T.tiers[k].cost) continue;   // only pitch what you can use and afford
+    return { t, k }; }
+  return null;
+}
+const PITCH_PERK = {
+  axe:  ['It actually brings a tree down, which yours won\'t, and it lasts three times as long.', 'Two pieces of wood a swing instead of one, and it lasts ages.', 'Never breaks. Never. You could hand it down to your grandkids.'],
+  shovel:['Lasts three times as long.', 'Now and then it turns up a little pile of clams with whatever you dig. And it lasts ages.', 'Never breaks. Not ever.'],
+  rod:  ['Lasts three times as long and gives you a little more time when something bites.', 'An even longer bite window, and it lasts ages.', 'Never breaks. Not ever.'],
+  net:  ['Lasts three times as long and makes catching a bit easier.', 'Makes catching a whole lot easier, and it lasts ages.', 'Never breaks. Not ever.'],
+  can:  ['Lasts seven times as long as yours.', 'Never breaks. Not ever.'],
+};
+const PITCH_DID = { axe:'You\'ve been chopping up a storm', shovel:'You\'ve dug up half the island', rod:'You\'ve been pulling fish out left and right', net:'You\'ve been catching bugs left and right', can:'You\'ve been keeping every plant on the island watered' };
+function pitchTool(k, p, after){
+  pitchedVisit=storeVisit;
+  const T=TOOLS[p.t], tr=T.tiers[p.k], cur=T.tiers[p.k-1], own=S.tools[p.t], perk=(PITCH_PERK[p.t]||[])[p.k-1]||'';
+  const open = tr.forever ? 'Hold on, partner. Before you look around. Come with me to the back a second.'
+    : tr.req&&tr.req.stat ? `Hey, you! Word gets around. ${PITCH_DID[p.t]}, I hear.`
+    : `Hey! How's that ${cur.name} treating you?${own&&own.tier===p.k-1&&!cur.forever&&own.uses<10?' Looks about done for, if I\'m honest.':''}`;
+  const pitch = tr.forever ? `I don't show this to just anybody. The ${tr.name}. ${perk}`
+    : `I actually have a better option for you, if you've got the clams. Came in on the last boat. The ${tr.name}. ${perk}`;
+  S.toolOffer[p.t]=p.k; save();
+  dialog(k.name, k.voice, [open, pitch, `${fmt(tr.cost)} clams. What do you say?`], null, [
+    { label:`Buy it (${fmt(tr.cost)})`, fn:()=>{ if (!buyTool(p.t, p.k)) { after(); return; } dialog(k.name, k.voice, ['Pleasure doing business! You won\'t regret it.'], after); } },
+    { label:'Maybe later', alt:true, fn:()=>dialog(k.name, k.voice, ['No rush. I\'ll keep it on the tools shelf for you.'], after) } ]);
+}
 function reqMet(t, tier){ const q=TOOLS[t].tiers[tier].req; if(!q) return true; if(q.tool!==undefined && (S.toolEver[t]===undefined || S.toolEver[t]<q.tool)) return false; if(q.stat && (S.stats[TOOLS[t].stat]||0)<q.stat) return false; return true; }
 function packReq(i){ const q=BACKPACKS[i].req; if(!q) return true; if(q.caught && S.caught<q.caught) return false; if(q.discovered && discovered()<q.discovered) return false; if(q.bestFriends && bestFriends()<q.bestFriends) return false; return true; }
 const shopKey = which => which==='stall' ? 'general' : which;
@@ -3147,6 +3189,10 @@ const markSold = (which, id, i) => { if (which==='rare'){ S.day.psold[i]=true; r
 function talkShop(id){
   const k=KEEPERS[SHOPS[id].keeper], open=shopOpen(id), shop=()=>openShop(id==='general'?'stall':id);
   if (id==='general' && !open){ dialog(k.name, k.voice, [keeperLine(k.id,'night')], ()=>openShop('stall')); return; }
+  if (id==='general' && !VISIT){ const p=toolPitch(); if (p){ pitchTool(k, p, ()=>talkShopRest(id, k, shop)); return; } }
+  talkShopRest(id, k, shop);
+}
+function talkShopRest(id, k, shop){
   // v1.19: shopkeepers ask favors too. With nothing to ask, talking goes straight to the shop like before.
   const menu=()=>dialog(k.name, k.voice, [], null, [ { label:'Let\'s shop', fn:shop }, ...favorChoices(npcOf(k.id), ()=>menu()), { label:'Bye!', alt:true, fn:()=>{} } ]);
   if (!favorChoices(npcOf(k.id), ()=>{}).length){ dialog(k.name, k.voice, [keeperLine(k.id,'greet')], shop); return; }
@@ -3157,9 +3203,9 @@ function investBox(id){
   let h=`<div class="notice"><b>${sh.tiers[t]}</b> <span class="muted">· tier ${t+1} of 4</span><br><span class="muted">${id==='general'?`Sells to you at ${Math.round(sh.discount[t]*100)}% off and pays ${Math.round(sh.sell[t]*100)}% for anything.`:`Sells to you at ${Math.round(sh.discount[t]*100)}% off and pays ${Math.round(sh.sell[t]*100)}% for ${buysText(sh)}.`} ${sh.slots[t]} items in stock a day.</span></div>`;
   if (t>=3) return h+`<div class="notice">${k.name}'s shop is as grand as it gets. Thank you, partner!</div>`;
   const cost=INVEST.cost[t+1], houseOk=S.home.built, tradeOk=st.trade>=INVEST.trade;
+  if (!houseOk || !tradeOk) return h+`<div class="notice"><span class="muted">${k.lock}</span></div>`;   // v1.24: no checklist, just a hint
   h+=`<div class="notice"><b>Invest in ${sh.tiers[t+1]}</b><br><span class="muted">${sh.perks[t+1]}. The building grows too.</span><div style="margin-top:6px"><b>${fmt(cost)} clams</b></div>`;
-  if (!houseOk || !tradeOk){ h+=`<div class="muted" style="margin-top:6px">${fill(k.lock.replace('{t}',fmt(INVEST.trade)))}</div><div class="muted" style="margin-top:6px">${houseOk?'Built a house: yes':'Build a house first (Island Board)'}<br>Trade here: ${fmt(Math.min(st.trade,INVEST.trade))} / ${fmt(INVEST.trade)} clams</div><div class="bar" style="margin-top:6px"><div style="width:${Math.min(100,st.trade/INVEST.trade*100)}%"></div></div>`; }
-  else h+=`<button class="btn" data-invest="${id}" style="margin-top:8px" ${S.clams<cost?'disabled':''}>Invest ${fmt(cost)}</button>`;
+  h+=`<button class="btn" data-invest="${id}" style="margin-top:8px" ${S.clams<cost?'disabled':''}>Invest ${fmt(cost)}</button>`;
   return h+'</div>';
 }
 function doInvest(id){ if (noEdit()) return false;
@@ -3188,19 +3234,20 @@ function openShop(which, startTab){
     if (tab==='tools'){
       for (const [t,T] of Object.entries(TOOLS)){ const own=S.tools[t];
         h+=`<div class="notice"><b>${T.name}</b> <span class="muted">· ${T.does}</span><br><span class="muted">${own?`You have: ${T.tiers[own.tier].name}, ${T.tiers[own.tier].forever?'never breaks':own.uses+' uses left'}`:'You don\'t have one yet.'}</span>`;
-        // Better tools only show up once you could actually buy and use them
-        const ever=Math.max(own?own.tier:-1, S.toolEver[t]??-1); let hidden=0;
+        // v1.23: better tools stay off the shelf until Pemberton offers them to you in person (see toolPitch)
+        const ever=Math.max(own?own.tier:-1, S.toolEver[t]??-1), offered=S.toolOffer[t]??-1; let hidden=0;
         T.tiers.forEach((tr,k)=>{ const ok=reqMet(t,k), keep=own&&T.tiers[own.tier].forever&&k<=own.tier;
-          if (k>0 && k>ever && !(k===ever+1 && ok)){ hidden++; return; }
-          h+=`<div class="row" style="margin:8px 0 0"><img src="${toolThumb(t,k)}"><div class="grow"><div class="nm">${tr.name}</div><div class="sub">${fmt(tr.cost)} clams · ${tr.forever?'<b>Never breaks</b>':tr.uses+' uses'}${tr.bonus&&t==='net'?` · +${Math.round(tr.bonus*100)}% catch`:''}${tr.bonus&&t==='rod'?` · longer bite window`:''}${tr.nofell?' · can\'t fell trees':''}${!ok?`<br>Locked: ${tr.req.desc}`:''}${k===ever+1&&k>0?' <span style="color:#d08a10;font-weight:600">New!</span>':''}</div></div><button class="btn" data-tool="${t}:${k}" ${keep||!ok||S.clams<tr.cost?'disabled':''}>${keep?(k===own.tier?'Owned':'Kept'):'Buy'}</button></div>`; });
+          if (k>0 && k>ever && k>offered){ hidden++; return; }
+          h+=`<div class="row" style="margin:8px 0 0"><img src="${toolThumb(t,k)}"><div class="grow"><div class="nm">${tr.name}</div><div class="sub">${fmt(tr.cost)} clams · ${tr.forever?'<b>Never breaks</b>':tr.uses+' uses'}${tr.bonus&&t==='net'?` · +${Math.round(tr.bonus*100)}% catch`:''}${tr.bonus&&t==='rod'?` · longer bite window`:''}${tr.nofell?' · can\'t fell trees':''}${k>ever&&k>0?' <span style="color:#d08a10;font-weight:600">New!</span>':''}</div></div><button class="btn" data-tool="${t}:${k}" ${keep||!ok||S.clams<tr.cost?'disabled':''}>${keep?(k===own.tier?'Owned':'Kept'):'Buy'}</button></div>`; });
         if (hidden) h+=`<div class="muted" style="margin-top:6px"></div>`;
         h+='</div>'; } }
     if (tab==='packs'){
       h+=`<div class="muted" style="margin-bottom:8px">You have ${slotsMax()} slots now.</div>`;
       h+=`<div class="row"><img src="${bikeThumb()}"><div class="grow"><div class="nm">Bicycle</div><div class="sub">${fmt(BIKE_COST)} clams · about twice as fast outdoors.${GUEST?'<br>Guest wallets top out at 10,000 clams, so you need an account for this one.':''}</div></div>${S.bike?'<span class="muted">Owned</span>':`<button class="btn" id="buyBike" ${S.clams<BIKE_COST?'disabled':''}>Buy</button>`}</div>`;
       if (World.season==='winter' || countItem('sled')) h+=`<div class="row"><img src="${thumb('sled')}"><div class="grow"><div class="nm">Wooden Sled</div><div class="sub">${fmt(ITEMS.sled.buy)} clams · winter only · ride it down snowy hills${isTouchDevice?'':` (press ${KB().sled.toUpperCase()})`}</div></div>${countItem('sled')?'<span class="muted">Owned</span>':`<button class="btn" id="buySled" ${S.clams<ITEMS.sled.buy?'disabled':''}>Buy</button>`}</div>`;
-      BACKPACKS.forEach((p,i)=>{ const owned=i<=S.pack, next=i===S.pack+1, ok=next&&packReq(i); if (i>S.pack+1) return;
-        h+=`<div class="row"><div class="slot" style="width:56px;border-width:2px;font-weight:700">${p.slots}</div><div class="grow"><div class="nm">${p.name}</div><div class="sub">${p.slots} slots · ${fmt(p.cost)} clams${p.req?`<br>${p.req.desc}`:''}${next&&p.req?`<br>Progress: ${S.caught} caught · ${discovered()} discovered · ${bestFriends()} best friends`:''}</div></div>${owned?'<span class="muted">Owned</span>':`<button class="btn" data-pack="${i}" ${!ok||S.clams<p.cost?'disabled':''}>${next?'Buy':'Locked'}</button>`}</div>`; }); }
+      // v1.24: the next bag only shows up once you've earned it. No requirement lists.
+      BACKPACKS.forEach((p,i)=>{ const owned=i<=S.pack, next=i===S.pack+1, ok=next&&packReq(i); if (i>S.pack+1 || (next && !ok)) return;
+        h+=`<div class="row"><div class="slot" style="width:56px;border-width:2px;font-weight:700">${p.slots}</div><div class="grow"><div class="nm">${p.name}${next?' <span style="color:#d08a10;font-weight:600">New!</span>':''}</div><div class="sub">${p.slots} slots · ${fmt(p.cost)} clams</div></div>${owned?'<span class="muted">Owned</span>':`<button class="btn" data-pack="${i}" ${S.clams<p.cost?'disabled':''}>Buy</button>`}</div>`; }); }
     if (tab==='sell'){
       const sh=SHOPS[sid]; const pays = which==='rare' ? '' : sh.buys ? `${KEEPERS[sh.keeper].name} pays <b>${Math.round(sh.sell[shopTier(sid)]*100)}%</b> for ${buysText(sh)}. Nothing else.` : `Pemberton buys anything${shopTier('general')?` at <b>${Math.round(sh.sell[shopTier('general')]*100)}%</b>`:''}. Specialists pay more for their thing.`;
       h+=`<div class="muted" style="margin-bottom:8px">${pays} Bigger catches are worth more.</div>`+invGrid(sel, s=>sellPrice(s,which)===null);
@@ -3237,7 +3284,7 @@ function openShop(which, startTab){
       S.clams-=price; addTrade(which,price); let isNew=false; for (let q=0;q<k;q++) if (addItem(id)==='new') isNew=true; Snd.coin(); updateHUD(); toast(`${isNew?'New! ':''}Bought ${k} ${ITEMS[id].name.toLowerCase()}.`, thumb(id), isNew?'new':''); save(); render(); });
     pBody.querySelectorAll('[data-b]').forEach(b=>b.onclick=()=>{ const i=+b.dataset.b; const id=list[i], it=ITEMS[id], price=buyPrice(which,it);
       if(S.clams<price) return; if(!canAdd(id)){ toast('Your bag is full.'); return; } S.clams-=price; if(tab==='garden') S.day.gsold[i]=true; else markSold(which,id,i); addTrade(which,price); if (which==='rare') track('peddler'); const r=addItem(id); Snd.coin(); updateHUD(); itemToast(id, r==='new', 'Bought'); render(); });
-    pBody.querySelectorAll('[data-tool]').forEach(b=>b.onclick=()=>{ const [t,k]=b.dataset.tool.split(':'); const tr=TOOLS[t].tiers[+k]; if(S.clams<tr.cost) return; S.clams-=tr.cost; addTrade(which,tr.cost); S.tools[t]={ tier:+k, uses:tr.forever?0:tr.uses }; S.toolEver[t]=Math.max(S.toolEver[t]??-1, +k); Snd.coin(); equip(t); updateHUD(); toast(`You got the ${tr.name}! It's in your hand now.`, toolThumb(t,+k)); save(); render(); });
+    pBody.querySelectorAll('[data-tool]').forEach(b=>b.onclick=()=>{ const [t,k]=b.dataset.tool.split(':'); if (buyTool(t,+k,which)) render(); });
     const bs=pBody.querySelector('#buySled'); if (bs) bs.onclick=()=>{ if (countItem('sled')||S.clams<ITEMS.sled.buy) return; if (!canAdd('sled')){ toast('Your bag is full.'); return; } S.clams-=ITEMS.sled.buy; addTrade(which,ITEMS.sled.buy); addItem('sled'); Snd.coin(); updateHUD(); setSledBtn(); toast('You got a sled! Find a snowy hill.'); save(); render(); };
     const bb=pBody.querySelector('#buyBike'); if(bb) bb.onclick=()=>{ if(S.bike||S.clams<BIKE_COST) return; S.clams-=BIKE_COST; addTrade(which,BIKE_COST); S.bike=true; Snd.fanfare(); updateHUD(); setBikeBtn(); toast('You got a bicycle!'); save(); render(); };
     pBody.querySelectorAll('[data-pack]').forEach(b=>b.onclick=()=>{ const i=+b.dataset.pack, p=BACKPACKS[i]; if(i!==S.pack+1||!packReq(i)||S.clams<p.cost) return; S.clams-=p.cost; addTrade(which,p.cost); S.pack=i; Snd.fanfare(); updateHUD(); toast(`You got the ${p.name}! (${p.slots} slots)`); save(); render(); });
@@ -3829,7 +3876,7 @@ function openBoard(){
     h+=`</div><div class="notice"><b>Museum</b><br>${donatedCount()} of ${MUSEUM_TOTAL} displays filled. Professor Thistle is just south of the plaza.</div>`;
     if (!VISIT) h+=`<div class="notice"><b>Favors</b> <span class="muted">· ${Q.done||0} done so far · up to ${MAX_FAVORS} at a time</span>${favorsHTML()}</div>`;
     h+=`<div class="notice"><b>Achievements</b> <span class="muted">· ${achCount()} of ${ACHIEVEMENTS.length} earned</span><br><button class="btn alt" id="bdAch" style="margin-top:6px">See achievements</button></div>`;
-    if (S.magic.tower) h+=`<div class="notice"><b>Wendell the wizard</b><br>Potions any time. ${moveUnlocked()?'Moving buildings: ready.':`Moving buildings opens with a house of ${MAGIC.unlockMove.cells} squares and ${MAGIC.unlockMove.shops} shops backed.`} ${landUnlocked()?'Shaping land: ready.':`Shaping land opens with a house of ${MAGIC.unlockLand.cells} squares and all 3 shops backed.`}</div>`;
+    if (S.magic.tower) h+=`<div class="notice"><b>Wendell the wizard</b><br>Potions any time.${moveUnlocked()?' Moving buildings: ready.':''}${landUnlocked()?' Shaping land: ready.':''}</div>`;
     pBody.innerHTML=h;
     const bdo=pBody.querySelector('#bdOpen'); if (bdo) bdo.onclick=()=>{ panelClose=null; closePanel(); openBuild(); };
     const bda=pBody.querySelector('#bdAch'); if (bda) bda.onclick=()=>{ closePanel(); setTimeout(()=>openAchievements(), 60); };
@@ -4745,5 +4792,5 @@ const PARTY = createParty({ scene, player, meBody, remotes, groundY, walkable, r
     keep:()=>{ if (r.partyAway && r.obj.parent){ r.partyAway.parent=r.obj.parent; r.obj.parent.remove(r.obj); } },
     back:()=>{ const a=r.partyAway; if (!a) return; delete r.partyAway; r.solid=a.solid; if (a.parent && !r.obj.parent) a.parent.add(r.obj); } })),
   swingAnim:(face)=>{ stopMove(); player.face=face; player.obj.rotation.y=face; player.act=0.4; bonkCool=0.35; Snd.swoosh(); } });
-window.__game = { v120:{ track, checkAch, achValue, grantWear, ownsWear, openAchievements, makeFavor, rollFavors, favorChoices, npcOf, clothesStock, wardrobeOwned, get Q(){ return Q; } }, party:PARTY, v119:{ tierPick, openChest, townCap:()=>townCap() }, v13:{ shopStock:w=>shopStock(w), learnPlan, rareRoll, knowsPlan, unfoundPlans, stockWeight, RARE_WORK, GroundItem, ShopItem, Furniture }, v1:{ scene, camera, OUT, updateSky, updateHUD, snowPass, SNOW_U, townNewDay, applyTown, talkHall, openHallPanel, buildPlaza, refreshStoreItems, buildStoreAll, buildShop, buildMuseumAll, spawnExhibits, mentorMoment, teachWoodworking, openCraft, doCook, nearStation, toggleSled, setSled, get sledding(){ return sledding; }, sledV, eatFood, Plant, fullBagCatch, KB, landSeaTap, terraLand, LAMPS:()=>LAMPS, hasUpstairs, ShopItem, Stairs, get exhibits(){ return exhibits; }, onDisplay, museumNeeds, museumExpand, museumFitState, museumTanks, renderer, nearestEnt:()=>nearestEnt(), doAction:()=>doAction(), openTankView, closeTankView, get tankView(){ return tankView; }, KEEPOUT, dayKeyOf, World, startPlacing, checkPlace, get placing(){ return placing; }, FX, homeStock, buyHome, draftUnowned, get homeRack(){ return homeRack; }, openShop, openBuild:(o)=>openBuild(o), closeBuild, get buildMode(){ return buildMode; }, ents, Tree, Stump, Weed, Bug, bugs, player, interact, layoutBar, pickNote, itemToast, reel, Fishing, fishes, spawnFish, WU, relayout, enterRoom:(id)=>enterRoom(id), trees }, get S(){ return S; }, dbg:{ setCine:(c)=>{ cine=c; }, showChoices:(t,c)=>showChoices(t,c), dialog:(...a)=>dialog(...a), setRiding:(v)=>setRiding(v), enterRoom:(id)=>enterRoom(id), openBuild:()=>openBuild(), rooms:()=>Object.keys(ROOMS), get yaw(){ return camYaw; }, set yaw(v){ camYaw=v; }, get riding(){ return riding; }, get snow(){ return SNOW_U.value; }, setWeather:(w)=>{ weatherOverride=w; World.weather=w; snowT=0; }, get dlg(){ return !!dlgState; } }, walkable, blocked, groundY, launchRag, ragdolls, swing, meBody, refreshPortals, portalArches, get portalEnt(){ return portalEnt; }, enterRoom, PLACES, net:{ party:(id,d)=>PARTY.onNet(id,d), bonked, visibleRemotes:()=>[...remotes.values()].filter(r=>r.obj.visible).map(r=>[r.name,+r.pos.x.toFixed(1),+r.pos.z.toFixed(1)]), remoteUpsert, remotePos, remoteLeave, remoteEmote, playerState, setInventory, toast:(m)=>toast(m), updateHUD:()=>updateHUD(), get started(){ return started; } }, ITEMS, itemThumb:(id)=>thumb(id), layoutInfo:()=>({ id:LAYOUT_ID, PLACES, PATHS, LOT, rects:RECTS.map(r=>r.slice(0,4)), lot:lotRect() }), terrainH:(x,z)=>rawHeight(x,z), terrainSlope:(x,z)=>hillSlope(x,z), interact, spawnBug:(id,x,z)=>new Bug(id,x,z), tapOdds:()=>Object.fromEntries(Object.keys(TAP_BASE).map(k=>[k, +tapChance({rarity:k}).toFixed(2)])), placingObj:()=>placing&&placing.m, toScreen:v=>{ const p=v.clone().project(camera); return [(p.x*0.5+0.5)*innerWidth, (-p.y*0.5+0.5)*innerHeight]; }, rebuildHome:()=>{ buildPlayerHouse(); rebuildHomeRoom(); }, openBuild, closeBuild, get buildMode(){ return buildMode; }, talkShop, openDonate, talkCurator, spawnMossby, onFelled, findPath, startPlacing, LOT, RECTS, shopEnts, museumEnt, houseEnt:()=>houseEnt, Time, player, ents, ITEMS, residents, World, ROOMS, goTo, handleTap, doAction, updateSky, rollDay, spawnDaily, castAt, Fishing, fishes, bugs, openBag, openBook, openShop, openBoard, openMenu, openCraft, doCraft, WOODWORK, enterRoom, exitRoom, equip, startLayout, endLayout, trees, applyControls, magic:{ startMagic, endMagic, landTap, magicPlace, castMagic, get mode(){ return magicMode; }, raiseTower, talkWizard, drinkPotion, potionOn, luckW, rollFavors, Q, favorChoices, findTowerSpot, get tower(){ return towerEnt; }, PLACES, TERRA, FALLS } };
+window.__game = { v123:{ toolPitch, pitchTool, buyTool, talkShop, get storeVisit(){ return storeVisit; } }, v120:{ track, checkAch, achValue, grantWear, ownsWear, openAchievements, makeFavor, rollFavors, favorChoices, npcOf, clothesStock, wardrobeOwned, get Q(){ return Q; } }, party:PARTY, v119:{ tierPick, openChest, townCap:()=>townCap() }, v13:{ shopStock:w=>shopStock(w), learnPlan, rareRoll, knowsPlan, unfoundPlans, stockWeight, RARE_WORK, GroundItem, ShopItem, Furniture }, v1:{ scene, camera, OUT, updateSky, updateHUD, snowPass, SNOW_U, townNewDay, applyTown, talkHall, openHallPanel, buildPlaza, refreshStoreItems, buildStoreAll, buildShop, buildMuseumAll, spawnExhibits, mentorMoment, teachWoodworking, openCraft, doCook, nearStation, toggleSled, setSled, get sledding(){ return sledding; }, sledV, eatFood, Plant, fullBagCatch, KB, landSeaTap, terraLand, LAMPS:()=>LAMPS, hasUpstairs, ShopItem, Stairs, get exhibits(){ return exhibits; }, onDisplay, museumNeeds, museumExpand, museumFitState, museumTanks, renderer, nearestEnt:()=>nearestEnt(), doAction:()=>doAction(), openTankView, closeTankView, get tankView(){ return tankView; }, KEEPOUT, dayKeyOf, World, startPlacing, checkPlace, get placing(){ return placing; }, FX, homeStock, buyHome, draftUnowned, get homeRack(){ return homeRack; }, openShop, openBuild:(o)=>openBuild(o), closeBuild, get buildMode(){ return buildMode; }, ents, Tree, Stump, Weed, Bug, bugs, player, interact, layoutBar, pickNote, itemToast, reel, Fishing, fishes, spawnFish, WU, relayout, enterRoom:(id)=>enterRoom(id), trees }, get S(){ return S; }, dbg:{ setCine:(c)=>{ cine=c; }, showChoices:(t,c)=>showChoices(t,c), dialog:(...a)=>dialog(...a), setRiding:(v)=>setRiding(v), enterRoom:(id)=>enterRoom(id), openBuild:()=>openBuild(), rooms:()=>Object.keys(ROOMS), get yaw(){ return camYaw; }, set yaw(v){ camYaw=v; }, get riding(){ return riding; }, get snow(){ return SNOW_U.value; }, setWeather:(w)=>{ weatherOverride=w; World.weather=w; snowT=0; }, get dlg(){ return !!dlgState; } }, walkable, blocked, groundY, launchRag, ragdolls, swing, meBody, refreshPortals, portalArches, get portalEnt(){ return portalEnt; }, enterRoom, PLACES, net:{ party:(id,d)=>PARTY.onNet(id,d), bonked, visibleRemotes:()=>[...remotes.values()].filter(r=>r.obj.visible).map(r=>[r.name,+r.pos.x.toFixed(1),+r.pos.z.toFixed(1)]), remoteUpsert, remotePos, remoteLeave, remoteEmote, playerState, setInventory, toast:(m)=>toast(m), updateHUD:()=>updateHUD(), get started(){ return started; } }, ITEMS, itemThumb:(id)=>thumb(id), layoutInfo:()=>({ id:LAYOUT_ID, PLACES, PATHS, LOT, rects:RECTS.map(r=>r.slice(0,4)), lot:lotRect() }), terrainH:(x,z)=>rawHeight(x,z), terrainSlope:(x,z)=>hillSlope(x,z), interact, spawnBug:(id,x,z)=>new Bug(id,x,z), tapOdds:()=>Object.fromEntries(Object.keys(TAP_BASE).map(k=>[k, +tapChance({rarity:k}).toFixed(2)])), placingObj:()=>placing&&placing.m, toScreen:v=>{ const p=v.clone().project(camera); return [(p.x*0.5+0.5)*innerWidth, (-p.y*0.5+0.5)*innerHeight]; }, rebuildHome:()=>{ buildPlayerHouse(); rebuildHomeRoom(); }, openBuild, closeBuild, get buildMode(){ return buildMode; }, talkShop, openDonate, talkCurator, spawnMossby, onFelled, findPath, startPlacing, LOT, RECTS, shopEnts, museumEnt, houseEnt:()=>houseEnt, Time, player, ents, ITEMS, residents, World, ROOMS, goTo, handleTap, doAction, updateSky, rollDay, spawnDaily, castAt, Fishing, fishes, bugs, openBag, openBook, openShop, openBoard, openMenu, openCraft, doCraft, WOODWORK, enterRoom, exitRoom, equip, startLayout, endLayout, trees, applyControls, magic:{ startMagic, endMagic, landTap, magicPlace, castMagic, get mode(){ return magicMode; }, raiseTower, talkWizard, drinkPotion, potionOn, luckW, rollFavors, Q, favorChoices, findTowerSpot, get tower(){ return towerEnt; }, PLACES, TERRA, FALLS } };
 window.__game.farm = { openPlantPanel, startGridPlacing, plantGrid, checkGrid, openGarden, rebuildGardens, gardenAtXZ, islandSeeds, harvestRec, perimeter, get fenceSegs(){ return FENCE_SEGS; }, fenceHit, get placing(){ return placing; }, plantEnts, gardenEnts, CELL };

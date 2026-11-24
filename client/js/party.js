@@ -157,6 +157,7 @@ export function createParty(C) {
     if (!P || !P.root) return; const Q = P;
     const parts = [Q.root, Q.ball && Q.ball.obj, Q.zone && Q.zone.obj, Q.crown, ...(Q.goalObjs || []).map(g => g.obj)].filter(Boolean);
     showClutter(Q); removeBots(Q);
+    if (ui) { ui.big.classList.remove('show'); bigT = 0; }   // never leave a countdown, goal or winner message behind
     if (soft) { C.sparkBurst(new THREE.Vector3(Q.cx, Q.cy + 1, Q.cz), 20, 5, 0xfff0b0); C.Snd.pop(); }
     for (const o of parts) { scene.remove(o); o.traverse(c => { if (c.geometry) c.geometry.dispose(); }); }
     Q.root = null; }
@@ -386,7 +387,7 @@ export function createParty(C) {
     C.Snd.fanfare();
     const c = new THREE.Vector3(P.cx, P.cy + 1.5, P.cz); for (let i = 0; i < 4; i++) setTimeout(() => { for (const col of COLS) C.puff(c.clone().add(new THREE.Vector3((Math.random() - 0.5) * 6, 1.5, (Math.random() - 0.5) * 6)), col, 6, 1.4, 3, 0.9, 1.4); C.sparkBurst(c, 14, 5, 0xfff0b0); }, i * 300);
     if (!inGame() || P.prized) return; P.prized = true;
-    if (!P.prize) { setTimeout(() => C.toast(P.practice ? 'Practice round. Play with friends to win cups and clams.' : 'Play with a friend to win prizes.'), 1500); return; }
+    if (!P.prize) { const msg = P.practice ? 'Practice round. Play with friends to win cups and clams.' : 'Play with a friend to win prizes.'; setTimeout(() => C.toast(msg), 1500); return; }
     setTimeout(() => {
       if (iWon) { const r = C.addItem(G0.prize); if (r) C.itemToast(G0.prize, r === 'new', 'Won'); else { C.dropNear(G0.prize, player.pos.clone()); C.toast(`Your bag is full, so your ${G0.name} Cup is on the ground next to you.`); } C.addClams(500); }
       else C.addClams(200);
@@ -470,7 +471,10 @@ export function createParty(C) {
 
   /* ---------- every frame ---------- */
   function update(dt, t) {
-    now = t; if (!P) return;
+    now = t;
+    // the big text (countdown, goals, winner) fades on its own timer, even after the game is put away
+    bigT -= dt; if (bigT <= 0 && ui && ui.big.classList.contains('show')) ui.big.classList.remove('show');
+    if (!P) return;
     if (P.isHost) hostTick(dt); else if (P) { P.left -= dt; if (P.ph === 'end' && P.left < -6) { teardown(true); P = null; setPartyMode(false); renderUI(); return; } }
     if (!P || !P.root) return;
     keepHidden(); fence();
@@ -492,7 +496,6 @@ export function createParty(C) {
       P.crown.position.lerp(tgt, Math.min(1, dt * (hp ? 12 : 4))); P.crown.rotation.y += dt * (hp ? 1 : 1.8);
       if (ho && ho !== P.lastHolder && P.ph === 'play' && ho !== '*') { C.Snd.pop(); C.sparkBurst(P.crown.position.clone(), 10, 3, 0xffe08a); }
       P.lastHolder = ho; }
-    bigT -= dt; if (bigT <= 0 && ui && ui.big.classList.contains('show')) ui.big.classList.remove('show');
     uiTick(); }
 
   /* ---------- screen ---------- */

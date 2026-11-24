@@ -34,7 +34,9 @@ const own = () => B.mode === 'visit' ? B.own : null;
 export function setup(boot) {
   B = boot; B.flush = flush;   // the wizard's spells save and reload the island
   B.sendLive = m => send(m);   // main.js sends bonks through the live room
-  ownVer = B.mode === 'visit' ? B.ownVersion : (B.version || 0); hostVer = B.hostVersion || 0;
+  ownVer = (B.mode === 'visit' || B.mode === 'trip') ? B.ownVersion : (B.version || 0); hostVer = B.hostVersion || 0;
+  // v1.26 boat trips: your bag and clams save to your own island's save; the trip island lives in this tab only
+  if (B.mode === 'trip') B.onSave = S => { try { sessionStorage.setItem('dw-trip-world', JSON.stringify({ ground: S.ground, cut: S.cut, stumps: S.stumps, plants: S.plants, day: S.day, placed: S.placed })); } catch {} queue(); };
   if (B.mode === 'account') B.onSave = S => { cacheLocal(S); queue(); };
   if (B.mode === 'visit') { base = snap(B.save); lastWorld = JSON.stringify(worldForPush(B.save)); B.onSave = () => queue(); }
   if (B.mode === 'account' && B.save) base = snap(B.save);
@@ -45,7 +47,7 @@ function queue() { if (blocked) return; clearTimeout(timer); timer = setTimeout(
 
 // Push the current state to the server now. Resolves once it's stored (or failed).
 export function flush() {
-  clearTimeout(timer); if (blocked) return Promise.resolve(false); if (B.mode !== 'account' && B.mode !== 'visit') return Promise.resolve(true);
+  clearTimeout(timer); if (blocked) return Promise.resolve(false); if (B.mode !== 'account' && B.mode !== 'visit' && B.mode !== 'trip') return Promise.resolve(true);
   // one push at a time, in order, so two pushes never race with the same version
   inflight = (inflight || Promise.resolve()).then(doFlush, doFlush);
   return inflight;
@@ -65,6 +67,12 @@ async function doFlush() {
         if (m.took) banner(`Your island was changed by a resident${m.clash ? ' (some of your last changes were replaced)' : ''}. Reload to see it.`, 'Reload', async () => { await flush(); location.reload(); });
       }
       conflict('Your island keeps changing somewhere else.'); return false;
+    }
+    if (B.mode === 'trip') {
+      const mine = { ...B.own, ...pick(S, PLAYER_KEYS) };
+      const r = await api('/api/save', { method: 'PUT', body: { data: mine, baseVersion: ownVer } });
+      if (r.ok) { ownVer = r.version; B.own = mine; return true; }
+      if (r.status === 409) conflict('Your island was changed somewhere else.'); return false;
     }
     // visiting: your bag/clams go to your own save; island changes (residents only) go to the host
     const mine = { ...B.own, ...pick(S, PLAYER_KEYS) }; mine.visits = { ...(B.own.visits || {}), [B.host.id]: { day: S.day } };
@@ -156,6 +164,8 @@ async function renderPanel() {
         <div class="notice">Guest limits: wallet up to 10,000 clams, common and uncommon finds only, house up to 12 floor squares, fewer house styles.</div>
         ${B.online ? '<button class="btn" id="mkAcct">Make an account and keep this island</button>' : '<div class="muted">Accounts are not available on this copy of the game.</div>'}`;
       const b = $('#mkAcct'); if (b) b.onclick = async () => { closePanel(); try { localStorage.setItem(SAVE_KEY, JSON.stringify(G().S)); } catch {} const ok = await signUpScreen({ sub: 'Your guest island moves to your account after you sign in. We email you a 6-digit code, no password needed.' }); if (ok) { location.reload(); return; } const el = $('#bootUI'); if (el) el.remove(); };
+    } else if (B.mode === 'trip') {
+      body.innerHTML = `<div class="notice">On a boat trip to <b>${esc((B.trip && B.trip.name) || 'a little island')}</b>.<br><span class="muted">Your bag and clams are saved to your account as you go. Talk to Skipper Wick on the dock to sail home.</span></div>`;
     } else if (B.mode === 'visit') {
       body.innerHTML = `<div class="notice">Visiting <b>${esc(B.host.name)}</b>'s island${B.host.island ? ', ' + esc(B.host.island) : ''}, as a <b>${B.role}</b>.<br><span class="muted">${B.role === 'resident' ? 'You can change things here like the owner can.' : 'You can look around, pick fruit, dig fossils and shop. Your bag and clams are your own.'}</span></div>
         <button class="btn" id="giftHost">Leave a gift in ${esc(B.host.name)}'s mailbox</button> <button class="btn alt" id="goHome">Go home</button>`;

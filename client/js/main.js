@@ -6,12 +6,12 @@ import * as THREE from 'three';
 import { TAU, clamp, lerp, smooth, mulberry32, hashStr, hash2, vnoise, fbm, weightedPick, inHours, inMonths, fmt, polyDist, segDist, Time, seasonOf } from './util.js';
 import { ITEMS, NATIVE_FRUITS, PLANTS, TOOLS, WOODWORK, BACKPACKS, BASE_SLOTS, HOUSE_LEVELS, RESIDENTS, DIALOGUE, PEDDLER, EVENTS, rarityLabel, RARITY_COLORS, SHOPS, INVEST, KEEPERS, MUSEUM, BUILD,
   FOREIGN_FRUIT_PRICE, FRUIT_REGROW_DAYS, POTIONS, WIZARD, MAGIC, STORY, FAVOR_ASKS, CROPS, RECIPES, ARRIVE, MENTOR, islandSeedPool, ISLAND_SEED_BUY, GARDEN_FENCES, GARDEN_DECOR, FR, RARE_WORK, RARE_ODDS, PLAN_PRICE,
-  WEAR_IDS, FAVOR_THEMES, DO_TASKS } from './content.js';
+  WEAR_IDS, FAVOR_THEMES, DO_TASKS, ORIGINAL_RESIDENTS } from './content.js';
 import { ACHIEVEMENTS, ACH_GROUPS } from './achieve.js';
 import { BY_SLOT, SLOT_NAMES } from './wardrobe-data.js';
 import { CELL, buildSoil, buildFences, buildStake, buildGardenSign, buildScarecrow, buildLanternPost, buildFlowerArch } from './farm.js';
 import { Snd } from './audio.js';
-import { LAYOUTS, DEFAULT_SHAPE, islandRadius, generateLayout, bluffD } from './layouts.js';
+import { LAYOUTS, DEFAULT_SHAPE, islandRadius, generateLayout, bluffD, generateTrip, TRIP_THEMES } from './layouts.js';
 import { buildBike, MODEL, M, mk, G, outline, windowMat, glowMats, glowMat, glowSprites, addGlow, textSprite, PALETTE, buildItemModel, thumb, toolThumb, FURN_BUILDERS, MF,
   buildTree, buildStump, buildShrub, buildFlower, buildTool, buildAnimal, buildPlayer, buildHouse, buildStall, buildBoard, buildPlankDeck, buildRoom, buildBird, buildGull, buildDuck, buildWeedClump } from './models.js';
 import './furn.js';
@@ -66,13 +66,17 @@ function migrate(s){
 }
 const BOOT = window.__BOOT || { mode:'guest' };
 const GUEST = BOOT.mode==='guest', VISIT = BOOT.mode==='visit', CAN_EDIT = !VISIT || BOOT.role==='resident';
+// v1.26: on a boat trip to a little island with no town. Your own things come along; the island is gone when you sail home.
+const TRIP = BOOT.mode==='trip', TRIP_THEME = TRIP ? ((BOOT.trip && BOOT.trip.theme) || 'plain') : null;
+if (TRIP_THEME==='moonlit'){ const h0=Time.hour.bind(Time); Time.hour=function(){ return 22.5 + (h0()%1)*0.8; }; }   // always night
+if (TRIP_THEME==='frost'){ Time.month=function(){ return 1; }; World.season='winter'; }   // always winter
 const GUEST_CAP = { clams:10000, cells:12, minRarity:3 };   // guest mode: wallet cap, house size, common and uncommon only
 const allowedFind = it => !GUEST || (it.rarity ?? 5) >= GUEST_CAP.minRarity;
 let S=null; if (BOOT.save) S=BOOT.save; else try { S=JSON.parse(localStorage.getItem(SAVE_KEY)); } catch(e){}
 S = migrate((S && (S.v===1||S.v===2)) ? S : freshState());
 // Generated islands (made in the island maker when signing up) carry their recipe in S.gen
 const LAYOUT_ID = (S.layout==='gen' && S.gen) ? 'gen' : LAYOUTS[S.layout] ? S.layout : 'classic';
-const LAY = Object.assign({}, DEFAULT_SHAPE, LAYOUT_ID==='gen' ? generateLayout(S.gen) : LAYOUTS[LAYOUT_ID]);
+const LAY = Object.assign({}, DEFAULT_SHAPE, LAYOUT_ID==='gen' ? (S.gen.trip ? generateTrip(S.gen) : generateLayout(S.gen)) : LAYOUTS[LAYOUT_ID]);
 const SC = LAY.scale || 1;   // island size (generated islands are about twice the area)
 if (!S.terra) S.terra = { cells:{}, moved:{} };   // wizard work: reshaped land, dug water, moved buildings
 if (!S.magic) S.magic = {};                       // wizard tower (unlocked by a quest) and where it stands
@@ -80,8 +84,12 @@ if (!S.magic) S.magic = {};                       // wizard tower (unlocked by a
    New islands start with three neighbors; the rest move in rarely, and only once the town gets upgrades (see townCap). Islands from before v1.0
    (they already have a day on the clock or a player name) keep everyone they had. */
 const START_RES=['pippa','bramble','mabel'], MOVE_ORDER=['lumi','otis','clover','juniper'];
-if (!S.town){ const older = !!S.day || !!S.player; S.town = { res: older ? RESIDENTS.map(R=>R.id) : START_RES.slice(), next:null, last:null, hall:0, fund:0, met:{}, deco:0 }; }
+if (!S.town){ const older = !!S.day || !!S.player; S.town = { res: older ? ORIGINAL_RESIDENTS.slice() : START_RES.slice(), next:null, last:null, hall:0, fund:0, met:{}, deco:0 }; }
 S.town.met=S.town.met||{}; S.town.res=S.town.res.filter(id=>RESIDENTS.some(R=>R.id===id));
+// v1.26: newer islanders get a home spot on this island when they first book a plot; it's kept here
+S.town.homes=S.town.homes||{}; S.town.left=S.town.left||{};
+const isOrig = id => ORIGINAL_RESIDENTS.includes(id);
+for (const R of RESIDENTS) if (!isOrig(R.id)) R.home = S.town.homes[R.id] ? S.town.homes[R.id].slice() : null;
 const livesHere = id => S.town.res.includes(id);
 /* v1.19: clothes you own (wear them from Change my look) and achievements you've earned */
 S.wardrobe = Array.isArray(S.wardrobe) ? S.wardrobe.filter(id=>ITEMS[id] && ITEMS[id].kind==='wear') : [];
@@ -285,7 +293,7 @@ const isBeach = (x,z) => { const h=rawHeight(x,z), t=Math.hypot(x,z)/islandR(Mat
    PLACES0 is the island as first made (trees and rocks are placed around it, so saved trees keep their spots).
    PLACES is where things stand now, after any buildings the wizard moved. */
 const PLACES0 = JSON.parse(JSON.stringify(LAY.places)); delete PLACES0.tower;
-for (const R of RESIDENTS) PLACES0[R.id]=R.home;
+for (const R of RESIDENTS) if (isOrig(R.id)) PLACES0[R.id]=R.home;
 const LOT0 = { ...LAY.lot };
 const PLACES = JSON.parse(JSON.stringify(PLACES0));
 const LOT = { ...LOT0 };   // center of the player's building lot (7 x 6 cells)
@@ -308,8 +316,9 @@ function findHallSpot(){
 }
 if (S.town && !VISIT && S.town.at===undefined) S.town.at = findHallSpot();
 if (S.town && S.town.at) PLACES.hall = S.town.at.slice();
+for (const R of RESIDENTS) if (!isOrig(R.id) && R.home) PLACES[R.id]=R.home.slice();
 for (const [k,p] of Object.entries(S.terra.moved||{})){ if (!PLACES[k] || !Array.isArray(p)) continue; if (k==='home'){ LOT.x += p[0]-PLACES.home[0]; LOT.z += p[1]-PLACES.home[1]; } PLACES[k]=[p[0],p[1]]; }
-for (const R of RESIDENTS) R.home = PLACES[R.id];
+for (const R of RESIDENTS) R.home = PLACES[R.id] || null;
 /* Portal Station (v1.7): a stone entrance with stairs down to an underground hall of portals, one to each friend's island.
    Every island gets one near the plaza, picked the same way every time (so a visitor's game finds the same spot). */
 const PORT_FOOT=2.6;
@@ -325,7 +334,8 @@ function findPortalSpot(){
     if (bad || hi-lo>0.9 || baseHeight(x,z+PORT_FOOT+2.5)<0.6) continue;
     return [+x.toFixed(1), +z.toFixed(1)]; }
   return null; }
-if (Array.isArray(S.portalAt)) PLACES.portal=S.portalAt.slice();
+if (TRIP){}   // no Portal Station on a trip island
+else if (Array.isArray(S.portalAt)) PLACES.portal=S.portalAt.slice();
 else { const p=findPortalSpot(); if (p){ PLACES.portal=p; if (!VISIT) S.portalAt=p; } }
 const MOVED = Object.keys(S.terra.moved||{}).length>0;
 const ALTERED = MOVED || TERRA_ANY || FALLS.length>0 || !!PLACES.tower || !!PLACES.portal || !!LAY.gen;   // trees and rocks then also skip spots that changed
@@ -439,10 +449,11 @@ function genPathsGrid(P, only){
   return out;
 }
 let PATHS;
-if (LAYOUT_ID==='classic' && !MOVED){ PATHS = [...PATHS_V4.filter((p,i)=>i!==8 && i!==9), ...PATHS_NEW]; const add=['tower','hall','portal'].filter(k=>PLACES[k]); if (add.length) PATHS.push(...genPathsGrid(PLACES, add)); }
+if (LAYOUT_ID==='classic' && !MOVED){ PATHS = [...PATHS_V4.filter((p,i)=>i!==8 && i!==9), ...PATHS_NEW]; const add=['tower','hall','portal',...RESIDENTS.filter(R=>!isOrig(R.id)).map(R=>R.id)].filter(k=>PLACES[k]); if (add.length) PATHS.push(...genPathsGrid(PLACES, add)); }
+else if (TRIP) PATHS = [];   // trip islands have no town, so no paths
 else PATHS = genPathsGrid(PLACES);
 const REROUTED = LAYOUT_ID!=='classic' || MOVED;   // the paths you see differ from the ones trees were placed around
-if (LAYOUT_ID!=='classic') PATHS_V4.push(...(LAYOUT_ID==='gen' ? genPathsRouted(PLACES0) : genPaths(PLACES0)));
+if (LAYOUT_ID!=='classic' && !TRIP) PATHS_V4.push(...(LAYOUT_ID==='gen' ? genPathsRouted(PLACES0) : genPaths(PLACES0)));
 let layoutPhase=true;   // true while the original trees and rocks are being placed
 const pathDist = (x,z) => { let m=1e9; for(const p of (layoutPhase?PATHS_V4:PATHS)) m=Math.min(m, polyDist(x,z,p)); return m; };
 const newPathDist = (x,z) => { let m=1e9; for(const p of PATHS_NEW) m=Math.min(m, polyDist(x,z,p)); return m; };
@@ -831,6 +842,8 @@ class Rock extends Ent {
   }
   update(dt){ if(this.hit>0){ this.hit=Math.max(0,this.hit-dt*5); const s=1+Math.sin(this.hit*Math.PI)*0.08; this.obj.scale.set(s,2-s,s); } }
 }
+// v1.26: boat tickets to named islands (see the trips section)
+const randomTicket = () => { const ids=Object.keys(ITEMS).filter(id=>ITEMS[id].kind==='ticket'); return ids[Math.floor(Math.random()*ids.length)]; };
 class DigSpot extends Ent {
   constructor(i,x,z){ super('dig',x,z,0.4); this.i=i; this.reach=1.3; const g=new THREE.Group(); for(const a of [0.6,-0.6]){ const m=mk(G.box(0.7,0.03,0.12), M(0x6a4a30), 0,0.03,0,g); m.rotation.y=a; m.castShadow=false; } this.attach(g); this.hitSphere(0.5,0.2); }
   label(){ return 'Dig'; }
@@ -838,6 +851,7 @@ class DigSpot extends Ent {
     const f=tierPick(Math.random, Object.values(ITEMS).filter(i=>i.kind==='fossil' && allowedFind(i)), i=>luckW(i,'dig'), 'dig'); this.remove(); setTimeout(()=>dropNear(f.id, this.pos, 0.3, true), 200);
     if (Math.random()<(potionOn('dig')?0.25:0.12)){ setTimeout(()=>{ const got=grantRandomStyle(); if(got){ Snd.jingle(); toast(`Swatch book: ${got}`); } }, 900); }
     if (!GUEST && Math.random()<rareChance('digPlan','dig')){ const pl=randomPlan(); if (pl){ const p=this.pos.clone(); setTimeout(()=>{ dropNear(pl, p, 0.9); sparkle(p.clone().add(new THREE.Vector3(0,1,0))); Snd.jingle(); toast('Something rolled up in the dirt...', thumb(pl), 'new', 'A rare plan!'); }, 1100); } }
+    if (!GUEST && Math.random()<0.004){ const tk=randomTicket(), p=this.pos.clone(); setTimeout(()=>{ dropNear(tk, p, 0.9); Snd.jingle(); toast('A boat ticket was buried here!', thumb(tk), 'new'); }, 1100); }   // v1.26
     if (toolTier('shovel')>=2 && Math.random()<0.3){ addClams(300); toast(`Your ${TOOLS.shovel.tiers[toolTier('shovel')].name.toLowerCase()} turned up 300 clams too!`); Snd.coin(); } save(); }
 }
 class GroundItem extends Ent {
@@ -1104,14 +1118,53 @@ class Resident extends Ent {
   }
   applyFace(dt){ if(this.lying) return; let d=this.face-this.obj.rotation.y; d=Math.atan2(Math.sin(d),Math.cos(d)); this.obj.rotation.y+=d*Math.min(1,dt*8); }
 }
+/* v1.26: Fennick comes through the Portal Station (once its beacon is lit) and pushes a little cart around the island,
+   stopping here and there along the paths. Walk up to him and he waits for you. */
+function buildMerchantCart(){
+  const g=new THREE.Group(), wood=M(0x8a5e3a), dark=M(0x5a3e28), cloth=[M(0xd8604d),M(0xf4e6c8)], iron=M(0x2c2a28);
+  mk(G.box(1.5,0.12,0.95), wood, 0,0.62,0,g); for (const sx of [-1,1]) mk(G.box(1.5,0.32,0.06), wood, 0,0.8,sx*0.46,g); mk(G.box(0.06,0.32,0.95), wood, 0.72,0.8,0,g);
+  const wheels=[]; for (const sz of [-1,1]){ const w=new THREE.Group(); w.position.set(-0.1,0.38,sz*0.55); g.add(w); const t=mk(new THREE.TorusGeometry(0.33,0.05,6,16), dark, 0,0,0,w);
+    for (let k=0;k<3;k++){ const sp=mk(G.box(0.62,0.04,0.04), dark, 0,0,0,w); sp.rotation.z=k/3*Math.PI; } mk(G.cyl(0.07,0.07,0.08,8), iron, 0,0,0,w).rotation.x=Math.PI/2; wheels.push(w); }
+  mk(G.box(0.05,0.35,0.05), wood, 0.7,0.42,0,g);   // a leg at the front so it stands when parked
+  for (const sz of [-1,1]){ const h=mk(G.box(0.9,0.05,0.05), wood, -1.05,0.86,sz*0.36,g); h.rotation.z=0.2; }
+  mk(G.cyl(0.03,0.03,0.78,6), wood, -1.45,0.95,0,g).rotation.x=Math.PI/2;   // the handlebar
+  // a striped awning on four posts
+  for (const [px,pz] of [[-0.68,-0.42],[0.68,-0.42],[-0.68,0.42],[0.68,0.42]]) mk(G.cyl(0.03,0.03,1.0,6), wood, px,1.2,pz,g);
+  for (let k=0;k<6;k++){ const st=mk(G.box(1.62/6,0.04,1.1), cloth[k%2], -0.81+(k+0.5)*1.62/6, 1.74+Math.sin(k/5*Math.PI)*0.08, 0, g); st.castShadow=true; }
+  // crates, a sack and a jar or two
+  mk(G.box(0.42,0.32,0.38), M(0xb8864e), -0.35,0.86,-0.18,g); mk(G.box(0.34,0.26,0.3), M(0xa8754a), 0.2,0.82,0.2,g);
+  mk(G.sph(0.22,10,8), M(0xd8c49a), 0.42,0.86,-0.2,g).scale.set(1,1.2,1);
+  mk(G.cyl(0.09,0.1,0.22,10), M(0x7ab0c8,{roughness:0.2}), -0.3,1.13,-0.18,g); mk(G.cyl(0.08,0.08,0.18,10), M(0xc87ab0,{roughness:0.2}), 0.2,1.04,0.2,g);
+  g.userData.wheels=wheels; return g;
+}
 class Peddler extends Ent {
-  constructor(){ const x=DOCK.x0-2.5, z=DOCK.z-3.4; super('peddler',x,z,0.6); this.solid=true; this.reach=1.9;
+  constructor(){ const st=Peddler.start(); super('peddler',st[0],st[1],0.6); this.solid=true; this.reach=2.2;
     const g=new THREE.Group(); const a=buildAnimal({ species:'frog', ears:'none', fur:0x7fbf5a, muzzle:0xe8f0c0, shirt:0x8a5ab8, cheek:0xf5a3a3 }); g.add(a); this.a=a;
-    mk(G.box(2,0.04,1.4), M(0xd8604d), 1.4,0.02,0.2,g).castShadow=false; mk(G.box(0.6,0.4,0.4), M(0xa8754a), 1.0,0.2,0,g); mk(G.box(0.5,0.5,0.4), M(0x8a6ab8), 1.8,0.25,0.2,g);
-    this.attach(g); this.hitSphere(1.0,1.0); this.obj.rotation.y=-0.4; }
+    const cart=buildMerchantCart(); cart.position.set(0,0,1.75); cart.rotation.y=-Math.PI/2; g.add(cart); this.cart=cart;
+    this.attach(g); this.hitSphere(1.1,1.2); this.route=null; this.ri=0; this.wait=2+Math.random()*3; this.talking=0; this.face=0; }
+  static start(){ if (PLACES.portal && portalEnt){ const d=portalEnt.doorPt; return [d[0], d[1]+2.4]; } return [DOCK.x0-2.5, DOCK.z-3.4]; }
   label(){ return 'Talk'; }
-  act(){ dialog(PEDDLER.name, PEDDLER.voice, [PEDDLER.greet], ()=>openShop('rare')); }
-  update(dt,t){ this.a.userData.body.position.y=Math.abs(Math.sin(t*2))*0.05; }
+  act(){ this.talking=6; dialog(PEDDLER.name, PEDDLER.voice, [PEDDLER.greet], ()=>openShop('rare')); }
+  pickRoute(){
+    // somewhere along a path, not too far, not inside anything
+    for (let k=0;k<12;k++){ const P=PATHS[Math.floor(Math.random()*PATHS.length)]; if (!P||!P.length) continue; const q=P[Math.floor(Math.random()*P.length)];
+      const d=Math.hypot(q[0]-this.pos.x, q[1]-this.pos.z); if (d<6 || d>26 || !walkable(q[0],q[1]) || onBridge(q[0],q[1])) continue;
+      this.solid=false; const r=findPath(this.pos.x, this.pos.z, q[0], q[1], 0.8); this.solid=true; if (r && r.length){ this.route=r; this.ri=0; return true; } }
+    return false; }
+  update(dt,t){
+    const u=this.a.userData, near=Math.hypot(player.pos.x-this.pos.x, player.pos.z-this.pos.z)<4.2;
+    if (this.talking>0) this.talking-=dt;
+    if (near || this.talking>0 || dlgState){ const want=Math.atan2(player.pos.x-this.pos.x, player.pos.z-this.pos.z); this.turn(want, dt*3); u.body.position.y=Math.abs(Math.sin(t*2))*0.05; return; }
+    if (!this.route){ this.wait-=dt; u.body.position.y=Math.abs(Math.sin(t*2))*0.05; if (this.wait<=0){ if (!this.pickRoute()) this.wait=3; } return; }
+    const q=this.route[this.ri]; if (!q){ this.route=null; this.wait=8+Math.random()*10; return; }
+    const tx=q.x!==undefined?q.x:q[0], tz=q.z!==undefined?q.z:q[1], dx=tx-this.pos.x, dz=tz-this.pos.z, d=Math.hypot(dx,dz);
+    if (d<0.25){ this.ri++; return; }
+    const sp=1.5*dt, nx=this.pos.x+dx/d*Math.min(sp,d), nz=this.pos.z+dz/d*Math.min(sp,d);
+    this.turn(Math.atan2(dx,dz), dt*4); this.pos.set(nx, groundY(nx,nz), nz); this.obj.position.copy(this.pos);
+    const ph=t*7; if (u.legs){ u.legs[0].rotation.x=Math.sin(ph)*0.5; u.legs[1].rotation.x=-Math.sin(ph)*0.5; } if (u.arms){ u.arms[0].rotation.x=-1.1; u.arms[1].rotation.x=-1.1; }
+    for (const w of this.cart.userData.wheels) w.rotation.z-=sp/0.33;
+  }
+  turn(want, k){ let df=want-this.obj.rotation.y; df=Math.atan2(Math.sin(df),Math.cos(df)); this.obj.rotation.y+=df*Math.min(1,k); }
 }
 
 /* ---------- Bugs: sneak up slowly, or they flee ---------- */
@@ -1220,8 +1273,10 @@ const fishes=[];
 function fishPool(type){ const h=Time.hour(), m=Time.month(); return Object.values(ITEMS).filter(i=>i.kind==='fish' && i.where===type && inMonths(m,i.months) && inHours(h,i.hours)); }
 function waterSpot(){ for(let k=0;k<40;k++){ const a=Math.random()*TAU, d=4+Math.random()*12; const x=player.pos.x+Math.cos(a)*d, z=player.pos.z+Math.sin(a)*d; if(isFishWater(x,z) && rawHeight(x,z)<-0.45 && !onDock(x,z) && !onBridge(x,z)) return [x,z]; } return null; }
 function spawnFish(){ const p=waterSpot(); if(!p) return; const type=waterType(p[0],p[1]); const pool=fishPool(type).filter(allowedFind); if(!pool.length) return; const sp=tierPick(Math.random, pool, i=>luckW(i,'fish'), 'fish');
-  const m=new THREE.Mesh(shadowGeo, shadowMat); m.scale.set(SIZE_SCALE[sp.size]*1.6,0.05,SIZE_SCALE[sp.size]*0.8); m.position.set(p[0],-0.25,p[1]); m.visible=false; OUT.add(m);   // the water shader draws the shadow (see Water)
-  fishes.push({ id:sp.id, m, size:SIZE_SCALE[sp.size]||0.85, age:0, home:new THREE.Vector3(p[0],0,p[1]), ph:Math.random()*10, state:'swim', t:0, nib:0 }); }
+  // v1.26: the fish's length is decided when it spawns, and its shadow shows it: a big shadow is a big one for its species
+  const meta=rollStats(sp.id), sz=(SIZE_SCALE[sp.size]||0.85)*(0.8+0.45*(meta.f||0));
+  const m=new THREE.Mesh(shadowGeo, shadowMat); m.scale.set(sz*1.6,0.05,sz*0.8); m.position.set(p[0],-0.25,p[1]); m.visible=false; OUT.add(m);   // the water shader draws the shadow (see Water)
+  fishes.push({ id:sp.id, meta, m, size:sz, age:0, home:new THREE.Vector3(p[0],0,p[1]), ph:Math.random()*10, state:'swim', t:0, nib:0 }); }
 // Hand the nearest fish to the water shader: position, heading, size. They fade in when they appear and out when they flee.
 function feedFishShadows(dt){ const U=WU.uFish.value, list=fishes.slice().sort((a,b)=>a.m.position.distanceToSquared(player.pos)-b.m.position.distanceToSquared(player.pos));
   for (let i=0;i<WATER_FISH_MAX;i++){ const f=list[i]; if (!f || World.inside){ U[i].set(0,0,0,0); continue; } f.age+=dt;
@@ -1238,7 +1293,7 @@ function castAt(pt){
 }
 function reel(){
   const f=Fishing.fish;
-  if (Fishing.state==='bite' && f){ useTool('rod'); const meta=rollStats(f.id), id=f.id; Snd.splash(); FX.fishCatch(id, bobber.position.clone()); setTimeout(()=>sparkle(player.pos.clone().add(new THREE.Vector3(0,2.3,0))), 600);
+  if (Fishing.state==='bite' && f){ useTool('rod'); const meta=f.meta||rollStats(f.id), id=f.id; Snd.splash(); FX.fishCatch(id, bobber.position.clone()); setTimeout(()=>sparkle(player.pos.clone().add(new THREE.Vector3(0,2.3,0))), 600);
     const kept=r=>{ setTimeout(()=>Snd.fanfare(),150); S.caught++; S.stats.fish++; track('fish'); const best=recordCatch(id, meta); catchToast(id, meta, r==='new', best); rareRoll('catch', 'moonpearl', player.pos, 'fish'); save(); };
     const r=addItem(id, meta); if(!r) setTimeout(()=>fullBagCatch(id, meta, kept), 250); else kept(r);
     f.m.parent && f.m.parent.remove(f.m); fishes.splice(fishes.indexOf(f),1);
@@ -1392,7 +1447,7 @@ function dropNear(id, at, rad=1.4, exact=false, meta){
 const reserved=[]; const reserve=(x,z,r)=>reserved.push([x,z,r]);
 const isFree=(x,z,r)=>{ for(const [a,b,c] of reserved) if(Math.hypot(x-a,z-b)<c+r) return false; return true; };
 reserve(0,0,3.5); reserve(...PLACES0.board,2.5); reserve(...PLACES0.shop,4.5); reserve(PLACES0.home[0],PLACES0.home[1]+1,5.5);
-for (const R of RESIDENTS) reserve(PLACES0[R.id][0],PLACES0[R.id][1]+1,5.5);
+for (const R of RESIDENTS) if (PLACES0[R.id]) reserve(PLACES0[R.id][0],PLACES0[R.id][1]+1,5.5);
 reserve(DOCK.x0-2,DOCK.z-3,4); reserve(DOCK.x0,DOCK.z,3); for(const b of BRIDGES){ reserve(...bEnd(b,1),2.5); reserve(...bEnd(b,-1),2.5); }
 function randLand(r, minH, maxH, rad, tries=60, near){
   for(let k=0;k<tries;k++){ let x,z; if(near){ const a=r()*TAU, d=4+r()*near[2]; x=near[0]+Math.cos(a)*d; z=near[1]+Math.sin(a)*d; } else { const a=r()*TAU, d=Math.sqrt(r())*56*SC; x=Math.cos(a)*d; z=Math.sin(a)*d; }
@@ -1491,8 +1546,7 @@ function buildPlayerHouse(home=S.home){
   if (ROOMS.home) ROOMS.home.exit=[houseEnt.doorPt[0], houseEnt.doorPt[1]+0.2];
   refreshSmoke();
 }
-rebuildHomeRoom();
-buildPlayerHouse();
+if (!TRIP){ rebuildHomeRoom(); buildPlayerHouse(); }
 const ROOF=[0xe0745a,0x7a9a5a,0x9a7ab8,0x4a7ad8,0xe88aa8,0x2a5a4a,0xd8b04a];
 /* ---------- Neighbors' homes, and plots for neighbors still on the way ---------- */
 const plotEnts={};
@@ -1502,7 +1556,7 @@ function buildResidentHome(R){
     const res=residents.find(x=>x.spec.id===R.id); Snd.door();
     if (res.loc==='in'){ enterRoom(R.id); if(res.asleep) setTimeout(()=>toast(`Shh... ${R.name} is fast asleep.`),500); }
     else toast(`Nobody's home. ${R.name} must be out and about.`); });
-  residentHomes.push(b); if (!ROOMS[R.id]) makeRoom(R.id, i+1, R.room, 8, 7, doorOf(b)); else ROOMS[R.id].exit=doorOf(b);
+  residentHomes.push(b); if (!ROOMS[R.id]) makeRoom(R.id, i<7 ? i+1 : 21+(i-7), R.room, 8, 7, doorOf(b)); else ROOMS[R.id].exit=doorOf(b);
   return b;
 }
 function buildPlotEnt(R){
@@ -1512,8 +1566,8 @@ function buildPlotEnt(R){
     else toast('An empty plot.'); });
   plotEnts[R.id].solid=false;
 }
-for (const R of RESIDENTS){ if (livesHere(R.id)) buildResidentHome(R); else buildPlotEnt(R); }
-const board=new Building('board',PLACES.board[0],PLACES.board[1],1.1,buildBoard(),'Read',()=>openBoard());
+for (const R of RESIDENTS){ if (!R.home || TRIP) continue; if (livesHere(R.id)) buildResidentHome(R); else buildPlotEnt(R); }
+const board = TRIP ? null : new Building('board',PLACES.board[0],PLACES.board[1],1.1,buildBoard(),'Read',()=>openBoard());
 
 /* ---------- Shops and museum ---------- */
 const shopOpen = id => { const h=SHOPS[id]?.hours; return !h || inHours(Time.hour(), h); };
@@ -1670,6 +1724,7 @@ function buildMuseumAll(){
 KEEPOUT.push([PLACES.museum[0], PLACES.museum[1]+0.5, 8.4], [PLACES.shop[0], PLACES.shop[1], 4.8], [PLACES.aquarium[0], PLACES.aquarium[1], 5.9], [PLACES.garden[0], PLACES.garden[1], 6.1]);
 if (PLACES.hall) KEEPOUT.push([PLACES.hall[0], PLACES.hall[1]+0.6, HALL_FOOT+0.6]);
 if (PLACES.portal) KEEPOUT.push([PLACES.portal[0], PLACES.portal[1]+0.4, PORT_FOOT+0.8]);
+for (const R of RESIDENTS) if (!isOrig(R.id) && R.home) KEEPOUT.push([R.home[0], R.home[1]+0.6, 4.4]);
 // Shops, museum and town hall go up once the day is set (the store shelves need today's stock)
 function initTownBuildings(){ buildStoreAll(); for (const id of ['aquarium','garden']) buildShop(id); buildMuseumAll(); buildHall(); buildPlaza(); refreshSmoke(); }
 let rebuildOnExit={};   // a shop you're standing in is rebuilt when you step outside
@@ -1687,11 +1742,32 @@ function buildHall(){
   const [dx,dz]=hallEnt.doorPt; clerk=new Keeper(KEEPERS.clementine, dx+(t===0?1.9:1.6), dz-(t===0?0.6:0.3), ()=>talkHall()); clerk.rest=0; hallEnt.tier=t;
 }
 const HALL_NAMES=['Town Tent','Town Hall','Grand Town Hall'];
-/* v1.19: nobody new moves in while the town is just a tent. Each town upgrade (town hall, grand hall, the museum
-   outgrowing its cottage, backing a shop) makes room for one more islander, and even then newcomers are rare:
-   at least MOVE_GAP real days after the last one moved in, then a small chance each day. */
-const MOVE_GAP=30, MOVE_DAILY=0.2;
-const townCap = () => Math.min(RESIDENTS.length, START_RES.length + (S.town.hall||0) + ((S.museum.tier||0)>=1?1:0) + (shopsBacked()>=1?1:0));
+/* v1.26: nobody new moves in while the town is just a tent. Once the town hall is built, newcomers turn up every few
+   days (at least MOVE_GAP days after the last one, then a coin flip each day) until 10 islanders live here.
+   You can ask an islander to move away as long as at least MIN_RES stay. Someone who left won't come back for a month. */
+const MOVE_GAP=2, MOVE_DAILY=0.5, TOWN_MAX=10, MIN_RES=5, RETURN_DAYS=30;
+const townCap = () => (S.town.hall||0)>=1 ? TOWN_MAX : Math.max(START_RES.length, Math.min(TOWN_MAX, S.town.res.length));
+// A spot for a newcomer's house: dry, fairly flat, clear of buildings, paths, gardens and anything you planted or placed
+function findHomeSpot(id){
+  const r=mulberry32(hashStr(id+':home:'+S.seed)), FOOT=3.6;
+  for (let k=0;k<3000;k++){ const a=r()*TAU, d=(12+r()*30)*Math.min(SC,1.3)+k*0.004, x=Math.cos(a)*d, z=Math.sin(a)*d;
+    if (Math.hypot(x,z)/islandR(a)>0.74 || polyDist(x,z,RIVER)<8 || Math.hypot(x-POND.x,z-POND.z)<POND.r+7 || nearFall(x,z,5)) continue;
+    if (x>DOCK.x0-12 && Math.abs(z-DOCK.z)<10) continue;
+    if (Math.abs(x-LOT.x)<BUILD.LW*BUILD.EC/2+6 && Math.abs(z-LOT.z)<BUILD.LD*BUILD.EC/2+7) continue;
+    if (Object.entries(PLACES).some(([kk,p])=>p && kk!=='board' && Math.hypot(x-p[0],z-p[1]) < (kk==='plaza'?10:kk==='museum'?10.5:kk==='hall'?HALL_FOOT+5.5:8.5))) continue;
+    if (visPathDist(x,z)<2.2 || visPathDist(x,z+3.2)<1.2) continue;
+    let bad=false, lo=99, hi=-99; for (let i=0;i<=12;i++){ const aa=i/12*TAU, rr=i===12?0:FOOT, px=x+Math.cos(aa)*rr, pz=z+Math.sin(aa)*rr, h=rawHeight(px,pz);
+      if (h<0.65 || !walkable(px,pz) || gardenAtXZ(px,pz) || inRects(px,pz,0.2)){ bad=true; break; } lo=Math.min(lo,h); hi=Math.max(hi,h); }
+    if (bad || hi-lo>1.1 || !walkable(x,z+FOOT+1.5)) continue;
+    if (S.plants.some(q=>!q.wild && Math.hypot(q.x-x,q.z-z)<FOOT+1.2) || S.placed.some(q=>q.x<500 && Math.hypot(q.x-x,q.z-z)<FOOT+1.2)) continue;
+    if (ents.some(e=>!e.removed && e.solid && (e instanceof Building || e instanceof Resident || e instanceof Keeper) && Math.hypot(e.pos.x-x,e.pos.z-z)<FOOT+3)) continue;
+    return [+x.toFixed(1), +z.toFixed(1)]; }
+  return null; }
+// Give a newcomer their spot: clear wild trees and rocks off it and mark it so nothing grows back there
+function claimHomeSpot(R, spot){
+  R.home=spot.slice(); PLACES[R.id]=spot.slice(); S.town.homes[R.id]=spot.slice(); KEEPOUT.push([spot[0], spot[1]+0.6, 4.4]);
+  for (const e of ents.slice()){ if (e.removed) continue; const d=Math.hypot(e.pos.x-spot[0], e.pos.z-spot[1]);
+    if (d<4.6 && ((e instanceof Tree && !e.rec) || e instanceof Rock || e instanceof Weed || e instanceof Stump)) e.remove(); } }
 const dayKeyOf = n => { const d=new Date(n*864e5); return d.getUTCFullYear()+'-'+String(d.getUTCMonth()+1).padStart(2,'0')+'-'+String(d.getUTCDate()).padStart(2,'0'); };
 const daysHere = () => S.town.day0 ? dayNum(today())-dayNum(S.town.day0) : 0;
 function hallReqs(t){ const q=HALL_NEED[t]; if (!q) return []; const out=[];
@@ -1702,27 +1778,39 @@ function hallReqs(t){ const q=HALL_NEED[t]; if (!q) return []; const out=[];
   return out; }
 // Called once a day (and when the island loads): neighbors move in, the town hall and museum finish building
 function townNewDay(key){
-  if (VISIT) return; const T=S.town; if (!T.day0) T.day0=key; const now=dayNum(key);
+  if (VISIT || TRIP) return; const T=S.town; if (!T.day0) T.day0=key; const now=dayNum(key);
   if (T.next && now>=dayNum(T.next.day)){ const id=T.next.id; if (!T.res.includes(id)) T.res.push(id); T.met[id]=false; T.last=key; T.next=null; T.arrived=id; }
+  if (T.leaving && now>=dayNum(T.leaving.day)){ const id=T.leaving.id; T.res=T.res.filter(x=>x!==id); T.left[id]=now; T.leaving=null; T.departed=id; T.last=T.last||key;
+    Q.active=Q.active.filter(f=>f.who!==id && f.to!==id); delete Q.offers[id]; }
   if (T.hallPend){ T.hall=Math.min(2,(T.hall||0)+1); T.hallPend=false; T.fund=0; T.hallNews=true; }
   if (S.museum.grow){ const plans=museumExpand(); S.museum.grow=0; if (plans.length) S.museum.grewNews=plans; }
   if (T.next && T.res.length>=townCap()) T.next=null;   // saves from before v1.19 may have someone booked without room
   const ref = Math.max(dayNum(T.day0), T.last ? dayNum(T.last) : 0);
   if (!T.next && T.res.length<townCap() && now-ref>=MOVE_GAP && mulberry32(hashStr(key+':movein:'+S.seed))()<MOVE_DAILY){
-    const id=MOVE_ORDER.find(x=>!T.res.includes(x)) || RESIDENTS.map(R=>R.id).find(x=>!T.res.includes(x));
-    if (id) T.next={ id, day:dayKeyOf(now+1) }; }
-  anonDonation(mulberry32(hashStr(key+':anon:'+S.seed))); museumGrowCheck();
+    const free=x=>!T.res.includes(x) && !(T.left[x]!==undefined && now-T.left[x]<RETURN_DAYS) && !(T.leaving && T.leaving.id===x);
+    const others=RESIDENTS.map(R=>R.id).filter(x=>free(x) && !MOVE_ORDER.includes(x));
+    let id=MOVE_ORDER.find(free) || (others.length ? others[hashStr(key+':who:'+S.seed)%others.length] : null);
+    if (id){ const R=RESIDENTS.find(x=>x.id===id);
+      if (!R.home){ const spot=findHomeSpot(id); if (spot) claimHomeSpot(R, spot); else id=null; }   // no room anywhere: try again another day
+      if (id) T.next={ id, day:dayKeyOf(now+1) }; } }
+  anonDonation(mulberry32(hashStr(key+':anon:'+S.seed))); museumGrowCheck(); incomeNewDay(now);
 }
 // Make the world match S.town: new houses and neighbors, plots, the hall and museum after overnight work
 function applyTown(){
-  for (const R of RESIDENTS){
+  for (const R of RESIDENTS){ if (!R.home) continue;
     if (livesHere(R.id)){ if (!residents.some(r=>r.spec.id===R.id)){ if (plotEnts[R.id]){ plotEnts[R.id].remove(); delete plotEnts[R.id]; } buildResidentHome(R); residents.push(new Resident(R)); } }
-    else buildPlotEnt(R); }
+    else { // moved away: their house and their walking self go, and the plot is empty again
+      const ri=residents.findIndex(r=>r.spec.id===R.id); if (ri>=0){ residents[ri].remove(); residents.splice(ri,1); }
+      for (let i=residentHomes.length-1;i>=0;i--){ const b=residentHomes[i]; if (!b.removed && Math.hypot(b.pos.x-R.home[0], b.pos.z-R.home[1])<0.5){ b.remove(); residentHomes.splice(i,1); } }
+      if (World.inside===R.id) exitRoom();
+      buildPlotEnt(R); } }
   if (hallEnt && hallEnt.tier!==(S.town.hall||0)){ buildHall(); buildPlaza(); }
   if (museumEnt && museumEnt.key!==museumKey()) rebuildPlace('museum'); else if (S.museum.news) spawnExhibits();
   refreshSmoke();
   const T=S.town;
   if (T.arrived){ const R=RESIDENTS.find(x=>x.id===T.arrived); T.arrived=null; if (R) setTimeout(()=>toast(`${R.name} moved in today!`, null, 'new'), 2400); }
+  refreshIncome();
+  if (T.departed){ const R=RESIDENTS.find(x=>x.id===T.departed); T.departed=null; if (R) setTimeout(()=>toast(`${R.name} moved away.`, null, '', 'Their plot is empty now. Someone new may take it.'), 2600); }
   if (T.hallNews){ T.hallNews=false; setTimeout(()=>{ Snd.fanfare(); toast(`The ${HALL_NAMES[T.hall]} is finished!`, null, 'new', T.hall===1?'Newcomers may start to notice the island, and the plaza got flower beds.':'A fountain in the plaza, and Wendell can now make new land.'); }, 3200); }
   if (S.museum.grewNews){ const g=S.museum.grewNews; S.museum.grewNews=false; setTimeout(()=>toast('The museum grew overnight!', null, 'new', Array.isArray(g)?'New: '+g.join(', ')+'.':''), 4000); }
   if (S.museum.news){ const nw=S.museum.news; S.museum.news=null; if (nw.clams) setTimeout(()=>{ Snd.coin(); toast(`+${fmt(nw.clams)} clams`, null, 'new', 'Someone left a donation at the museum. Professor Thistle sent it your way.'); }, 5000); }
@@ -1745,10 +1833,10 @@ function talkHall(){
     ...(VISIT?[]:[{ label: !S.home.built ? 'A house?' : loanOpen() ? 'Pay my loan' : 'Home loan', fn:()=>talkLoan(menu) }]),
     { label:'New neighbors?', fn:()=>{ const nxt=T.next && RESIDENTS.find(R=>R.id===T.next.id), cap=townCap();
         const lines = nxt ? [`${nxt.name} is moving in ${dayNum(T.next.day)<=dayNum(today())?'today':'tomorrow'}! The boxes are already on the plot.`]
-          : T.res.length>=RESIDENTS.length ? ['Every plot on the island is taken. What a town we have!']
+          : T.res.length>=TOWN_MAX ? [`${TOWN_MAX} islanders! Every plot on the island is taken. What a town we have!`]
           : T.res.length>=cap ? (t===0 ? ['Nobody moves to an island whose town hall is a tent, dear.','Fix the place up a bit. Folks hear about that sort of thing.']
               : [`Nobody new is looking at us right now. Every big town project makes the island a little more tempting to newcomers.`])
-          : ['Word is getting around about this island. Someone new might turn up one of these weeks, but folks out here take their time.'];
+          : ['Word is getting around about this island. Someone new should turn up in the next few days.'];
         dialog(k.name, v, lines, menu); } },
     { label:'Island news', fn:()=>openBoard() },
     { label:'Bye!', alt:true, fn:()=>{} } ]);
@@ -1769,6 +1857,152 @@ function openHallPanel(){
     const go=pBody.querySelector('#hallGo'); if (go) go.onclick=()=>{ if (noEdit()) return; S.town.hallPend=true; save(); Snd.fanfare(); toast('The builders start tonight!', null, 'new', `The ${HALL_NAMES[S.town.hall+1]} will be ready tomorrow.`); render(); };
   };
   openPanel('Town Projects'); render();
+}
+/* =====================================================================
+   v1.26: PASSIVE INCOME. Four people you meet around the island, each in their own spot, each something you fund and then
+   upgrade over time: a fisherman who lost his boat, a beekeeper, an orchard keeper and a bookkeeper for the shops you back.
+   Each one fills up over 3 days and then waits for you. Fish come at the usual odds, so a rare one is still rare.
+   ===================================================================== */
+const INC_DAYS=3, INC_UPGRADE_WAIT=7;
+const INCOME = {
+  boat:{ who:'Gill', voice:400, acc:['beanie'], accC:0x3a6ab0, unit:['fish','fish'], hint:'a fisherman sitting by a wrecked rowboat on the beach',
+    tiers:[{ name:'Rowboat', cost:30000, per:2 }, { name:'Fishing Sloop', cost:150000, per:4 }, { name:'Trawler', cost:500000, per:7 }],
+    meet:['Oh, hey there. Don\'t mind me. Just sitting with what\'s left of my boat.','Storm took her right out from under me. I fished these waters my whole life.',
+      'Tell you what. If you bought me a new rowboat, I\'d split the catch with you. A couple of fish a day, and I\'ll keep them in a crate right here.'],
+    up:['Business is good! The rowboat\'s doing fine, but she can only carry so much.','Get me a {name} and I could bring in a lot more for you.'] },
+  bees:{ who:'Hollis', voice:300, acc:['beanie'], accC:0xe8b020, unit:['honey jar','honey jars'], hint:'a beekeeper out in a quiet meadow',
+    tiers:[{ name:'Beehive', cost:20000, per:2 }, { name:'Three Hives', cost:90000, per:5 }, { name:'Apiary', cost:300000, per:9 }],
+    meet:['Shh. Careful now. The bees are deciding whether they like you.','I keep bees, or I did. My last hive got blown over and the colony moved on.',
+      'Buy me a new hive and I\'ll share the honey. More flowers nearby means more honey, so plant some if you like.'],
+    up:['The bees are thriving. They want more room, I think.','A {name} would mean a lot more honey for both of us.'] },
+  orchard:{ who:'Russet', voice:520, acc:['headband'], accC:0x7ab04a, unit:['piece of fruit','pieces of fruit'], hint:'an orchard keeper among the fruit trees',
+    tiers:[{ name:'Fruit Ladder', cost:20000, per:4 }, { name:'Pony Cart', cost:100000, per:8 }, { name:'Cider Shed', cost:300000, per:14 }],
+    meet:['Hello! Just admiring these trees. Somebody ought to be picking them properly.','I used to run an orchard back home. All I need is a good ladder.',
+      'Get me one and I\'ll pick fruit while you\'re busy, and keep it in baskets for you.'],
+    up:['These trees could give a lot more, you know.','With a {name}, I could get through twice the orchard.'] },
+  books:{ who:'Quill', voice:640, acc:['glasses'], accC:0x2a2a2a, unit:['clam','clams'], hint:'a bookkeeper by the general store',
+    tiers:[{ name:'Ledger', cost:25000, per:800 }, { name:'Counting House', cost:120000, per:2000 }, { name:'Trading Office', cost:400000, per:4500 }],
+    meet:['Ah! You\'re the one who\'s been backing the shops. I\'ve been watching the numbers.','Nobody is collecting your share of the profits! It\'s a scandal.',
+      'Buy me a proper ledger and I\'ll keep the books. Your cut piles up here every day, for each shop you\'ve backed.'],
+    up:['The shops are doing well, and the paperwork is piling up.','A {name} and I could squeeze a lot more out of every shop you back.'] },
+};
+const INC_IDS=Object.keys(INCOME);
+if (!S.income) S.income={};
+const incOf = k => S.income[k] || (S.income[k]={ tier:-1 });
+// when each one first turns up
+function incUnlocked(k){ if (GUEST || VISIT) return false; const T=S.town, hall=(T.hall||0)>=1;
+  if (k==='boat') return hall && (S.caught||0)>=40;
+  if (k==='bees') return hall && (S.plants.filter(p=>!p.wild && PLANTS[p.sp] && PLANTS[p.sp].ptype==='flower').length>=5 || discovered()>=45);
+  if (k==='orchard') return hall && daysHere()>=10 && trees.some(t=>!t.removed && t.fruit && t.fruit!=='coconut');
+  if (k==='books') return shopsBacked()>=1;
+  return false; }
+function incPerDay(k){ const I=incOf(k), D=INCOME[k]; if (I.tier<0) return 0; let n=D.tiers[I.tier].per;
+  if (k==='bees' && I.at){ const fl=S.plants.filter(p=>PLANTS[p.sp] && PLANTS[p.sp].ptype==='flower' && Math.hypot(p.x-I.at[0],p.z-I.at[1])<16).length; n+=Math.min(3, Math.floor(fl/4)); }
+  if (k==='books') n*=shopsBacked();
+  return n; }
+function incomeNewDay(now){
+  for (const k of INC_IDS){ const I=incOf(k); if (I.tier<0) continue; if (I.last===undefined){ I.last=now; continue; }
+    const days=now-I.last; if (days<=0) continue; const per=incPerDay(k); I.acc=Math.min(per*INC_DAYS, (I.acc||0)+per*days); I.last=now; } }
+// spots: each person has a place of their own, picked the same way every time on this island
+function incSpot(k){
+  const r=mulberry32(hashStr(k+':inc:'+S.seed)), far=(x,z,m)=>!Object.entries(PLACES).some(([kk,p])=>p && kk!=='board' && Math.hypot(x-p[0],z-p[1])<(kk==='plaza'?8:m))
+    && !INC_IDS.some(o=>o!==k && S.income[o] && S.income[o].at && Math.hypot(x-S.income[o].at[0],z-S.income[o].at[1])<12);
+  const clear=(x,z,rad)=>{ for (let i=0;i<=8;i++){ const a=i/8*TAU, rr=i===8?0:rad, px=x+Math.cos(a)*rr, pz=z+Math.sin(a)*rr; if (!walkable(px,pz) || inRects(px,pz,0.2) || gardenAtXZ(px,pz) || keptOut(px,pz)) return false; }
+    return !S.plants.some(q=>!q.wild && Math.hypot(q.x-x,q.z-z)<rad+0.8) && !S.placed.some(q=>q.x<500 && Math.hypot(q.x-x,q.z-z)<rad+0.8) && !ents.some(e=>!e.removed && e.solid && Math.hypot(e.pos.x-x,e.pos.z-z)<rad+e.r); };
+  for (let n=0;n<2500;n++){ let x, z;
+    if (k==='boat'){ const a=r()*TAU, d=islandR(a)*(0.9+r()*0.08); x=Math.cos(a)*d; z=Math.sin(a)*d; if (!isBeach(x,z) || Math.hypot(x-DOCK.x0,z-DOCK.z)<16) continue;
+      const ox=Math.cos(a), oz=Math.sin(a); if (!isFishWater(x+ox*4.5, z+oz*4.5)) continue; if (!far(x,z,9) || !clear(x,z,1.6)) continue; return [+x.toFixed(1), +z.toFixed(1), +a.toFixed(3)]; }
+    if (k==='orchard'){ const fr=trees.filter(t=>!t.removed && t.fruit && t.fruit!=='coconut'); if (!fr.length) return null; const t=fr[Math.floor(r()*fr.length)], a=r()*TAU; x=t.pos.x+Math.cos(a)*3; z=t.pos.z+Math.sin(a)*3; }
+    else if (k==='books'){ const p=PLACES.shop; if (!p) return null; const a=r()*TAU, d=6.5+r()*4; x=p[0]+Math.cos(a)*d; z=p[1]+Math.sin(a)*d; if (visPathDist(x,z)<1) continue;
+      if (Object.entries(PLACES).some(([kk,q])=>q && kk!=='shop' && kk!=='plaza' && kk!=='board' && Math.hypot(x-q[0],z-q[1])<7)) continue; if (!clear(x,z,1.6)) continue; return [+x.toFixed(1), +z.toFixed(1), 0]; }
+    else { const a=r()*TAU, d=islandR(a)*(0.35+r()*0.4); x=Math.cos(a)*d; z=Math.sin(a)*d; if (rawHeight(x,z)<SAND_H+0.3 || visPathDist(x,z)<3) continue; }
+    if (!far(x,z,8.5) || !clear(x,z,2.2)) continue;
+    let lo=99, hi=-99; for (let i=0;i<8;i++){ const h=rawHeight(x+Math.cos(i)*2,z+Math.sin(i)*2); lo=Math.min(lo,h); hi=Math.max(hi,h); } if (hi-lo>0.9) continue;
+    return [+x.toFixed(1), +z.toFixed(1), 0]; }
+  return null; }
+// props: what they've got to work with, by tier
+function buildIncomeProps(k, tier, at){
+  const g=new THREE.Group(), wood=M(0x8a5e3a), dark=M(0x5a3e28), cloth=M(0xf4e6c8), red=M(0xd8604d);
+  if (k==='boat'){ const a=at[2]||0, ox=Math.cos(a), oz=Math.sin(a);
+    const hull=(L,W,H,c)=>{ const h=new THREE.Group(); const b=mk(G.box(L,H,W), M(c), 0,H/2,0,h); mk(G.box(L*0.3,H*0.9,W*0.7), M(c), L*0.55,H*0.55,0,h).rotation.y=Math.PI/4; mk(G.box(L*0.98,0.06,W+0.04), wood, 0,H,0,h); return h; };
+    if (tier<0){ const w=hull(2.4,1.0,0.45,0x9a7a5a); w.rotation.set(0,0,Math.PI*0.92); w.position.set(ox*1.6+0.3, 0.55, oz*1.6+0.3); g.add(w); mk(G.box(0.9,0.06,0.18), wood, ox*1.1-0.6, 0.12, oz*1.1+0.5, g).rotation.y=0.7; }
+    else { const B=new THREE.Group(); B.position.set(ox*(4+tier*1.2), 0, oz*(4+tier*1.2)); B.rotation.y=-a+Math.PI/2; g.add(B);
+      const sz=[[2.4,1.1,0.5,0x5a8ab0],[3.6,1.5,0.7,0xe8e0d0],[5,2.1,0.9,0x3a6a8a]][tier]; const h=hull(...sz); h.position.y=-0.35; B.add(h);
+      if (tier>=1){ mk(G.cyl(0.06,0.07,3.2,6), wood, 0,1.9,0,B); const sail=mk(G.box(0.04,2.2,1.4), cloth, 0,2.1,0.75,B); sail.castShadow=true; }
+      if (tier>=2){ mk(G.box(1.4,1.0,1.4), M(0xf4f0e8), -1.1,0.8,0,B); mk(G.box(1.6,0.12,1.6), red, -1.1,1.36,0,B); }
+      // the mooring rope back to the beach
+      mk(G.cyl(0.02,0.02,4,4), M(0xc8b088), -ox*0, 0.2, 0, B).rotation.z=Math.PI/2; }
+    // the catch crate by the fisherman
+    mk(G.box(0.8,0.5,0.6), wood, -oz*1.1, 0.25, ox*1.1, g); g.userData.crate=mk(G.box(0.7,0.12,0.5), M(0x7ab0c8), -oz*1.1, 0.52, ox*1.1, g); }
+  if (k==='bees'){ const n=[1,1,3,5][tier+1];
+    for (let i=0;i<n;i++){ const a=i/Math.max(1,n)*TAU+0.6, d=n>1?2.2:1.8, hv=new THREE.Group(); hv.position.set(Math.cos(a)*d, 0, Math.sin(a)*d); g.add(hv);
+      if (tier<0){ const b=mk(G.box(0.7,0.5,0.6), M(0xd8c8a0), 0,0.25,0,hv); b.rotation.z=1.2; continue; }
+      mk(G.box(0.18,0.3,0.18), dark, 0,0.15,0,hv); for (let s=0;s<3;s++) mk(G.box(0.7,0.26,0.6), M([0xf0d890,0xe8c870,0xf0d890][s]), 0,0.42+s*0.27,0,hv);
+      const roof=mk(G.cone(0.6,0.3,4), M(0x8a6a4a), 0,1.32,0,hv); roof.rotation.y=Math.PI/4; mk(G.box(0.2,0.05,0.03), M(0x3a2a1a), 0,0.36,0.31,hv); }
+    g.userData.crate=mk(G.cyl(0.25,0.22,0.3,10), M(0xe8a020,{roughness:0.3}), -1.3,0.15,1.3,g); }
+  if (k==='orchard'){
+    if (tier>=0){ const ld=new THREE.Group(); ld.position.set(1.4,0,-0.6); ld.rotation.z=-0.25; g.add(ld); for (const s of [-1,1]) mk(G.box(0.06,2.4,0.06), wood, 0,1.2,s*0.25,ld); for (let i=0;i<6;i++) mk(G.box(0.05,0.05,0.5), wood, 0,0.3+i*0.38,0,ld); }
+    if (tier>=1){ const c=new THREE.Group(); c.position.set(-1.8,0,-1.2); g.add(c); mk(G.box(1.4,0.5,0.9), wood, 0,0.55,0,c); for (const s of [-1,1]){ const w=mk(new THREE.TorusGeometry(0.3,0.05,6,14), dark, 0,0.32,s*0.5,c); } }
+    if (tier>=2){ const sh=new THREE.Group(); sh.position.set(-0.4,0,-2.8); g.add(sh); mk(G.box(2.2,1.6,1.6), M(0xd8c4a0), 0,0.8,0,sh); const rf=mk(G.cone(1.7,0.8,4), M(0x8a4a3a), 0,2.0,0,sh); rf.rotation.y=Math.PI/4; mk(G.cyl(0.35,0.35,0.6,10), wood, 1.4,0.3,0.6,sh); }
+    for (let i=0;i<2;i++) mk(G.cyl(0.32,0.26,0.32,12), M(0xc8a060), -0.9+i*0.75, 0.16, 1.0, g);
+    g.userData.crate=mk(G.sph(0.24,10,8), M(0xe2483d), -0.9,0.36,1.0,g); }
+  if (k==='books'){
+    mk(G.box(1.2,0.08,0.7), wood, 0,0.8,0,g); for (const [x,z] of [[-0.5,-0.28],[0.5,-0.28],[-0.5,0.28],[0.5,0.28]]) mk(G.box(0.07,0.8,0.07), dark, x,0.4,z,g);
+    mk(G.box(0.4,0.06,0.3), red, -0.2,0.87,0,g); mk(G.box(0.36,0.04,0.28), cloth, -0.2,0.91,0,g);
+    if (tier>=1){ for (const x of [-0.75,0.75]) mk(G.cyl(0.04,0.04,2.2,6), wood, x,1.1,-0.5,g); mk(G.box(1.8,0.06,1.2), M(0x3a6a5a), 0,2.2,-0.1,g); }
+    if (tier>=2){ mk(G.box(1.8,1.3,0.12), M(0xd8c8a8), 0,0.65,-0.6,g); mk(G.box(1.1,0.3,0.06), M(0x3a3028), 0,1.95,0.5,g); }
+    g.userData.crate=mk(G.cyl(0.14,0.16,0.22,10), M(0xf3c35a,{metalness:0.6,roughness:0.3}), 0.35,0.95,0,g); }
+  return g; }
+const incEnts={};
+function refreshIncome(){
+  if (VISIT || GUEST) return;
+  for (const k of INC_IDS){ const I=incOf(k);
+    if (!I.met && !I.seen && !incUnlocked(k)) continue;
+    if (!I.at){ const p=incSpot(k); if (!p) continue; I.at=p; I.seen=true; save(); setTimeout(()=>toast(`Someone new is on the island: ${INCOME[k].hint}.`, null, 'new'), 3600); }
+    const E=incEnts[k]; if (E && E.tier===I.tier){ if (E.props.userData.crate) E.props.userData.crate.visible=(I.acc||0)>0; continue; }
+    if (E){ OUT.remove(E.props); E.keeper.remove(); }
+    const [x,z,a]=I.at, props=buildIncomeProps(k, I.tier, I.at); props.position.set(x, groundY(x,z), z); OUT.add(props);
+    if (props.userData.crate) props.userData.crate.visible=(I.acc||0)>0;
+    const D=INCOME[k], spec={ name:D.who, voice:D.voice, build:()=>buildAnimal({ look:CH.lookCode(CH.residentLook(S.seed, 'inc:'+k)), acc:D.acc, accC:D.accC }) };
+    const kp=new Keeper(spec, x, z, ()=>talkIncome(k)); kp.rest = k==='boat' ? Math.atan2(Math.cos(a), Math.sin(a)) : 0;
+    incEnts[k]={ tier:I.tier, props, keeper:kp }; } }
+function incCollect(k){
+  const I=incOf(k), D=INCOME[k]; let n=Math.floor(I.acc||0); if (n<=0) return 0; let got=0;
+  if (k==='books'){ addClams(n); track('earned',n); I.acc=0; Snd.coin(); updateHUD(); save(); return n; }
+  const m=Time.month(), seaPool=Object.values(ITEMS).filter(i=>i.kind==='fish' && i.where==='sea' && inMonths(m,i.months)).filter(allowedFind);
+  const fruits=[...new Set(trees.filter(t=>!t.removed && t.fruit).map(t=>t.fruit))]; if (!fruits.length) fruits.push(S.nativeFruit||'apple');
+  for (; got<n; got++){ let id, meta;
+    if (k==='boat'){ const sp=tierPick(Math.random, seaPool, i=>luckW(i,'fish'), 'fish'); if (!sp) break; id=sp.id; meta=rollStats(id); }
+    else if (k==='bees') id='honey';
+    else id = Math.random()<0.75 && fruits.includes(S.nativeFruit) ? S.nativeFruit : fruits[Math.floor(Math.random()*fruits.length)];
+    const r=addItem(id, meta); if (!r) break;
+    if (meta){ recordCatch(id, meta); if (r==='new') itemToast(id, true, 'Received'); }
+    else if (r==='new') itemToast(id, true, 'Received'); }
+  I.acc=Math.max(0,(I.acc||0)-got); Snd.coin(); save(); updateHUD(); return got; }
+function talkIncome(k){
+  const D=INCOME[k], I=incOf(k), v=D.voice, nm=D.who, nowD=dayNum(today()), back=()=>talkIncome(k);
+  if (VISIT){ dialog(nm, v, ['Nice to meet you! I work for the owner of this island.']); return; }
+  if (I.tier<0){ const t=D.tiers[0];
+    dialog(nm, v, I.met ? [`Still thinking about that ${t.name.toLowerCase()}? It's ${fmt(t.cost)} clams.`] : [...D.meet, `It'd cost ${fmt(t.cost)} clams.`], null, [
+      { label:`Fund it (${fmt(t.cost)})`, fn:()=>{ if (noEdit()) return; if (S.clams<t.cost){ dialog(nm, v, ['Ah, looks like you\'re a little short. No rush, I\'ll be right here.']); return; }
+          S.clams-=t.cost; I.tier=0; I.since=nowD; I.last=nowD; I.acc=0; I.met=true; updateHUD(); save(); Snd.fanfare(); refreshIncome();
+          dialog(nm, v, [`You won't regret it! I'll get started tomorrow.`, `Come by any time. It fills up over about ${INC_DAYS} days, then I'll just hold on to it for you.`]); } },
+      { label:'Not right now', alt:true, fn:()=>{ I.met=true; save(); dialog(nm, v, ['No worries. You know where to find me.']); } } ]);
+    return; }
+  const n=Math.floor(I.acc||0), cap=incPerDay(k)*INC_DAYS, nx=D.tiers[I.tier+1], canUp=nx && nowD-(I.since||0)>=INC_UPGRADE_WAIT, u=D.unit;
+  const line = k==='books' ? `Your share is ${fmt(n)} clams so far. It holds up to ${fmt(cap)}.` : `I've got ${n} ${n===1?u[0]:u[1]} set aside for you. Room for ${cap}.`;
+  const choices=[];
+  if (n>0) choices.push({ label: k==='books' ? `Collect ${fmt(n)} clams` : 'Collect', fn:()=>{ const got=incCollect(k); refreshIncome();
+      if (k==='books') dialog(nm, v, [`There you go: ${fmt(got)} clams.`], back);
+      else if (got<n) dialog(nm, v, [got ? `Your bag's full after ${got}. I'll hold the rest.` : `Your bag's full! I'll keep them for you.`], back);
+      else dialog(nm, v, ['All yours!'], back); } });
+  if (canUp) choices.push({ label:`Upgrade: ${nx.name} (${fmt(nx.cost)})`, fn:()=>{
+      dialog(nm, v, D.up.map(l=>l.replace('{name}',nx.name)), null, [
+        { label:`Buy it (${fmt(nx.cost)})`, fn:()=>{ if (S.clams<nx.cost){ dialog(nm, v, ['Not quite enough clams yet. Next time!'], back); return; }
+            S.clams-=nx.cost; I.tier++; I.since=nowD; updateHUD(); save(); Snd.fanfare(); refreshIncome(); dialog(nm, v, [`A ${nx.name}! This is going to be great.`], back); } },
+        { label:'Maybe later', alt:true, fn:back } ]); } });
+  choices.push({ label:'Bye!', alt:true, fn:()=>{} });
+  dialog(nm, v, [`The ${D.tiers[I.tier].name.toLowerCase()} is working out great. ${line}`], null, choices);
 }
 /* =====================================================================
    v0.9: WENDELL THE WIZARD, POTIONS, FAVORS, SHAPING THE ISLAND
@@ -1882,24 +2116,41 @@ buildTowerEnt();
    Below: a hall with a portal arch for each friend's island you can visit (and one home, when you're visiting),
    plus the invite booth for inviting friends to yours. Step into a portal and you're off. */
 let portalEnt=null; const portalArches=[];
+/* v1.26: old-world look. A ring of rough, mossy stones round the stairwell, two weathered standing stones with a lintel
+   over the stairs, faint carved runes, a hanging iron lantern, and a wooden signpost so people know what it is. */
+function portalSignTex(){ const cv=document.createElement('canvas'); cv.width=512; cv.height=192; const x=cv.getContext('2d');
+  const gr=x.createLinearGradient(0,0,0,192); gr.addColorStop(0,'#9a7350'); gr.addColorStop(1,'#7d5b3e'); x.fillStyle=gr; x.fillRect(0,0,512,192);
+  x.strokeStyle='rgba(60,40,25,.35)'; x.lineWidth=2; for (let k=0;k<9;k++){ x.beginPath(); const y=14+k*20+Math.sin(k)*4; x.moveTo(0,y); x.bezierCurveTo(170,y+6,340,y-6,512,y+2); x.stroke(); }
+  x.fillStyle='#f4e6c8'; x.textAlign='center'; x.textBaseline='middle'; x.font='700 64px Georgia, serif'; x.fillText('Portal Station',256,78);
+  x.font='italic 600 34px Georgia, serif'; x.fillStyle='#ecdcb8'; x.fillText('to friends\' isles below',256,140);
+  const t=new THREE.CanvasTexture(cv); t.colorSpace=THREE.SRGBColorSpace; return t; }
 function buildPortalEntrance(){
-  const g=new THREE.Group(), stone=M(0xa8a6b4), dark=M(0x2a2438), trim=M(0x8a86a0);
-  mk(G.cyl(2.3,2.45,0.34,28), stone, 0,0.17,0,g);
-  mk(G.cyl(2.32,2.32,0.06,28), trim, 0,0.37,0,g);
-  // stairwell opening and the first steps going down into the dark
+  const g=new THREE.Group(), r=mulberry32(77), stone=M(0x9a978c,{flatShading:true}), stone2=M(0x87857a,{flatShading:true}), dark=M(0x1e1a1a), moss=M(0x5f8a3e), wood=M(0x6a4a32), iron=M(0x2c2a28,{metalness:0.3,roughness:0.6});
+  // a low, uneven flagstone platform
+  mk(G.cyl(2.3,2.5,0.34,14), stone2, 0,0.17,0,g);
+  for (let i=0;i<14;i++){ const a=i/14*TAU+r()*0.2; if (Math.sin(a)>0.45) continue; const b=mk(G.dod(0.42+r()*0.12), i%2?stone:stone2, Math.cos(a)*2.15, 0.36, Math.sin(a)*2.15, g); b.scale.set(1.1,0.55,0.9); b.rotation.y=a;
+    if (r()<0.6) mk(G.sph(0.22,7,5), moss, Math.cos(a)*2.15, 0.56, Math.sin(a)*2.15, g).scale.set(1.2,0.3,1); }
+  // the stairwell and the first worn steps down into the dark
   mk(G.box(1.5,0.04,1.9), dark, 0,0.39,0.15,g).castShadow=false;
-  for (let i=0;i<3;i++) mk(G.box(1.4,0.05,0.32), M(0x6e6a84-i*0x101010), 0,0.38-i*0.0, 0.95-i*0.42,g).position.y=0.4-i*0.12;
-  // steps up onto the platform from the path
-  for (let i=0;i<2;i++) mk(G.box(1.8,0.16,0.4), stone, 0,0.08+i*0.0,2.45-i*0.0,g).position.set(0,0.08*(i+1),2.55-i*0.35);
-  // the arch over the stairs
-  for (const sx of [-0.95,0.95]) mk(G.box(0.34,2.3,0.4), stone, sx,1.5,0.15,g);
-  const arch=new THREE.Mesh(new THREE.TorusGeometry(0.95,0.2,10,24,Math.PI), stone); arch.position.set(0,2.65,0.15); arch.castShadow=true; g.add(arch);
-  const crystal=new THREE.Mesh(new THREE.OctahedronGeometry(0.32,0), new THREE.MeshStandardMaterial({ color:0xb89aff, emissive:0x7a4ae0, emissiveIntensity:0.9, roughness:0.3 })); crystal.position.set(0,3.95,0.15); g.add(crystal);
-  addGlow(g, 3.95, 2.2, 0xb89aff);
-  // little rune stones around the rim that glow at night
-  const runeMat=new THREE.MeshStandardMaterial({ color:0xd8c8ff, emissive:0x8a6af0, emissiveIntensity:0.6 });
-  for (let i=0;i<8;i++){ const a=i/8*TAU+0.2; if (Math.sin(a)>0.55) continue; mk(G.box(0.22,0.14,0.22), runeMat, Math.cos(a)*2.05,0.44,Math.sin(a)*2.05,g); }
-  g.userData.door=[0,1.75]; g.userData.rects=[[-2.3,-2.3,-0.78,1.6],[0.78,-2.3,2.3,1.6],[-0.78,-2.3,0.78,-0.6]]; g.userData.crystal=crystal;
+  for (let i=0;i<3;i++) mk(G.box(1.4,0.05,0.32), M(0x77746a-i*0x101010), 0,0.4-i*0.12, 0.95-i*0.42,g);
+  for (let i=0;i<2;i++) mk(G.box(1.8,0.16,0.4), stone2, 0,0.08*(i+1),2.55-i*0.35,g);
+  // two standing stones and a rough lintel, leaning just a touch
+  for (const sx of [-1,1]){ const st=mk(G.box(0.5,2.6,0.55), stone, sx*1.02,1.55,0.15,g); st.rotation.z=-sx*0.04; st.rotation.y=sx*0.05;
+    mk(G.sph(0.2,7,5), moss, sx*1.08,2.82,0.15,g).scale.set(1.4,0.4,1.3);
+    for (let k=0;k<3;k++){ const rn=mk(G.box(0.18,0.05,0.02), new THREE.MeshStandardMaterial({ color:0xc8d8e8, emissive:0x5a8ab0, emissiveIntensity:0.5 }), sx*1.02, 1.0+k*0.5, 0.44, g); rn.rotation.z=(k%2?0.6:-0.6); rn.castShadow=false; } }
+  const lin=mk(G.box(2.9,0.5,0.7), stone2, 0,3.05,0.15,g); lin.rotation.z=0.03;
+  mk(G.sph(0.3,8,5), moss, -0.6,3.33,0.15,g).scale.set(1.6,0.35,1.2); mk(G.sph(0.2,8,5), moss, 0.8,3.32,0.25,g).scale.set(1.3,0.3,1);
+  // a lantern hanging from the lintel
+  mk(G.cyl(0.01,0.01,0.3,4), iron, 0,2.65,0.42,g).castShadow=false;
+  const lan=new THREE.Group(); lan.position.set(0,2.32,0.42); g.add(lan);
+  mk(G.box(0.22,0.28,0.22), glowMat(0xffc874), 0,0,0,lan); for (const [px,pz] of [[-1,-1],[1,-1],[-1,1],[1,1]]) mk(G.box(0.03,0.32,0.03), iron, px*0.12,0,pz*0.12,lan);
+  const rf=mk(G.cone(0.22,0.16,4), iron, 0,0.22,0,lan); rf.rotation.y=Math.PI/4; addGlow(lan, 0, 2.4, 0xffc874);
+  // a wooden signpost by the steps
+  const sp=new THREE.Group(); sp.position.set(1.75,0,2.55); sp.rotation.y=-0.35; g.add(sp);
+  mk(G.cyl(0.07,0.09,1.7,7), wood, 0,0.85,0,sp);
+  const board=mk(G.box(1.5,0.58,0.07), wood, 0,1.45,0.08,sp); const face=new THREE.Mesh(new THREE.PlaneGeometry(1.42,0.52), new THREE.MeshStandardMaterial({ map:portalSignTex(), roughness:0.9, emissive:0x3a2a1a, emissiveIntensity:0.25 })); face.position.set(0,1.45,0.12); sp.add(face);
+  mk(G.box(1.62,0.07,0.22), M(0x4a3a2c), 0,1.78,0.1,sp);   // a little drip cap
+  g.userData.door=[0,1.75]; g.userData.rects=[[-2.3,-2.3,-0.78,1.6],[0.78,-2.3,2.3,1.6],[-0.78,-2.3,0.78,-0.6]];
   return g; }
 function swirlTex(){ const cv=document.createElement('canvas'); cv.width=cv.height=128; const x=cv.getContext('2d'); x.translate(64,64);
   const gr=x.createRadialGradient(0,0,4,0,0,64); gr.addColorStop(0,'rgba(255,255,255,1)'); gr.addColorStop(0.5,'rgba(255,255,255,0.55)'); gr.addColorStop(1,'rgba(255,255,255,0.15)'); x.fillStyle=gr; x.beginPath(); x.arc(0,0,64,0,TAU); x.fill();
@@ -2001,7 +2252,7 @@ function findTowerSpot(ignoreTrees){
   return ignoreTrees ? null : findTowerSpot(true);
 }
 function raiseTower(){
-  const spot=findTowerSpot(); if (!spot){ toast('The magic fizzled. There was no room near the plaza. Clear a little space and talk to Lumi again.'); return false; }
+  const spot=findTowerSpot(); if (!spot){ toast('The magic fizzled. There was no room near the plaza. Clear a little space and talk to '+npcName(storyWho('wizard'))+' again.'); return false; }
   S.magic.tower=true; S.magic.at=spot; PLACES.tower=spot.slice(); save();
   for (const t of trees) if (!t.removed && !t.rec && (Math.hypot(t.pos.x-spot[0],t.pos.z-spot[1])<4.8 || Math.hypot(t.pos.x-spot[0],t.pos.z-spot[1]-3.8)<2.6)) t.remove();   // natural trees in the way step aside
   buildTowerEnt(); refreshSmoke();
@@ -2052,10 +2303,19 @@ const favorItemName = f => f.kind==='kind' ? (KIND_WORD[f.item]||[f.item,f.item]
 function favorTask(f){ if (f.to) return `Take the parcel to ${npcName(f.to)}`;
   if (f.kind==='do') return (DO_TASKS[f.item]||['Help out'])[0].replace('{n}',f.n).replace(/\{s\}/g,f.n>1?'s':'');
   return `Bring ${f.n>1?f.n+' ':''}${favorItemName(f)}${f.catch?' (catch one)':''}${f.cook?' (cook it)':''}`; }
+/* v1.26: story quests aren't tied to one islander. Whoever already holds one keeps it; otherwise the islander it was
+   written for takes it if they live here; otherwise it passes to someone who does (and on again if they move away). */
+function storyWho(key){ const st=STORY[key]; if (!st) return null; Q.holder=Q.holder||{};
+  const h=Q.holder[key]; if (h && livesHere(h)) return h;
+  if (livesHere(st.who)){ Q.holder[key]=st.who; return st.who; }
+  const busy=id=>Object.keys(STORY).some(k=>k!==key && Q.holder[k]===id && livesHere(id));
+  const pool=S.town.res.filter(id=>!busy(id)), list=pool.length?pool:S.town.res.slice(); if (!list.length) return null;
+  const pick=list[hashStr(key+':'+S.seed+':'+(S.town.left?Object.keys(S.town.left).length:0))%list.length]; Q.holder[key]=pick; return pick; }
+const storyLines = (key, kind) => { const st=STORY[key]; return storyWho(key)===st.who ? st[kind] : (st['g'+kind]||st[kind]); };
 function storyOpen(key){ const st=Q.story[key]; if (st==='done') return false;
   if (key==='wizard') return !S.magic.tower && (S.caught>=4 || discovered()>=10 || S.home.built);
   if (key==='beacon') return !GUEST && !!S.magic.tower && S.caught>=12;
-  if (key==='swatches') return (S.friend.juniper||0)>=6;
+  if (key==='swatches') return (S.friend[storyWho('swatches')]||0)>=6;
   return false; }
 // A thank-you gift from someone's own list: clothes you don't own yet and things you haven't been given come first
 function pickGift(who, r){ const T=FAVOR_THEMES[who]; if (!T) return null;
@@ -2085,7 +2345,7 @@ function rollFavors(r){
   Q.offers={};
   const who=[...residents.map(x=>x.spec.id), ...KEEPER_IDS.filter(keeperAround)];
   for (const id of who){ if (favorFor(id) || Q.active.some(f=>f.to===id)) continue;
-    const story=Object.keys(STORY).find(k=>STORY[k].who===id && storyOpen(k)); if (story){ Q.offers[id]={ story }; continue; }
+    const story=Object.keys(STORY).find(k=>storyWho(k)===id && storyOpen(k)); if (story){ Q.offers[id]={ story }; continue; }
     if (Q.active.length<MAX_FAVORS && r()<(KEEPER_IDS.includes(id)?0.32:0.42)){ const f=makeFavor(id, r); if (f) Q.offers[id]=f; } }
 }
 function haveFor(f){ if (f.story){ return STORY[f.story].need.every(([id,n])=> ITEMS[id] ? countItem(id)>=n : S.inv.filter(s=>ITEMS[s.id].kind===id).reduce((a,s)=>a+s.n,0)>=n); }
@@ -2113,15 +2373,16 @@ function giveReward(npc, f, then){
   if (gift){ Q.gifted.push(gift); const it=ITEMS[gift]; lines.push(fill(it.kind==='wear' ? `And this ${it.name.toLowerCase()} is for you. I think it'll suit you, {c}.` : `And I want you to have this ${it.name.toLowerCase()}, {c}.`, c)); }
   if (b && b.item) lines.push(fill(`Oh, and I found ${b.n?b.n+' ':article(ITEMS[b.item].name)+' '}${ITEMS[b.item].name}${b.n>1?'s':''} lying around. You should have ${b.n>1?'them':'it'}, {c}.`, c));
   if (b && b.style) lines.push(fill(`I also had a swatch book I don't need. Now you can use ${b.style} on your house, {c}.`, c));
+  let tk=null; if (!GUEST && !VISIT && Math.random()<0.04){ tk=randomTicket(); lines.push(fill(`Oh, and here's a boat ticket. I'll never use it. Skipper Wick at the dock will know where it goes, {c}.`, c)); }
   save(); Snd.coin(); sparkle(npc.pos.clone().add(new THREE.Vector3(0,2,0)));
-  dialog(npc.name, npc.voice, lines, ()=>{ toast(`Favor done! +${fmt(f.reward)} clams`, null, 'new'); if (gift) receive(gift); if (b && b.item){ for(let i=0;i<(b.n||1);i++) receive(b.item); } checkAch(); then&&then(); });
+  dialog(npc.name, npc.voice, lines, ()=>{ toast(`Favor done! +${fmt(f.reward)} clams`, null, 'new'); if (gift) receive(gift); if (tk) receive(tk); if (b && b.item){ for(let i=0;i<(b.n||1);i++) receive(b.item); } checkAch(); then&&then(); });
 }
 function finishStory(res, key, then){
   const st=STORY[key], c={ c:res.spec.catch }; takeFor(st.need); Q.story[key]='done'; delete Q.offers[res.spec.id]; S.friend[res.spec.id]=(S.friend[res.spec.id]||0)+4; save();
-  dialog(res.spec.name, res.spec.voice, st.done.map(l=>fill(l,c)), ()=>{
+  dialog(res.spec.name, res.spec.voice, storyLines(key,'done').map(l=>fill(l,c)), ()=>{
     if (key==='wizard'){ if (raiseTower()){ const [tx,tz]=PLACES.tower, dir=Math.abs(tx)>Math.abs(tz) ? (tx>0?'east':'west') : (tz>0?'south':'north');
       setTimeout(()=>{ toast(`A wizard tower appeared ${dir} of the plaza!`, null, 'new'); }, 400); } }
-    if (key==='beacon'){ S.magic.beacon=true; save(); toast('The dock beacon is lit!', null, 'new', 'Traveling traders will visit more often.'); Snd.fanfare(); }
+    if (key==='beacon'){ S.magic.beacon=true; delete S.magic.merchantLast; save(); toast('The portal beacon is lit!', null, 'new', 'Traveling merchants can find the island now. Fennick should turn up every few days.'); Snd.fanfare(); }
     if (key==='swatches'){ const got=[]; for(let i=0;i<4;i++){ const g=grantRandomStyle(); if(g) got.push(g); } toast(got.length?`New house styles: ${got.join(', ')}`:'You already own every style!', null, 'new'); Snd.fanfare(); }
     checkAch(); then&&then(); });
 }
@@ -2149,7 +2410,7 @@ function favorChoices(npc, menu){
   if (off && off.story && npc.res){ const st=STORY[off.story], res=npc.res;
     out.unshift({ label: Q.story[off.story]==='asked' ? 'About that wish...' : 'You look thoughtful', fn:()=>{
       if (Q.story[off.story]==='asked' && haveFor(off)) { dialog(nm,v,[fill('Did you bring them, {c}?',c)], null, [{ label:'I did!', fn:()=>finishStory(res, off.story, menu) }, { label:'Not yet', alt:true, fn:menu }]); return; }
-      Q.story[off.story]='asked'; save(); dialog(nm,v,st.ask.map(l=>fill(l,c)), menu); } }); }
+      Q.story[off.story]='asked'; save(); dialog(nm,v,storyLines(off.story,'ask').map(l=>fill(l,c)), menu); } }); }
   else if (off && !off.story){
     out.unshift({ label:'Need a hand?', fn:()=>{
       const g=off.gift && ITEMS[off.gift], pay = g ? `If you do, I'll give you my ${g.name.toLowerCase()}, and ${fmt(off.reward)} clams on top.` : `I'd pay you ${fmt(off.reward)} clams for it.`;
@@ -2536,7 +2797,36 @@ const REF_LAMPS = S.refLamps && S.refLamps.id===LAYOUT_ID ? S.refLamps.pts : ref
 for (const [x,z] of REF_LAMPS) reserve(x,z,0.8);   // trees and rocks are placed around where the lamps first stood
 const lampClear = (x,z) => lampOK(x,z) && !keptOut(x,z) && !Object.entries(PLACES).some(([k,p])=>k!=='plaza'&&k!=='board'&&Math.hypot(x-p[0],z-p[1])<footOf(k)-0.5);
 let LAMPS = (!PLAYER_ALTERED && !REROUTED) ? REF_LAMPS : (LAYOUT_ID==='classic' && !MOVED ? CLASSIC_LAMPS : lampSpots(PATHS)).filter(([x,z])=>lampClear(x,z));
-function placeLamps(){ for (const [x,z] of LAMPS){ const g=new THREE.Group(); mk(G.cyl(0.07,0.09,2.4,8),M(0x4a3a30),0,1.2,0,g); mk(G.box(0.34,0.42,0.34),glowMat(0xffd27a),0,2.5,0,g); mk(G.cone(0.3,0.25,4),M(0x3a2e26),0,2.83,0,g).rotation.y=Math.PI/4; addGlow(g,2.5,3.2); g.position.set(x,groundY(x,z),z); OUT.add(g); } }
+/* v1.26: street lamps are crooked wooden posts with an arm, a hanging iron lantern under a little roof, and a bit of moss and ivy */
+function buildStreetLamp(r){
+  const g=new THREE.Group(), wood=M(0x8a6a4c,{roughness:0.95}), dark=M(0x5a4232), iron=M(0x2c2a28,{metalness:0.3,roughness:0.6}), moss=M(0x5f8a3e), ivy=M(0x4f8a3a);
+  // the post: three short segments, each leaning a little, so it looks hand-hewn
+  let x=0, y=0, z=0; const lean=[(r()-0.5)*0.16, (r()-0.5)*0.16];
+  for (let i=0;i<3;i++){ const h=0.82, tx=(r()-0.5)*0.12+lean[0]*0.5, tz=(r()-0.5)*0.12+lean[1]*0.5, seg=mk(G.cyl(0.085-i*0.008,0.105-i*0.008,h,7), wood, x+tx/2, y+h/2, z+tz/2, g);
+    seg.rotation.set(tz*1.2, 0, -tx*1.2); x+=tx; y+=h-0.03; z+=tz; }
+  mk(G.cyl(0.15,0.19,0.18,7), dark, 0, 0.09, 0, g);                                   // a chunk of stone-ish base
+  mk(G.sph(0.11,8,6), wood, x, y+0.02, z, g).scale.set(1,0.6,1);                     // rounded cap
+  // the arm, with a little brace underneath
+  const dir=r()*TAU, ax=Math.cos(dir), az=Math.sin(dir), L=0.62, armY=y-0.12;
+  const arm=mk(G.box(L,0.07,0.07), wood, x+ax*L/2, armY, z+az*L/2, g); arm.rotation.y=-dir;
+  const br=mk(G.box(0.36,0.05,0.05), wood, x+ax*0.17, armY-0.17, z+az*0.17, g); br.rotation.set(0,-dir,0); br.rotateZ(0.75);
+  const hx=x+ax*(L-0.07), hz=z+az*(L-0.07);
+  mk(G.cyl(0.008,0.008,0.24,4), iron, hx, armY-0.15, hz, g).castShadow=false;        // the chain
+  // the lantern: an iron frame round a glowing box, with a small peaked roof and a finial
+  const lan=new THREE.Group(); lan.position.set(hx, armY-0.52, hz); lan.rotation.y=-dir; g.add(lan);
+  mk(G.box(0.24,0.3,0.24), glowMat(0xffd27a), 0, 0, 0, lan);
+  for (const [px,pz] of [[-1,-1],[1,-1],[-1,1],[1,1]]) mk(G.box(0.035,0.34,0.035), iron, px*0.13, 0, pz*0.13, lan);
+  mk(G.box(0.3,0.04,0.3), iron, 0, -0.18, 0, lan); mk(G.box(0.3,0.035,0.3), iron, 0, 0.17, 0, lan);
+  const roof=mk(G.cone(0.27,0.2,4), dark, 0, 0.29, 0, lan); roof.rotation.y=Math.PI/4;
+  mk(G.sph(0.03,6,4), iron, 0, 0.42, 0, lan);
+  addGlow(lan, 0, 3.2);
+  // moss on the cap and the arm, ivy climbing the post
+  mk(G.sph(0.1,8,5), moss, x, y+0.06, z, g).scale.set(1.25,0.35,1.25);
+  mk(G.sph(0.07,7,4), moss, x+ax*0.25, armY+0.05, z+az*0.25, g).scale.set(1.6,0.4,1);
+  if (r()<0.75){ const n=4+Math.floor(r()*4), a0=r()*TAU; for (let i=0;i<n;i++){ const t=i/n, a=a0+t*3.2, yy=0.25+t*1.5; mk(G.sph(0.06,6,4), ivy, Math.cos(a)*0.1+lean[0]*t, yy, Math.sin(a)*0.1+lean[1]*t, g).scale.set(1,0.55,1.2); } }
+  return g;
+}
+function placeLamps(){ if (TRIP) return; LAMPS.forEach(([x,z],i)=>{ const g=buildStreetLamp(mulberry32(hashStr('lamp:'+i+':'+x.toFixed(1)))); g.position.set(x,groundY(x,z),z); OUT.add(g); }); }
 
 /* ---------- Trees, rocks, scenery ---------- */
 const trees=[], rocks=[], wildFlowerSpots=[];
@@ -2561,11 +2851,12 @@ const clearForNew = p => !!inRects(p[0],p[1],2.4) || newPathDist(p[0],p[1])<2.3 
   } else {   // generated islands: what grows depends on the terrain, and high ground leans to pines and cedars
     const F=LAY.flora, kinds=Object.entries(F.trees), tot=kinds.reduce((a,k)=>a+k[1],0);
     const kindAt = p => { if (rawHeight(p[0],p[1])>3.3 && r()<0.75) return r()<0.6?'pine':'cedar'; let x=r()*tot; for(const [k,w] of kinds){ x-=w; if(x<=0) return k; } return kinds[0][0]; };
-    for(let i=0;i<Math.round(24*F.fruit);i++) add('fruittree',S.nativeFruit,SAND_H+0.2,12);
-    for(let i=0;i<115;i++) add(kindAt,null,SAND_H+0.2,12);
-    for(let i=0;i<Math.round(20*F.palms);i++) add('palm','coconut',0.25,SAND_H);
+    const TK = LAY.trip ? 0.3 : 1;   // trip islands are about a quarter the size
+    for(let i=0;i<Math.round(24*F.fruit*TK);i++) add('fruittree', TRIP_THEME==='orchard' ? NATIVE_FRUITS[i%NATIVE_FRUITS.length] : S.nativeFruit, SAND_H+0.2,12);
+    for(let i=0;i<Math.round(115*TK);i++) add(kindAt,null,SAND_H+0.2,12);
+    for(let i=0;i<Math.round(20*F.palms*TK);i++) add('palm','coconut',0.25,SAND_H);
   }
-  const nRocks = LAY.gen ? (LAY.terrain==='mountainous'||LAY.terrain==='cliffs' ? 16 : 12) : 9;
+  const nRocks = LAY.trip ? (TRIP_THEME==='fossil' ? 8 : 4) : LAY.gen ? (LAY.terrain==='mountainous'||LAY.terrain==='cliffs' ? 16 : 12) : 9;
   for(let i=0;i<nRocks;i++){ const p=randLand(r,SAND_H+0.1,12,2.2); if(!p) continue; reserve(p[0],p[1],2); if(clearForNew(p)) continue; rocks.push(new Rock(i,p[0],p[1],r)); }
 }
 layoutPhase=false;
@@ -2642,33 +2933,44 @@ spawnAmbient();
 
 /* ---------- Player ---------- */
 const player = { pos:new THREE.Vector3(PLACES.home[0]+1.5, 0, PLACES.home[1]+4.4), face:0, target:null, targetEnt:null, cb:null, act:0, obj:buildPlayer({ look:S.look }), stuck:0, lastD:0, speedFrac:0 };
+if (TRIP) player.pos.set(DOCK.x0+3.2, 0, DOCK.z+0.3);   // you step off the boat onto the dock
 player.pos.y=groundY(player.pos.x,player.pos.z); scene.add(player.obj);
 const marker=(()=>{ const m=new THREE.Mesh(new THREE.RingGeometry(0.25,0.38,24).rotateX(-Math.PI/2), new THREE.MeshBasicMaterial({ color:0xffffff, transparent:true, opacity:0.8, depthWrite:false })); m.visible=false; scene.add(m); return m; })();
 
 /* ---------- Daily reset ---------- */
 let dailyEnts=[], peddler=null, weatherOverride=null;
+/* v1.26: no traveling merchant until the Portal Station's beacon is lit. Then Fennick comes through every 3 or 4 days. */
+function merchantDay(key){
+  if (GUEST || !S.magic || !S.magic.beacon) return false;
+  const now=dayNum(key), last=S.magic.merchantLast;
+  if (last===undefined){ S.magic.merchantLast=now; return true; }   // the first visit comes right after the beacon is lit
+  const gap=now-last; if (gap<3) return false;
+  if (gap>=4 || mulberry32(hashStr(key+':merchant:'+S.seed))()<0.5){ S.magic.merchantLast=now; return true; }
+  return false; }
 function rollDay(){
-  const key=Time.dayKey(); if (S.day && S.day.key===key) return false;
+  const key=Time.dayKey(); if (S.day && (S.day.key===key || TRIP)) return false;   // a trip island doesn't refill at midnight
   const r=mulberry32(hashStr(key+':'+S.seed)); const m=Time.month(), season=seasonOf(m);
-  const w=r(); const weather = w<0.6?'sunny':(w<0.82?'cloudy':(season==='winter'?'snow':'rain'));
+  const w=r(); const weather = TRIP_THEME==='moonlit' ? 'sunny' : TRIP_THEME==='frost' ? 'snow' : w<0.6?'sunny':(w<0.82?'cloudy':(season==='winter'?'snow':'rain'));
   const digs=[], weeds=[];
-  for(let i=0;i<6;i++){ let p=null; for(let k=0;k<8;k++){ p=randLand(r,SAND_H+0.15,9,1.2); if(!p || !hiddenSpot(p[0],p[1])) break; } if(p) digs.push({x:p[0],z:p[1],dug:false}); }
+  // v1.26 trip themes: more spots, never better odds
+  const nDig = TRIP ? (TRIP_THEME==='fossil' ? 36 : 8) : 6, nShell = TRIP ? ({ coral:26, shipwreck:14 }[TRIP_THEME]||8) : 8, nRare = TRIP ? ({ coral:4, shipwreck:5 }[TRIP_THEME]||1) : 1;
+  for(let i=0;i<nDig;i++){ let p=null; for(let k=0;k<8;k++){ p=randLand(r,SAND_H+0.15,9,1.2); if(!p || !hiddenSpot(p[0],p[1])) break; } if(p) digs.push({x:p[0],z:p[1],dug:false}); }
   for(let i=0;i<7;i++){ const p=randLand(r,SAND_H+0.2,9,0.6); if(p) weeds.push({x:p[0],z:p[1],pulled:false}); }
   const pickN=(pool,n)=>{ const a=pool.slice(), o=[]; while(o.length<n && a.length) o.push(a.splice(Math.floor(r()*a.length),1)[0].id); return o; };
   const furnPool=generalPool(m), gt=shopTier('general');
   const seeds=Object.values(ITEMS).filter(i=>i.kind==='seed'), starts=Object.values(ITEMS).filter(i=>i.kind==='sapling'&&PLANTS[i.plant].ptype==='shrub'), saps=Object.values(ITEMS).filter(i=>i.kind==='sapling'&&i.buy>0&&PLANTS[i.plant].ptype==='tree');
   const shellPool=Object.values(ITEMS).filter(i=>i.kind==='shell');
   S.ground = S.ground.filter(g=>!g.beach);
-  for(let i=0;i<8;i++){ for(let k=0;k<30;k++){ const a=r()*TAU, d=(40+r()*16)*SC; const x=Math.cos(a)*d, z=Math.sin(a)*d; if(isBeach(x,z) && !onDock(x,z)){ S.ground.push({ id:tierPick(r,shellPool.filter(allowedFind),i=>i.rarity).id, x, z, beach:true }); break; } } }
+  for(let i=0;i<nShell;i++){ for(let k=0;k<30;k++){ const a=r()*TAU, d=(40+r()*16)*SC; const x=Math.cos(a)*d, z=Math.sin(a)*d; if(isBeach(x,z) && !onDock(x,z)){ S.ground.push({ id:tierPick(r,shellPool.filter(allowedFind),i=>i.rarity).id, x, z, beach:true }); break; } } }
   // v1.9: this island's own crops grow wild in a few spots, ripe. Picking one gives the crop and 1 to 4 seeds. Topped back up to 6 each day.
-  if (!VISIT){ const pool=islandSeeds(); let have=S.plants.filter(p=>p.wild).length;
-    for (let tries=0; have<6 && tries<60; tries++){ const p=randLand(r,SAND_H+0.2,9,0.8); if (!p) continue; const [x,z]=p;
+  if (!VISIT){ const pool=islandSeeds(); let have=S.plants.filter(p=>p.wild).length, want=TRIP_THEME==='bloom'?18:6;
+    for (let tries=0; have<want && tries<120; tries++){ const p=randLand(r,SAND_H+0.2,9,0.8); if (!p) continue; const [x,z]=p;
       if (gardenAtXZ(x,z) || visPathDist(x,z)<1.2 || blocked(x,z,0.45) || S.plants.some(q=>Math.hypot(q.x-x,q.z-z)<1.2) || trees.some(t=>!t.removed && Math.hypot(t.pos.x-x,t.pos.z-z)<1.3)) continue;
       const seed=pool[Math.floor(r()*pool.length)];
       S.plants.push({ id:'w'+key.replace(/\W/g,'')+have+Math.floor(r()*1e4), sp:ITEMS[seed].plant, x, z, stage:3, rot:r()*TAU, lastGrow:key, wild:true }); have++; } }
   // plants grow overnight (watered plants always grow)
   if (!VISIT) for (const p of S.plants){ if (p.lastGrow===key) continue; const watered = p.watered && p.watered!==key; if (p.stage<3 && (watered || r()<0.55)) p.stage++; p.watered=null; p.lastGrow=key; }
-  S.day={ key, fruit:{}, branch:{}, chop:{}, rock:{}, lucky:Math.floor(r()*9), digs, weeds, weather, peddler:!GUEST && r()<(S.magic&&S.magic.beacon?0.55:0.35),
+  S.day={ key, fruit:{}, branch:{}, chop:{}, rock:{}, lucky:Math.floor(r()*9), digs, weeds, weather, peddler:merchantDay(key),
     stock:pickWeighted(r, furnPool, 6, [], i=>stockWeight(i,gt)), sold:{}, garden:[...pickN(seeds,4), ...pickN(starts,1), ...pickN(saps,1)], gsold:{},
     pstock:pickWeighted(r, Object.values(ITEMS).filter(i=>i.shop==='rare'), 2, [], i=>stockWeight(i,0)), psold:{}, chat:{}, gift:{} };
   // v1.13 rare things on their own random stream, so they don't shift the rest of the day
@@ -2676,6 +2978,8 @@ function rollDay(){
   if (!GUEST){ const a=rr(), b=rr(), c=rr();
     if (a<RARE_ODDS.beachPearl){ const p=beachSpot(rr); if (p) S.ground.push({ id:'moonpearl', x:p[0], z:p[1], beach:true }); }
     const plan=randomPlan(rr); if (plan && b<RARE_ODDS.bottlePlan){ const p=beachSpot(rr); if (p) S.ground.push({ id:plan, x:p[0], z:p[1], beach:true, bottle:true }); }
+    for (let k=1;k<nRare;k++){ if (rr()<RARE_ODDS.beachPearl){ const p=beachSpot(rr); if (p) S.ground.push({ id:'moonpearl', x:p[0], z:p[1], beach:true }); }
+      const pl=randomPlan(rr); if (pl && rr()<RARE_ODDS.bottlePlan){ const p=beachSpot(rr); if (p) S.ground.push({ id:pl, x:p[0], z:p[1], beach:true, bottle:true }); } }
     if (S.day.peddler && plan && c<RARE_ODDS.peddlerPlan) S.day.pplan=randomPlan(rr); }
   townNewDay(key); save(); return true;
 }
@@ -2690,7 +2994,7 @@ function spawnDaily(){
   World.weather = weatherOverride || S.day.weather;
 }
 rollDay(); spawnDaily();
-function ensureFavors(){ if (VISIT || Q.rolledFor===S.day.key) return; rollFavors(mulberry32(hashStr(S.day.key+':favors:'+S.seed))); Q.rolledFor=S.day.key;
+function ensureFavors(){ if (VISIT || TRIP || Q.rolledFor===S.day.key) return; rollFavors(mulberry32(hashStr(S.day.key+':favors:'+S.seed))); Q.rolledFor=S.day.key;
   for (const [k,v] of Object.entries(S.fruitPicked||{})) if (dayNum(S.day.key)-v >= FRUIT_REGROW_DAYS) delete S.fruitPicked[k]; save(); }
 ensureFavors();
 // furniture: validate saved positions (the island changed shape in v2)
@@ -2871,9 +3175,28 @@ function talkTo(res){
         dialog(res.spec.name, res.spec.voice, [line], menu); } },
     { label:'Give a gift', fn:()=>{ if(S.day.gift[res.spec.id]){ dialog(res.spec.name,res.spec.voice,[fill('You already gave me something today, {c}! Save it for tomorrow.',c)],menu); return; }
         openBag('give', i=>{ panelClose=null; closePanel(); giveGift(res,i,menu); }, ()=>menu()); } },
+    ...(canAskToLeave(res.spec.id) ? [{ label:'Ever think about moving?', fn:()=>askToLeave(res, menu) }] : []),
     { label:'Bye!', alt:true, fn:end } ]);
   if (!VISIT){ const tk=(S.day.talked=S.day.talked||{}); if (!tk[res.spec.id]){ tk[res.spec.id]=1; track('talk'); } }
   dialog(res.spec.name, res.spec.voice, [greetingFor(res)], menu);
+}
+/* v1.26: ask an islander to move away. They pack up overnight. At least MIN_RES islanders always stay. */
+const canAskToLeave = id => !VISIT && !GUEST && livesHere(id) && S.town.res.length>MIN_RES && !S.town.leaving;
+const LEAVE_LINES = {
+  cheerful:['Moving? Me? Oh... I hadn\'t thought about it, {c}.','I guess there are lots of islands out there. Do you think I should?'],
+  gruff:['Hrm. You trying to get rid of me, {c}?','...Say it straight. You want me to go?'],
+  dreamy:['Moving... like a cloud drifting somewhere new, {c}?','Is that what the island wants?'],
+  sporty:['Moving? Like a new training camp, {c}?','Huh. Is that what you think I should do?'],
+  caring:['Oh, dear. Moving? At my age, {c}?','Is that what you\'d like, sweetheart?'],
+  elegant:['Darling, are you suggesting I relocate, {c}?','Be honest with me.'],
+  lazy:['Moving sounds like a lot of lifting, {c}.','...You think I should, though?'] };
+function askToLeave(res, back){
+  const R=res.spec, c={ c:R.catch }, v=R.voice;
+  dialog(R.name, v, (LEAVE_LINES[R.personality]||LEAVE_LINES.cheerful).map(l=>fill(l,c)), null, [
+    { label:'I think it might be time', fn:()=>{ if (!canAskToLeave(R.id)) return back();
+        S.town.leaving={ id:R.id, day:dayKeyOf(dayNum(today())+1) }; if (S.town.next && S.town.next.id===R.id) S.town.next=null; save();
+        dialog(R.name, v, [fill('Oh. Okay. I\'ll start packing tonight, {c}.',c), 'I\'ll be gone by tomorrow. It was nice living here.'], ()=>toast(`${R.name} will move away tomorrow.`)); } },
+    { label:'No, never mind!', alt:true, fn:()=>dialog(R.name, v, [fill('Phew. Okay, {c}.',c)], back) } ]);
 }
 function giveGift(res, slot, menu){
   const P=DIALOGUE[res.spec.personality], s=S.inv[slot], it=ITEMS[s.id]; removeAt(slot,1); S.day.gift[res.spec.id]=true; track('gift');
@@ -2882,6 +3205,7 @@ function giveGift(res, slot, menu){
   const c={ c:res.spec.catch, item:it.name }; const lines=[fill(P[tier][Math.floor(Math.random()*P[tier].length)],c)]; let reward=null;
   if ((S.friend[res.spec.id]>=4 && Math.random()<0.35) || (tier==='love' && Math.random()<0.2)){ const pool=Object.values(ITEMS).filter(i=>i.kind==='furniture'&&i.shop==='stall'&&inMonths(Time.month(),i.months)&&(i.rarity??FR.c)>=3); reward=pool[Math.floor(Math.random()*pool.length)].id; lines.push(fill(P.returnGift[0],c)); }
   let styleGift=null; if (!reward && S.friend[res.spec.id]>=6 && Math.random()<0.25){ styleGift=grantRandomStyle(); if(styleGift) lines.push(fill(`Oh, and I had some leftover supplies from fixing up my place. Here, try ${styleGift} on your house!`,c)); }
+  if (!reward && !styleGift && !GUEST && !VISIT && S.friend[res.spec.id]>=15 && Math.random()<0.08){ reward=randomTicket(); lines.push(fill('You\'re one of my best friends, so... here. A boat ticket. Go somewhere nice, {c}.',c)); }   // v1.26
   if (tier==='love'){ Snd.jingle(); sparkle(res.pos.clone().add(new THREE.Vector3(0,2,0))); }
   dialog(res.spec.name, res.spec.voice, lines, ()=>{ if(reward){ const r=addItem(reward); if(r) itemToast(reward, r==='new', 'Received'); else dropNear(reward, player.pos); } menu(); });
 }
@@ -3171,6 +3495,22 @@ function pitchTool(k, p, after){
     { label:`Buy it (${fmt(tr.cost)})`, fn:()=>{ if (!buyTool(p.t, p.k)) { after(); return; } dialog(k.name, k.voice, ['Pleasure doing business! You won\'t regret it.'], after); } },
     { label:'Maybe later', alt:true, fn:()=>dialog(k.name, k.voice, ['No rush. I\'ll keep it on the tools shelf for you.'], after) } ]);
 }
+/* v1.26: the pitch comes when you go to buy the lower tier again (say, a new flimsy rod after the last one broke).
+   Pemberton offers the next tier at 20% off, once. Turn it down and it stays on the Tools shelf at full price. */
+const PITCH_OFF=0.2;
+function pitchOnBuy(t, k){
+  const T=TOOLS[t], n=k+1; if (!T || n>=T.tiers.length || n<=(S.toolOffer[t]??-1) || (S.toolEver[t]??-1)<k || !reqMet(t,n)) return false;
+  const tr=T.tiers[n], price=Math.round(tr.cost*(1-PITCH_OFF)); if (S.clams<price) return false;
+  const kp=KEEPERS[SHOPS.general.keeper], perk=(PITCH_PERK[t]||[])[n-1]||'', own=S.tools[t], broke=!own || (own.tier===k && !T.tiers[k].forever && own.uses<=0);
+  S.toolOffer[t]=n; save(); panelClose=null; closePanel();
+  const back=()=>openShop('stall');
+  dialog(kp.name, kp.voice, [broke ? `Another ${T.tiers[k].name}? You wore the last one clean out, didn't you. Hang on a second.` : `Another ${T.tiers[k].name}? Before you grab that, hang on a second.`,
+      `Somebody who uses a tool that hard should have a better one. The ${tr.name}. ${perk}`,
+      `Normally ${fmt(tr.cost)} clams, but since it's your first, I'll do ${fmt(price)}.`], null, [
+    { label:`Buy it (${fmt(price)})`, fn:()=>{ const c=tr.cost; tr.cost=price; const ok=buyTool(t, n); tr.cost=c; dialog(kp.name, kp.voice, [ok?'Pleasure doing business! You won\'t regret it.':'Hm, looks like you\'re a little short.'], back); } },
+    { label:`Just the ${T.tiers[k].name}`, alt:true, fn:()=>{ buyTool(t, k); dialog(kp.name, kp.voice, ['Suit yourself. I\'ll keep the good one on the tools shelf for you.'], back); } } ]);
+  return true;
+}
 function reqMet(t, tier){ const q=TOOLS[t].tiers[tier].req; if(!q) return true; if(q.tool!==undefined && (S.toolEver[t]===undefined || S.toolEver[t]<q.tool)) return false; if(q.stat && (S.stats[TOOLS[t].stat]||0)<q.stat) return false; return true; }
 function packReq(i){ const q=BACKPACKS[i].req; if(!q) return true; if(q.caught && S.caught<q.caught) return false; if(q.discovered && discovered()<q.discovered) return false; if(q.bestFriends && bestFriends()<q.bestFriends) return false; return true; }
 const shopKey = which => which==='stall' ? 'general' : which;
@@ -3203,7 +3543,6 @@ const markSold = (which, id, i) => { if (which==='rare'){ S.day.psold[i]=true; r
 function talkShop(id){
   const k=KEEPERS[SHOPS[id].keeper], open=shopOpen(id), shop=()=>openShop(id==='general'?'stall':id);
   if (id==='general' && !open){ dialog(k.name, k.voice, [keeperLine(k.id,'night')], ()=>openShop('stall')); return; }
-  if (id==='general' && !VISIT){ const p=toolPitch(); if (p){ pitchTool(k, p, ()=>talkShopRest(id, k, shop)); return; } }
   talkShopRest(id, k, shop);
 }
 function talkShopRest(id, k, shop){
@@ -3298,7 +3637,9 @@ function openShop(which, startTab){
       S.clams-=price; addTrade(which,price); let isNew=false; for (let q=0;q<k;q++) if (addItem(id)==='new') isNew=true; Snd.coin(); updateHUD(); toast(`${isNew?'New! ':''}Bought ${k} ${ITEMS[id].name.toLowerCase()}.`, thumb(id), isNew?'new':''); save(); render(); });
     pBody.querySelectorAll('[data-b]').forEach(b=>b.onclick=()=>{ const i=+b.dataset.b; const id=list[i], it=ITEMS[id], price=buyPrice(which,it);
       if(S.clams<price) return; if(!canAdd(id)){ toast('Your bag is full.'); return; } S.clams-=price; if(tab==='garden') S.day.gsold[i]=true; else markSold(which,id,i); addTrade(which,price); if (which==='rare') track('peddler'); const r=addItem(id); Snd.coin(); updateHUD(); itemToast(id, r==='new', 'Bought'); render(); });
-    pBody.querySelectorAll('[data-tool]').forEach(b=>b.onclick=()=>{ const [t,k]=b.dataset.tool.split(':'); if (buyTool(t,+k,which)) render(); });
+    pBody.querySelectorAll('[data-tool]').forEach(b=>b.onclick=()=>{ const [t,k]=b.dataset.tool.split(':');
+      if (which==='stall' && !VISIT && pitchOnBuy(t,+k)) return;   // v1.26: Pemberton steps in when you reach for the old model
+      if (buyTool(t,+k,which)) render(); });
     const bs=pBody.querySelector('#buySled'); if (bs) bs.onclick=()=>{ if (countItem('sled')||S.clams<ITEMS.sled.buy) return; if (!canAdd('sled')){ toast('Your bag is full.'); return; } S.clams-=ITEMS.sled.buy; addTrade(which,ITEMS.sled.buy); addItem('sled'); Snd.coin(); updateHUD(); setSledBtn(); toast('You got a sled! Find a snowy hill.'); save(); render(); };
     const bb=pBody.querySelector('#buyBike'); if(bb) bb.onclick=()=>{ if(S.bike||S.clams<BIKE_COST) return; S.clams-=BIKE_COST; addTrade(which,BIKE_COST); S.bike=true; Snd.fanfare(); updateHUD(); setBikeBtn(); toast('You got a bicycle!'); save(); render(); };
     pBody.querySelectorAll('[data-pack]').forEach(b=>b.onclick=()=>{ const i=+b.dataset.pack, p=BACKPACKS[i]; if(i!==S.pack+1||!packReq(i)||S.clams<p.cost) return; S.clams-=p.cost; addTrade(which,p.cost); S.pack=i; Snd.fanfare(); updateHUD(); toast(`You got the ${p.name}! (${p.slots} slots)`); save(); render(); });
@@ -3412,7 +3753,97 @@ function anonDonation(r){
 }
 // The museum grows overnight once the collection outgrows it
 function museumGrowCheck(){ if (museumNeeds().length && !S.museum.grow){ S.museum.grow=1; save(); return true; } return false; }
-initTownBuildings(); applyTown();
+if (!TRIP){ initTownBuildings(); applyTown(); }
+/* =====================================================================
+   v1.26: BOAT TRIPS. Skipper Wick waits at the dock with her boat. Pay a flat fee for a random little island (mostly
+   ones like yours, now and then a themed one), or hand her a ticket for a named island. You stay as long as you like;
+   your bag is the limit. Sail home and the island is gone. Odds are never better out there, but some islands have more spots.
+   ===================================================================== */
+const TRIP_FEE=2000, SKIPPER={ name:'Skipper Wick', voice:460, acc:['beanie'], accC:0x2a4a7a };
+function buildTripBoat(){ const g=new THREE.Group(), wood=M(0x8a5e3a), hullC=M(0x3a6a8a), cloth=M(0xf4e6c8);
+  mk(G.box(4.2,0.7,1.6), hullC, 0,0.0,0,g); mk(G.box(1.2,0.66,1.1), hullC, 2.3,0.02,0,g).rotation.y=Math.PI/4; mk(G.box(4.3,0.08,1.66), wood, 0,0.38,0,g);
+  mk(G.box(1.3,0.8,1.2), M(0xf4f0e8), -1.1,0.8,0,g); mk(G.box(1.5,0.1,1.4), M(0xd8604d), -1.1,1.25,0,g);
+  mk(G.cyl(0.06,0.07,3.4,6), wood, 0.6,2.0,0,g); const sail=mk(G.box(0.04,2.4,1.3), cloth, 0.6,2.2,0.7,g); sail.castShadow=true;
+  mk(G.cyl(0.25,0.25,0.12,10), M(0xffffff), 1.2,0.5,0.82,g).rotation.x=Math.PI/2; return g; }
+let skipper=null;
+function buildSkipper(){
+  if (VISIT || GUEST) return;
+  const sx=DOCK.x0+5.2, sz=DOCK.z-0.75;
+  const spec={ name:SKIPPER.name, voice:SKIPPER.voice, build:()=>buildAnimal({ look:CH.lookCode(CH.residentLook(TRIP && BOOT.own ? BOOT.own.seed : S.seed, 'skipper')), acc:SKIPPER.acc, accC:SKIPPER.accC }) };
+  skipper=new Keeper(spec, sx, sz, ()=>TRIP ? talkSkipperTrip() : talkSkipperHome()); skipper.rest=Math.PI;
+  const boat=buildTripBoat(); boat.position.set(DOCK.x0+8.5, -0.1, DOCK.z+DOCK.w+1.5); OUT.add(boat); }
+buildSkipper();
+const invCounts = () => { const c={}; for (const s of S.inv) c[s.id]=(c[s.id]||0)+s.n; return c; };
+function talkSkipperHome(){
+  const v=SKIPPER.voice, nm=SKIPPER.name, tickets=S.inv.filter(s=>ITEMS[s.id] && ITEMS[s.id].kind==='ticket');
+  if (!BOOT.flush && BOOT.mode!=='account'){ dialog(nm, v, ['Trips need an account, I\'m afraid.']); return; }
+  const go=(theme, ticket)=>{
+    if (noEdit()) return;
+    if (!ticket && S.clams<TRIP_FEE){ dialog(nm, v, [`It's ${fmt(TRIP_FEE)} clams for a trip. Come back when you've got it.`]); return; }
+    const r=Math.random(); let th=theme;
+    if (!th){ const x=Math.random(); th = x<0.85 ? 'plain' : x<0.97 ? ['orchard','bloom','frost'][Math.floor(Math.random()*3)] : ['moonlit','castaway'][Math.floor(Math.random()*2)]; }
+    const fruits=NATIVE_FRUITS.filter(f=>f!==S.nativeFruit), T=TRIP_THEMES[th];
+    const trip={ seed:(Math.random()*1e9)|0, theme:th, name:T.name, fruit:fruits[Math.floor(Math.random()*fruits.length)], start:invCounts(), seen:Object.keys(S.seen||{}), from:S.island };
+    if (ticket) removeItem(ticket,1); else S.clams-=TRIP_FEE;
+    updateHUD(); save();
+    dialog(nm, v, [th==='plain' ? 'All aboard! Let\'s see where the wind takes us.' : `All aboard for ${T.name}! ${T.blurb}`], async ()=>{
+      try { sessionStorage.setItem('dw-trip', JSON.stringify(trip)); sessionStorage.removeItem('dw-trip-world'); } catch(e){}
+      document.documentElement.classList.add('magicret'); Snd.swoosh();
+      try { if (BOOT.flush) await BOOT.flush(); } catch(e){}
+      setTimeout(()=>location.reload(), 600); });
+  };
+  dialog(nm, v, ['Ahoy! Fancy a trip? I know a lot of little islands out there.', `Somewhere new costs ${fmt(TRIP_FEE)} clams. Got a ticket? I\'ll take you right where it says.`], null, [
+    { label:`Somewhere new (${fmt(TRIP_FEE)})`, fn:()=>go(null, null) },
+    ...[...new Set(tickets.map(t=>t.id))].map(id=>({ label:`Use ${ITEMS[id].name.replace('Ticket to ','ticket: ')}`, fn:()=>go(ITEMS[id].theme, id) })),
+    { label:'Not today', alt:true, fn:()=>{} } ]);
+}
+function talkSkipperTrip(){
+  const v=SKIPPER.voice, nm=SKIPPER.name;
+  dialog(nm, v, ['Ready to head home? Once we leave, I can never find the same island twice.'], null, [
+    { label:'Sail home', fn:()=>tripGoHome() },
+    { label:'Not yet', alt:true, fn:()=>dialog(nm, v, ['Take your time. I\'ll be right here.']) } ]);
+}
+async function tripGoHome(){
+  const t=BOOT.trip||{}, now=invCounts(), got={};
+  for (const [id,n] of Object.entries(now)){ const d=n-((t.start||{})[id]||0); if (d>0) got[id]=d; }
+  const fresh=Object.keys(S.seen||{}).filter(id=>!(t.seen||[]).includes(id));
+  try { sessionStorage.setItem('dw-trip-recap', JSON.stringify({ name:t.name, got, fresh, invite:S.tripInvite||null })); sessionStorage.removeItem('dw-trip'); sessionStorage.removeItem('dw-trip-world'); } catch(e){}
+  delete S.tripInvite; save();
+  document.documentElement.classList.add('magicret'); Snd.swoosh();
+  try { if (BOOT.flush) await BOOT.flush(); } catch(e){}
+  setTimeout(()=>{ location.href=location.pathname+location.search; }, 600);
+}
+// Back home: a recap card, and a castaway's answer if you invited one
+function tripRecap(){
+  let R=null; try { R=JSON.parse(sessionStorage.getItem('dw-trip-recap')||'null'); sessionStorage.removeItem('dw-trip-recap'); } catch(e){}
+  if (!R || TRIP || VISIT) return;
+  const rows=Object.entries(R.got||{}).filter(([id])=>ITEMS[id]).map(([id,n])=>`<div class="row"><img src="${thumb(id)}"><div class="grow"><div class="nm">${ITEMS[id].name}${(R.fresh||[]).includes(id)?' <span style="color:#d08a10;font-weight:600">New!</span>':''}</div><div class="sub">x${n}</div></div></div>`).join('');
+  openPanel(`Back from ${R.name||'your trip'}`);
+  pBody.innerHTML = rows ? `<div class="muted" style="margin-bottom:8px">What you brought home:</div>${rows}` : '<div class="notice">You came home empty-handed this time. The sea air was nice, though.</div>';
+  if (R.invite){ const RS=RESIDENTS.find(x=>x.id===R.invite), T=S.town;
+    if (RS && !T.res.includes(RS.id) && !T.next && (T.hall||0)>=1 && T.res.length<TOWN_MAX){ if (!RS.home){ const sp=findHomeSpot(RS.id); if (sp) claimHomeSpot(RS, sp); }
+      if (RS.home){ T.next={ id:RS.id, day:dayKeyOf(dayNum(today())+1) }; save(); applyTown(); pBody.insertAdjacentHTML('beforeend', `<div class="notice" style="margin-top:10px"><b>${RS.name} is moving in tomorrow!</b><br><span class="muted">They followed you home from ${R.name}.</span></div>`); } }
+    else if (RS) pBody.insertAdjacentHTML('beforeend', `<div class="notice" style="margin-top:10px">${RS.name} wanted to move here, but there's no room right now${(T.hall||0)<1?' (the town hall needs building first)':''}.</div>`); }
+}
+// Trip island extras: a castaway camping near the middle, a wreck on the beach
+if (TRIP){
+  if (TRIP_THEME==='castaway'){ const own=(BOOT.own && BOOT.own.town) || { res:[], left:{} }, pool=RESIDENTS.filter(R=>!(own.res||[]).includes(R.id));
+    const R=pool[Math.floor(mulberry32(S.seed)()*pool.length)];
+    if (R){ let p=null; const rr=mulberry32(S.seed+5); for (let k=0;k<300 && !p;k++){ const a=rr()*TAU, d=6+rr()*10, x=Math.cos(a)*d, z=Math.sin(a)*d; if (walkable(x,z) && !blocked(x,z,1.2) && rawHeight(x,z)>SAND_H) p=[x,z]; }
+      if (p){ const tent=new THREE.Group(); const c=mk(G.cone(1.3,1.6,4), M(0xd8a050), 0,0.8,0,tent); c.rotation.y=Math.PI/4; mk(G.box(0.5,0.9,0.05), M(0x5a3e28), 0,0.45,0.78,tent);
+        for (let i=0;i<5;i++) mk(G.dod(0.14), M(0x8a8a8a), 1.6+Math.cos(i/5*TAU)*0.35, 0.08, 0.6+Math.sin(i/5*TAU)*0.35, tent); tent.position.set(p[0]-1.6, groundY(p[0],p[1]), p[1]-1.2); OUT.add(tent);
+        const spec={ name:R.name, voice:R.voice, build:()=>buildAnimal({ ...R, look:CH.lookCode(CH.residentLook(BOOT.own?BOOT.own.seed:S.seed, R.id, RESIDENTS.indexOf(R))) }) };
+        new Keeper(spec, p[0], p[1], ()=>{ const c={ c:R.catch };
+          if (S.tripInvite===R.id) return dialog(R.name, R.voice, [fill('I\'m packed and ready, {c}! I\'ll follow your boat home.',c)]);
+          dialog(R.name, R.voice, [fill('Oh! A visitor! I\'ve been camping out here for ages, {c}.',c), 'I\'d love a real home somewhere. Is your island nice?'], null, [
+            { label:'Come live on my island!', fn:()=>{ S.tripInvite=R.id; save(); dialog(R.name, R.voice, [fill('Really?! I\'ll follow your boat home, {c}!',c), 'If there\'s room, I\'ll move in right away.']); } },
+            { label:'Just passing through', alt:true, fn:()=>dialog(R.name, R.voice, [fill('Okay! Safe travels, {c}.',c)]) } ]); }); } } }
+  if (TRIP_THEME==='shipwreck'){ const rr=mulberry32(S.seed+9); for (let k=0;k<400;k++){ const a=rr()*TAU, d=islandR(a)*0.93, x=Math.cos(a)*d, z=Math.sin(a)*d; if (!isBeach(x,z) || Math.hypot(x-DOCK.x0,z-DOCK.z)<12) continue;
+      const w=new THREE.Group(), wood=M(0x6a4a32), dark=M(0x4a3424); const hull=mk(G.box(5,1.4,2), wood, 0,0.4,0,w); hull.rotation.z=0.35; hull.rotation.y=0.2;
+      for (let i=0;i<5;i++){ const rib=mk(G.box(0.18,1.6,0.18), dark, -1.8+i*0.9, 1.2, 0.95, w); rib.rotation.z=0.3+i*0.04; }
+      const mast=mk(G.cyl(0.1,0.12,4,6), wood, 0.4,1.6,0,w); mast.rotation.z=0.9; mk(G.box(1.4,0.9,0.05), M(0xe8dcc0), 1.6,2.2,0.3,w).rotation.z=0.6;
+      w.position.set(x, groundY(x,z)-0.3, z); w.rotation.y=-a; OUT.add(w); setRects('wreck', [[x-2.2,z-2.2,x+2.2,z+2.2]]); break; } }
+}
 function talkCurator(){
   const k=KEEPERS.thistle, v=k.voice;
   const menu=()=>dialog(k.name, v, [], null, [
@@ -3593,6 +4024,9 @@ function applyHome(d){
    The first house is the base model: one 3 x 3 room with nothing extra, built the moment you take the loan.
    Later, new floor squares go on a loan too, on any floor. One loan at a time: pay it off before borrowing again. No interest. */
 const loanOpen = () => !!(S.loan && S.loan.owed>0);
+// v1.26: one loan covers at most 9 new floor squares, so a big house takes several loans (prices still rise per square)
+const LOAN_MAX_SQ=9;
+const newSquares = plan => Math.max(0, planCells(plan)-(S.home.paid||0));
 function buildBaseHouse(){
   if (S.home.built || GUEST || VISIT) return;
   const d={ built:true, g2:1, paid:0, plan:{ rooms:[defaultRoom('r1',2+BUILD.SHIFT[0],2+BUILD.SHIFT[1],3,3)], links:{}, door:{i:3+BUILD.SHIFT[0],j:4+BUILD.SHIFT[1]} }, ext:defaultExt() }; fixDoor(d.plan);
@@ -3609,7 +4043,7 @@ function talkLoan(back){
       `It's ${fmt(houseCost(9,0))} clams. Pay it back whenever you like, a little at a time. No interest!`, 'Paint, porches, shutters and bigger rooms all cost extra later on.'], null,
     [{ label:'Build it!', fn:()=>buildBaseHouse() }, { label:'Not yet', alt:true, fn:back }]);
   if (loanOpen()) return openLoanPanel();
-  dialog(k.name, v, ['Your house is all paid off! Want more room? Draw new rooms in the builder, on any floor, and I\'ll put the new floor on a loan. One loan at a time, mind you.'], back);
+  dialog(k.name, v, ['Your house is all paid off! Want more room? Draw new rooms in the builder, on any floor, and I\'ll put the new floor on a loan. One loan at a time, mind you, and up to 9 new squares per loan.'], back);
 }
 function openLoanPanel(){
   const render=()=>{ const L=S.loan; let h;
@@ -3643,6 +4077,7 @@ function closeBuild(commit){
     const un=draftUnowned(d); if (un.length){ toast(`You're only trying on ${un.map(u=>u.list==='mixer'?'a mixed color':homeName(u.list,u.v)).join(', ')}.`, null, '', 'Buy it, or put it back, to finish.'); Snd.fail(); renderBuild(); bBody.scrollTop=0; return; }
     const cells=planCells(d.plan), cost=houseCost(cells, S.home.paid), fee=remodelFee(S.home.plan, d.plan);
     if (cost>0 && loanOpen()){ toast(`Pay off your home loan before adding floor. You still owe ${fmt(S.loan.owed)} clams.`, null, '', 'Clementine at the town hall takes payments.'); Snd.fail(); return; }
+    if (newSquares(d.plan)>LOAN_MAX_SQ){ toast(`One loan covers up to ${LOAN_MAX_SQ} new floor squares. You drew ${newSquares(d.plan)}.`, null, '', 'Build part of it now and the rest on your next loan.'); Snd.fail(); return; }
     if (fee>S.clams){ toast(`The remodel fee is ${fmt(fee)} clams. You have ${fmt(S.clams)}.`); Snd.fail(); return; }
     const back=applyHome(d); if (back<0) return;
     S.clams-=fee; if (cost>0) S.loan={ owed:cost, total:cost }; save(); updateHUD();
@@ -3662,7 +4097,7 @@ function renderBuild(keepScroll){
   const B=buildMode; if(!B) return; const plan=B.draft.plan; const st=bBody.scrollTop;
   $('#bTabs').querySelectorAll('[data-bt]').forEach(b=>{ b.classList.toggle('on', b.dataset.bt===B.tab); b.onclick=()=>{ if(B.tab===b.dataset.bt) return; B.tab=b.dataset.bt; B.brush=null; Snd.click(); if (B.tab==='int' && !floorHas(plan,B.floor)) B.floor=0; setBuildView(B.tab==='int'?'in'+B.floor:'out'); renderBuild(); }; });
   const cells=planCells(plan), cost=houseCost(cells,S.home.paid), fee=remodelFee(S.home.plan, plan), lo=loanOpen(), nr=allRooms(plan).length, fl=topFloor(plan)+1;
-  $('#bCost').innerHTML=`${nr} room${nr>1?'s':''}${fl>1?` on ${fl} floors`:''} · ${cells} floor squares · ${cost>0 ? (lo ? `<b style="color:#c0503a">new floor needs a loan, but you still owe ${fmt(S.loan.owed)}</b>` : `new floor: <b>${fmt(cost)}</b> clams on a home loan`) : 'no new floor'} · ${fee ? `remodel fee: <b>${fmt(fee)}</b> (you have ${fmt(S.clams)})` : 'no remodel fee'}`;
+  $('#bCost').innerHTML=`${nr} room${nr>1?'s':''}${fl>1?` on ${fl} floors`:''} · ${cells} floor squares · ${cost>0 ? (lo ? `<b style="color:#c0503a">new floor needs a loan, but you still owe ${fmt(S.loan.owed)}</b>` : newSquares(plan)>LOAN_MAX_SQ ? `<b style="color:#c0503a">${newSquares(plan)} new squares: one loan covers up to ${LOAN_MAX_SQ}</b>` : `new floor (${newSquares(plan)} of ${LOAN_MAX_SQ} squares): <b>${fmt(cost)}</b> clams on a home loan`) : 'no new floor'} · ${fee ? `remodel fee: <b>${fmt(fee)}</b> (you have ${fmt(S.clams)})` : 'no remodel fee'}`;
   const prob=planIssue(plan), up=B.floor>0;
   $('#bMsg').innerHTML = prob ? `<b style="color:#c0503a">${prob}</b>` : B.tab==='layout' ? ({ rooms: up ? `Draw ${FLOOR_NAME[B.floor]} rooms over the rooms below. Tap a room to move or resize it.` : 'Drag an empty square to add a room. Tap a room, then drag it to move or drag an edge to resize. Shaded squares can\'t be built on.',
       doors: up ? 'Tap a wall between rooms on this floor: doorway, open, or solid.' : 'Tap a wall between rooms: doorway, open, or solid. Tap a front-facing wall to move the front door.',
@@ -3671,7 +4106,7 @@ function renderBuild(keepScroll){
       roof: 'Tap a room to pick how its roof points and what kind it is.', stairs:`Tap a square that has a room on this floor and the one below to put the stairs up to the ${FLOOR_NAME[B.floor]} there.` })[B.mode]
     : B.tab==='ext' ? (B.brush ? `Drag on the roof to ${B.brush==='moss'?'paint moss on. Go over a spot again for thicker moss':'scrub moss off'}.` : 'Drag the picture to look around. Use the buttons on the right to zoom and tilt.') : 'Pick a room on the plan, then its floor, wallpaper and lighting.';
   const trying=draftUnowned(B.draft).length>0; if (trying && !prob) $('#bMsg').innerHTML='<b style="color:#3a7ab0">Trying on a new style. Buy it or put it back to finish.</b>';
-  $('#bDone').disabled = !!prob || (cost>0 && lo) || fee>S.clams || trying; $('#bDone').textContent = B.first ? 'Build it' : 'Done';
+  $('#bDone').disabled = !!prob || (cost>0 && lo) || newSquares(plan)>LOAN_MAX_SQ || fee>S.clams || trying; $('#bDone').textContent = B.first ? 'Build it' : 'Done';
   buildEl.classList.toggle('tall', !!B.tall && B.tab!=='ext');
   if (B.tab==='layout') renderLayoutTab(); else if (B.tab==='ext') renderExtTab(); else renderIntTab();
   renderTryBar(); renderViewBar();
@@ -4062,7 +4497,7 @@ function renderViewBar(){ const B=buildMode;
 function openBoard(){
   const render=()=>{ const d=Time.now();
     let h=`<div class="notice"><b>${S.island||'Island'} news</b><br>${d.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})}. Weather: ${World.weather}.</div>`;
-    if (S.day.peddler) h+=`<div class="notice">A traveling peddler named Fennick is near the dock today.${S.day.pplan&&ITEMS[S.day.pplan]&&!knowsPlan(ITEMS[S.day.pplan].learns)?' Word is he has a rare plan with him.':''}</div>`;
+    if (S.day.peddler) h+=`<div class="notice">Fennick came through the Portal Station today and is pushing his cart around the island.${S.day.pplan&&ITEMS[S.day.pplan]&&!knowsPlan(ITEMS[S.day.pplan].learns)?' Word is he has a rare plan with him.':''}</div>`;
     { const rp=shopStock('stall').filter(isRarePiece); if (rp.length) h+=`<div class="notice">Pemberton has something rare on display today: ${rp.map(id=>ITEMS[id].name+' '+rarityTag(ITEMS[id])).join(', ')}.</div>`; }
     if (S.ground.some(g=>g.bottle)) h+=`<div class="notice">Someone saw a bottle wash up on the beach this morning.</div>`;
     for(const e of activeEvents()) h+=`<div class="notice">${e.notice}</div>`;
@@ -4192,8 +4627,59 @@ toolBtn.addEventListener('click', e=>{ e.stopPropagation(); if(toolPop.classList
   let h=`<button class="tp${!S.equip?' on':''}" data-t="">${HAND_SVG}<span>Hands</span></button>`;
   for(const t of Object.keys(TOOLS)){ const T=S.tools[t]; if(!T) continue; const d=TOOLS[t].tiers[T.tier]; h+=`<button class="tp${S.equip===t?' on':''}" data-t="${t}"><img src="${toolThumb(t,T.tier)}"><span>${TOOLS[t].name}</span><i style="width:${d.forever?100:Math.max(4,T.uses/d.uses*100)}%"></i></button>`; }
   if (!Object.keys(S.tools).length) h+='<div class="muted" style="padding:6px">No tools yet.</div>';
+  h+=`<button class="tp" id="tpMap"><img src="${mapThumb()}"><span>Map</span></button>`;   // v1.26: the map is always on you, like a tool, and takes no bag space
   toolPop.innerHTML=h; toolPop.classList.add('show'); positionToolPop(); Snd.click();
+  toolPop.querySelector('#tpMap').onclick=ev=>{ ev.stopPropagation(); toolPop.classList.remove('show'); openMap(); };
   toolPop.querySelectorAll('[data-t]').forEach(b=>b.onclick=ev=>{ ev.stopPropagation(); equip(b.dataset.t||null); toolPop.classList.remove('show'); Snd.click(); }); });
+/* v1.26: the island map. Land, water, paths, every building and whose house is whose. It doesn't show where anyone is. */
+let _mapThumb=null;
+function mapThumb(){ if (_mapThumb) return _mapThumb; const cv=document.createElement('canvas'); cv.width=cv.height=64; const x=cv.getContext('2d');
+  x.translate(32,32); x.rotate(-0.12); x.fillStyle='#ecd9a8'; x.strokeStyle='#8b6b50'; x.lineWidth=2.5; x.beginPath(); x.moveTo(-22,-18); x.lineTo(-7,-22); x.lineTo(8,-18); x.lineTo(23,-22); x.lineTo(23,18); x.lineTo(8,22); x.lineTo(-7,18); x.lineTo(-22,22); x.closePath(); x.fill(); x.stroke();
+  x.strokeStyle='rgba(139,107,80,.6)'; x.lineWidth=1.5; x.beginPath(); x.moveTo(-7,-22); x.lineTo(-7,18); x.moveTo(8,-18); x.lineTo(8,22); x.stroke();
+  x.fillStyle='#7cbf5a'; x.beginPath(); x.ellipse(0,0,13,10,0.3,0,TAU); x.fill(); x.strokeStyle='#e2483d'; x.lineWidth=2.5; x.beginPath(); x.moveTo(3,-3); x.lineTo(9,3); x.moveTo(9,-3); x.lineTo(3,3); x.stroke();
+  return _mapThumb=cv.toDataURL(); }
+function mapExtent(){ let m=0; for (let i=0;i<64;i++) m=Math.max(m, islandR(i/64*TAU)); return m*1.12; }
+function drawIslandMap(cv){
+  const ctx=cv.getContext('2d'), W=cv.width, H=cv.height, E=mapExtent(), k=Math.min(W,H)/(E*2), X=x=>W/2+x*k, Z=z=>H/2+z*k;
+  // land and water, sampled from the real terrain
+  const N=Math.min(240, W), img=ctx.createImageData(N,N), step=E*2/N;
+  for (let j=0;j<N;j++) for (let i=0;i<N;i++){ const x=-E+(i+0.5)*step, z=-E+(j+0.5)*step, h=rawHeight(x,z), o=(j*N+i)*4; let c;
+    if (h< -0.15 || (!walkable(x,z) && h<0.2)){ const d=clamp(-h/3,0,1); c=[86-30*d, 186-40*d, 206-30*d]; }
+    else if (h<SAND_H+0.08) c=[238,218,166];
+    else { const t=clamp((h-SAND_H)/6,0,1); c=[128-40*t, 190-50*t, 98-30*t]; }
+    img.data[o]=c[0]; img.data[o+1]=c[1]; img.data[o+2]=c[2]; img.data[o+3]=255; }
+  const tmp=document.createElement('canvas'); tmp.width=tmp.height=N; tmp.getContext('2d').putImageData(img,0,0);
+  ctx.imageSmoothingEnabled=true; ctx.drawImage(tmp, 0,0,N,N, X(-E),Z(-E),E*2*k,E*2*k);
+  // paths and the dock
+  ctx.strokeStyle='#e6cf9a'; ctx.lineWidth=Math.max(2,1.6*k); ctx.lineCap='round'; ctx.lineJoin='round';
+  for (const P of PATHS){ ctx.beginPath(); P.forEach((q,i)=>i?ctx.lineTo(X(q[0]),Z(q[1])):ctx.moveTo(X(q[0]),Z(q[1]))); ctx.stroke(); }
+  ctx.fillStyle='#a87a4e'; ctx.fillRect(X(DOCK.x0), Z(DOCK.z-DOCK.w), Math.max(4,(DOCK.x1-DOCK.x0)*k), DOCK.w*2*k);
+  // buildings
+  const labels=[];
+  const mark=(p, col, name, big)=>{ if (!p) return; const r=big?7:5; ctx.fillStyle=col; ctx.strokeStyle='#5b4336'; ctx.lineWidth=1.6;
+    ctx.beginPath(); ctx.moveTo(X(p[0]),Z(p[1])-r); ctx.lineTo(X(p[0])+r,Z(p[1])); ctx.lineTo(X(p[0])+r*0.75,Z(p[1])); ctx.lineTo(X(p[0])+r*0.75,Z(p[1])+r*0.9); ctx.lineTo(X(p[0])-r*0.75,Z(p[1])+r*0.9); ctx.lineTo(X(p[0])-r*0.75,Z(p[1])); ctx.lineTo(X(p[0])-r,Z(p[1])); ctx.closePath(); ctx.fill(); ctx.stroke();
+    if (name) labels.push([X(p[0]), Z(p[1])+r+3, name, big]); };
+  ctx.fillStyle='#d8bc86'; ctx.beginPath(); ctx.arc(X(0),Z(0),Math.max(6,4.5*k),0,TAU); ctx.fill(); labels.push([X(0),Z(0)+Math.max(6,4.5*k)+3,'Plaza']);
+  const B={ museum:['#f2c64a','Museum'], shop:['#f2c64a','General Store'], aquarium:['#7ac0d8','Aquarium'], garden:['#9ad070','Bug & Bloom'], hall:['#e8a060',HALL_NAMES[S.town.hall||0]], portal:['#b8b0c8','Portal Station'], tower:['#a8a0b8','Wizard Tower'] };
+  for (const [key,[col,name]] of Object.entries(B)) if (PLACES[key] && (key!=='tower' || S.magic.tower)) mark(PLACES[key], col, name, true);
+  if (S.home && S.home.built) mark([LOT.x, LOT.z], '#e2604d', 'Your house', true); else mark([LOT.x, LOT.z], '#e2604d', 'Your tent', true);
+  for (const R of RESIDENTS) if (R.home && livesHere(R.id)) mark(R.home, '#ffffff', R.name);
+  ctx.font='600 12px Fredoka, sans-serif'; ctx.textAlign='center'; ctx.textBaseline='top';
+  for (const [x,y,t,big] of labels){ ctx.font=(big?'700 13px':'600 12px')+' Fredoka, sans-serif'; ctx.lineWidth=3.5; ctx.strokeStyle='rgba(255,250,238,.95)'; ctx.strokeText(t,x,y); ctx.fillStyle='#4a3628'; ctx.fillText(t,x,y); }
+  // you are here
+  if (!World.inside){ const px=X(player.pos.x), pz=Z(player.pos.z), f=player.face||0; ctx.save(); ctx.translate(px,pz); ctx.rotate(-f+Math.PI);
+    ctx.fillStyle='#e2483d'; ctx.strokeStyle='#fff'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(0,-9); ctx.lineTo(7,7); ctx.lineTo(0,3); ctx.lineTo(-7,7); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore(); }
+  // compass
+  ctx.fillStyle='#5b4336'; ctx.font='700 14px Fredoka, sans-serif'; ctx.textAlign='center'; ctx.fillText('N', W-22, 10); ctx.beginPath(); ctx.moveTo(W-22,28); ctx.lineTo(W-27,40); ctx.lineTo(W-17,40); ctx.closePath(); ctx.fill();
+}
+function openMap(){
+  openPanel(`Map of ${S.island||'the island'}`); Snd.click();
+  const w=Math.max(260, Math.min(pBody.clientWidth-8, 620)), cv=document.createElement('canvas'), dpr=Math.min(2, devicePixelRatio||1);
+  cv.width=Math.round(w*dpr); cv.height=Math.round(w*dpr); cv.style.width=w+'px'; cv.style.height=w+'px'; cv.style.borderRadius='14px'; cv.style.display='block'; cv.style.margin='0 auto'; cv.style.background='#56bace';
+  pBody.appendChild(cv); const ctx=cv.getContext('2d'); ctx.scale(dpr,dpr); cv.width; // keep scale
+  const off=document.createElement('canvas'); off.width=w; off.height=w; drawIslandMap(off); ctx.drawImage(off,0,0);
+  const note=document.createElement('div'); note.className='muted'; note.style.cssText='margin-top:8px;text-align:center'; note.textContent=World.inside?'You\'re indoors right now.':'The red arrow is you.'; pBody.appendChild(note);
+}
 addEventListener('pointerdown', e=>{ if(!toolPop.contains(e.target) && e.target!==toolBtn && !toolBtn.contains(e.target)) toolPop.classList.remove('show'); });
 function positionToolPop(){ const r=toolBtn.getBoundingClientRect(); const w=Math.min(300, innerWidth-20); toolPop.style.width=w+'px'; toolPop.style.left=clamp(r.left+r.width/2-w/2,10,innerWidth-w-10)+'px'; toolPop.style.top=Math.max(10, r.top-toolPop.offsetHeight-10)+'px'; }
 
@@ -4643,7 +5129,7 @@ function frame(){
   saveT+=dt; if(saveT>15){ saveT=0; save(); }
   updateRemotes(dt,t); updateSnow(dt); PARTY.update(dt,t);
   if (started && !tankView){ updateHold(dt); if (meBody.rag) updateRag(meBody,dt,t); else movePlayer(dt,t); bonkCool=Math.max(0,bonkCool-dt); updateBugs(dt); updateFishing(dt,t); updateCatchMeter(dt); tickDialog(dt); updateActButton(); updateCutaway(); }
-  for(const e of ents.slice()){ if (e.removed) continue; if (e.rag){ updateRag(e,dt,t); continue; } if (e instanceof Resident || Math.abs(e.pos.x-player.pos.x)<40) e.update(dt,t); }
+  for(const e of ents.slice()){ if (e.removed) continue; if (e.rag){ updateRag(e,dt,t); continue; } if (e instanceof Resident || e instanceof Peddler || Math.abs(e.pos.x-player.pos.x)<40) e.update(dt,t); }
   WU.uTime.value=t; if (!World.inside){ updateWater(t); updateAmbient(dt,t); updateFalls(dt,t);
     for(const c of clouds){ c.position.x+=c.userData.v*dt; if(c.position.x>150) c.position.x=-150; }
     const lnOn=activeEvents().some(e=>e.id==='lantern-night');
@@ -4667,7 +5153,7 @@ function setPlayerLook(code){ S.look=code; save(); player.obj=swapLook(player.ob
 /* ---------- Start screen ---------- */
 const isNew=!S.player || (BOOT.mode==='account' && !S.island);
 if (isNew && S.player) $('#inName').value=S.player;
-if (!isNew){ $('#newForm').classList.add('hide'); $('#backMsg').classList.remove('hide'); $('#backMsg').textContent='Welcome back to '+S.island+', '+S.player+'!'; $('#bStart').textContent='Continue'; }
+if (!isNew){ $('#newForm').classList.add('hide'); $('#backMsg').classList.remove('hide'); $('#backMsg').textContent= TRIP ? `You sailed to ${S.island}. ${(TRIP_THEMES[TRIP_THEME]||{}).blurb||''} Talk to Skipper Wick on the dock to sail home.` : 'Welcome back to '+S.island+', '+S.player+'!'; $('#bStart').textContent='Continue'; }
 $('#loading').textContent='';
 $('#bStart').onclick=async()=>{
   if (!S.look && (MAGIC_RET||PORTAL_RET) && !isNew){ S.look=CH.lookCode(CH.defaultLook()); player.obj=swapLook(player.obj, buildPlayer({ look:S.look })); }
@@ -4682,7 +5168,8 @@ $('#bStart').onclick=async()=>{
   const p=residents[0];
   if (isNew) setTimeout(()=>dialog(p.spec.name, p.spec.voice, [fill('Oh! Hi hi! You must be {p}! Welcome to {isle}, {c}!',{c:p.spec.catch}), 'Pemberton\'s shop by the plaza has tools. Come say hi to everyone, okay?']), 700);
   else if (S.migratedFrom1){ delete S.migratedFrom1; save(); setTimeout(()=>dialog(p.spec.name, p.spec.voice, [fill('{p}! Did you notice? The island got so much BIGGER overnight, {c}!',{c:p.spec.catch}), 'There\'s a river, a pond, and four new neighbors! And the stall sells tools now. You\'ll need them for bugs, fish and digging.', 'Your old furniture is safe. Anything that didn\'t fit went back in your bag.']), 700); }
-  else toast('Welcome back, '+S.player+'!');
+  else if (TRIP) toast(`Welcome to ${S.island}!`, null, 'new', 'Gather all you like. Skipper Wick will take you home when you\'re ready.');
+  else { toast('Welcome back, '+S.player+'!'); setTimeout(tripRecap, 900); }
 };
 if ((MAGIC_RET||PORTAL_RET) && !isNew) $('#bStart').onclick();
 /* ---------- Bicycle ---------- */
@@ -5003,6 +5490,8 @@ const PARTY = createParty({ scene, player, meBody, remotes, groundY, walkable, r
     back:()=>{ const a=r.partyAway; if (!a) return; delete r.partyAway; r.solid=a.solid; if (a.parent && !r.obj.parent) a.parent.add(r.obj); } })),
   swingAnim:(face)=>{ stopMove(); player.face=face; player.obj.rotation.y=face; player.act=0.4; bonkCool=0.35; Snd.swoosh(); } });
 window.__game = { v123:{ toolPitch, pitchTool, buyTool, talkShop, get storeVisit(){ return storeVisit; } }, v120:{ track, checkAch, achValue, grantWear, ownsWear, openAchievements, makeFavor, rollFavors, favorChoices, npcOf, clothesStock, wardrobeOwned, get Q(){ return Q; } }, party:PARTY, v119:{ tierPick, openChest, townCap:()=>townCap() }, v13:{ shopStock:w=>shopStock(w), learnPlan, rareRoll, knowsPlan, unfoundPlans, stockWeight, RARE_WORK, GroundItem, ShopItem, Furniture }, v1:{ scene, camera, OUT, updateSky, updateHUD, snowPass, SNOW_U, townNewDay, applyTown, talkHall, openHallPanel, buildPlaza, refreshStoreItems, buildStoreAll, buildShop, buildMuseumAll, spawnExhibits, mentorMoment, teachWoodworking, openCraft, doCook, nearStation, toggleSled, setSled, get sledding(){ return sledding; }, sledV, eatFood, Plant, fullBagCatch, KB, landSeaTap, terraLand, LAMPS:()=>LAMPS, hasUpstairs, ShopItem, Stairs, get exhibits(){ return exhibits; }, onDisplay, museumNeeds, museumExpand, museumFitState, museumTanks, renderer, nearestEnt:()=>nearestEnt(), doAction:()=>doAction(), openTankView, closeTankView, get tankView(){ return tankView; }, KEEPOUT, dayKeyOf, World, startPlacing, checkPlace, get placing(){ return placing; }, FX, homeStock, buyHome, draftUnowned, get homeRack(){ return homeRack; }, openShop, openBuild:(o)=>openBuild(o), closeBuild, get buildMode(){ return buildMode; }, ents, Tree, Stump, Weed, Bug, bugs, player, interact, layoutBar, pickNote, itemToast, reel, Fishing, fishes, spawnFish, WU, relayout, enterRoom:(id)=>enterRoom(id), trees }, get S(){ return S; }, dbg:{ setCine:(c)=>{ cine=c; }, showChoices:(t,c)=>showChoices(t,c), dialog:(...a)=>dialog(...a), setRiding:(v)=>setRiding(v), enterRoom:(id)=>enterRoom(id), openBuild:()=>openBuild(), rooms:()=>Object.keys(ROOMS), get yaw(){ return camYaw; }, set yaw(v){ camYaw=v; }, get riding(){ return riding; }, get snow(){ return SNOW_U.value; }, setWeather:(w)=>{ weatherOverride=w; World.weather=w; snowT=0; }, get dlg(){ return !!dlgState; } }, walkable, blocked, groundY, launchRag, ragdolls, swing, meBody, refreshPortals, portalArches, get portalEnt(){ return portalEnt; }, enterRoom, PLACES, net:{ party:(id,d)=>PARTY.onNet(id,d), bonked, visibleRemotes:()=>[...remotes.values()].filter(r=>r.obj.visible).map(r=>[r.name,+r.pos.x.toFixed(1),+r.pos.z.toFixed(1)]), remoteUpsert, remotePos, remoteLeave, remoteEmote, playerState, setInventory, toast:(m)=>toast(m), updateHUD:()=>updateHUD(), get started(){ return started; } }, ITEMS, itemThumb:(id)=>thumb(id), layoutInfo:()=>({ id:LAYOUT_ID, PLACES, PATHS, LOT, rects:RECTS.map(r=>r.slice(0,4)), lot:lotRect() }), terrainH:(x,z)=>rawHeight(x,z), terrainSlope:(x,z)=>hillSlope(x,z), interact, spawnBug:(id,x,z)=>new Bug(id,x,z), tapOdds:()=>Object.fromEntries(Object.keys(TAP_BASE).map(k=>[k, +tapChance({rarity:k}).toFixed(2)])), placingObj:()=>placing&&placing.m, toScreen:v=>{ const p=v.clone().project(camera); return [(p.x*0.5+0.5)*innerWidth, (-p.y*0.5+0.5)*innerHeight]; }, rebuildHome:()=>{ buildPlayerHouse(); rebuildHomeRoom(); }, openBuild, closeBuild, get buildMode(){ return buildMode; }, talkShop, openDonate, talkCurator, spawnMossby, onFelled, findPath, startPlacing, LOT, RECTS, shopEnts, museumEnt, houseEnt:()=>houseEnt, Time, player, ents, ITEMS, residents, World, ROOMS, goTo, handleTap, doAction, updateSky, rollDay, spawnDaily, castAt, Fishing, fishes, bugs, openBag, openBook, openShop, openBoard, openMenu, openCraft, doCraft, WOODWORK, enterRoom, exitRoom, equip, startLayout, endLayout, trees, applyControls, magic:{ startMagic, endMagic, landTap, magicPlace, castMagic, get mode(){ return magicMode; }, raiseTower, talkWizard, drinkPotion, potionOn, luckW, rollFavors, Q, favorChoices, findTowerSpot, get tower(){ return towerEnt; }, PLACES, TERRA, FALLS } };
+// v1.26 test hooks
+window.__game.v126 = { townNewDay, applyTown, findHomeSpot, claimHomeSpot, townCap, incomeNewDay, refreshIncome, talkIncome, incCollect, incOf, INCOME, incEnts, openMap, talkSkipperHome, talkSkipperTrip, tripGoHome, tripRecap, storyWho, askToLeave, canAskToLeave, pitchOnBuy, merchantDay, get peddler(){ return peddler; }, get skipper(){ return skipper; }, newSquares, LOAN_MAX_SQ, TRIP, TRIP_THEME, residents, residentHomes, plotEnts, KEEPOUT, Q, PATHS, camTarget, updateCamera, set camDist(v){ camDist=v; }, get camDist(){ return camDist; }, set camYaw(v){ camYaw=v; } };
 // v1.25 test hooks for the house builder
 window.__game.house = { LT, previewBuild:(w)=>previewBuild(w), renderBuild:(k)=>renderBuild(k), homeBlocked, planIssue, setBuildView:(v)=>setBuildView(v), mossPaintAt, buildMossLayer, roofHit, houseFrame, rebuildFloor, HOME_IDS, get houseEnt(){ return houseEnt; }, edgeTap, stairsTap, landProblem, closeBuild };
 window.__game.farm = { openPlantPanel, startGridPlacing, plantGrid, checkGrid, openGarden, rebuildGardens, gardenAtXZ, islandSeeds, harvestRec, perimeter, get fenceSegs(){ return FENCE_SEGS; }, fenceHit, get placing(){ return placing; }, plantEnts, gardenEnts, CELL };

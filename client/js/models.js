@@ -70,7 +70,11 @@ export function buildTree(r, type, opt={}){
     for (let i=1;i<9;i++){ const t=i/9; const ring=mk(G.tor(0.18-t*0.05,0.025,5,12), M(0x8a6a44), lean[0]*t*t, t*h, lean[1]*t*t, top); ring.rotation.x=Math.PI/2; ring.castShadow=false; }
     const tp=new THREE.Vector3(lean[0],h,lean[1]);
     top.add(leafy(new THREE.Mesh(frondsGeo(tp, 9, 2.3*size, season==='winter'?[0x5a9a50,0x6aa858]:[0x4fae46,0x5fbe52,0x6ac25a], r, tint), foliageMat('frond')), foliageMat('frond')));
-    if (stage===3 && opt.fruit) for(let i=0;i<3;i++){ const a=i/3*TAU+0.4; fruits.push(outline(mk(G.sph(0.24,12,10), M(0x7a4a28), tp.x+Math.cos(a)*0.3, h-0.3, tp.z+Math.sin(a)*0.3, top),1.08)); }
+    // v1.26: coconuts hang lower, bigger and a touch lighter so they show under the big fronds
+    if (stage===3 && opt.fruit) for(let i=0;i<3;i++){ const a=i/3*TAU+0.4, cx=tp.x+Math.cos(a)*0.36, cz=tp.z+Math.sin(a)*0.36;
+      const nut=outline(mk(G.sph(0.31,14,12), M(0x9a6232,{roughness:0.8}), cx, h-0.62, cz, top),1.1); nut.scale.set(1,1.12,1);
+      mk(G.cyl(0.035,0.05,0.3,6), M(0x6a7a3a), -Math.cos(a)*0.06, 0.38, -Math.sin(a)*0.06, nut).castShadow=false;
+      fruits.push(nut); }
     return g;
   }
   if (type==='pine' || type==='cedar'){
@@ -199,6 +203,9 @@ export function buildItemModel(id){
   else if (d.t==='log'){ for(let i=0;i<3;i++){ const l=mk(G.cyl(0.13,0.13,0.8,10), M(0xa8754a), 0, 0.13+(i===2?0.22:0), (i===2?0:(i-0.5)*0.27), g); l.rotation.z=Math.PI/2; mk(G.cyl(0.11,0.11,0.01,10),M(0xe0b888),0.4,l.position.y,l.position.z,g).rotation.z=Math.PI/2; } }
   else if (d.t==='branch'){ const l=mk(G.cyl(0.07,0.09,0.9,7), M(0xc8b49a), 0, 0.1, 0, g); l.rotation.z=Math.PI/2; const tw=mk(G.cyl(0.03,0.04,0.35,5), M(0xc8b49a), 0.1, 0.22, 0.05, g); tw.rotation.z=-0.8; }
   else if (d.t==='stone'){ const s=mk(G.dod(0.3), MF(0x9aa1a8), 0, 0.22, 0, g); s.scale.set(1,0.75,0.9); }
+  else if (d.t==='ticket'){ const t=mk(G.box(0.62,0.03,0.34), M(0xf4e6c8), 0,0.04,0,g); t.rotation.y=0.3; const st=mk(G.box(0.2,0.035,0.34), M(d.c), -0.18,0.045,-0.06,g); st.rotation.y=0.3; mk(G.box(0.28,0.035,0.04), M(0x8a6a4a), 0.12,0.045,0.06,g).rotation.y=0.3; }
+  else if (d.t==='honey'){ const gl=new THREE.MeshStandardMaterial({ color:0xe8a020, transparent:true, opacity:0.9, roughness:0.2, emissive:0x8a4a00, emissiveIntensity:0.15 });
+    mk(G.cyl(0.2,0.18,0.36,14), gl, 0,0.18,0,g); mk(G.cyl(0.22,0.22,0.06,14), M(0xf4e6c8), 0,0.39,0,g); mk(G.cyl(0.16,0.2,0.08,14), M(0xd8604d), 0,0.44,0,g); }
   else if (d.t==='clay'){ const s=mk(G.sph(0.28,10,8), M(0xc87a50), 0, 0.2, 0, g); s.scale.set(1.1,0.7,1); }
   else if (d.t==='iron'){ const s=mk(G.dod(0.22), MF(0x6a7078,{metalness:0.6,roughness:0.4}), 0, 0.2, 0, g); mk(G.dod(0.12), MF(0xa8b0b8,{metalness:0.8,roughness:0.3}), 0.12,0.28,0.05,g); }
   else if (d.t==='potion'){ const gl=new THREE.MeshStandardMaterial({ color:d.c, transparent:true, opacity:0.85, roughness:0.15, emissive:d.c, emissiveIntensity:0.25 });

@@ -280,6 +280,12 @@ const STYLES = {
   mabel:   { W:4.4, D:3.6, walls:'stone', wallC:0xd8d0c0, roof:'mossy', moss:0.55, H:[2.4], door:{ type:'dutch', hood:'none' }, win:{ type:'cross', shut:true, box:true }, chimney:'brick', extras:['bed','ivyL'], gableWin:'both' },
   juniper: { W:4.2, D:3.4, walls:'timber', wallC:0xf6efe0, beamC:0x4a3226, roof:'steep', pitch:0.8, ridgeZ:true, H:[2.1,1.6], jetty:0.25, door:{ type:'round', hood:'none' }, win:{ type:'cross', shut:true, box:true }, chimney:'brick', extras:['bed'] },
   clover:  { W:4.4, D:3.6, walls:'plaster', wallC:0xf8f0d8, roof:'thatch', roofC:0xc8a868, moss:0.6, H:[2.4], door:{ type:'round', hood:'none' }, win:{ type:'round', box:true }, chimney:'stone', extras:['ivyR','bed'] },
+  // v1.26 newcomers
+  hazel:   { W:4.2, D:3.6, walls:'board', wallC:0xfff0d8, roof:'steep', roofC:0xd8704a, ridgeZ:true, H:[2.35], door:{ type:'round', hood:'none' }, win:{ type:'cross', shut:true, box:true }, gableWin:'front', chimney:'stone', extras:['bed','ivyL'] },
+  tobin:   { W:4.6, D:3.6, walls:'log', wallC:0xb8884e, roof:'gambrel', roofC:0x4a6a8a, ridgeZ:true, H:[2.3], door:{ type:'dutch', hood:'awning' }, win:{ type:'cross', shut:false, box:false, frame:0xf0e0c0 }, loft:true, chimney:'brick', extras:['barrel','wood'] },
+  wren:    { W:4.2, D:3.4, walls:'plaster', wallC:0xe8eef8, roof:'mossy', roofC:0x6a7aa0, moss:0.8, H:[2.4], door:{ type:'round', hood:'none' }, win:{ type:'round', box:false }, turret:true, chimney:null, extras:['ivyR','bed'] },
+  barley:  { W:4.6, D:3.8, walls:'stone', wallC:0xb8b0a0, roof:'mossy', roofC:0x6a5444, moss:1.0, H:[2.25], door:{ type:'plank', hood:'none' }, win:{ type:'cross', shut:true, box:false }, chimney:'stone', chimSide:-1, extras:['wood','barrel'], base:'stone' },
+  marigold:{ W:4.4, D:3.6, walls:'timber', wallC:0xfff4e0, beamC:0x6a4a30, roof:'thatch', roofC:0xd0a860, moss:0.4, H:[2.4], door:{ type:'dutch', hood:'none' }, win:{ type:'cross', shut:true, box:true }, chimney:'brick', extras:['bed','ivyL'], gableWin:'both' },
 };
 export const COTTAGE_IDS = Object.keys(STYLES);
 export function buildCottage(id, o={}){

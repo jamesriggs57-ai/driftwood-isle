@@ -239,3 +239,27 @@ How it works: the host's game runs the clock, scoring and the crown, and sends t
 **Lighting inside.** Each room has a free overhead light with brightness and warmth sliders (Inside > Lighting). Bought fixtures: ceiling lights (glass pendant, paper lantern, hanging bulbs, brass chandelier), wall lights (brass sconces, candle sconces, iron lanterns) and accents (picture-rail glow, gallery spotlights, fairy lights), in the museum's style of warm light pools and beams. Up to 8 real lights per floor (`MAX_LIGHTS`); home interiors use a lower ambient light so the rooms' own lights set the mood (`LT` in `house.js`).
 
 **Code.** The player's house moved to `client/js/house.js` (plan helpers, outside, inside, moss). Floors: `plan`, `plan.up`, `plan.up3`, `plan.up4`; stairs up to floor n: `plan.stairs`, `stairs2`, `stairs3`; trellises `plan.trel`, balconies `plan.balc` (keys like windows: `row:i,j,side`). Interiors: `home`, `home2`, `home3`, `home4`. Per room: `pitch` ('x' or 'z'), `roof`, `ceil`, `sconce`, `accent`, `bright`, `warm`.
+
+## v1.26: boat trips, a bigger town, passive income, a map
+
+**Town.** New islands still start with Pippa, Bramble and Mabel. Once the town hall is built, a newcomer arrives every few days (`MOVE_GAP` 2 days, then a 50% chance each day) until 10 islanders live there (`TOWN_MAX`). Five new islanders can move in: Hazel, Tobin, Wren, Barley and Marigold. Their home spot is picked on each island when they first book a plot (`findHomeSpot`, saved in `S.town.homes`), so existing islands keep their layout. Talk to any islander and pick "Ever think about moving?" to ask them to leave; they pack overnight. At least 5 always stay (`MIN_RES`), and someone who left won't return for 30 days.
+
+**Story quests pass between islanders.** The wizard tower, portal beacon and swatch book quests belong to whoever holds them (`Q.holder`). If the islander they were written for isn't living there, someone else takes the quest, with neutral dialogue (`gask`/`gdone` in `STORY`).
+
+**Merchants.** No traveling merchant until the beacon quest is done; it now lights the beacon on the Portal Station. After that Fennick comes through the portal every 3 or 4 days and pushes a cart around the island along the paths.
+
+**Look.** The Portal Station has standing stones, a lintel, a hanging lantern and a wooden "Portal Station" sign. Wendell, his tower and his staff are greyer and older-looking. Street lamps are crooked wooden posts with a hanging iron lantern, moss and ivy. Coconuts hang lower and bigger.
+
+**Home loans.** One loan covers at most 9 new floor squares (`LOAN_MAX_SQ`); prices per square are unchanged.
+
+**Passive income** (`INCOME` in main.js). Four people turn up once you've progressed: Gill (fisherman, on a beach), Hollis (beekeeper, in a meadow), Russet (orchard keeper, by fruit trees) and Quill (bookkeeper, by the general store, once you back a shop). Fund them, then upgrade after a week. Each fills over 3 days and then waits. Gill's fish use the normal odds. Honey is a new item. Saved in `S.income`.
+
+**Map.** A map sits with your tools (no bag slot). It shows land, water, paths, buildings and whose house is whose, not where anyone is.
+
+**Fish.** A fish's size is rolled when it spawns and its shadow shows it, so a big shadow is a big one for its species.
+
+**Pemberton.** The tool pitch now happens when you go to buy the lower tier again (say, a new Flimsy Rod), with 20% off the first one.
+
+**Boat trips.** Skipper Wick waits at the dock. 2,000 clams buys a trip to a random small island (85% plain, 12% Orchard/Bloom/Frost, 3% Moonlit/Castaway), or hand her a ticket for a named island. Tickets turn up from favors (4%), digging (0.4%) and best-friend gifts (8%). Trip islands are about a quarter the size, have no town, and are made from a seed and a theme (`generateTrip` in layouts.js). Odds never change; themes change the look, the time of day or season, and how many spots there are (Fossil Bluffs has 36 dig spots, Coral Atoll lots of beach finds, Shipwreck Cove more bottle rolls). Castaway Isle has an islander camping who can follow you home. There's no time limit and the island doesn't refill. Sailing home shows what you brought back.
+
+How it works: boot.js starts in `trip` mode when `sessionStorage['dw-trip']` is set. Your player keys come along; the island's own state lives in `sessionStorage['dw-trip-world']` so reloading doesn't refill it. online.js saves only player keys to your own save during a trip. Friends can't come along yet.

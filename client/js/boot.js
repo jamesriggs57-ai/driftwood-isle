@@ -195,6 +195,22 @@ async function start() {
         hideScreen(); return launch(B);
       }
     }
+    // v1.26: on a boat trip? Your bag and clams come along; the island is made from the trip's seed and theme.
+    // What you've already gathered there is kept in this tab until you sail home, so reloading doesn't refill it.
+    const tripRaw = sessionStorage.getItem('dw-trip');
+    if (tripRaw && data && data.player) {
+      let trip = null; try { trip = JSON.parse(tripRaw); } catch {}
+      if (trip && trip.seed) {
+        const S = {}; for (const k of PLAYER_KEYS) if (data[k] !== undefined) S[k] = data[k];
+        let world = null; try { world = JSON.parse(sessionStorage.getItem('dw-trip-world') || 'null'); } catch {}
+        Object.assign(S, { v: data.v || 2, layout: 'gen', gen: { seed: trip.seed, terrain: 'hilly', town: 'trip', trip: true, theme: trip.theme }, seed: trip.seed,
+          island: trip.name || 'a little island', placed: [], ground: [], plants: [], cut: {}, stumps: [], home: null, house: 0, shops: {}, museum: {}, magic: {}, terra: { cells: {}, moved: {} },
+          town: { res: [], next: null, last: null, hall: 0, fund: 0, met: {}, at: null, homes: {}, left: {} }, portalAt: false, nativeFruit: trip.fruit || data.nativeFruit, gardens: [] }, world || {});
+        Object.assign(B, { mode: 'trip', save: S, own: data, ownVersion: version, trip, startMsg: `You sailed to ${trip.name || 'a little island'}.` });
+        hideScreen(); return launch(B);
+      }
+      sessionStorage.removeItem('dw-trip');
+    }
     Object.assign(B, { save: data, version }); hideScreen(); return launch(B);
   }
 

@@ -296,35 +296,48 @@ Object.assign(FURN_BUILDERS, {
 export function buildTower(){
   const g=new THREE.Group(); const R=2.1, H=5.2, F=0.5;
   const plinth=texBox('stone',0xa8a49a,R*2+0.8,F+1.2,R*2+0.8,1.0); plinth.position.y=F/2-0.6; g.add(plinth);   // reaches below ground on slopes
-  const body=mk(new THREE.CylinderGeometry(R,R,H,24), M(0xd8d0c0), 0,F+H/2,0,g); body.castShadow=body.receiveShadow=true;
-  for (let k=0;k<5;k++) for (let i=0;i<10;i++){ const a=i/10*TAU+(k%2)*0.31; if (k<3 && Math.abs(Math.atan2(Math.sin(a),Math.cos(a)))<0.45) continue; const st=mk(G.box(0.7,0.36,0.08), M([0xc8c0b0,0xb8b0a0,0xd0c8b8][(i+k)%3]), Math.sin(a)*(R+0.03), F+0.5+k*1.0, Math.cos(a)*(R+0.03), g); st.rotation.y=a; st.castShadow=false; }
-  const band=mk(G.cyl(R+0.12,R+0.12,0.25,20), M(0x6a5a8a), 0,F+H,0,g);
-  const roof=outline(mk(new THREE.ConeGeometry(R+0.7,3.6,20), M(0x5a4a9a), 0,F+H+1.8,0,g)); roof.rotation.y=0.1;
-  const tip=mk(G.sph(0.32,14,10), glowMat(0xffe27a), 0,F+H+3.8,0,g); addGlow(g,F+H+3.8,3.5,0xffe27a);
-  for (let i=0;i<5;i++){ const a=i/5*TAU; const st=mk(G.ico(0.12,0), glowMat(0xfff3b0), Math.sin(a)*(R+0.2), F+H+1.0+(i%2)*0.6, Math.cos(a)*(R+0.2), g); st.castShadow=false; }
+  const body=mk(new THREE.CylinderGeometry(R,R*1.06,H,24), M(0xb4ae9e), 0,F+H/2,0,g);   // v1.26: older, greyer stone body.castShadow=body.receiveShadow=true;
+  for (let k=0;k<5;k++) for (let i=0;i<10;i++){ const a=i/10*TAU+(k%2)*0.31; if (k<3 && Math.abs(Math.atan2(Math.sin(a),Math.cos(a)))<0.45) continue; const st=mk(G.box(0.7,0.36,0.08), M([0xa8a292,0x9a9484,0xb2ac9c][(i+k)%3]), Math.sin(a)*(R+0.03), F+0.5+k*1.0, Math.cos(a)*(R+0.03), g); st.rotation.y=a; st.castShadow=false; }
+  const band=mk(G.cyl(R+0.12,R+0.12,0.25,20), M(0x5a5248), 0,F+H,0,g);
+  const roof=outline(mk(new THREE.ConeGeometry(R+0.7,3.6,20), M(0x4e5460,{flatShading:true}), 0,F+H+1.8,0,g)); roof.rotation.y=0.1;   // slate, crooked a touch
+  roof.rotation.z=0.06;
+  for (let i=0;i<7;i++){ const a=i/7*TAU+0.3; mk(G.sph(0.32,7,5), M(0x5f8a3e), Math.sin(a)*(R+0.35), F+H+0.25, Math.cos(a)*(R+0.35), g).scale.set(1.2,0.35,1); }
+  // an iron finial with a crescent-moon vane instead of a glowing ball
+  mk(G.cyl(0.04,0.06,0.9,6), M(0x2c2a28), 0.2,F+H+3.95,0,g); const vane=mk(new THREE.TorusGeometry(0.22,0.04,6,14,Math.PI*1.3), M(0x2c2a28), 0.2,F+H+4.45,0,g); vane.rotation.z=0.6;
+  // ivy up one side
+  for (let i=0;i<14;i++){ const t=i/14, a=-2.2+Math.sin(i*1.3)*0.25; mk(G.sph(0.2,6,4), M(0x4f8a3a), Math.sin(a)*(R+0.12), F+0.3+t*H*0.8, Math.cos(a)*(R+0.12), g).scale.set(1,0.8,0.5); }
   // windows (round, glowing)
   for (const [y,a] of [[F+2.6,0.6],[F+3.8,-0.7],[F+2.0,Math.PI-0.5],[F+4.1,Math.PI+0.6]]){ const w=mk(G.cyl(0.32,0.32,0.08,16), glowMat(0xffd27a), Math.sin(a)*(R+0.02), y, Math.cos(a)*(R+0.02), g); w.rotation.set(Math.PI/2,0,0); w.rotation.y=a; w.lookAt(Math.sin(a)*10, y, Math.cos(a)*10); w.rotateX(Math.PI/2); }
   // door
-  mk(G.box(1.4,2.35,0.1), M(0x8a7a6a), 0,F+1.12,R+0.04,g); const dr=mk(G.box(1.1,1.9,0.16), M(0x4a2f5a), 0,F+0.95,R+0.1,g); const arch=mk(new THREE.CylinderGeometry(0.55,0.55,0.16,16,1,false,-Math.PI/2,Math.PI), M(0x4a2f5a), 0,F+1.9,R+0.1,g); arch.rotation.set(-Math.PI/2,0,0);
+  mk(G.box(1.4,2.35,0.1), M(0x8a7a6a), 0,F+1.12,R+0.04,g); const dr=mk(G.box(1.1,1.9,0.16), M(0x5a3e2a), 0,F+0.95,R+0.1,g); const arch=mk(new THREE.CylinderGeometry(0.55,0.55,0.16,16,1,false,-Math.PI/2,Math.PI), M(0x5a3e2a), 0,F+1.9,R+0.1,g); arch.rotation.set(-Math.PI/2,0,0);
   mk(G.sph(0.07,8,6), M(0xf3c35a,{metalness:0.7,roughness:0.3}), 0.35,F+0.95,R+0.2,g);
   for (let s=0;s<2;s++) mk(G.box(1.6-s*0.3,0.18,0.5), M(0xa8a49a), 0, F-0.09-s*0.18, R+0.3+s*0.4, g);
   const sign=new THREE.Group(); sign.position.set(1.6,0,R+1.3); g.add(sign); mk(G.cyl(0.05,0.05,1.2,6),M(0x6a4a3a),0,0.6,0,sign); const moon=mk(G.cyl(0.3,0.3,0.06,16),M(0xffe9a8),0,1.25,0,sign); moon.rotation.x=Math.PI/2;
   // a few floating sparkles that bob (animated by the game)
-  const orbs=[]; for(let i=0;i<4;i++){ const o=mk(G.ico(0.1,1), glowMat(0xc8b0ff), 0,0,0,g); o.castShadow=false; o.userData.ph=i/4; orbs.push(o); } g.userData.orbs=orbs;
+  const orbs=[]; for(let i=0;i<4;i++){ const o=mk(G.ico(0.06,1), glowMat(0xfff0b0), 0,0,0,g); o.castShadow=false; o.userData.ph=i/4; orbs.push(o); } g.userData.orbs=orbs;
   g.userData.door=[0, R+0.9]; g.userData.rects=[[-R-0.2,-R-0.2,R+0.2,R+0.3]];
   return g;
 }
 /* Wendell, the island wizard (an old goat in a starry hat) */
 export const buildWizard = asChar(_buildWizard);
 function _buildWizard(){
-  const spec={ species:'goat', ears:'goat', fur:0xe8e2d8, muzzle:0xfffaf2, shirt:0x5a4a9a, cheek:0xe8b0c0 };
+  const spec={ species:'goat', ears:'goat', fur:0xe8e2d8, muzzle:0xfffaf2, shirt:0x6e6a62, cheek:0xe8b0c0 };   // v1.26: a grey, road-worn wizard
   const a=buildAnimal(spec); const u=a.userData;
   const hat=new THREE.Group(); hat.position.set(0,0.42,-0.02); u.head.add(hat);
-  outline(mk(G.cyl(0.62,0.62,0.06,24), M(0x4a3a8a), 0,0,0,hat)); const cone=outline(mk(new THREE.ConeGeometry(0.4,1.0,20), M(0x4a3a8a), 0,0.52,0,hat)); cone.rotation.z=0.18;
-  for (let i=0;i<6;i++){ const st=mk(G.ico(0.05,0), glowMat(0xffe27a), Math.sin(i*1.7)*0.28*(1-i/7), 0.12+i*0.13, 0.26*(1-i/7)+0.06, hat); st.castShadow=false; }
-  const beard=outline(mk(new THREE.ConeGeometry(0.2,0.55,12), M(0xffffff), 0,-0.42,0.36,u.head)); beard.rotation.x=Math.PI+0.25;
-  const robe=mk(new THREE.CylinderGeometry(0.36,0.55,0.62,16), M(0x5a4a9a), 0,0.42,0,u.body); robe.castShadow=true;
+  const felt=M(0x77736b,{roughness:0.95});
+  const brim=outline(mk(G.cyl(0.7,0.66,0.05,24), felt, 0,0,0,hat)); brim.rotation.x=0.08;
+  // a tall, floppy pointed hat: two cones, the top one bent over
+  const c1=outline(mk(new THREE.ConeGeometry(0.4,0.75,18,1,true), felt, 0,0.38,0,hat)); c1.material.side=THREE.DoubleSide;
+  const tipG=new THREE.Group(); tipG.position.set(0,0.7,0); tipG.rotation.z=0.75; hat.add(tipG); outline(mk(new THREE.ConeGeometry(0.17,0.5,14), felt, 0,0.22,0,tipG));
+  mk(G.cyl(0.41,0.43,0.08,18), M(0x4a4038), 0,0.07,0,hat);   // a band
+  const beard=outline(mk(new THREE.ConeGeometry(0.24,0.8,12), M(0xf0eee8), 0,-0.52,0.34,u.head)); beard.rotation.x=Math.PI+0.18;
+  const robe=mk(new THREE.CylinderGeometry(0.38,0.6,0.66,16), M(0x6e6a62,{roughness:0.95}), 0,0.4,0,u.body); robe.castShadow=true;
+  mk(G.cyl(0.4,0.42,0.06,16), M(0x4a3a2c), 0,0.66,0,u.body);   // a rope belt
+  const cloak=mk(new THREE.CylinderGeometry(0.42,0.66,0.9,16,1,true,Math.PI*0.6,Math.PI*0.8), M(0x5a5650,{roughness:0.95}), 0,0.5,-0.04,u.body); cloak.material.side=THREE.DoubleSide;
   const staff=new THREE.Group(); u.arms[1].add(staff); staff.position.set(0.04,-0.3,0.08);
-  mk(G.cyl(0.035,0.04,1.6,6), M(0x7a5232), 0,0.3,0,staff); const orb=mk(G.sph(0.11,12,10), glowMat(0x9ad8ff), 0,1.12,0,staff); u.orb=orb;
+  // a gnarled wooden staff with a small stone set in a knot of roots at the top
+  const sw=M(0x6a4a2e); mk(G.cyl(0.035,0.045,1.6,6), sw, 0,0.3,0,staff);
+  for (let i=0;i<4;i++){ const a=i/4*TAU; const k=mk(G.cyl(0.018,0.03,0.3,5), sw, Math.cos(a)*0.07,1.12,Math.sin(a)*0.07,staff); k.rotation.set(Math.sin(a)*0.5,0,-Math.cos(a)*0.5); }
+  const orb=mk(G.sph(0.08,10,8), glowMat(0xfff2c9), 0,1.14,0,staff); u.orb=orb;
   return a;
 }

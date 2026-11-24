@@ -199,3 +199,57 @@ export function drawIslandPreview(cv, L){
   for (const p of Object.values(L.homes||{})) if (p) dot(p,'#ffffff',3.5);
   if (L.places.home) dot(L.places.home,'#e2604d',5);
 }
+
+/* =====================================================================
+   v1.26 TRIP ISLANDS: small islands you sail to from the dock. About a quarter the area of a generated island,
+   no town, just things to gather. They're made from a seed and a theme, and they're gone once you sail home.
+   Places that a home island has (museum, shops, your lot) are parked far out of the world so nothing is built.
+   ===================================================================== */
+export const TRIP_THEMES = {
+  plain:     { name:'A quiet island',  terrain:'hilly', blurb:'An island a lot like yours.' },
+  orchard:   { name:'Orchard Isle',    terrain:'flat',  blurb:'Fruit trees of every kind.', fruit:4 },
+  bloom:     { name:'Bloom Isle',      terrain:'flat',  blurb:'Wild flowers and crops that don\'t grow on your island.', flowers:3 },
+  frost:     { name:'Frost Isle',      terrain:'hilly', blurb:'Snowy all year, with winter critters out any month.' },
+  moonlit:   { name:'Moonlit Isle',    terrain:'flat',  blurb:'Always night. Night bugs and night fish at any hour.' },
+  coral:     { name:'Coral Atoll',     terrain:'flat',  blurb:'A low, sandy atoll with beach finds everywhere.', small:true },
+  fossil:    { name:'Fossil Bluffs',   terrain:'mountainous', blurb:'Dig spots everywhere you look.' },
+  shipwreck: { name:'Shipwreck Cove',  terrain:'hilly', blurb:'An old wreck on the beach, and bottles washing up.' },
+  castaway:  { name:'Castaway Isle',   terrain:'flat',  blurb:'Someone is camping here. Maybe they\'d like a real home.' },
+};
+const FAR = 4000;
+export function generateTrip(gen){
+  for (let attempt=0; attempt<20; attempt++){ const L=tryTrip((gen.seed|0)+attempt*7919, gen.theme); if (L) return L; }
+  return tryTrip(gen.seed|0, gen.theme, true);
+}
+function tryTrip(seed, theme, force){
+  const T = TRIP_THEMES[theme] || TRIP_THEMES.plain, terrain = T.terrain, r = mulberry32(seed ^ 0x7a1b);
+  const scale = T.small ? 0.6 : 0.72, R = 50*scale, rr=(a,b)=>a+r()*(b-a);
+  const ph=[rr(0,TAU), rr(0,TAU), rr(0,TAU)];
+  const base = FLORA[terrain] || FLORA.hilly;
+  const flora = { trees:base.trees, fruit:(T.fruit||1)*base.fruit, flowers:(T.flowers||1)*base.flowers, palms:base.palms*(T.small?1.6:1) };
+  const L = { gen:true, trip:true, theme, name:T.name, terrain, town:'trip', R, ph, scale, bumps:[], mounds:[], flora, homes:{},
+    places:{ plaza:[0,0], board:[FAR,FAR] } };
+  const radiusAt = a => islandRadius(L, a), tOf=(x,z)=>Math.hypot(x,z)/radiusAt(Math.atan2(z,x));
+  const angDist = (a,b) => Math.abs(Math.atan2(Math.sin(a-b), Math.cos(a-b)));
+  // a short creek out to the coast, away from the dock on the east
+  let river=null;
+  for (let k=0;k<60 && !river;k++){ const as=rr(0,TAU), am=as+(r()<0.5?1:-1)*rr(0.3,0.7); if (angDist(am,0)<0.9 || angDist(as,0)<0.7) continue;
+    const pts=[]; for (let i=0;i<=3;i++){ const f=i/3, a=lerp(as,am,f), rad=lerp(0.42*R, radiusAt(am)*1.3, f), w=Math.sin(f*Math.PI)*rr(-3,3); pts.push([Math.cos(a)*rad-Math.sin(a)*w, Math.sin(a)*rad+Math.cos(a)*w]); }
+    if (polyDist(0,0,pts) < 10) continue; river=pts.map(p=>[+p[0].toFixed(1), +p[1].toFixed(1)]); }
+  if (!river) return null;
+  L.river=river; L.bridges=[[1,0.5]];
+  let pond=null;
+  for (let k=0;k<80 && !pond;k++){ const a=rr(0,TAU), d=rr(0.3,0.55)*R, x=Math.cos(a)*d, z=Math.sin(a)*d;
+    if (polyDist(x,z,river)<10 || (x>0.3*R && Math.abs(z-4)<10) || tOf(x,z)>0.65 || Math.hypot(x,z)<8) continue; pond={ x:+x.toFixed(1), z:+z.toFixed(1), r:+rr(3.2,4.2).toFixed(1) }; }
+  if (!pond) return null;
+  L.pond=pond;
+  const hills=(n,A0,A1,R0,R1)=>{ for (let i=0,k=0;i<n && k<200;k++){ const a=rr(0,TAU), d=rr(0.2,0.6)*R, x=Math.cos(a)*d, z=Math.sin(a)*d;
+      if (Math.hypot(x,z)<8 || polyDist(x,z,river)<6 || Math.hypot(x-pond.x,z-pond.z)<8 || (x>0.3*R && Math.abs(z-4)<8)) continue; L.mounds.push([+x.toFixed(1),+z.toFixed(1),+rr(A0,A1).toFixed(2),+rr(R0,R1).toFixed(1)]); i++; } };
+  if (terrain==='flat'){ hills(2,0.4,0.8,7,11); L.liftAmp=0.4; }
+  else if (terrain==='mountainous'){ hills(2,2.4,3.4,9,13); hills(2,1.0,1.8,6,9); L.liftAmp=1.2; }
+  else { hills(4,1.0,2.0,7,12); L.liftAmp=0.9; }
+  // home-island places, parked out of the world
+  ['museum','shop','aquarium','garden','tower','home'].forEach((k,i)=>{ L.places[k]=[FAR+i*40, FAR]; });
+  L.lot={ x:FAR+200, z:FAR }; RESIDENT_IDS.forEach((id,i)=>{ L.homes[id]=[FAR+400+i*40, FAR]; });
+  return L;
+}

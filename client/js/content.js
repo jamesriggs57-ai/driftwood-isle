@@ -30,6 +30,11 @@ def('wood',     {name:'Wood',           kind:'material', price:60,  model:{t:'lo
 def('softwood', {name:'Driftwood Branch',kind:'material', price:20, model:{t:'branch'}});
 def('stone',    {name:'Stone',          kind:'material', price:75,  model:{t:'stone'}});
 def('clay',     {name:'Clay',           kind:'material', price:100, model:{t:'clay'}});
+def('honey',    {name:'Honey Jar',      kind:'material', price:220, model:{t:'honey'}});   // v1.26: from the beehives
+// v1.26: boat tickets to a named island. Found now and then: a thank-you from a favor, a rare dig, a gift from a best friend.
+export const TICKET_THEMES = { orchard:['Orchard Isle',0xe2483d], bloom:['Bloom Isle',0xf08ab0], frost:['Frost Isle',0x9ad0f0], moonlit:['Moonlit Isle',0x5a4a9a],
+  coral:['Coral Atoll',0xf0907a], fossil:['Fossil Bluffs',0xb8a07a], shipwreck:['Shipwreck Cove',0x6a8aa0], castaway:['Castaway Isle',0x7ab04a] };
+for (const [th,[nm,c]] of Object.entries(TICKET_THEMES)) def('ticket_'+th, { name:'Ticket to '+nm, kind:'ticket', price:800, stack:5, theme:th, model:{ t:'ticket', c } });
 def('iron',     {name:'Iron Nugget',    kind:'material', price:375, model:{t:'iron'}});
 def('weed',     {name:'Clump of Weeds', kind:'material', price:10,  model:{t:'weed'}});
 def('stump',    {name:'Tree Stump',     kind:'material', price:180, stack:10, model:{t:'stump'}});   // dug up with a shovel; woodworkers turn it into stump furniture
@@ -393,8 +398,24 @@ export const RESIDENTS = [
     room:{ floor:0x6a4a3a, wall:0xe8f0e0, pattern:'stripe', accent:0x2a5a4a, items:[['bed',-2,-2,0],['bookshelf',1.6,-2.7,0],['armchair',2,0.2,-0.8],['floorlamp',2.8,-1,0],['rug',0,0.6,0],['monstera',-2.6,1,0],['birdbath',-0.2,-2.4,0]] } },
   { id:'clover', acc:['glasses'], top:'stripe', name:'Clover', species:'sheep', ears:'sheep', fur:0xfafafa, muzzle:0xf0e0d0, shirt:0x9ac06a, cheek:0xf5b0b0, home:[16,-30], voice:420,
     personality:'lazy', catch:'mmbaa', loves:['fruit','fish'], likes:['flower','furniture'], homeHours:[[11,14]],
-    room:{ floor:0xc8a878, wall:0xf8f0d8, pattern:'check', accent:0x9ac06a, items:[['bed',-2,-2,0],['blanket',1.2,0.4,0.3],['crate',2.6,-2.2,0],['crate',2.6,-1.3,0.4],['armchair',-1.6,0.8,0.7],['plant',2.6,1.4,0]] } },
+    room:{ floor:0xc8a878, wall:0xf8f0d8, pattern:'check', accent:0x9ac06a, items:[['bed',-2,-2,0],['blanket',1.2,0.4,0.3],['crate',2.6,-2.2,0],['crate',2.6,-1.3,0.4],['armchair',-1.6,0.8,0.7],['plant',2.6,1.4,0]] } },  // v1.26: five more islanders who can move in. Their homes are picked on each island when they book a plot (see townNewDay).
+  { id:'hazel', acc:['flower'], accC:0xf08ab0, name:'Hazel', species:'squirrel', ears:'round', fur:0xc8803a, muzzle:0xfff0dc, shirt:0x6ac0d8, cheek:0xf5a3a3, home:null, voice:600,
+    personality:'cheerful', catch:'yippee', loves:['bug','flower'], likes:['fruit','shell'], homeHours:[[11,12]],
+    room:{ floor:0xd8b088, wall:0xfff6e0, pattern:'dots', accent:0x6ac0d8, items:[['bed',-2,-2,0],['rug',0,0.5,0],['planter',2.4,-2.4,0],['table',1.4,0.8,0],['stool',2.4,1.4,0],['floorlamp',-2.6,1,0]] } },
+  { id:'tobin', acc:['headband'], accC:0x3ab06a, name:'Tobin', species:'dog', ears:'round', fur:0xd8b48a, muzzle:0xfff4e4, shirt:0xe28a2a, cheek:0xf0a0a0, home:null, voice:360,
+    personality:'sporty', catch:'hup hup', loves:['fish','material'], likes:['bug','fruit'], homeHours:[[12,13]],
+    room:{ floor:0xb8a080, wall:0xe8f0f4, pattern:'stripe', accent:0xe28a2a, items:[['bed',-2,-2,0],['bench',1.8,-2.4,0],['crate',2.6,1,0],['rug',0,0.5,0],['plant',-2.6,1,0]] } },
+  { id:'wren', acc:['beret'], accC:0x3a6ab0, name:'Wren', species:'fox', ears:'cat', fur:0xe8a070, muzzle:0xfff8f0, shirt:0xb8a0d8, cheek:0xf0a0c8, home:null, voice:560,
+    personality:'dreamy', catch:'tralee', loves:['shell','flower'], likes:['fossil','bug'], homeHours:[[15,17]],
+    room:{ floor:0xb8c8d8, wall:0xeef0fa, pattern:'dots', accent:0x7a8ad8, items:[['bed',-2,-2,0],['telescope',2.2,-2.2,-0.6],['rug',0,0.5,0],['monstera',-2.6,1.2,0],['desk',2.2,0.6,-Math.PI/2]] } },
+  { id:'barley', acc:['scarf'], accC:0xc8a040, name:'Barley', species:'bear', ears:'round', fur:0x7a6a5a, muzzle:0xc8b8a0, shirt:0x4a6a4a, cheek:0xd98a7a, home:null, voice:250,
+    personality:'gruff', catch:'harrumph', loves:['material','furniture'], likes:['fish','fruit'], homeHours:[[6,8],[18,19]],
+    room:{ floor:0x8a6a48, wall:0xd8c8a8, pattern:'stripe', accent:0x4a6a4a, items:[['bed',-2,-2,0],['stove',2.2,-2.4,0],['armchair',1.4,0,-0.6],['bookshelf',0,-2.7,0],['crate',-2.6,1,0]] } },
+  { id:'marigold', acc:['apron'], accC:0xfff0d0, name:'Marigold', species:'hedgehog', ears:'round', fur:0xa88a70, muzzle:0xf8ece0, shirt:0xf0b84a, cheek:0xf5a3b3, home:null, voice:680,
+    personality:'caring', catch:'sweetpea', loves:['fruit','flower'], likes:['shell','furniture'], homeHours:[[8,10],[16,17]],
+    room:{ floor:0xd8a878, wall:0xfff4e8, pattern:'check', accent:0xf0b84a, items:[['bed',-2,-2,0],['table',1.2,0,0],['stool',2.2,0.4,0],['stove',2.4,-2.4,0],['planter',-2.6,0.6,Math.PI/2],['rug',-0.4,1,0]] } },
 ];
+export const ORIGINAL_RESIDENTS = ['pippa','bramble','lumi','otis','mabel','juniper','clover'];
 
 /* ---------- Dialogue by personality ----------
    {p}=player name, {c}=catchphrase, {item}=gift name, {isle}=island name */
@@ -624,13 +645,19 @@ export const MAGIC = { moveHome:30000, moveOther:50000, raise:1500, lower:1500, 
 export const STORY = {
   wizard:{ who:'lumi', need:[['starfish',2],['sanddollar',1]],
     ask:['I keep seeing little sparkles near the plaza at night, {c}. Like someone magic is looking for a place to live.','They say wizards can\'t resist a wish made on starfish. Could you bring me 2 starfish and a sand dollar? They wash up on the beach.'],
-    done:['You found them! Okay, okay. I\'m making the wish right now, {c}...','...','Did you feel that? The ground went all tingly! Look over there!'] },
+    done:['You found them! Okay, okay. I\'m making the wish right now, {c}...','...','Did you feel that? The ground went all tingly! Look over there!'],
+    gask:['I keep seeing little sparkles near the plaza at night, {c}. Someone magic might be looking for a place to live.','They say a wizard can\'t resist a wish made on starfish. Could you bring me 2 starfish and a sand dollar from the beach?'],
+    gdone:['You found them! Here goes, {c}...','...','Did you feel that? Look over there!'] },
   beacon:{ who:'otis', need:[['iron',3],['wood',10]],
-    ask:['Hey {p}! The old dock beacon is busted, {c}. Traders sail right past us at night.','Bring me 3 iron nuggets and 10 wood and I\'ll fix it up. More traders means more rare stuff!'],
-    done:['Perfect! A few whacks with the hammer and... she\'s shining, {c}!','Fennick and friends will find the dock much more often now.'] },
+    ask:['Hey {p}! Ever notice the beacon stone up on the Portal Station is dark, {c}?','Traveling merchants use it to find islands. Bring me 3 iron nuggets and 10 wood and I\'ll get it burning again!'],
+    done:['Perfect! A few whacks with the hammer and... she\'s glowing, {c}!','Merchants will be able to find us through the portal now. Keep an eye out for a cart!'],
+    gask:['{p}, the old beacon on the Portal Station has gone dark, {c}. Merchants use it to find islands.','If you brought me 3 iron nuggets and 10 wood, I think I could fix it.'],
+    gdone:['There! It\'s glowing again, {c}.','Merchants should start coming through the portal every few days.'] },
   swatches:{ who:'juniper', need:[['fossil',1],['lantern',1]],
     ask:['Darling, your house deserves better finishes, {c}. I have a cousin in the paint trade.','Bring me any fossil and a Garden Lantern, and I\'ll have her send you a few of her sample books.'],
-    done:['Exquisite. My cousin will be thrilled, {c}.','Here, these swatch books are yours. Do use them with restraint.'] },
+    done:['Exquisite. My cousin will be thrilled, {c}.','Here, these swatch books are yours. Do use them with restraint.'],
+    gask:['Your house could use some new finishes, {c}. I know someone in the paint trade.','Bring me any fossil and a Garden Lantern, and I\'ll have them send you a few sample books.'],
+    gdone:['Thank you, {c}! They\'ll be thrilled.','Here, these swatch books are yours now.'] },
 };
 // Things islanders ask for. kind:'item' = a specific item, kind:'kind' = anything of that kind.
 export const FAVOR_ASKS = [
@@ -890,6 +917,54 @@ export const FAVOR_THEMES = {
       A('kind','fish',[1,1],'Grilled fish sounds good. Bring me any fish.') ],
     gifts:['cloudbag','hammock','wa_nightcap','wo_pajamas','wa_teddypack','wc_mint','wc_cocoa','blanket','ottoman'],
     thanks:['You did all that? I\'m tired just thinking about it. Here, {c}.','Mmm, perfect. This is for you. Don\'t wake me, {c}.'] },
+  hazel:{ open:['Hazel is fizzing with excitement.','{p}! {p}! Got a sec, {c}?','Oh good, it\'s you! I need a hand, {c}!'],
+    asks:[ A('kind','flower',[3,5],'I\'m making a flower garland for my door! Could you bring me {n} flowers?'),
+      A('do','bug',[3,5],'Bug parade! Catch {n} bugs so I can cheer for them!'),
+      A('item','native',[3,5],'I\'m baking a surprise! I need {n} {item}. Shh!'),
+      A('do','plant',[2,3],'More color! Plant {n} things anywhere on the island!'),
+      A('catch','bug',[1,1],'Have you ever seen a {item}? I have to see one up close!'),
+      A('deliver',null,[1,1],'Could you take this to {to}? It\'s a thank-you card!'),
+      A('kind','shell',[2,3],'I\'m decorating my windowsill. {n} beach finds, please!') ],
+    gifts:['wa_flowercrown','flowercart','ladybuglamp','wc_peach','wa_balloon','tulipvase','porchswing'],
+    thanks:['You\'re amazing, {c}! This is for you!','Yippee! Here, here, take this, {c}!'] },
+  tobin:{ open:['Tobin is jogging in place.','{p}! Just the teammate I needed, {c}!','Ready for a challenge, {c}?'],
+    asks:[ A('do','fish',[3,5],'Fishing drills! Catch {n} fish, any kind!'),
+      A('do','chop',[6,10],'Chop {n} pieces of wood. Builds the shoulders!'),
+      A('item','wood',[5,8],'I\'m building a pull-up bar. {n} wood, please!'),
+      A('item','coconut',[2,3],'Recovery drink time! Bring me {n} coconuts!'),
+      A('do','talk',[3,4],'Team spirit! Say hi to {n} neighbors today!'),
+      A('catch','fish',[1,1],'A {item} beat me in a staring contest. Catch it so I can try again!'),
+      A('kind','fish',[1,1],'Protein! Bring me a fish. Any fish!') ],
+    gifts:['trampoline','wa_ballcap','wa_shades','wo_varsity','wc_mustard','bench','wa_goggles'],
+    thanks:['Great hustle, {c}! You earned this!','Team player of the week, {c}! Here!'] },
+  wren:{ open:['Wren is humming to the clouds.','Oh... {p}. You found me, {c}.','I had a little dream about you, {c}. You were helping me.'],
+    asks:[ A('kind','shell',[2,4],'I\'m building a wind chime out of beach finds. {n} would be perfect.'),
+      A('kind','fossil',[1,1],'Could you bring me a fossil? I want to hear what it remembers.'),
+      A('do','bugnight',[2,3],'Catch {n} bugs after dark? I want to know who\'s awake at night.'),
+      A('do','shell',[3,5],'Walk the beach and pick up {n} beach finds. The waves left them for someone.'),
+      A('kind','flower',[2,4],'Could you bring me {n} flowers? I\'m painting them.'),
+      A('catch','fish',[1,1],'I wonder what a {item} thinks about. Could you catch one?') ],
+    gifts:['starlamp','moonmobile','wa_moonstone','wa_cape','wc_lavender','telescope','wa_nightcap'],
+    thanks:['Thank you... this is for you, {c}.','The island hums a little louder now, {c}. Here.'] },
+  barley:{ open:['Barley grunts.','Hrm. You there. Got a minute, {c}?','...I need a hand. Don\'t make it weird, {c}.'],
+    asks:[ A('item','wood',[6,10],'Shed roof\'s leaking. Bring me {n} wood.'),
+      A('item','stone',[4,6],'Need {n} stones for a garden wall.'),
+      A('item','iron',[1,2],'My kettle handle snapped. {n} iron nugget{s}.'),
+      A('do','craft',[1,2],'Make {n} thing{s} at a workbench. Hands should stay busy.'),
+      A('do','chop',[6,10],'Chop {n} pieces of wood. I\'ll know if you don\'t.'),
+      A('kind','furniture',[1,1],'Bring me a piece of furniture. Something sturdy.'),
+      A('kind','fish',[1,1],'Supper. One fish. Any fish.') ],
+    gifts:['carvebench','logpile','stumpstool','wa_bandana','wo_flannel','wc_forest','wa_rucksack'],
+    thanks:['Hrm. Good. Take this.','...Thanks. Here. Don\'t mention it, {c}.'] },
+  marigold:{ open:['Marigold is wiping her paws on her apron.','Oh, {p}, sweetpea! Have you a moment, {c}?','Could I trouble you for something, {c}?'],
+    asks:[ A('kind','fruit',[3,5],'I\'m making jam for the whole island. {n} pieces of fruit, please!'),
+      A('kind','veg',[2,4],'Stew night! Could you bring me {n} vegetables?'),
+      A('cook',null,[1,1],'Would you cook me a {item}? I\'d love to taste your cooking.'),
+      A('do','water',[4,6],'Water {n} plants for me? The garden\'s thirsty and so am I.'),
+      A('kind','flower',[3,4],'{n} flowers for my kitchen table, please. It looks so bare.'),
+      A('deliver',null,[1,1],'Could you run this pie over to {to}? Still warm!') ],
+    gifts:['teaset','knitbasket','wo_cardigan','wc_peach','wa_longscarf','wickerbasket','ottoman'],
+    thanks:['Oh, bless you, {c}. This is for you.','You\'re a dear, {p}. Take this, {c}.'] },
   pemberton:{ c:'friend', open:['Pemberton leans over the counter.','Psst. Partner. I\'ve got a job for you, {c}.','Business is business, {c}. And I need a hand.'],
     asks:[ A('do','sold',[6,10],'Shelves are looking bare. Sell me {n} things, any things!'),
       A('item','wood',[6,8],'I\'m building new shelves. {n} wood, please.'),

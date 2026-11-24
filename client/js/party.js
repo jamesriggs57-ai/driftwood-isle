@@ -14,14 +14,14 @@ import { M, mk, G, addGlow } from './models.js';
 const TAU = Math.PI * 2;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 export const GAMES = {
-  ball:  { name: 'Bonk Ball', R: 7, time: 180, win: 5, prize: 'bonkcup',
+  ball:  { name: 'Bonk Ball', R: 9, time: 180, win: 5, prize: 'bonkcup',
            how: ['Swing at the beach ball to send it flying. Get it into a friend\'s goal to score.', 'Guard your own goal. Bonking friends is allowed.'] },
-  crown: { name: 'Crown Keeper', R: 6, time: 150, win: 30, prize: 'crowncup',
-           how: ['Stand in the glowing ring by yourself to wear the crown and earn points.', 'If two of you are in it, nobody scores. Bonk them out! The ring moves now and then.'] },
+  crown: { name: 'Crown Keeper', R: 7, time: 150, win: 30, prize: 'crowncup',
+           how: ['Stand in the glowing ring by yourself to wear the crown and earn points.', 'The ring drifts around the whole time, so keep chasing it. If two of you are in it, nobody scores. Bonk them out!'] },
 };
 const COLS = [0xef7a5a, 0x4fb8c8, 0xf2c24a, 0xa98ad8], CSS = ['#ef7a5a', '#4fb8c8', '#e9b632', '#a98ad8'];
 const SOFT = new Set(['tree', 'rock', 'stump', 'weed', 'dig', 'item', 'furn']);   // things that poof away while a game is on
-const MAXP = 4, BR = 0.5, ZONE_R = 1.7, ZONE_MOVE = 16, COUNT = 3, END_T = 8, LOBBY_MAX = 300;
+const MAXP = 4, BR = 0.5, ZONE_R = 2.1, ZONE_SPEED = 1.5, COUNT = 3, END_T = 8, LOBBY_MAX = 300;
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const num = (v, d = 0) => Number.isFinite(+v) ? +v : d;
 const fmtT = s => { s = Math.max(0, Math.ceil(s)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
@@ -82,7 +82,7 @@ export function createParty(C) {
     const t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; return t; }
   let _nt = null;
   function buildGoal(col, name) {
-    const g = new THREE.Group(), W = 3.4, Hh = 1.45, D = 1.2;
+    const g = new THREE.Group(), W = 3.9, Hh = 1.45, D = 1.2;
     for (const s of [-1, 1]) { const p = mk(G.cyl(0.11, 0.14, Hh, 8), drift, s * W / 2, Hh / 2, 0, g); p.rotation.z = s * 0.03; mk(G.cyl(0.07, 0.09, Hh * 0.8, 6), driftD, s * W / 2, Hh * 0.4, D, g); }
     const bar = mk(G.cyl(0.1, 0.1, W + 0.2, 8), drift, 0, Hh, 0, g); bar.rotation.z = Math.PI / 2;
     _nt = _nt || netTex();
@@ -137,6 +137,15 @@ export function createParty(C) {
     for (const e of C.ents) { if (e.removed || !SOFT.has(e.kind) || e.pos.x > 500 || !e.obj || !e.obj.parent) continue; if (Math.hypot(e.pos.x - P.cx, e.pos.z - P.cz) > P.R + 1.2) continue;
       P.hidden.push({ e, solid: e.solid, parent: e.obj.parent }); e.solid = false; e.obj.parent.remove(e.obj); e.partyHidden = true;
       C.puff(e.pos.clone().setY(e.pos.y + 1), 0xffffff, 6, 0.6, 1.5, 0.9, 0.5); } }
+  // the rope is a real fence: players in the game stay inside it, everyone else stays outside
+  function fence() {
+    const pen = (o, inside) => { const dx = o.pos.x - P.cx, dz = o.pos.z - P.cz, d = Math.hypot(dx, dz) || 1e-6, lim = inside ? P.R - 0.45 : P.R + 0.45;
+      if (inside ? d > lim : d < lim) { o.pos.x = P.cx + dx / d * lim; o.pos.z = P.cz + dz / d * lim; if (o.obj) { o.obj.position.x = o.pos.x; o.obj.position.z = o.pos.z; } } return d; };
+    if (!C.World.inside) { const me = { pos: player.pos, obj: player.obj }, d = Math.hypot(player.pos.x - P.cx, player.pos.z - P.cz);
+      if (inGame() && P.ph !== 'end') { if (d < P.R + 1.5) pen(me, true); }
+      else if (P.fenceOut) pen(me, false);
+      P.fenceOut = Math.hypot(player.pos.x - P.cx, player.pos.z - P.cz) > P.R + 0.3; }
+    for (const b of P.bots || []) pen(b, true); }
   function keepHidden() { for (const h of P.hidden || []) if (h.e.obj && h.e.obj.parent) { h.parent = h.e.obj.parent; h.e.obj.parent.remove(h.e.obj); } }
   function showClutter(Q) { for (const h of Q.hidden || []) { const e = h.e; delete e.partyHidden; if (e.removed) continue; e.solid = h.solid; if (e.obj && !e.obj.parent) h.parent.add(e.obj); C.puff(e.pos.clone().setY(e.pos.y + 1), 0xffffff, 5, 0.5, 1.5, 0.9, 0.5); } Q.hidden = []; }
   let _beam = null;
@@ -157,7 +166,7 @@ export function createParty(C) {
   function goalAngles(Q) {
     const pl = Q.players.slice().sort((a, b) => a.slot - b.slot), n = pl.length;
     const base = n <= 1 ? [-Math.PI / 2] : n === 2 ? [0, Math.PI] : n === 3 ? [-Math.PI / 2, Math.PI / 6, 5 * Math.PI / 6] : [0, Math.PI / 2, Math.PI, -Math.PI / 2];
-    const half = 1.75 / Q.R;
+    const half = 2 / Q.R;
     if (n <= 1) return [{ a: base[0], half, owner: '', name: n ? 'Practice goal' : 'Goal', slot: -1 }];
     return pl.map((p, i) => ({ a: base[i], half, owner: p.id, name: p.name, slot: p.slot }));
   }
@@ -231,11 +240,13 @@ export function createParty(C) {
     const inside = P.players.filter(p => { const q = posOf(p.id); return q && Math.hypot(q.x - Z.x, q.z - Z.z) < ZONE_R + 0.15; });
     P.holder = inside.length === 1 ? inside[0].id : inside.length > 1 ? '*' : '';
     if (P.ph === 'play' && inside.length === 1) { inside[0].score += dt; if (inside[0].score >= GAMES.crown.win) { inside[0].score = GAMES.crown.win; endGame(); } }
-    if (P.ph === 'play') { P.zoneT -= dt; if (P.zoneT <= 0) moveZone(); } }
-  function moveZone() { const Z = P.zone; let x = P.cx, z = P.cz;
-    for (let k = 0; k < 40; k++) { const a = Math.random() * TAU, d = Math.random() * (P.R - ZONE_R - 0.8); x = P.cx + Math.cos(a) * d; z = P.cz + Math.sin(a) * d; if (Math.hypot(x - Z.tx, z - Z.tz) > 3.2) break; }
-    Z.tx = +x.toFixed(2); Z.tz = +z.toFixed(2); P.zoneT = ZONE_MOVE; P.zoneSeq = (P.zoneSeq || 0) + 1; zoneMoved(); }
-  function zoneMoved() { C.Snd.pop(); if (inGame()) bigText('The crown moved!', 1.2, true); }
+    if (P.ph === 'play') driftZone(dt); }
+  // the ring wanders steadily around the arena: a slow loop that swings in and out, now and then turning back the other way
+  function driftZone(dt) { const Z = P.zone, rr = P.R - ZONE_R - 0.5;
+    P.zt = (P.zt || 0) + dt; if (!P.zdir) P.zdir = 1; P.zflip = (P.zflip ?? 9 + Math.random() * 8) - dt; if (P.zflip <= 0) { P.zdir *= -1; P.zflip = 9 + Math.random() * 8; }
+    const r = rr * (0.62 + 0.38 * Math.sin(P.zt * 0.31 + 1.3));
+    P.zang = (P.zang ?? -Math.PI / 2) + P.zdir * ZONE_SPEED / Math.max(1.2, r) * dt;
+    Z.tx = +(P.cx + Math.cos(P.zang) * r).toFixed(2); Z.tz = +(P.cz + Math.sin(P.zang) * r).toFixed(2); }
 
   /* ---------- practice buddies ---------- */
   const B_SPEED = 4.3;
@@ -291,7 +302,8 @@ export function createParty(C) {
   function crownBot(b, dt, t) {
     const Z = P.zone; b.think -= dt;
     if (b.think <= 0 || !b.off) { const a = Math.random() * TAU, r = Math.random() * 0.9; b.off = [Math.cos(a) * r, Math.sin(a) * r]; b.think = 1.5 + Math.random() * 2; }
-    botWalk(b, Z.x + b.off[0], Z.z + b.off[1], dt, t, 0.95);
+    const vx = (Z.x - (b.zx ?? Z.x)) / Math.max(dt, 1e-3), vz = (Z.z - (b.zz ?? Z.z)) / Math.max(dt, 1e-3); b.zx = Z.x; b.zz = Z.z;
+    botWalk(b, Z.x + b.off[0] + clamp(vx, -3, 3) * 0.4, Z.z + b.off[1] + clamp(vz, -3, 3) * 0.4, dt, t, 0.95);
     if (b.cd > 0) return;
     const inZ = (x, z) => Math.hypot(x - Z.x, z - Z.z) < ZONE_R + 0.6;
     if (!inZ(b.pos.x, b.pos.z)) return;
@@ -311,7 +323,7 @@ export function createParty(C) {
     if (!at) { C.dialog('Party games', 560, ['There\'s no open, flat spot big enough nearby.', 'Try a wide meadow or the beach, away from trees and buildings.']); return; }
     if (P) { if (P.isHost || P.joined) leave(true); if (P) { teardown(false); P = null; } }
     P = { id: Math.random().toString(36).slice(2, 9), game, host: myId(), hostName: myName(), cx: at[0], cz: at[1], R: G0.R, ph: 'lobby', left: LOBBY_MAX,
-          players: [{ id: myId(), name: myName(), score: 0, slot: 0 }], isHost: true, joined: true, zoneT: ZONE_MOVE, goalLock: 0, ballHold: 0 };
+          players: [{ id: myId(), name: myName(), score: 0, slot: 0 }], isHost: true, joined: true, goalLock: 0, ballHold: 0 };
     if (practice) { P.practice = true; addBots(game === 'ball' ? practice.ball || 1 : practice.crown || 2); if (!P.bots.length) { P = null; C.toast('No islanders are free to play right now.'); return; } }
     buildArena(); setPartyMode(true); renderUI();
     if (practice) { C.dialog(G0.name + ' practice', 560, [...G0.how, `Practicing with ${P.bots.map(b => b.name).join(' and ')}. No prizes, just for fun.`], () => { if (P && P.practice && P.ph === 'lobby') startGame(); }); teleportToSpot(true); placeBots(); return; }
@@ -324,7 +336,7 @@ export function createParty(C) {
     const d = { k: 'st', id: P.id, g: P.game, h: P.host, hn: P.hostName, c: [P.cx, P.cz], ph: P.ph, left: +P.left.toFixed(1), pl: P.players.map(p => [p.id, p.name, +p.score.toFixed(1), p.slot]) };
     if (P.ball) d.b = [P.ball.p.x, P.ball.p.y, P.ball.p.z, P.ball.v.x, P.ball.v.y, P.ball.v.z].map(v => +v.toFixed(2)), d.lh = P.lh || '', d.bh = +(P.ballHold || 0).toFixed(2);
     if (P.frozenGoals) d.fg = P.frozenGoals.map(g => [+g.a.toFixed(4), g.owner, g.name, g.slot]);
-    if (P.zone) d.z = [P.zone.tx, P.zone.tz, P.zoneSeq || 0, +(P.zoneT || 0).toFixed(1)], d.ho = P.holder || '';
+    if (P.zone) d.z = [P.zone.tx, P.zone.tz], d.ho = P.holder || '';
     if (P.winners) d.w = P.winners, d.pz = P.prize ? 1 : 0;
     send(d); }
   function hostTick(dt) {
@@ -342,7 +354,7 @@ export function createParty(C) {
     if (!P || !P.isHost || P.ph !== 'lobby') return;
     P.ph = 'count'; P.left = COUNT; P.prize = !P.practice && P.players.filter(p => !p.bot).length >= 2; P.players.forEach(p => p.score = 0); P.winners = null;
     if (P.game === 'ball') { P.frozenGoals = goalAngles(P); syncGoals(); resetBall(true); }
-    if (P.game === 'crown') { P.zone.tx = P.cx; P.zone.tz = P.cz; P.zoneT = ZONE_MOVE; P.zoneSeq = (P.zoneSeq || 0) + 1; }
+    if (P.game === 'crown') { P.zone.tx = P.cx; P.zone.tz = P.cz; P.zt = 0; P.zang = -Math.PI / 2; P.zdir = 1; P.zflip = undefined; }
     if (P.bots) placeBots();
     onPhase(); broadcast(); }
   function resetBall(now0) { const b = P.ball; b.p.set(P.cx, C.groundY(P.cx, P.cz) + 3.2, P.cz); b.v.set(0, 0, 0); P.lh = ''; P.ballHold = now0 ? 0 : 0.01; }
@@ -424,12 +436,12 @@ export function createParty(C) {
       P.players = d.pl.slice(0, MAXP).map(a => ({ id: String(a[0]), name: String(a[1] || 'Friend').slice(0, 30), score: num(a[2]), slot: num(a[3]) | 0 }));
       P.ph = ['lobby', 'count', 'play', 'end'].includes(d.ph) ? d.ph : 'lobby'; P.left = num(d.left);
       P.joined = P.players.some(p => p.id === myId());
-      if (Array.isArray(d.fg)) P.frozenGoals = d.fg.map(g => ({ a: num(g[0]), half: 1.75 / P.R, owner: String(g[1] || ''), name: String(g[2] || ''), slot: num(g[3], -1) }));
+      if (Array.isArray(d.fg)) P.frozenGoals = d.fg.map(g => ({ a: num(g[0]), half: 2 / P.R, owner: String(g[1] || ''), name: String(g[2] || ''), slot: num(g[3], -1) }));
       else P.frozenGoals = null;
       if (fresh) { buildArena(); if (dismissed !== d.id && P.ph === 'lobby') { C.Snd.jingle(); } }
       if (P.game === 'ball') syncGoals();
       if (P.ball && Array.isArray(d.b)) { P.lh = String(d.lh || ''); const hold = num(d.bh); if (hold > 0 && !(P.ballHold > 0)) P.ballHold = hold; if (now - lastLocalHit > 0.35) correctBall(d.b); }
-      if (P.zone && Array.isArray(d.z)) { const seq = num(d.z[2]); if (P.zoneSeq !== undefined && seq !== P.zoneSeq && P.ph === 'play') zoneMoved(); P.zoneSeq = seq; P.zone.tx = num(d.z[0], P.cx); P.zone.tz = num(d.z[1], P.cz); P.zoneT = num(d.z[3], 9); P.holder = String(d.ho || ''); }
+      if (P.zone && Array.isArray(d.z)) { P.zone.tx = num(d.z[0], P.cx); P.zone.tz = num(d.z[1], P.cz); P.holder = String(d.ho || ''); }
       if (Array.isArray(d.w)) { P.winners = d.w.map(String); P.prize = !!d.pz; }
       if (prevPh !== P.ph && !fresh) onPhase();
       else if (fresh && P.ph === 'end') { /* arrived at the very end: just show the arena going away */ }
@@ -459,17 +471,17 @@ export function createParty(C) {
   /* ---------- every frame ---------- */
   function update(dt, t) {
     now = t; if (!P) return;
-    if (P.isHost) hostTick(dt); else if (P) { P.left -= dt; if (P.zoneT !== undefined) P.zoneT -= dt; if (P.ph === 'end' && P.left < -6) { teardown(true); P = null; setPartyMode(false); renderUI(); return; } }
+    if (P.isHost) hostTick(dt); else if (P) { P.left -= dt; if (P.ph === 'end' && P.left < -6) { teardown(true); P = null; setPartyMode(false); renderUI(); return; } }
     if (!P || !P.root) return;
-    keepHidden();
+    keepHidden(); fence();
     // the ring pops up with a bounce
     if (P.rise < 1) { P.rise = Math.min(1, P.rise + dt * 1.5); const k = P.rise, e = k < 1 ? 1 + Math.sin(k * Math.PI) * 0.3 : 1; P.root.scale.y = Math.max(0.01, k * e); for (const g of P.goalObjs || []) g.obj.scale.y = Math.max(0.01, k * e); }
     if (P.ball && P.ph !== 'count') stepBall(dt, P.isHost);
     else if (P.ball) { const b = P.ball; b.obj.visible = true; b.p.set(P.cx, C.groundY(P.cx, P.cz) + BR + Math.abs(Math.sin(t * 3)) * 0.6, P.cz); b.v.set(0, 0, 0); b.obj.position.copy(b.p); }
     if (P.zone) {
       if (!P.isHost && (P.ph === 'lobby' || P.ph === 'play')) { /* holder comes from the host */ }
-      const Z = P.zone, mv = Math.hypot(Z.tx - Z.x, Z.tz - Z.z); if (mv > 0.01) { const k = Math.min(1, dt * 3); Z.x += (Z.tx - Z.x) * k; Z.z += (Z.tz - Z.z) * k; if (Math.hypot(Z.tx - Z.x, Z.tz - Z.z) < 0.02) { Z.x = Z.tx; Z.z = Z.tz; } placeZone(false); }
-      const ho = P.holder, contest = ho === '*', warn = P.ph === 'play' && P.zoneT < 3;
+      const Z = P.zone, mv = Math.hypot(Z.tx - Z.x, Z.tz - Z.z); if (mv > 0.01) { const k = Math.min(1, dt * (P.isHost ? 30 : 8)); Z.x += (Z.tx - Z.x) * k; Z.z += (Z.tz - Z.z) * k; if (Math.hypot(Z.tx - Z.x, Z.tz - Z.z) < 0.02) { Z.x = Z.tx; Z.z = Z.tz; } placeZone(false); }
+      const ho = P.holder, contest = ho === '*', warn = false;
       const col = contest ? 0xff8a7a : ho ? COLS[((P.players.find(p => p.id === ho) || {}).slot || 0) % 4] : 0xffe08a;
       Z.ring.material.color.setHex(col); Z.beam.material.color.setHex(col); Z.fill.material.color.setHex(col);
       Z.ring.material.opacity = contest ? 0.5 + Math.abs(Math.sin(t * 12)) * 0.5 : warn ? 0.4 + Math.abs(Math.sin(t * 8)) * 0.6 : 0.85;
@@ -487,16 +499,16 @@ export function createParty(C) {
   function ensureUI() {
     if (ui) return ui;
     const st = document.createElement('style'); st.textContent = `
-#partyBox{position:absolute;left:50%;transform:translateX(-50%);top:calc(env(safe-area-inset-top) + 126px);pointer-events:auto;max-width:94vw;display:none;flex-direction:column;align-items:center;gap:6px;padding:8px 12px;font-size:14px;text-align:center;z-index:5}
+#partyBox{position:absolute;left:calc(env(safe-area-inset-left) + 10px);top:calc(env(safe-area-inset-top) + 82px);pointer-events:auto;max-width:min(270px,calc(100vw - 130px));display:none;flex-direction:column;align-items:flex-start;gap:5px;padding:7px 10px;font-size:13px;text-align:left;z-index:5}
 #partyBox.show{display:flex}
-#partyBox .pt{font-weight:700;font-size:15px}
+#partyBox .pt{font-weight:700;font-size:14px}
 #partyBox .pt small{font-weight:500;color:var(--brown2);margin-left:6px}
-#partyBox .chips{display:flex;flex-wrap:wrap;gap:5px;justify-content:center}
-#partyBox .chip{display:flex;align-items:center;gap:5px;background:#fff;border:2px solid var(--line);border-radius:14px;padding:2px 9px;font-weight:600;font-size:13px}
+#partyBox .chips{display:flex;flex-wrap:wrap;gap:4px}
+#partyBox .chip{display:flex;align-items:center;gap:4px;background:#fff;border:2px solid var(--line);border-radius:12px;padding:1px 7px;font-weight:600;font-size:12px}
 #partyBox .chip i{width:11px;height:11px;border-radius:50%;display:inline-block}
 #partyBox .chip.me{border-color:var(--brown2)}
 #partyBox .chip.hold{box-shadow:0 0 0 3px #ffe08a}
-#partyBox .row2{display:flex;gap:6px;justify-content:center}
+#partyBox .row2{display:flex;gap:6px;flex-wrap:wrap}
 #partyBox button{font-family:inherit;font-weight:700;font-size:14px;border-radius:14px;border:3px solid #fff;padding:6px 14px;cursor:pointer;background:radial-gradient(circle at 40% 35%,#9ee27a,#5fae43);color:#fff;box-shadow:0 3px 0 #3f8a2f}
 #partyBox button.alt{background:var(--cream2);color:var(--brown);border-color:var(--line);box-shadow:0 3px 0 rgba(91,67,50,.2)}
 #partyBox button:active{transform:translateY(2px);box-shadow:none}
@@ -504,7 +516,7 @@ export function createParty(C) {
 #partyBig.small{font-size:clamp(26px,6.5vw,46px)}
 #partyBig.show{opacity:1;animation:pbig .35s ease-out}
 @keyframes pbig{0%{transform:scale(.6)}70%{transform:scale(1.12)}100%{transform:scale(1)}}
-@media (max-height:540px) and (orientation:landscape){#partyBox{top:calc(env(safe-area-inset-top) + 74px);left:calc(env(safe-area-inset-left) + 10px);transform:none;padding:6px 10px}}
+@media (min-width:700px){#partyBox{max-width:340px}}
 body.partyOn #swingBtn{display:block}
 body.partyOn #hud.magic #swingBtn{display:none}`;
     document.head.appendChild(st);
@@ -527,11 +539,12 @@ body.partyOn #hud.magic #swingBtn{display:none}`;
       else if (P.joined) { sub = `Waiting for ${esc(P.hostName)} to start`; btns = `<button class="alt" data-a="leave">Leave</button>`; }
       else { sub = `${esc(P.hostName)} set up a game`; btns = P.wantJoin ? '<span class="muted">Joining...</span>' : `<button data-a="join">Join</button><button class="alt" data-a="no">No thanks</button>`; } }
     else if (P.ph === 'count') sub = 'Get ready';
-    else if (P.ph === 'play') { sub = `<span data-t>${fmtT(P.left)}</span> · first to ${G0.win}`; btns = P.joined ? `<button class="alt" data-a="${P.isHost ? 'cancel' : 'leave'}" style="padding:3px 10px;font-size:12px">${P.isHost ? 'End game' : 'Leave'}</button>` : ''; }
+    else if (P.ph === 'play') { sub = `<span data-t>${fmtT(P.left)}</span> · first to ${G0.win}`; btns = P.joined ? `<button class="alt" data-a="${P.isHost ? 'cancel' : 'leave'}" style="padding:2px 9px;font-size:12px;border-width:2px">${P.isHost ? 'End game' : 'Leave'}</button>` : ''; }
     else { sub = 'Game over'; if (P.practice) btns = `<button data-a="again">Play again</button><button class="alt" data-a="cancel">Done</button>`; }
     if (P.practice && P.ph === 'lobby') { sub = 'Practice'; btns = `<button data-a="start">Start</button><button class="alt" data-a="cancel">Put away</button>`; }
-    if (P.practice && (P.ph === 'play' || P.ph === 'count')) btns = `<button class="alt" data-a="cancel" style="padding:3px 10px;font-size:12px">Stop</button>`;
-    b.innerHTML = `<div class="pt">${esc(G0.name)} <small>${sub}</small></div>${P.ph === 'lobby' && !P.joined ? '' : `<div class="chips">${chips}</div>`}${btns ? `<div class="row2">${btns}</div>` : ''}`;
+    if (P.practice && (P.ph === 'play' || P.ph === 'count')) btns = `<button class="alt" data-a="cancel" style="padding:2px 9px;font-size:12px;border-width:2px">Stop</button>`;
+    const inline = (P.ph === 'play' || P.ph === 'count') && btns;   // during play the small button sits on the title line to keep the box short
+    b.innerHTML = `<div class="pt" style="display:flex;align-items:center;gap:6px;width:100%">${esc(G0.name)} <small style="flex:1">${sub}</small>${inline ? btns : ''}</div>${P.ph === 'lobby' && !P.joined ? '' : `<div class="chips">${chips}</div>`}${btns && !inline ? `<div class="row2">${btns}</div>` : ''}`;
     b.classList.add('show'); bind(); ui.key = P.ph; }
   function bind() { ui.box.querySelectorAll('[data-a]').forEach(el => el.onclick = () => { const a = el.dataset.a;
     if (a === 'start') startGame(); else if (a === 'again') { P.ph = 'lobby'; P.winners = null; P.prized = false; startGame(); } else if (a === 'cancel') { if (P.ph === 'play' && !P.practice && !confirmEnd()) return; leave(); } else if (a === 'leave') leave(); else if (a === 'join') { dismissed = null; join(); } else if (a === 'no') { dismissed = P.id; renderUI(); } }); }

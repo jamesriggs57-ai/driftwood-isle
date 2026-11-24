@@ -188,33 +188,61 @@ def('palm_sapling', { name:'Palm Sapling', kind:'sapling', plant:'palm', price:1
 /* ---------- Furniture ----------
    b = builder in models.js. r = footprint radius. shop: 'stall' daily stock, 'rare' peddler only. indoor/outdoor are both fine. */
 const furn = (id, name, buy, r, o={}) => def(id, Object.assign({ name, kind:'furniture', buy, price:Math.round(buy/4), r, shop:'stall', stack:5, model:{t:'furn', b:o.b||id} }, o));
-furn('stool','Stump Stool',400,0.45);
-furn('bench','Log Bench',900,0.9);
-furn('table','Round Garden Table',1100,0.75);
-furn('plant','Potted Fern',500,0.4);
-furn('monstera','Potted Monstera',900,0.45);
-furn('lantern','Garden Lantern',1200,0.35,{glow:true});
-furn('crate','Fruit Crate',600,0.5);
-furn('planter','Flower Planter',800,0.7);
-furn('blanket','Picnic Blanket',700,0.9,{flat:true});
-furn('birdbath','Stone Birdbath',1500,0.5);
-furn('signpost','Wooden Signpost',450,0.3);
-furn('fence','Wooden Fence',300,0.55,{stack:30});
-furn('mailbox','Mailbox',700,0.3);
-furn('bed','Cozy Bed',2500,1.0);
-furn('bookshelf','Bookshelf',1800,0.7);
-furn('rug','Round Rug',1200,1.1,{flat:true});
-furn('armchair','Armchair',1500,0.6);
-furn('floorlamp','Floor Lamp',1300,0.35,{glow:true});
-furn('dresser','Dresser',1600,0.65);
-furn('desk','Writing Desk',1700,0.75);
-furn('stove','Wood Stove',3000,0.6,{glow:true});
-furn('pumpkin','Harvest Pumpkin',650,0.5,{months:[9,10,11]});
-furn('snowbuddy','Snow Buddy',650,0.5,{months:[12,1,2]});
-furn('umbrella','Beach Umbrella',2200,0.5,{shop:'rare'});
-furn('campfire','Cozy Campfire',2800,0.8,{shop:'rare',glow:true});
-furn('windchime','Shell Wind Chime',2000,0.35,{shop:'rare'});
-furn('telescope','Brass Telescope',4200,0.5,{shop:'rare'});
+// v1.13 rarity: every shop piece has a rarity weight (same scale as fish and bugs, see rarityLabel).
+// Shops roll their daily stock by rarity, so commons show up most days and very rare pieces only now and then.
+export const FR = { c:8, u:4, r:1.8, v:1, l:0.5 };
+const C={rarity:FR.c}, U={rarity:FR.u}, R={rarity:FR.r}, V={rarity:FR.v};
+furn('stool','Stump Stool',400,0.45,C);
+furn('bench','Log Bench',900,0.9,C);
+furn('table','Round Garden Table',1100,0.75,U);
+furn('plant','Potted Fern',500,0.4,C);
+furn('monstera','Potted Monstera',900,0.45,U);
+furn('lantern','Garden Lantern',1200,0.35,{glow:true,...U});
+furn('crate','Fruit Crate',600,0.5,C);
+furn('planter','Flower Planter',800,0.7,C);
+furn('blanket','Picnic Blanket',700,0.9,{flat:true,...C});
+furn('birdbath','Stone Birdbath',1500,0.5,U);
+furn('signpost','Wooden Signpost',450,0.3,C);
+furn('fence','Wooden Fence',300,0.55,{stack:30,...C});
+furn('mailbox','Mailbox',700,0.3,C);
+furn('bed','Cozy Bed',2500,1.0,U);
+furn('bookshelf','Bookshelf',1800,0.7,U);
+furn('rug','Round Rug',1200,1.1,{flat:true,...U});
+furn('armchair','Armchair',1500,0.6,U);
+furn('floorlamp','Floor Lamp',1300,0.35,{glow:true,...U});
+furn('dresser','Dresser',1600,0.65,U);
+furn('desk','Writing Desk',1700,0.75,U);
+furn('stove','Wood Stove',3000,0.6,{glow:true,...U});
+furn('pumpkin','Harvest Pumpkin',650,0.5,{months:[9,10,11],...C});
+furn('snowbuddy','Snow Buddy',650,0.5,{months:[12,1,2],...C});
+// v1.13 new everyday pieces
+furn('wickerbasket','Wicker Basket',450,0.4,C);
+furn('bookstack','Stack of Books',500,0.35,C);
+furn('cactus','Potted Cactus',450,0.35,C);
+furn('ottoman','Knit Ottoman',800,0.45,C);
+furn('sidetable','Side Table',900,0.4,C);
+furn('tulipvase','Tulip Vase',550,0.3,C);
+furn('rocker','Rocking Chair',2400,0.6,U);
+furn('gramophone','Gramophone',3400,0.5,U);
+furn('hammock','Hammock',3600,1.3,U);
+furn('easel','Painter\'s Easel',2800,0.55,U);
+furn('birdfeeder','Bird Feeder',1900,0.4,U);
+// Rare and very rare: they still turn up at Pemberton's, just not often
+furn('grandfather','Grandfather Clock',5200,0.5,R);
+furn('piano','Upright Piano',12000,0.8,R);
+furn('shipbottle','Ship in a Bottle',6500,0.4,R);
+furn('orrery','Brass Orrery',9500,0.5,R);
+furn('musicbox','Carousel Music Box',8200,0.45,R);
+furn('tiffany','Stained Glass Lamp',7200,0.4,{glow:true,...R});
+furn('crystalball','Crystal Ball',26000,0.45,{glow:true,...V});
+furn('harp','Gilded Harp',34000,0.55,V);
+furn('beaconlamp','Lighthouse Lamp',29000,0.5,{glow:true,...V});
+// Fennick's cart
+furn('umbrella','Beach Umbrella',2200,0.5,{shop:'rare',...R});
+furn('campfire','Cozy Campfire',2800,0.8,{shop:'rare',glow:true,...R});
+furn('windchime','Shell Wind Chime',2000,0.35,{shop:'rare',...R});
+furn('telescope','Brass Telescope',4200,0.5,{shop:'rare',...R});
+furn('birdcage','Golden Birdcage',30000,0.45,{shop:'rare',...V});
 // Crafted only (shop:'craft' keeps them out of the stall and peddler)
 furn('workbench','Workbench',1600,0.75,{shop:'craft'});
 furn('logpile','Log Pile',500,0.7,{shop:'craft'});
@@ -228,6 +256,37 @@ furn('stumptable','Stump Side Table',1400,0.55,{shop:'craft'});
 furn('stumpplanter','Hollow Stump Planter',1500,0.5,{shop:'craft'});
 furn('stumplamp','Mushroom Stump Lamp',2600,0.45,{shop:'craft',glow:true});
 furn('stumpbench','Split Stump Bench',2400,0.9,{shop:'craft'});
+
+/* ---------- v1.13 Rare woodworking ----------
+   Showpiece furniture. You need the plan (found, never bought in a shop except from Fennick now and then)
+   and rare ingredients that only turn up by chance while doing ordinary island things. */
+const RM = (id, name, price, how, o={}) => def(id, Object.assign({ name, kind:'material', price, rarity:FR.v, stack:10, rare:true, how, model:{t:'rare', s:id} }, o));
+RM('heartwood',  'Heartwood',    2500, 'Now and then when you chop wood, more often when a tree comes down');
+RM('goldsap',    'Golden Sap',   2500, 'Now and then when you shake a tree (once per tree a day)');
+RM('starstone',  'Starstone',    3000, 'Now and then when you hit rocks, more often at night');
+RM('moonpearl',  'Moonpearl',    3000, 'Now and then with a catch, or washed up on the beach');
+RM('glimmermoss','Glimmer Moss', 2000, 'Grows on old stumps: sometimes comes up when you dig one out, or with weeds at night');
+const legend = (id, name, buy, r, o={}) => furn(id, name, buy, r, Object.assign({ shop:'craft', rarity:FR.l, legendary:true, glow:true, stack:1 }, o));
+legend('lanterntree',  'Heartwood Lantern Tree', 90000, 0.75);
+legend('pearlfountain','Moonpearl Fountain',    110000, 1.0);
+legend('armillary',    'Celestial Armillary',   100000, 0.6);
+legend('saplamp',      'Golden Sap Lamp',        80000, 0.45);
+legend('grotto',       'Glimmer Grotto',        120000, 1.0);
+legend('wishwell',     'Wishing Well',          130000, 0.9);
+export const RARE_WORK = [
+  { id:'lanterntree',   mats:{ heartwood:3, glimmermoss:2, goldsap:1, wood:12 } },
+  { id:'pearlfountain', mats:{ moonpearl:3, starstone:1, stone:12, clay:4 } },
+  { id:'armillary',     mats:{ starstone:3, goldsap:1, iron:6 } },
+  { id:'saplamp',       mats:{ goldsap:3, heartwood:1, iron:3 } },
+  { id:'grotto',        mats:{ glimmermoss:3, starstone:2, moonpearl:1, stone:10 } },
+  { id:'wishwell',      mats:{ heartwood:2, moonpearl:2, goldsap:1, stone:10, wood:4 } },
+];
+// One plan item per showpiece. Plans are learned the moment you pick one up, so you never hold duplicates.
+for (const r of RARE_WORK){ r.plan='plan_'+r.id; def(r.plan, { name:'Plan: '+ITEMS[r.id].name, kind:'plan', learns:r.id, price:6000, rarity:FR.l, stack:1, model:{t:'plan', of:r.id} }); }
+// How often rare things turn up (chance per action). Potions double the matching ones.
+export const RARE_ODDS = { chop:0.012, fell:0.06, shake:0.02, rock:0.012, rockNight:0.03, catch:0.015, stump:0.1, weedNight:0.03,
+  beachPearl:0.06, digPlan:0.015, bottlePlan:0.03, peddlerPlan:0.35 };
+export const PLAN_PRICE = 45000;   // Fennick's price for a plan
 
 /* ---------- Woodworking ----------
    No random recipe drops: every plan is visible from the start, with its unlock shown.
@@ -427,24 +486,21 @@ export const EVENTS = [
 
 /* ---------- New shop furniture (tier = shop investment tier needed before it shows up in stock) ---------- */
 // Tidepool Aquarium Supply
-furn('fishtank','Little Fish Tank',1800,0.5,{shop:'aquarium',tier:0});
-furn('lifering','Life Ring Stand',900,0.4,{shop:'aquarium',tier:0});
-furn('anchor','Old Anchor',1500,0.55,{shop:'aquarium',tier:0});
-furn('shipwheel','Ship\'s Wheel',2400,0.5,{shop:'aquarium',tier:1});
-furn('buoylamp','Buoy Lamp',2000,0.4,{shop:'aquarium',tier:1,glow:true});
-furn('corallamp','Coral Lamp',3200,0.4,{shop:'aquarium',tier:2,glow:true});
-furn('bigtank','Grand Aquarium',9000,1.0,{shop:'aquarium',tier:3});
+furn('fishtank','Little Fish Tank',1800,0.5,{shop:'aquarium',tier:0,...C});
+furn('lifering','Life Ring Stand',900,0.4,{shop:'aquarium',tier:0,...C});
+furn('anchor','Old Anchor',1500,0.55,{shop:'aquarium',tier:0,...C});
+furn('shipwheel','Ship\'s Wheel',2400,0.5,{shop:'aquarium',tier:1,...U});
+furn('buoylamp','Buoy Lamp',2000,0.4,{shop:'aquarium',tier:1,glow:true,...U});
+furn('corallamp','Coral Lamp',3200,0.4,{shop:'aquarium',tier:2,glow:true,...R});
+furn('bigtank','Grand Aquarium',9000,1.0,{shop:'aquarium',tier:3,...R});
 // Sprig's Bug & Bloom
-furn('terrarium','Bug Terrarium',1600,0.45,{shop:'garden',tier:0});
-furn('skep','Straw Bee Skep',1400,0.45,{shop:'garden',tier:0});
-furn('gnome','Garden Gnome',900,0.35,{shop:'garden',tier:0});
-furn('butterflyframe','Butterfly Frame',2200,0.45,{shop:'garden',tier:1});
-furn('mothlamp','Moth Lantern',2000,0.35,{shop:'garden',tier:1,glow:true});
-furn('rosearch','Rose Arch',3500,1.0,{shop:'garden',tier:2});
-furn('fountain','Garden Fountain',8000,1.0,{shop:'garden',tier:3});
-// General store extras that only appear once you've invested
-furn('grandfather','Grandfather Clock',5200,0.5,{shop:'general',tier:2});
-furn('piano','Upright Piano',12000,0.8,{shop:'general',tier:3});
+furn('terrarium','Bug Terrarium',1600,0.45,{shop:'garden',tier:0,...C});
+furn('skep','Straw Bee Skep',1400,0.45,{shop:'garden',tier:0,...C});
+furn('gnome','Garden Gnome',900,0.35,{shop:'garden',tier:0,...C});
+furn('butterflyframe','Butterfly Frame',2200,0.45,{shop:'garden',tier:1,...U});
+furn('mothlamp','Moth Lantern',2000,0.35,{shop:'garden',tier:1,glow:true,...U});
+furn('rosearch','Rose Arch',3500,1.0,{shop:'garden',tier:2,...R});
+furn('fountain','Garden Fountain',8000,1.0,{shop:'garden',tier:3,...R});
 // Museum thank-you gifts (never sold)
 furn('globe','Antique Globe',3000,0.45,{shop:'gift'});
 furn('skeleton','Mini Dino Skeleton',6000,0.8,{shop:'gift'});
@@ -458,7 +514,7 @@ export const SHOPS = {
   general:{ id:'general', name:'Pemberton\'s General Store', keeper:'pemberton', buys:null, hours:null,
     sell:[1.0,1.03,1.06,1.1], discount:[0,0.05,0.1,0.15], slots:[6,8,10,12],
     tiers:['Market Stall','Corner Shop','General Store','Grand Emporium'],
-    perks:['', 'Two more furniture slots, 5% off, +3% when you sell', 'Clocks and rarer pieces in stock, 10% off, +6% when you sell', 'Pianos and peddler-quality finds, 15% off, +10% when you sell'] },
+    perks:['', 'Two more furniture slots, rare pieces a little more often, 5% off, +3% when you sell', 'Two more slots, rare pieces almost twice as often, very rare twice as often, 10% off, +6% when you sell', 'Two more slots, rare pieces over twice as often, very rare 3x as often, 15% off, +10% when you sell'] },
   aquarium:{ id:'aquarium', name:'Tidepool Aquarium Supply', keeper:'marlo', buys:['fish'], hours:[8,22],
     sell:[1.2,1.3,1.4,1.5], discount:[0,0.05,0.1,0.15], slots:[3,4,5,6],
     tiers:['Bait Shack','Aquarium Supply','Tidepool Aquarium','Grand Aquarium Hall'],

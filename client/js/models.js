@@ -220,6 +220,7 @@ export function buildItemModel(id){
   else if (d.t==='fish') CR.buildFishInto(g, d, id);
   else if (d.t==='bug') CR.buildBugInto(g, d, id);
   else if (d.t==='furn') FURN_BUILDERS[d.b](g);
+  else if (ITEM_BUILDERS[d.t]) ITEM_BUILDERS[d.t](g, d, id);
   else if (d.t==='flower'){ g.add(buildFlower(d.sp, 3)); }
   else if (d.t==='seed'){ const P=PLANTS[d.sp]; mk(G.box(0.4,0.5,0.06), M(0xf3e2c4), 0,0.25,0,g); mk(G.box(0.42,0.08,0.07), M(0xd8c0a0), 0,0.48,0,g); const f=mk(G.cyl(0.11,0.11,0.02,14), M(P.colors[0]), 0,0.24,0.04,g); f.rotation.x=Math.PI/2; mk(G.cyl(0.04,0.04,0.025,10),M(0xf8d040),0,0.24,0.05,g).rotation.x=Math.PI/2; }
   else if (d.t==='sapling'){ const s=buildTree(mulberry32(3), d.sp, { stage:0 }); g.add(s); mk(G.sph(0.28,10,8), M(0xc8a070), 0,0.05,0,g).scale.y=0.6; }
@@ -376,6 +377,7 @@ export const toolThumb = (type,tier) => thumbCache['tool:'+type+tier] || renderT
 
 /* ---------- Furniture ---------- */
 const WOOD=0xa8754a, WOOD2=0x8b5e3a, WOODL=0xc99a6a;
+export const ITEM_BUILDERS = {};   // v1.13: other modules register item model types here (rare.js: rare ingredients, plans)
 export const FURN_BUILDERS = {
   stool(g){ mk(G.cyl(0.36,0.4,0.48,14), M(WOOD), 0,0.24,0,g); mk(G.cyl(0.36,0.36,0.04,14), M(0xe8c99a), 0,0.5,0,g); },
   bench(g){ const s=mk(G.cyl(0.24,0.24,1.7,12), M(WOOD), 0,0.52,0,g); s.rotation.z=Math.PI/2; s.scale.z=0.65; mk(G.cyl(0.2,0.24,0.42,10), M(WOOD2), -0.6,0.21,0,g); mk(G.cyl(0.2,0.24,0.42,10), M(WOOD2), 0.6,0.21,0,g); const back=mk(G.box(1.6,0.45,0.1), M(WOODL), 0,0.9,-0.18,g); back.rotation.x=-0.15; },

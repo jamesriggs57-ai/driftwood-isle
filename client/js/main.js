@@ -5,13 +5,14 @@
 import * as THREE from 'three';
 import { TAU, clamp, lerp, smooth, mulberry32, hashStr, hash2, vnoise, fbm, weightedPick, inHours, inMonths, fmt, polyDist, segDist, Time, seasonOf } from './util.js';
 import { ITEMS, NATIVE_FRUITS, PLANTS, TOOLS, WOODWORK, BACKPACKS, BASE_SLOTS, HOUSE_LEVELS, RESIDENTS, DIALOGUE, PEDDLER, EVENTS, rarityLabel, RARITY_COLORS, SHOPS, INVEST, KEEPERS, MUSEUM, BUILD,
-  FOREIGN_FRUIT_PRICE, FRUIT_REGROW_DAYS, POTIONS, WIZARD, MAGIC, STORY, FAVOR_ASKS, CROPS, RECIPES, ARRIVE, MENTOR, islandSeedPool, ISLAND_SEED_BUY, GARDEN_FENCES, GARDEN_DECOR } from './content.js';
+  FOREIGN_FRUIT_PRICE, FRUIT_REGROW_DAYS, POTIONS, WIZARD, MAGIC, STORY, FAVOR_ASKS, CROPS, RECIPES, ARRIVE, MENTOR, islandSeedPool, ISLAND_SEED_BUY, GARDEN_FENCES, GARDEN_DECOR, FR, RARE_WORK, RARE_ODDS, PLAN_PRICE } from './content.js';
 import { CELL, buildSoil, buildFences, buildStake, buildGardenSign, buildScarecrow, buildLanternPost, buildFlowerArch } from './farm.js';
 import { Snd } from './audio.js';
 import { LAYOUTS, DEFAULT_SHAPE, islandRadius, generateLayout, bluffD } from './layouts.js';
 import { buildBike, MODEL, M, mk, G, outline, windowMat, glowMats, glowMat, glowSprites, addGlow, textSprite, PALETTE, buildItemModel, thumb, toolThumb, FURN_BUILDERS, MF,
   buildTree, buildStump, buildShrub, buildFlower, buildTool, buildAnimal, buildPlayer, buildHouse, buildStall, buildBoard, buildPlankDeck, buildRoom, buildBird, buildGull, buildDuck, buildWeedClump } from './models.js';
 import './furn.js';
+import { addAura, buildBottle } from './rare.js';
 import * as GC from './ground.js';
 import * as CH from './chars.js';
 import { openCreator } from './creator.js';
@@ -771,17 +772,18 @@ class Tree extends Ent {
     const n=this.fruitLeft();
     if (n>0){ S.day.fruit[this.key]=0; if (!VISIT) (S.fruitPicked=S.fruitPicked||{})[this.key]=dayNum(today()); for(let i=0;i<n;i++) setTimeout(()=>dropNear(this.fruit, this.pos, 1.6), 250+i*120); }
     else if (!S.day.branch[this.key] && Math.random()<0.7){ S.day.branch[this.key]=true; setTimeout(()=>dropNear('softwood', this.pos, 1.6), 300); }
+    const sap=(S.day.sap=S.day.sap||{}); if (!sap[this.key]){ sap[this.key]=1; rareRoll('shake', 'goldsap', this.pos); }
     save(); setTimeout(()=>this.refresh(),250);
   }
   chop(){
     const tier=toolTier('axe'); if(!useTool('axe')) return;
     const n=(S.day.chop[this.key]||0); S.day.chop[this.key]=n+1; S.stats.chopped++;
     this.shake=0.7; Snd.chop(); puff(this.pos.clone().add(new THREE.Vector3(0,1,0)), 0xd8b080, 5, 0.4, 1.5, 0.8, 0.5);
-    if (n<3){ dropNear('wood', this.pos, 1.6); if (tier>=2) dropNear('wood', this.pos, 1.6); }
+    if (n<3){ dropNear('wood', this.pos, 1.6); if (tier>=2) dropNear('wood', this.pos, 1.6); rareRoll('chop', 'heartwood', this.pos); }
     else if (TOOLS.axe.tiers[tier].nofell) toast('Too flimsy to fell it.');
     else { Snd.timber(); dropNear('wood', this.pos, 1.6);
       if (this.rec){ S.plants.splice(S.plants.indexOf(this.rec),1); } else S.cut[this.key]='gone';
-      const st={ key:this.key, x:this.pos.x, z:this.pos.z }; S.stumps.push(st); new Stump(st); FX.fell(this.obj, this.pos.clone(), this.type); this.remove(true); onFelled(this.pos.clone()); }
+      rareRoll('fell', 'heartwood', this.pos); const st={ key:this.key, x:this.pos.x, z:this.pos.z }; S.stumps.push(st); new Stump(st); FX.fell(this.obj, this.pos.clone(), this.type); this.remove(true); onFelled(this.pos.clone()); }
     save();
   }
   update(dt,t){ const top=this.obj.userData.top; if(!top) return; top.rotation.z=Math.sin(t*0.9+this.pos.x)*0.012+Math.sin(t*38)*0.07*this.shake; top.rotation.x=Math.cos(t*0.7+this.pos.z)*0.01; if(this.shake>0) this.shake=Math.max(0,this.shake-dt*1.6); }
@@ -790,7 +792,7 @@ class Stump extends Ent {
   constructor(rec){ super('stump',rec.x,rec.z,0.45); this.rec=rec; this.solid=true; this.reach=1.4; this.attach(buildStump()); }
   label(){ return S.equip==='shovel' ? 'Dig up' : 'Look'; }
   act(){ if (this.label()==='Look') return; if(!useTool('shovel')) return; Snd.dig(); S.stumps.splice(S.stumps.indexOf(this.rec),1);
-    const pos=this.pos.clone(); FX.stumpOut(this.obj, pos); this.remove(true); setTimeout(()=>dropNear('stump', pos, 1.1), 900); S.stats.dug++; save(); }
+    const pos=this.pos.clone(); FX.stumpOut(this.obj, pos); this.remove(true); setTimeout(()=>dropNear('stump', pos, 1.1), 900); rareRoll('stump', 'glimmermoss', pos); S.stats.dug++; save(); }
 }
 if (!S.stumps) S.stumps=[];
 
@@ -807,7 +809,7 @@ class Rock extends Ent {
     if (used>=4){ toast('The rock is all tapped out for today.'); return; }
     if (!useTool(t)) return; S.day.rock[this.idx]=used+1;
     if (this.idx===S.day.lucky){ const amt=[100,200,400,800][used]; addClams(amt); Snd.coin(); toast('A pouch of '+amt+' clams popped out!'); }
-    else { const x=Math.random(); dropNear(x<0.6?'stone':(x<0.88?'clay':'iron'), this.pos, 1.7); }
+    else { const x=Math.random(); dropNear(x<0.6?'stone':(x<0.88?'clay':'iron'), this.pos, 1.7); rareRoll(World.night>0.5?'rockNight':'rock', 'starstone', this.pos); }
     save();
   }
   update(dt){ if(this.hit>0){ this.hit=Math.max(0,this.hit-dt*5); const s=1+Math.sin(this.hit*Math.PI)*0.08; this.obj.scale.set(s,2-s,s); } }
@@ -818,19 +820,24 @@ class DigSpot extends Ent {
   act(){ if(!needTool('shovel') || !useTool('shovel')) return; Snd.dig(); puff(this.pos.clone().add(new THREE.Vector3(0,0.2,0)), 0xb08a5a, 8, 0.6, 2.5, 1, 0.6); S.day.digs[this.i].dug=true; S.stats.dug++; FX.hole(this.pos.clone(), 0.5, 1.6);
     const f=weightedPick(Math.random, Object.values(ITEMS).filter(i=>i.kind==='fossil' && allowedFind(i)), i=>luckW(i,'dig')); this.remove(); setTimeout(()=>dropNear(f.id, this.pos, 0.3, true), 200);
     if (Math.random()<(potionOn('dig')?0.25:0.12)){ setTimeout(()=>{ const got=grantRandomStyle(); if(got){ Snd.jingle(); toast(`Swatch book: ${got}`); } }, 900); }
+    if (!GUEST && Math.random()<rareChance('digPlan','dig')){ const pl=randomPlan(); if (pl){ const p=this.pos.clone(); setTimeout(()=>{ dropNear(pl, p, 0.9); sparkle(p.clone().add(new THREE.Vector3(0,1,0))); Snd.jingle(); toast('Something rolled up in the dirt...', thumb(pl), 'new', 'A rare plan!'); }, 1100); } }
     if (toolTier('shovel')>=2 && Math.random()<0.3){ addClams(300); toast(`Your ${TOOLS.shovel.tiers[toolTier('shovel')].name.toLowerCase()} turned up 300 clams too!`); Snd.coin(); } save(); }
 }
 class GroundItem extends Ent {
-  constructor(rec){ super('item',rec.x,rec.z,0.35); this.rec=rec; this.reach=1.2; const m=buildItemModel(rec.id); m.scale.setScalar(ITEMS[rec.id].kind==='furniture'?0.6:0.95); const g=new THREE.Group(); g.add(m); this.attach(g); this.hitSphere(0.45,0.3); this.spin=Math.random()*TAU; this.bounce=rec.fresh?1:0; delete rec.fresh; }
+  constructor(rec){ super('item',rec.x,rec.z,0.35); this.rec=rec; this.reach=1.2; const it=ITEMS[rec.id]; const m=rec.bottle?buildBottle(rec.id):buildItemModel(rec.id); m.scale.setScalar(it.kind==='furniture'?0.6:0.95); const g=new THREE.Group(); g.add(m);
+    if (it.rare || it.kind==='plan') this.aura=addAura(g, RARITY_COLORS[rarityLabel(it.rarity)], 0.35, 1.3); this.attach(g); this.hitSphere(0.45,0.3); this.spin=Math.random()*TAU; this.bounce=rec.fresh?1:0; delete rec.fresh; }
   label(){ return 'Pick up'; }
-  act(){ if (!this.rec.beach && noEdit()) return; const id=this.rec.id, res=addItem(id, this.rec.m); if(!res){ toast('Your bag is full. Sell or drop something first.'); return; }
+  act(){ if (!this.rec.beach && noEdit()) return; const id=this.rec.id;
+    if (ITEMS[id].kind==='plan'){ const fresh=learnPlan(id); if (!fresh){ addClams(ITEMS[id].price); toast(`You already know that plan. Pemberton gave you ${fmt(ITEMS[id].price)} clams for the paper.`); }
+      Snd.pop(); const i=S.ground.indexOf(this.rec); if(i>=0) S.ground.splice(i,1); this.remove(); save(); return; }
+    const res=addItem(id, this.rec.m); if(!res){ toast('Your bag is full. Sell or drop something first.'); return; }
     for (let k=1;k<(this.rec.n||1);k++){ if (!addItem(id)) break; pickNote(id,'Picked up'); } Snd.pop(); const i=S.ground.indexOf(this.rec); if(i>=0) S.ground.splice(i,1); if (VISIT && this.rec.beach){ (S.day.vpicked=S.day.vpicked||[]).push(Math.round(this.rec.x*10)+','+Math.round(this.rec.z*10)); } this.remove(); save(); itemToast(id, res==='new', 'Picked up'); craftNudge(id); }
-  update(dt,t){ this.obj.children[0].rotation.y=this.spin+Math.sin(t*1.5+this.spin)*0.2; if(this.bounce>0){ this.bounce=Math.max(0,this.bounce-dt*2.2); this.obj.position.y=this.pos.y+Math.abs(Math.sin(this.bounce*Math.PI*2))*this.bounce*1.4; } }
+  update(dt,t){ if (this.aura) this.aura(t,dt); this.obj.children[0].rotation.y=this.spin+Math.sin(t*1.5+this.spin)*0.2; if(this.bounce>0){ this.bounce=Math.max(0,this.bounce-dt*2.2); this.obj.position.y=this.pos.y+Math.abs(Math.sin(this.bounce*Math.PI*2))*this.bounce*1.4; } }
 }
 class Weed extends Ent {
   constructor(i,x,z){ super('weed',x,z,0.5); this.i=i; this.reach=1.4; const g=buildWeedClump(hashStr(today()+':'+i)%9973+1, 1.45); g.rotation.y=i*1.7; this.attach(g); this.hitSphere(0.6,0.35); }
   label(){ return 'Pull'; }
-  act(){ const r=addItem('weed'); if(!r){ toast('Your bag is full.'); return; } Snd.rustle(); puff(this.pos.clone().add(new THREE.Vector3(0,0.3,0)),0x6a8a2a,8,0.5,2,0.8,0.5); puff(this.pos.clone().add(new THREE.Vector3(0,0.1,0)),0x6a5038,5,0.4,1.5,0.7,0.5); S.day.weeds[this.i].pulled=true; FX.yank(this.obj); this.remove(true); save(); itemToast('weed', r==='new','Pulled'); }
+  act(){ const r=addItem('weed'); if(!r){ toast('Your bag is full.'); return; } Snd.rustle(); puff(this.pos.clone().add(new THREE.Vector3(0,0.3,0)),0x6a8a2a,8,0.5,2,0.8,0.5); puff(this.pos.clone().add(new THREE.Vector3(0,0.1,0)),0x6a5038,5,0.4,1.5,0.7,0.5); S.day.weeds[this.i].pulled=true; FX.yank(this.obj); this.remove(true); if (World.night>0.5) rareRoll('weedNight', 'glimmermoss', this.pos); save(); itemToast('weed', r==='new','Pulled'); }
 }
 
 /* ---------- v1.9 harvesting ---------- */
@@ -1179,7 +1186,7 @@ function castAt(pt){
 function reel(){
   const f=Fishing.fish;
   if (Fishing.state==='bite' && f){ useTool('rod'); const meta=rollStats(f.id), id=f.id; Snd.splash(); FX.fishCatch(id, bobber.position.clone()); setTimeout(()=>sparkle(player.pos.clone().add(new THREE.Vector3(0,2.3,0))), 600);
-    const kept=r=>{ setTimeout(()=>Snd.fanfare(),150); S.caught++; S.stats.fish++; const best=recordCatch(id, meta); catchToast(id, meta, r==='new', best); save(); };
+    const kept=r=>{ setTimeout(()=>Snd.fanfare(),150); S.caught++; S.stats.fish++; const best=recordCatch(id, meta); catchToast(id, meta, r==='new', best); rareRoll('catch', 'moonpearl', player.pos, 'fish'); save(); };
     const r=addItem(id, meta); if(!r) setTimeout(()=>fullBagCatch(id, meta, kept), 250); else kept(r);
     f.m.parent && f.m.parent.remove(f.m); fishes.splice(fishes.indexOf(f),1);
   } else if (f && (f.state==='nibble'||f.state==='approach')){ toast('Too soon!'); f.state='flee'; f.t=0; Snd.splash(); }
@@ -1477,16 +1484,18 @@ class ShopItem extends Ent {
   constructor(list, i, id, x, z, onShelf){ super('shopitem',x,z,0.35); this.list=list; this.i=i; this.id=id; this.reach=onShelf?2.1:1.7; this.solid=false;
     const g=new THREE.Group(), m=buildItemModel(id), it=ITEMS[id]; m.scale.setScalar(it.kind==='furniture'?(onShelf?0.42:0.62):0.7); m.position.y=onShelf?0:0.62; g.add(m); this.m=m;
     if (!onShelf){ mk(G.cyl(0.42,0.46,0.6,14), M(0xe8dcc4), 0,0.3,0,g); mk(G.cyl(0.46,0.46,0.04,14), M(0xc99a6a), 0,0.61,0,g); }
+    if (isRarePiece(id)){ const lab=rarityLabel(it.rarity); this.aura=addAura(g, RARITY_COLORS[lab], onShelf?0.3:1.1, lab==='Very rare'?2.2:1.6); if (!onShelf) mk(G.tor(0.47,0.025,8,32), M(parseInt(RARITY_COLORS[lab].slice(1),16),{metalness:0.5,roughness:0.3}), 0,0.62,0,g).rotation.x=Math.PI/2; }
     this.attach(g); this.hitSphere(0.55, onShelf?0.25:0.9); this.refresh(); }
   get sold(){ return this.list==='garden' ? !!S.day.gsold[this.i] : isSold('stall', this.id, this.i); }
   refresh(){ this.m.visible=!this.sold; }
   label(){ return this.sold ? null : 'Look'; }
   act(){ if (this.sold) return; const it=ITEMS[this.id], price=buyPrice('stall', it), k=KEEPERS.pemberton;
-    dialog(k.name, k.voice, [`Ah, the ${it.name}. ${fmt(price)} clams${it.kind==='seed'?', and it grows wherever there\'s grass':''}.`], null, [
+    const rl=isRarePiece(this.id)?rarityLabel(it.rarity):null;
+    dialog(k.name, k.voice, [rl ? `Ah, the ${it.name}. ${rl==='Very rare'?'I\'ve only had one of these through the door once before.':'That one\'s rare. I don\'t get many.'} ${fmt(price)} clams.` : `Ah, the ${it.name}. ${fmt(price)} clams${it.kind==='seed'?', and it grows wherever there\'s grass':''}.`], null, [
       { label:`Buy it (${fmt(price)})`, fn:()=>{ if (S.clams<price){ toast('Not enough clams.'); Snd.fail(); return; } if (!canAdd(this.id)){ toast('Your bag is full.'); return; }
           S.clams-=price; if (this.list==='garden') S.day.gsold[this.i]=true; else markSold('stall', this.id, this.i); addTrade('stall',price); const r=addItem(this.id); Snd.coin(); updateHUD(); itemToast(this.id, r==='new', 'Bought'); this.refresh(); save(); } },
       { label:'Just looking', alt:true, fn:()=>{} } ]); }
-  update(dt,t){ if (this.m.visible) this.m.rotation.y=Math.sin(t*0.6+this.i)*0.4; }
+  update(dt,t){ if (!this.m.visible) return; this.m.rotation.y=Math.sin(t*0.6+this.i)*0.4; runAnims(this.m, this.obj, t, dt); if (this.aura) this.aura(t,dt); }
 }
 function buildStoreAll(){
   const t=shopTier('general'), [W,D]=STORE_SIZE[t];
@@ -1685,6 +1694,32 @@ const nowMs = () => Time.now().getTime();
 const potionOn = k => { const p=S.potions, n=nowMs(); return (p[k]||0)>n || (p.all||0)>n; };
 // Luck: rare things (rarity weight under 3) become about 3.5x as likely, common ones a little less likely
 const luckW = (it, k) => { const w=it.rarity ?? 5; return potionOn(k) ? (w<3 ? w*3.5 : w*0.75) : w; };
+
+/* ---------- v1.13 rare finds: showpiece plans and rare ingredients ----------
+   Plans are learned the moment you pick one up (no duplicates). Ingredients turn up by chance while
+   doing ordinary island things; the matching potion doubles the odds. Guests don't get either. */
+if (!S.rare) S.rare={ plans:[], made:0 };
+const knowsPlan = fid => S.rare.plans.includes(fid);
+const unfoundPlans = () => RARE_WORK.filter(r=>!knowsPlan(r.id));
+const rareChance = (k, potion) => RARE_ODDS[k]*(potion && potionOn(potion) ? 2 : 1);
+function rareRoll(k, id, at, potion){
+  if (GUEST || Math.random()>=rareChance(k, potion)) return false;
+  const p=at.clone(); setTimeout(()=>{ dropNear(id, p, 1.4); sparkle(p.clone().add(new THREE.Vector3(0,1.4,0))); Snd.jingle(); toast('Rare find!', thumb(id), 'new', `${ITEMS[id].name} ${rarityTag(ITEMS[id])}`); }, 450);
+  return true; }
+function learnPlan(planId){ const fid=ITEMS[planId].learns; if (knowsPlan(fid)) return false; S.rare.plans.push(fid); save(); Snd.fanfare();
+  toast(`Rare plan found: ${ITEMS[fid].name}!`, thumb(fid), 'new', S.craft ? 'It\'s in Woodworking now. The ingredients are the hard part.' : 'Once Bramble teaches you woodworking, you can make it.');
+  return true; }
+const randomPlan = (r=Math.random) => { const u=unfoundPlans(); return u.length ? u[Math.floor(r()*u.length)].plan : null; };
+function beachSpot(r){ for(let k=0;k<40;k++){ const a=r()*TAU, d=(40+r()*16)*SC; const x=Math.cos(a)*d, z=Math.sin(a)*d; if(isBeach(x,z) && !onDock(x,z)) return [x,z]; } return null; }
+// v1.13: daily stock is rolled by rarity. Investing in a shop makes rare and very rare pieces more likely.
+const STOCK_W = { 'Common':10, 'Uncommon':5, 'Rare':1.4, 'Very rare':0.45 };
+const TIER_BOOST = [[1,1],[1.3,1.4],[1.7,2],[2.2,3]];   // [rare, very rare] multipliers per investment tier
+function stockWeight(it, t=0){ const r=rarityLabel(it.rarity ?? FR.c); let w=STOCK_W[r]||0; const b=TIER_BOOST[t]||TIER_BOOST[0]; if (r==='Rare') w*=b[0]; else if (r==='Very rare') w*=b[1]; return w; }
+function pickWeighted(r, pool, k, have, wf){ const a=pool.filter(i=>!have.includes(i.id)), out=[];
+  while (out.length<k && a.length){ const tot=a.reduce((s,i)=>s+wf(i),0); if (tot<=0) break; let x=r()*tot, j=0; for (;j<a.length-1;j++){ x-=wf(a[j]); if (x<=0) break; } out.push(a.splice(j,1)[0].id); }
+  return out; }
+const generalPool = m => Object.values(ITEMS).filter(i=>i.kind==='furniture' && i.shop==='stall' && inMonths(m,i.months) && allowedFind(i));
+const isRarePiece = id => { const it=ITEMS[id]; return it && it.kind==='furniture' && it.rarity!==undefined && it.rarity<3; };
 function drinkPotion(slot){
   const s=S.inv[slot]; if(!s) return; const it=ITEMS[s.id]; if (it.kind!=='potion') return;
   removeAt(slot,1); const k=it.luck, until=Math.max(nowMs(), S.potions[k]||0)+it.mins*60000; S.potions[k]=until; save();
@@ -1905,7 +1940,7 @@ function favorBonus(){
   if (x<0.3){ const id=POTIONS[Math.floor(Math.random()*3)]; return { item:id }; }
   if (x<0.5){ const st=grantRandomStyle(); if (st) return { style:st }; }
   if (x<0.65){ const fr=NATIVE_FRUITS.filter(f=>f!==S.nativeFruit); return { item:fr[Math.floor(Math.random()*fr.length)], n:2 }; }
-  if (x<0.8){ const pool=Object.values(ITEMS).filter(i=>i.kind==='furniture' && i.shop==='rare'); return { item:pool[Math.floor(Math.random()*pool.length)].id }; }
+  if (x<0.8){ const pool=Object.values(ITEMS).filter(i=>i.kind==='furniture' && i.shop==='rare' && (i.rarity??FR.c)>=1.5); return { item:pool[Math.floor(Math.random()*pool.length)].id }; }
   return null;
 }
 function giveReward(res, f, then){
@@ -2368,7 +2403,7 @@ function rollDay(){
   for(let i=0;i<6;i++){ let p=null; for(let k=0;k<8;k++){ p=randLand(r,SAND_H+0.15,9,1.2); if(!p || !hiddenSpot(p[0],p[1])) break; } if(p) digs.push({x:p[0],z:p[1],dug:false}); }
   for(let i=0;i<7;i++){ const p=randLand(r,SAND_H+0.2,9,0.6); if(p) weeds.push({x:p[0],z:p[1],pulled:false}); }
   const pickN=(pool,n)=>{ const a=pool.slice(), o=[]; while(o.length<n && a.length) o.push(a.splice(Math.floor(r()*a.length),1)[0].id); return o; };
-  const furnPool=Object.values(ITEMS).filter(i=>i.kind==='furniture' && i.shop==='stall' && inMonths(m,i.months));
+  const furnPool=generalPool(m), gt=shopTier('general');
   const seeds=Object.values(ITEMS).filter(i=>i.kind==='seed'), starts=Object.values(ITEMS).filter(i=>i.kind==='sapling'&&PLANTS[i.plant].ptype==='shrub'), saps=Object.values(ITEMS).filter(i=>i.kind==='sapling'&&i.buy>0&&PLANTS[i.plant].ptype==='tree');
   const shellPool=Object.values(ITEMS).filter(i=>i.kind==='shell');
   S.ground = S.ground.filter(g=>!g.beach);
@@ -2382,8 +2417,14 @@ function rollDay(){
   // plants grow overnight (watered plants always grow)
   if (!VISIT) for (const p of S.plants){ if (p.lastGrow===key) continue; const watered = p.watered && p.watered!==key; if (p.stage<3 && (watered || r()<0.55)) p.stage++; p.watered=null; p.lastGrow=key; }
   S.day={ key, fruit:{}, branch:{}, chop:{}, rock:{}, lucky:Math.floor(r()*9), digs, weeds, weather, peddler:!GUEST && r()<(S.magic&&S.magic.beacon?0.55:0.35),
-    stock:pickN(furnPool,6), sold:{}, garden:[...pickN(seeds,4), ...pickN(starts,1), ...pickN(saps,1)], gsold:{},
-    pstock:pickN(Object.values(ITEMS).filter(i=>i.shop==='rare'),2), psold:{}, chat:{}, gift:{} };
+    stock:pickWeighted(r, furnPool, 6, [], i=>stockWeight(i,gt)), sold:{}, garden:[...pickN(seeds,4), ...pickN(starts,1), ...pickN(saps,1)], gsold:{},
+    pstock:pickWeighted(r, Object.values(ITEMS).filter(i=>i.shop==='rare'), 2, [], i=>stockWeight(i,0)), psold:{}, chat:{}, gift:{} };
+  // v1.13 rare things on their own random stream, so they don't shift the rest of the day
+  const rr=mulberry32(hashStr(key+':rare:'+S.seed));
+  if (!GUEST){ const a=rr(), b=rr(), c=rr();
+    if (a<RARE_ODDS.beachPearl){ const p=beachSpot(rr); if (p) S.ground.push({ id:'moonpearl', x:p[0], z:p[1], beach:true }); }
+    const plan=randomPlan(rr); if (plan && b<RARE_ODDS.bottlePlan){ const p=beachSpot(rr); if (p) S.ground.push({ id:plan, x:p[0], z:p[1], beach:true, bottle:true }); }
+    if (S.day.peddler && plan && c<RARE_ODDS.peddlerPlan) S.day.pplan=randomPlan(rr); }
   townNewDay(key); save(); return true;
 }
 function spawnDaily(){
@@ -2583,7 +2624,7 @@ function giveGift(res, slot, menu){
   const tier = res.spec.loves.includes(it.kind)?'love' : res.spec.likes.includes(it.kind)?'like' : 'meh';
   const pts = tier==='love'?3:tier==='like'?2:1; S.friend[res.spec.id]=(S.friend[res.spec.id]||0)+pts; save();
   const c={ c:res.spec.catch, item:it.name }; const lines=[fill(P[tier][Math.floor(Math.random()*P[tier].length)],c)]; let reward=null;
-  if ((S.friend[res.spec.id]>=4 && Math.random()<0.35) || (tier==='love' && Math.random()<0.2)){ const pool=Object.values(ITEMS).filter(i=>i.kind==='furniture'&&i.shop==='stall'&&inMonths(Time.month(),i.months)); reward=pool[Math.floor(Math.random()*pool.length)].id; lines.push(fill(P.returnGift[0],c)); }
+  if ((S.friend[res.spec.id]>=4 && Math.random()<0.35) || (tier==='love' && Math.random()<0.2)){ const pool=Object.values(ITEMS).filter(i=>i.kind==='furniture'&&i.shop==='stall'&&inMonths(Time.month(),i.months)&&(i.rarity??FR.c)>=3); reward=pool[Math.floor(Math.random()*pool.length)].id; lines.push(fill(P.returnGift[0],c)); }
   let styleGift=null; if (!reward && S.friend[res.spec.id]>=6 && Math.random()<0.25){ styleGift=grantRandomStyle(); if(styleGift) lines.push(fill(`Oh, and I had some leftover supplies from fixing up my place. Here, try ${styleGift} on your house!`,c)); }
   if (tier==='love'){ Snd.jingle(); sparkle(res.pos.clone().add(new THREE.Vector3(0,2,0))); }
   dialog(res.spec.name, res.spec.voice, lines, ()=>{ if(reward){ const r=addItem(reward); if(r) itemToast(reward, r==='new', 'Received'); else dropNear(reward, player.pos); } menu(); });
@@ -2623,12 +2664,12 @@ function updateHUD(){
   const wi=(World.weather==='sunny' && World.night>0.5)?'night':World.weather; if(wi!==lastWIcon){ $('#wIcon').innerHTML=WICONS[wi]; lastWIcon=wi; }
   $('#mAmt').textContent=fmt(S.clams);
 }
-const kindName = k => ({veg:'Vegetable',herb:'Herb',berry:'Berry',food:'Food',gear:'Gear',fruit:'Fruit',material:'Material',shell:'Beach find',fossil:'Fossil',fish:'Fish',bug:'Bug',furniture:'Furniture',flower:'Flower',seed:'Seeds',sapling:'Plant',potion:'Potion',quest:'Favor item'})[k]||k;
+const kindName = k => ({veg:'Vegetable',herb:'Herb',berry:'Berry',food:'Food',gear:'Gear',fruit:'Fruit',material:'Material',shell:'Beach find',fossil:'Fossil',fish:'Fish',bug:'Bug',furniture:'Furniture',flower:'Flower',seed:'Seeds',sapling:'Plant',potion:'Potion',quest:'Favor item',plan:'Rare plan'})[k]||k;
 const canPlant = it => it.kind==='seed' || it.kind==='sapling' || (it.kind==='fruit' && it.plant);
 
 /* Bag: tap an item and its actions appear in the bar pinned to the bottom of the panel */
 function invGrid(sel, dim){ let h='<div class="grid">'; const N=slotsMax(); for(let i=0;i<N;i++){ const s=S.inv[i]; if(!s){ h+='<div class="slot empty"></div>'; continue; } h+=`<div class="slot${sel===i?' sel':''}" data-i="${i}" style="${dim&&dim(s)?'opacity:.35':''}"><img src="${thumb(s.id)}" alt="">${s.n>1?`<span class="n">${s.n}</span>`:''}</div>`; } return h+'</div>'; }
-function itemDetail(s){ const it=ITEMS[s.id]; let sub=kindName(it.kind); if(s.m) sub+=` · ${statText(s.id,s.m)}`; if(it.rarity && (it.kind==='fish'||it.kind==='bug')) sub+=' '+rarityTag(it); return `<img src="${thumb(s.id)}"><div class="grow"><div class="nm">${it.name}${s.n>1?` x${s.n}`:''}</div><div class="sub">${sub}</div><div class="sub">Sells for ${fmt(entryPrice(s))} clams</div></div>`; }
+function itemDetail(s){ const it=ITEMS[s.id]; let sub=kindName(it.kind); if(s.m) sub+=` · ${statText(s.id,s.m)}`; if(it.rarity && (it.kind==='fish'||it.kind==='bug'||it.kind==='furniture'||it.rare)) sub+=' '+rarityTag(it); if (it.rare) sub+=`<br>${it.how}`; return `<img src="${thumb(s.id)}"><div class="grow"><div class="nm">${it.name}${s.n>1?` x${s.n}`:''}</div><div class="sub">${sub}</div><div class="sub">Sells for ${fmt(entryPrice(s))} clams</div></div>`; }
 function openBag(mode='view', onPick, onCancel){
   let sel=-1;
   const render=()=>{
@@ -2733,7 +2774,7 @@ function eatFood(slot){ const s=S.inv[slot]; if (!s || ITEMS[s.id].kind!=='food'
 const wellFed = () => (S.fed||0)>nowMs();
 const recipeOut = r => r.out||1;
 const kindsMade = () => S.craft ? (S.craft.kinds||[]).length : 0;
-const recipeOpen = r => S.craft && kindsMade()>=r.unlock;
+const recipeOpen = r => r.plan ? !!S.craft && knowsPlan(r.id) : !!S.craft && kindsMade()>=r.unlock;
 function craftFits(r, k){
   // Simulate the bag: take the materials out, put the results in. Never lose materials to a full bag.
   const inv=S.inv.map(x=>({...x})), max=slotsMax();
@@ -2752,13 +2793,28 @@ function doCraft(r, k){
   for (const [m,n] of Object.entries(r.mats)) if (countItem(m)<n*k) return false;
   for (const [m,n] of Object.entries(r.mats)) removeItem(m, n*k);
   const n=recipeOut(r)*k; let isNew=false; for(let i=0;i<n;i++){ if(addItem(r.id)==='new') isNew=true; }
-  const before=kindsMade(); S.craft.made+=k; S.craft.kinds=S.craft.kinds||[]; if(!S.craft.kinds.includes(r.id)) S.craft.kinds.push(r.id); save();
+  const before=kindsMade(); S.craft.made+=k; S.craft.kinds=S.craft.kinds||[];
+  if (r.plan){ S.rare.made+=k; save(); Snd.chop(); setTimeout(()=>Snd.fanfare(),200); sparkle(player.pos.clone().add(new THREE.Vector3(0,2.2,0)));
+    toast(`You made the ${ITEMS[r.id].name}!`, thumb(r.id), 'new', `${rarityTag(ITEMS[r.id])} It's in your bag.`); return true; }
+  if(!S.craft.kinds.includes(r.id)) S.craft.kinds.push(r.id); save();
   Snd.chop(); setTimeout(()=>Snd.jingle(),140);
   toast(`${isNew?'New! ':''}You made ${n>1?n+' ':''}${n>1?ITEMS[r.id].name+(ITEMS[r.id].name.endsWith('s')?'':'s'):article(ITEMS[r.id].name)+' '+ITEMS[r.id].name}!`, thumb(r.id), isNew?'new':'');
   const fresh=WOODWORK.filter(x=>x.unlock>before && x.unlock<=kindsMade());
   if (fresh.length) setTimeout(()=>{ Snd.fanfare(); toast('New woodworking plans!', thumb(fresh[0].id), 'new', fresh.map(x=>ITEMS[x.id].name).join(', ')); }, 900);
   return true;
 }
+// v1.13: rare plans sit at the top of Woodworking. Unfound ones show as silhouettes.
+const RARE_MATS = ['heartwood','goldsap','starstone','moonpearl','glimmermoss'];
+function rareCraftSection(){
+  const found=S.rare.plans.length, any=found || RARE_MATS.some(m=>countItem(m));
+  let h=`<div class="notice" style="border-color:${RARITY_COLORS.Legendary}"><b>Rare plans</b> <span class="muted">· ${found} of ${RARE_WORK.length} found${S.rare.made?` · ${S.rare.made} made`:''}</span>`;
+  if (!any) h+=`<br><span class="muted">Showpiece plans turn up in odd places: dig spots, bottles on the beach, and now and then on Fennick's cart. Each needs rare ingredients you'll only find by chance.</span>`;
+  RARE_WORK.forEach((r,i)=>{ const it=ITEMS[r.id], known=knowsPlan(r.id);
+    if (!known){ h+=`<div class="row" style="margin:8px 0 0;opacity:.75"><img src="${thumb(r.id)}" style="filter:brightness(0) opacity(.45)"><div class="grow"><div class="nm">??? ${rarityTag(it)}</div><div class="sub">Plan not found yet</div></div></div>`; return; }
+    const mx=craftMax(r), mats=Object.entries(r.mats).map(([m,n])=>{ const have=countItem(m), ok=have>=n, rare=ITEMS[m].rare; return `<span style="color:${ok?'inherit':'#c0503a'};font-weight:${ok&&!rare?400:700}">${ITEMS[m].name} ${have}/${n}</span>`; }).join(' · ');
+    h+=`<div class="row" style="margin:8px 0 0"><img src="${thumb(r.id)}"><div class="grow"><div class="nm">${it.name} ${rarityTag(it)}</div><div class="sub">${mats}${bagBlocked(r)?'<br><b>Your bag is full.</b> Make room first.':''}</div></div><button class="btn" data-rc="${i}" ${mx<=0?'disabled':''}>Make</button></div>`; });
+  if (any) h+=`<div style="margin-top:10px"><b style="font-size:13px">Rare ingredients</b>`+RARE_MATS.map(m=>`<div class="sub" style="margin-top:4px"><b>${ITEMS[m].name} ${countItem(m)}</b> <span class="muted">· ${ITEMS[m].how}</span></div>`).join('')+'</div>';
+  return h+'</div>'; }
 function openCraft(start){
   if (!S.craft && !S.cook) return;
   let filter='all', tab = start || (S.craft ? 'wood' : 'cook'); const qty={};
@@ -2771,6 +2827,7 @@ function openCraft(start){
     let h=tabsH+`<div class="notice"><b>Woodworking</b> <span class="muted">· ${kd} of ${WOODWORK.length} plans made · ${fmt(S.craft.made)} crafted</span>`;
     h+= next!==undefined ? `<div class="bar" style="margin:8px 0 4px"><div style="width:${Math.min(100,kd/next*100)}%"></div></div><span class="muted">Make ${next-kd} more different thing${next-kd>1?'s':''} to unlock new plans.</span>` : `<br><span class="muted">You know every plan. Bramble would be proud.</span>`;
     h+=`<div class="muted" style="margin-top:6px">Your materials: ${Object.keys(MAT_NAMES).map(m=>`${MAT_NAMES[m]} ${countItem(m)}`).join(' · ')}</div></div>`;
+    h+=rareCraftSection();
     h+='<div class="tabs">'+[['all','All plans'],['now','Can make now']].map(([k,n])=>`<button class="tab${k===filter?' on':''}" data-f="${k}">${n}</button>`).join('')+'</div>';
     let shown=0;
     WOODWORK.forEach((r,i)=>{ const it=ITEMS[r.id], open=recipeOpen(r), mx=open?craftMax(r):0;
@@ -2788,6 +2845,7 @@ function openCraft(start){
     pBody.innerHTML=h; bindTabs();
     pBody.querySelectorAll('[data-f]').forEach(b=>b.onclick=()=>{ filter=b.dataset.f; Snd.click(); render(); });
     pBody.querySelectorAll('[data-q]').forEach(b=>b.onclick=()=>{ const [i,d]=b.dataset.q.split(':'); const r=WOODWORK[+i], mx=craftMax(r); qty[i]= d==='max'?mx:Math.max(1,Math.min(mx,(qty[i]||1)+(+d))); Snd.click(); render(); });
+    pBody.querySelectorAll('[data-rc]').forEach(b=>b.onclick=()=>{ const r=RARE_WORK[+b.dataset.rc]; if (doCraft(r,1)){ const st=pBody.scrollTop; render(); pBody.scrollTop=st; } });
     pBody.querySelectorAll('[data-c]').forEach(b=>b.onclick=()=>{ const i=+b.dataset.c, r=WOODWORK[i]; const k=Math.max(1,Math.min(qty[i]||1, craftMax(r))); if(doCraft(r,k)){ qty[i]=1; const st=pBody.scrollTop; render(); pBody.scrollTop=st; } });
   };
   openPanel('Woodworking'); render();
@@ -2836,8 +2894,8 @@ function shopStock(which){
   const id=shopKey(which), t=shopTier(id), n=SHOPS[id].slots[t], m=Time.month();
   const r=mulberry32(hashStr(S.day.key+':'+id+':'+S.seed));
   const pickN=(pool,k,have=[])=>{ const a=pool.filter(i=>!have.includes(i.id)), o=[]; while(o.length<k && a.length) o.push(a.splice(Math.floor(r()*a.length),1)[0].id); return o; };
-  if (id==='general'){ const base=S.day.stock.slice(0,6); const pool=Object.values(ITEMS).filter(i=>i.kind==='furniture' && ((i.shop==='stall' && inMonths(m,i.months)) || (i.shop==='general' && i.tier<=t) || (t>=3 && i.shop==='rare')));
-    return [...base, ...pickN(pool, n-base.length, base)]; }
+  if (id==='general'){ const base=S.day.stock.slice(0,6).filter(x=>ITEMS[x]);
+    return [...base, ...pickWeighted(r, generalPool(m), n-base.length, base, i=>stockWeight(i,t))]; }
   const pool=Object.values(ITEMS).filter(i=>i.kind==='furniture' && i.shop===id && (i.tier||0)<=t);
   let out=[...pool.filter(i=>(i.tier||0)===t).map(i=>i.id).slice(0,1)]; out=[...out, ...pickN(pool, n-out.length, out)];
   if (id==='garden'){ const seeds=Object.values(ITEMS).filter(i=>i.kind==='seed'||(i.kind==='sapling'&&i.buy>0&&(t>=1||PLANTS[i.plant].ptype!=='tree'))); out=[...out, ...pickN(seeds, 2+t)]; }
@@ -2871,7 +2929,7 @@ function doInvest(id){ if (noEdit()) return false;
 function openShop(which, startTab){
   let tab=startTab||'buy', sel=-1; const sid=shopKey(which);
   const tabs = which==='rare' ? [['buy','Rare finds'],['sell','Sell']] : which==='stall' ? [['buy','Furniture'],['home','Home goods'],['garden','Garden'],['tools','Tools'],['packs','Bags & bike'],['sell','Sell'],['invest','Invest']] : [['buy','Shop'],['sell','Sell'],['invest','Invest']];
-  const buyRow=(id,i,sold,price,orig)=>{ const it=ITEMS[id]; return `<div class="row"><img src="${thumb(id)}"><div class="grow"><div class="nm">${it.name}</div><div class="sub">${fmt(price)} clams${orig&&orig!==price?` <s>${fmt(orig)}</s>`:''}${it.kind==='seed'?' · plant on grass':''}${it.kind==='sapling'?' · needs a shovel to plant':''}</div></div><button class="btn" data-b="${i}" ${sold||S.clams<price?'disabled':''}>${sold?'Sold':'Buy'}</button></div>`; };
+  const buyRow=(id,i,sold,price,orig)=>{ const it=ITEMS[id]; return `<div class="row"><img src="${thumb(id)}"><div class="grow"><div class="nm">${it.name}${it.kind==='furniture'&&it.rarity!==undefined?' '+rarityTag(it):''}</div><div class="sub">${fmt(price)} clams${orig&&orig!==price?` <s>${fmt(orig)}</s>`:''}${it.kind==='seed'?' · plant on grass':''}${it.kind==='sapling'?' · needs a shovel to plant':''}</div></div><button class="btn" data-b="${i}" ${sold||S.clams<price?'disabled':''}>${sold?'Sold':'Buy'}</button></div>`; };
   let list=[];
   // v1.8: this island's own seeds, always in stock, cheap, by the handful
   const islandRows=()=>`<div class="notice" style="margin-bottom:10px"><b>Grows wild here</b> <span class="muted">· always in stock</span>`+islandSeeds().map(id=>{ const it=ITEMS[id];
@@ -2880,7 +2938,9 @@ function openShop(which, startTab){
     let h='<div class="tabs">'+tabs.map(([k,n])=>`<button class="tab${k===tab?' on':''}" data-t="${k}">${n}</button>`).join('')+'</div>'; setFoot('');
     if (tab==='buy'){ list=shopStock(which);
       const intro = which==='rare'?'Rare finds, today only.' : which==='stall'?'New furniture every day. At night, leave clams in the jar.' : which==='aquarium'?'Marlo\'s salty stock changes every day.' : 'Sprig\'s plants and bug gear change every day.';
-      h+=`<div class="muted" style="margin-bottom:8px">${intro}</div>`; if (sid==='garden') h+=islandRows(); list.forEach((id,i)=>h+=buyRow(id,i,isSold(which,id,i),buyPrice(which,ITEMS[id]),ITEMS[id].buy)); }
+      h+=`<div class="muted" style="margin-bottom:8px">${intro}</div>`; if (sid==='garden') h+=islandRows();
+      if (which==='rare' && S.day.pplan && ITEMS[S.day.pplan]){ const pl=ITEMS[S.day.pplan], known=knowsPlan(pl.learns);
+        h+=`<div class="notice" style="margin-bottom:10px"><b>Something special</b> <span class="muted">· a plan, wrapped in oilcloth</span><div class="row" style="margin:8px 0 0"><img src="${thumb(pl.learns)}"><div class="grow"><div class="nm">${pl.name} ${rarityTag(pl)}</div><div class="sub">${fmt(PLAN_PRICE)} clams · teaches you to make it. You still need the rare ingredients.</div></div><button class="btn" id="buyPlan" ${known||S.clams<PLAN_PRICE?'disabled':''}>${known?'Known':'Buy'}</button></div></div>`; } list.forEach((id,i)=>h+=buyRow(id,i,isSold(which,id,i),buyPrice(which,ITEMS[id]),ITEMS[id].buy)); }
     if (tab==='garden'){ list=S.day.garden; h+=islandRows()+'<div class="muted" style="margin-bottom:8px">Other seeds and plants change daily.</div>'; list.forEach((id,i)=>h+=buyRow(id,i,S.day.gsold[i],buyPrice(which,ITEMS[id]),ITEMS[id].buy)); }
     if (tab==='tools'){
       for (const [t,T] of Object.entries(TOOLS)){ const own=S.tools[t];
@@ -2916,6 +2976,7 @@ function openShop(which, startTab){
     if (tab==='invest') h+=investBox(sid);
     pBody.innerHTML=h;
     pBody.querySelectorAll('[data-hb]').forEach(b=>b.onclick=()=>{ if (buyHome(homeStock()[+b.dataset.hb])) render(); });
+    const bp=pBody.querySelector('#buyPlan'); if (bp) bp.onclick=()=>{ const pl=S.day.pplan; if (!pl || knowsPlan(ITEMS[pl].learns) || S.clams<PLAN_PRICE) return; S.clams-=PLAN_PRICE; updateHUD(); Snd.coin(); learnPlan(pl); save(); render(); };
     pBody.querySelectorAll('[data-ht]').forEach(b=>b.onclick=()=>{ const it=homeStock()[+b.dataset.ht];
       if (VISIT){ toast('You can try styles on your own house when you\'re home.'); return; }
       if (!S.home.built){ toast('Build your house first.'); Snd.fail(); return; }
@@ -3367,7 +3428,9 @@ function renderIntTab(){
 function openBoard(){
   const render=()=>{ const d=Time.now();
     let h=`<div class="notice"><b>${S.island||'Island'} news</b><br>${d.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})}. Weather: ${World.weather}.</div>`;
-    if (S.day.peddler) h+=`<div class="notice">A traveling peddler named Fennick is near the dock today.</div>`;
+    if (S.day.peddler) h+=`<div class="notice">A traveling peddler named Fennick is near the dock today.${S.day.pplan&&ITEMS[S.day.pplan]&&!knowsPlan(ITEMS[S.day.pplan].learns)?' Word is he has a rare plan with him.':''}</div>`;
+    { const rp=shopStock('stall').filter(isRarePiece); if (rp.length) h+=`<div class="notice">Pemberton has something rare on display today: ${rp.map(id=>ITEMS[id].name+' '+rarityTag(ITEMS[id])).join(', ')}.</div>`; }
+    if (S.ground.some(g=>g.bottle)) h+=`<div class="notice">Someone saw a bottle wash up on the beach this morning.</div>`;
     for(const e of activeEvents()) h+=`<div class="notice">${e.notice}</div>`;
     h+=`<div class="notice">Ripe fruit trees: ${trees.filter(t=>!t.removed&&t.fruit&&t.fruitLeft()>0).length}. Cracks to dig: ${S.day.digs.filter(x=>!x.dug).length}. Islanders: ${residents.length}.</div>`;
     h+=`<div class="notice"><b>Your progress</b><br>Critters caught: ${S.caught} · Items discovered: ${discovered()} · Best friends: ${bestFriends()}</div>`;
@@ -3413,7 +3476,7 @@ function openMenu(){
     <div class="notice"><b>Testing tools</b><br><span class="muted">The game runs on your real clock. These preview other times and weather.</span>
       <label class="f">Preview time: <span id="mOffT"></span></label><input type="range" id="mOff" min="-23" max="23" step="1" value="${Time.offsetH}">
       <label class="f">Weather <select id="mW"><option value="">Today's weather</option><option>sunny</option><option>cloudy</option><option>rain</option><option>snow</option></select></label>
-      ${DEV?`<div style="margin-top:8px"><b>Shortcuts</b> <span class="muted">(only on this device)</span><br><button class="btn alt" id="dvC">+50,000 clams</button> <button class="btn alt" id="dvT">${S.magic.tower?'Tower is up':'Raise the wizard tower'}</button> <button class="btn alt" id="dvM">${S.devMagic?'Wizard needs requirements again':'Skip wizard requirements'}</button> <button class="btn alt" id="dvF">New favors now</button> <button class="btn alt" id="dvD">Town: skip a day</button> <button class="btn alt" id="dvOff">Hide shortcuts</button></div>`:''}
+      ${DEV?`<div style="margin-top:8px"><b>Shortcuts</b> <span class="muted">(only on this device)</span><br><button class="btn alt" id="dvC">+50,000 clams</button> <button class="btn alt" id="dvT">${S.magic.tower?'Tower is up':'Raise the wizard tower'}</button> <button class="btn alt" id="dvM">${S.devMagic?'Wizard needs requirements again':'Skip wizard requirements'}</button> <button class="btn alt" id="dvF">New favors now</button> <button class="btn alt" id="dvD">Town: skip a day</button> <button class="btn alt" id="dvR">Rare kit</button> <button class="btn alt" id="dvOff">Hide shortcuts</button></div>`:''}
     </div>
     <button class="btn warn" id="mReset">Start a new island</button>${saveOK?'':'<div class="muted" style="margin-top:8px">Saving isn\'t available in this browser.</div>'}`;
     $('#mLook').onclick=async()=>{ closePanel(); const L=await openCreator({ look:CH.parseLook(S.look), title:'Change your look', cancel:true }); if (L) setPlayerLook(CH.lookCode(L)); };
@@ -3434,6 +3497,7 @@ function openMenu(){
     const offT=()=>{ $('#mOffT').textContent = Time.offsetH===0?'now':(Time.offsetH>0?'+':'')+Time.offsetH+'h'; }; offT();
     $('#mOff').oninput=e=>{ Time.offsetH=+e.target.value; offT(); if(rollDay()) spawnDaily(); updateSky(); updateHUD(); };
     if (DEV){ $('#dvC').onclick=()=>{ S.clams+=50000; save(); updateHUD(); Snd.coin(); };
+      $('#dvR').onclick=()=>{ for (const m of RARE_MATS) for (let k=0;k<5;k++) addItem(m); for (const r of RARE_WORK) if (!knowsPlan(r.id)) S.rare.plans.push(r.id); save(); toast('Rare kit: 5 of each rare ingredient and every rare plan.'); };
       $('#dvT').onclick=()=>{ if (!S.magic.tower){ closePanel(); Q.story.wizard='done'; raiseTower(); } };
       $('#dvM').onclick=()=>{ S.devMagic=!S.devMagic; save(); render(); };
       $('#dvD').onclick=()=>{ S.town.devDays=(S.town.devDays||0)+1; townNewDay(dayKeyOf(dayNum(today())+S.town.devDays)); applyTown(); toast(`Town moved ahead ${S.town.devDays} day${S.town.devDays>1?'s':''}: ${S.town.res.length} islanders${S.town.next?', '+S.town.next.id+' moving in next':''}.`); };
@@ -4259,5 +4323,5 @@ function setInventory(inv, seen, equip){ S.inv=inv; if(seen) S.seen=Object.assig
 if (VISIT) setTimeout(()=>toast(`Visiting ${BOOT.host.name}'s island${BOOT.host.island?' ('+BOOT.host.island+')':''} as a ${BOOT.role}.`), 1500);
 
 addEventListener('visibilitychange', ()=>{ if(document.hidden) save(); else if(Snd.ctx) Snd.ctx.resume(); });
-window.__game = { v1:{ scene, camera, OUT, updateSky, updateHUD, snowPass, SNOW_U, townNewDay, applyTown, talkHall, openHallPanel, buildPlaza, refreshStoreItems, buildStoreAll, buildShop, buildMuseumAll, spawnExhibits, exhibitSlots, mentorMoment, teachWoodworking, openCraft, doCook, nearStation, toggleSled, setSled, get sledding(){ return sledding; }, sledV, eatFood, Plant, fullBagCatch, KB, landSeaTap, terraLand, LAMPS:()=>LAMPS, hasUpstairs, ShopItem, Stairs, get exhibits(){ return exhibits; }, KEEPOUT, dayKeyOf, World, startPlacing, checkPlace, get placing(){ return placing; }, FX, homeStock, buyHome, draftUnowned, get homeRack(){ return homeRack; }, openShop, openBuild:(o)=>openBuild(o), closeBuild, get buildMode(){ return buildMode; }, ents, Tree, Stump, Weed, Bug, bugs, player, interact, layoutBar, pickNote, itemToast, reel, Fishing, fishes, spawnFish, WU, relayout, enterRoom:(id)=>enterRoom(id), trees }, get S(){ return S; }, dbg:{ showChoices:(t,c)=>showChoices(t,c), dialog:(...a)=>dialog(...a), setRiding:(v)=>setRiding(v), enterRoom:(id)=>enterRoom(id), openBuild:()=>openBuild(), rooms:()=>Object.keys(ROOMS), get yaw(){ return camYaw; }, set yaw(v){ camYaw=v; }, get riding(){ return riding; }, get snow(){ return SNOW_U.value; }, setWeather:(w)=>{ weatherOverride=w; World.weather=w; snowT=0; }, get dlg(){ return !!dlgState; } }, walkable, blocked, groundY, launchRag, ragdolls, swing, meBody, refreshPortals, portalArches, get portalEnt(){ return portalEnt; }, enterRoom, PLACES, net:{ bonked, visibleRemotes:()=>[...remotes.values()].filter(r=>r.obj.visible).map(r=>[r.name,+r.pos.x.toFixed(1),+r.pos.z.toFixed(1)]), remoteUpsert, remotePos, remoteLeave, remoteEmote, playerState, setInventory, toast:(m)=>toast(m), updateHUD:()=>updateHUD(), get started(){ return started; } }, ITEMS, itemThumb:(id)=>thumb(id), layoutInfo:()=>({ id:LAYOUT_ID, PLACES, PATHS, LOT, rects:RECTS.map(r=>r.slice(0,4)), lot:lotRect() }), terrainH:(x,z)=>rawHeight(x,z), terrainSlope:(x,z)=>hillSlope(x,z), interact, spawnBug:(id,x,z)=>new Bug(id,x,z), tapOdds:()=>Object.fromEntries(Object.keys(TAP_BASE).map(k=>[k, +tapChance({rarity:k}).toFixed(2)])), placingObj:()=>placing&&placing.m, toScreen:v=>{ const p=v.clone().project(camera); return [(p.x*0.5+0.5)*innerWidth, (-p.y*0.5+0.5)*innerHeight]; }, rebuildHome:()=>{ buildPlayerHouse(); rebuildHomeRoom(); }, openBuild, closeBuild, get buildMode(){ return buildMode; }, talkShop, openDonate, talkCurator, spawnMossby, onFelled, findPath, startPlacing, LOT, RECTS, shopEnts, museumEnt, houseEnt:()=>houseEnt, Time, player, ents, ITEMS, residents, World, ROOMS, goTo, handleTap, doAction, updateSky, rollDay, spawnDaily, castAt, Fishing, fishes, bugs, openBag, openBook, openShop, openBoard, openMenu, openCraft, doCraft, WOODWORK, enterRoom, exitRoom, equip, startLayout, endLayout, trees, applyControls, magic:{ startMagic, endMagic, landTap, magicPlace, castMagic, get mode(){ return magicMode; }, raiseTower, talkWizard, drinkPotion, potionOn, luckW, rollFavors, Q, favorChoices, findTowerSpot, get tower(){ return towerEnt; }, PLACES, TERRA, FALLS } };
+window.__game = { v13:{ shopStock:w=>shopStock(w), learnPlan, rareRoll, knowsPlan, unfoundPlans, stockWeight, RARE_WORK, GroundItem, ShopItem, Furniture }, v1:{ scene, camera, OUT, updateSky, updateHUD, snowPass, SNOW_U, townNewDay, applyTown, talkHall, openHallPanel, buildPlaza, refreshStoreItems, buildStoreAll, buildShop, buildMuseumAll, spawnExhibits, exhibitSlots, mentorMoment, teachWoodworking, openCraft, doCook, nearStation, toggleSled, setSled, get sledding(){ return sledding; }, sledV, eatFood, Plant, fullBagCatch, KB, landSeaTap, terraLand, LAMPS:()=>LAMPS, hasUpstairs, ShopItem, Stairs, get exhibits(){ return exhibits; }, KEEPOUT, dayKeyOf, World, startPlacing, checkPlace, get placing(){ return placing; }, FX, homeStock, buyHome, draftUnowned, get homeRack(){ return homeRack; }, openShop, openBuild:(o)=>openBuild(o), closeBuild, get buildMode(){ return buildMode; }, ents, Tree, Stump, Weed, Bug, bugs, player, interact, layoutBar, pickNote, itemToast, reel, Fishing, fishes, spawnFish, WU, relayout, enterRoom:(id)=>enterRoom(id), trees }, get S(){ return S; }, dbg:{ showChoices:(t,c)=>showChoices(t,c), dialog:(...a)=>dialog(...a), setRiding:(v)=>setRiding(v), enterRoom:(id)=>enterRoom(id), openBuild:()=>openBuild(), rooms:()=>Object.keys(ROOMS), get yaw(){ return camYaw; }, set yaw(v){ camYaw=v; }, get riding(){ return riding; }, get snow(){ return SNOW_U.value; }, setWeather:(w)=>{ weatherOverride=w; World.weather=w; snowT=0; }, get dlg(){ return !!dlgState; } }, walkable, blocked, groundY, launchRag, ragdolls, swing, meBody, refreshPortals, portalArches, get portalEnt(){ return portalEnt; }, enterRoom, PLACES, net:{ bonked, visibleRemotes:()=>[...remotes.values()].filter(r=>r.obj.visible).map(r=>[r.name,+r.pos.x.toFixed(1),+r.pos.z.toFixed(1)]), remoteUpsert, remotePos, remoteLeave, remoteEmote, playerState, setInventory, toast:(m)=>toast(m), updateHUD:()=>updateHUD(), get started(){ return started; } }, ITEMS, itemThumb:(id)=>thumb(id), layoutInfo:()=>({ id:LAYOUT_ID, PLACES, PATHS, LOT, rects:RECTS.map(r=>r.slice(0,4)), lot:lotRect() }), terrainH:(x,z)=>rawHeight(x,z), terrainSlope:(x,z)=>hillSlope(x,z), interact, spawnBug:(id,x,z)=>new Bug(id,x,z), tapOdds:()=>Object.fromEntries(Object.keys(TAP_BASE).map(k=>[k, +tapChance({rarity:k}).toFixed(2)])), placingObj:()=>placing&&placing.m, toScreen:v=>{ const p=v.clone().project(camera); return [(p.x*0.5+0.5)*innerWidth, (-p.y*0.5+0.5)*innerHeight]; }, rebuildHome:()=>{ buildPlayerHouse(); rebuildHomeRoom(); }, openBuild, closeBuild, get buildMode(){ return buildMode; }, talkShop, openDonate, talkCurator, spawnMossby, onFelled, findPath, startPlacing, LOT, RECTS, shopEnts, museumEnt, houseEnt:()=>houseEnt, Time, player, ents, ITEMS, residents, World, ROOMS, goTo, handleTap, doAction, updateSky, rollDay, spawnDaily, castAt, Fishing, fishes, bugs, openBag, openBook, openShop, openBoard, openMenu, openCraft, doCraft, WOODWORK, enterRoom, exitRoom, equip, startLayout, endLayout, trees, applyControls, magic:{ startMagic, endMagic, landTap, magicPlace, castMagic, get mode(){ return magicMode; }, raiseTower, talkWizard, drinkPotion, potionOn, luckW, rollFavors, Q, favorChoices, findTowerSpot, get tower(){ return towerEnt; }, PLACES, TERRA, FALLS } };
 window.__game.farm = { openPlantPanel, startGridPlacing, plantGrid, checkGrid, openGarden, rebuildGardens, gardenAtXZ, islandSeeds, harvestRec, perimeter, get fenceSegs(){ return FENCE_SEGS; }, fenceHit, get placing(){ return placing; }, plantEnts, gardenEnts, CELL };

@@ -9,7 +9,7 @@
    ===================================================================== */
 import { ITEMS, BACKPACKS, BASE_SLOTS, LETTERS } from '../../client/js/content.js';
 
-const KEEP_IDS = /^(relic_|lampframe$|cutting$)/;   // v1.38 items that can't be mailed or traded
+const KEEP_IDS = /^(relic_|lampframe$|cutting$|millsails$|bellframe$|crowbar$|wrecklens$|chartpiece$)/;   // v1.38, v1.39 story items that can't be mailed or traded
 const DAY = 86400e3;
 const SESSION_DAYS = 30;
 const GUEST = { clams: 10000, minRarity: 3 };

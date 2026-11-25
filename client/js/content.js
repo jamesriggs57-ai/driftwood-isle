@@ -26,7 +26,7 @@ export const FRUIT_REGROW_DAYS = 3;   // a picked tree grows fruit again after t
 export const NATIVE_FRUITS = ['apple','pear','peach','orange','plum','cherry','lemon'];
 
 /* ---------- Materials ---------- */
-def('wood',     {name:'Wood',           kind:'material', price:60,  model:{t:'log'}});
+def('wood',     {name:'Wood',           kind:'material', price:30,  model:{t:'log'}});   // v1.39: halved (was 60); regrowing pines made clear-cutting pay too well
 def('softwood', {name:'Driftwood Branch',kind:'material', price:20, model:{t:'branch'}});
 def('stone',    {name:'Stone',          kind:'material', price:75,  model:{t:'stone'}});
 def('clay',     {name:'Clay',           kind:'material', price:100, model:{t:'clay'}});

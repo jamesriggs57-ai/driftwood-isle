@@ -8,6 +8,7 @@ import { M, mk, G, glowMat, addGlow, ITEM_BUILDERS } from './models.js';
 import { ENCH, FAMILIES, TWIN, TWIN_SLOTS, POWER, CRAFT, REPAIR, SCROLL_ODDS, WORDS, migrate, fits, knows, enchOf, slotsOf, rankOn, describe, toolsText, maxUses,
   canApply, needFor, missing, apply, remove, learn, repairNeed, repairClams, repair, repairForClams, craftNeed, canCraft, craft, teachable, rank3Known, scrollPick,
   outputOf, oneSwing, luckFor, bonkPower, sureOf, bigRoll, sprayOf, sprayTargets, ONE_SWING_WOOD } from './enchant-core.js';
+import { toolBench, enchBench, TWIN_BENCH, BENCH_NAME } from './benches-core.js';
 export * from './enchant-core.js';
 
 const FAM_COLOR = { tough:0x8a9aa8, bonk:0xf08a3a, lucky:0x5ac06a, output:0xd8a040, sure:0x5ab0e0, big:0x3a6ad8, spray:0x7ad8f0 };
@@ -37,6 +38,10 @@ export function createEnchant(C){
   const thumbE = id => C.thumb('escroll_'+(id==='twin'?'triple':id));
 
   /* --- hooks called from main.js --- */
+  // v1.40 crafting tables: C.bench() is the best table in reach (0 none, 1 Workbench, 2 Carpenter's Bench, 3 Master Workbench)
+  const here=()=>C.bench ? C.bench() : 3;
+  const applyBench=(id,c)=>Math.max(enchBench(ENCH[id].rank), c&&c.bind?TWIN_BENCH:0);
+  const benchLine=b=>b>here() ? `<br><b>Needs a ${BENCH_NAME[b]}</b>` : '';
   const H = {
     maxUses:t=>maxUses(S(),t),
     // after T.uses-- in useTool: warn before an enchanted tool breaks, and say what was lost when it does
@@ -83,13 +88,13 @@ export function createEnchant(C){
       ? ['Okay, so. Wendell showed me a little trick and I\'ve been DYING to show somebody.','You tie a charm onto your tool. Some string, a bit of this, a bit of that. And it just works better! Magic!','Here, I\'ll show you a few. Watch my paws, {c}.']
       : ['Ooh, I worked out some new ones! For nets and rods, and even the watering can!','Watch closely. It\'s all in the knot.'];
     const ids=L.map(x=>x.id); for (const id of ids) learn(S(), id); S().rare.ench.lessons.pippa=(S().rare.ench.lessons.pippa||0)+1; C.save(); C.Snd.fanfare();
-    C.dialog('Pippa', v, lines.map(l=>l.replace('{c}', cat)), ()=>{ C.toast(`Enchantments learned: ${ids.map(nm).join(', ')}`, thumbE(ids[0]), 'new', 'Put them on a tool from the Tools tab in crafting.'); menu(); }); }
+    C.dialog('Pippa', v, lines.map(l=>l.replace('{c}', cat)), ()=>{ C.toast(`Enchantments learned: ${ids.map(nm).join(', ')}`, thumbE(ids[0]), 'new', 'Put them on a tool at a workbench, from the Tools tab in crafting.'); menu(); }); }
 
   function wendellLessons(menu){ const v=260, L=teachable(S(),'wendell');
     if (!L.length){ const k=S().rare.ench.known.length; C.dialog('Wendell', v, [k ? 'Put the charms you know to work first. Magic grows with use, apprentice. Come back when your tools have seen some.' : 'Enchanting? Pippa has a knack for the simple charms. Start with her. I teach the serious ones.'], menu); return; }
     const ch=L.slice(0,4).map(({id,price})=>({ label:`${nm(id)} (${fmt(price)})`, fn:()=>{ if (C.noEdit()) return; if (S().clams<price){ C.dialog('Wendell', v, ['The stars are generous. I am less so. Come back with the clams.'], menu); return; }
       C.addClams(-price); learn(S(), id); C.save(); C.Snd.magic ? C.Snd.magic() : C.Snd.fanfare();
-      const text = id==='twin' ? ['The Twin Charm. Two enchantments, one tool. Bind the second with a starstone and a drop of golden sap.','Choose your pairs wisely. A tool can only carry so much magic.'] : [`${ENCH[id].name}. ${describe(id)}.`, 'Mind you, magic on a tool is only as lasting as the tool. Keep it mended.'];
+      const text = id==='twin' ? ['The Twin Charm. Two enchantments, one tool. Bind the second with a starstone and a drop of golden sap, at a Master Workbench.','Choose your pairs wisely. A tool can only carry so much magic.'] : [`${ENCH[id].name}. ${describe(id)}.`, 'Mind you, magic on a tool is only as lasting as the tool. Keep it mended.'];
       C.dialog('Wendell', v, text, ()=>{ C.toast(`Enchantment learned: ${nm(id)}!`, thumbE(id), 'new'); menu(); }); } }));
     C.dialog('Wendell', v, ['Ah, an apprentice of the charm arts. I can teach you these, for a fee. Magic isn\'t free. Neither is tea.'], null, [...ch, { label:'Not now', alt:true, fn:menu }]); }
 
@@ -100,6 +105,7 @@ export function createEnchant(C){
     const s=S(), E=s.rare.ench, tools=Object.keys(TOOLS);
     if (sel && !s.tools[sel]) sel=null; if (!sel) sel=tools.find(t=>s.tools[t])||null;
     let h=tabsH+`<div class="tabs">${[['tools','Your tools'],['make','Make a tool'],['known','Enchantments']].map(([k,n])=>`<button class="tab${k===mode?' on':''}" data-em="${k}">${n}</button>`).join('')}</div>`;
+    if (C.benchBanner) h+=C.benchBanner();
     if (mode==='tools'){
       if (!sel) h+='<div class="muted">You don\'t have any tools. Pemberton sells them, or you can make one.</div>';
       else { h+='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">'+tools.filter(t=>s.tools[t]).map(t=>`<button class="btn ${t===sel?'':'alt'}" data-et="${t}" style="padding:4px 10px"><img src="${C.toolThumb(t,s.tools[t].tier)}" style="width:26px;height:26px;vertical-align:middle"> ${TOOLS[t].name}</button>`).join('')+'</div>';
@@ -115,15 +121,15 @@ export function createEnchant(C){
         if (!E.known.length) h+='<div class="muted" style="margin-top:8px">You don\'t know any enchantments yet. Pippa might.</div>';
         else if (!opts.length) h+=`<div class="muted" style="margin-top:8px">None of the enchantments you know work on ${TOOLS[sel].name.toLowerCase()}s.</div>`;
         else { h+='<div class="notice"><b>Enchant</b>';
-          for (const id of opts){ const c=canApply(s,sel,id,inv), need=c.need||needFor(id, null), on=en.includes(id);
+          for (const id of opts){ const c=canApply(s,sel,id,inv), need=c.need||needFor(id, null), on=en.includes(id), bb=applyBench(id,c), at=bb<=here();
             const note = on ? 'On this tool' : [c.replace ? `Replaces ${ENCH[c.replace].name}` : '', c.bind ? 'Two on one tool: uses the Twin Charm\'s binding too' : ''].filter(Boolean).join('. ');
-            h+=`<div class="row" style="margin:8px 0 0"><img src="${thumbE(id)}"><div class="grow"><div class="nm">${ENCH[id].name}</div><div class="sub">${describe(id,sel)}${note?`<br><i>${note}</i>`:''}<br>${on?'':matsHTML(need)}${!on&&!c.ok&&!c.miss?`<br>${c.why}`:''}</div></div><button class="btn" data-eap="${id}" ${c.ok?'':'disabled'}>${on?'On':'Enchant'}</button></div>`; }
+            h+=`<div class="row" style="margin:8px 0 0"><img src="${thumbE(id)}"><div class="grow"><div class="nm">${ENCH[id].name}</div><div class="sub">${describe(id,sel)}${note?`<br><i>${note}</i>`:''}<br>${on?'':matsHTML(need)}${!on&&!c.ok&&!c.miss?`<br>${c.why}`:''}${on?'':benchLine(bb)}</div></div><button class="btn" data-eap="${id}" ${c.ok&&at?'':'disabled'}>${on?'On':'Enchant'}</button></div>`; }
           h+='</div>'; } } }
     if (mode==='make'){
-      h+='<div class="muted" style="margin-bottom:8px">Tools you make are the same as the ones Pemberton sells, and need the same experience. A new tool starts with no enchantments.</div>';
+      h+='<div class="muted" style="margin-bottom:8px">Tools you make are the same as the ones Pemberton sells, and need the same experience. A new tool starts with no enchantments. A Flimsy tool can be made anywhere. Better ones need a bigger crafting table.</div>';
       for (const t of tools){ const own=s.tools[t]; h+=`<div class="notice"><b>${TOOLS[t].name}</b> <span class="muted">· ${own?'You have: '+TOOLS[t].tiers[own.tier].name:'You don\'t have one'}</span>`;
         TOOLS[t].tiers.forEach((tr,k)=>{ const c=canCraft(s,t,k,inv,C.reqMet), need=craftNeed(t,k); if (!need) return; if (own && own.tier>=k) return; if (!C.reqMet(t,k) && k>((s.toolEver[t]??-1)+1)) return;
-          h+=`<div class="row" style="margin:8px 0 0"><img src="${C.toolThumb(t,k)}"><div class="grow"><div class="nm">${tr.name}</div><div class="sub">${matsHTML(need)}${!C.reqMet(t,k)&&tr.req?`<br>${tr.req.desc}`:''}</div></div><button class="btn" data-emk="${t}:${k}" ${c.ok?'':'disabled'}>Make</button></div>`; });
+          h+=`<div class="row" style="margin:8px 0 0"><img src="${C.toolThumb(t,k)}"><div class="grow"><div class="nm">${tr.name}</div><div class="sub">${matsHTML(need)}${!C.reqMet(t,k)&&tr.req?`<br>${tr.req.desc}`:''}${benchLine(toolBench(k))}</div></div><button class="btn" data-emk="${t}:${k}" ${c.ok&&toolBench(k)<=here()?'':'disabled'}>Make</button></div>`; });
         h+='</div>'; } }
     if (mode==='known'){
       h+=`<div class="muted" style="margin-bottom:8px">${E.known.length} of ${Object.keys(ENCH).length} known${E.twin?' · Twin Charm: tools hold two':''}</div>`;
@@ -135,14 +141,14 @@ export function createEnchant(C){
     const rer=()=>{ const st=pB.scrollTop; renderTab(tabsH, bind); pB.scrollTop=st; };
     const rep=pB.querySelector('#eRep'); if (rep) rep.onclick=()=>{ if (C.noEdit()) return; const r=repair(s,sel,inv); if (r.ok){ C.Snd.coin(); C.toast(`Your ${TOOLS[sel].tiers[s.tools[sel].tier].name} is good as new.`, C.toolThumb(sel,s.tools[sel].tier)); C.save(); } rer(); };
     pB.querySelectorAll('[data-erm]').forEach(b=>b.onclick=()=>{ if (C.noEdit()) return; const id=b.dataset.erm; confirm(`Take ${ENCH[id].name} off? The charm unravels, so you'd need the ingredients again to put it back.`, ()=>{ remove(s,sel,id); C.save(); C.Snd.click(); rer(); }); });
-    pB.querySelectorAll('[data-eap]').forEach(b=>b.onclick=()=>{ if (C.noEdit()) return; const id=b.dataset.eap, c=canApply(s,sel,id,inv); if (!c.ok) return;
+    pB.querySelectorAll('[data-eap]').forEach(b=>b.onclick=()=>{ if (C.noEdit()) return; const id=b.dataset.eap, c=canApply(s,sel,id,inv); if (!c.ok || applyBench(id,c)>here()) return;
       const go=out=>{ const r=apply(s,sel,id,inv,out); if (!r.ok){ C.toast(r.why); return; } C.Snd.fanfare(); C.toast(`${ENCH[id].name} is on your ${TOOLS[sel].tiers[s.tools[sel].tier].name}.`, thumbE(id), 'new', describe(id,sel)+(r.removed?`. ${ENCH[r.removed].name} came off.`:'')); C.save(); C.updateHeld(); rer(); };
       const cur=enchOf(s,sel), same=cur.find(x=>ENCH[x].fam===ENCH[id].fam);
       if (same) confirm(`${ENCH[id].name} takes the place of ${ENCH[same].name}.`, ()=>go(same));
       else if (cur.length>=slotsOf(s)){ if (cur.length===1) confirm(`${ENCH[id].name} takes the place of ${ENCH[cur[0]].name}.`, ()=>go(cur[0]));
         else pick(`Which one comes off for ${ENCH[id].name}?`, cur.map(x=>({ label:ENCH[x].name, fn:()=>go(x) }))); }
       else go(null); });
-    pB.querySelectorAll('[data-emk]').forEach(b=>b.onclick=()=>{ if (C.noEdit()) return; const [t,k]=b.dataset.emk.split(':'), kk=+k, c=canCraft(s,t,kk,inv,C.reqMet); if (!c.ok) return;
+    pB.querySelectorAll('[data-emk]').forEach(b=>b.onclick=()=>{ if (C.noEdit()) return; const [t,k]=b.dataset.emk.split(':'), kk=+k, c=canCraft(s,t,kk,inv,C.reqMet); if (!c.ok || toolBench(kk)>here()) return;
       const go=()=>{ const r=craft(s,t,kk,inv,C.reqMet); if (!r.ok){ C.toast(r.why); return; } C.Snd.fanfare(); C.equip(t); C.toast(`You made a ${TOOLS[t].tiers[kk].name}!`, C.toolThumb(t,kk), 'new'); C.save(); C.updateHUD(); rer(); };
       if (c.loses) confirm(`Your old ${TOOLS[t].name.toLowerCase()} has ${c.loses.map(nm).join(' and ')} on it. The new one starts plain, and those are lost.`, go); else go(); });
   }

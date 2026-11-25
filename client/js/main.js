@@ -5744,7 +5744,7 @@ function setupLighthouse(lh, P){
     input:()=>{ const jm=Math.hypot(joy.x,joy.y); if (joy.active && jm>0.15) return [joy.x/jm*clamp((jm-0.15)/0.7,0.25,1), joy.y/jm*clamp((jm-0.15)/0.7,0.25,1)];
       return [(keys['d']||keys['arrowright']?1:0)-(keys['a']||keys['arrowleft']?1:0), (keys['s']||keys['arrowdown']?1:0)-(keys['w']||keys['arrowup']?1:0)]; },
     skyFollow:tg=>{ sky.position.copy(camera.position); stars.position.copy(camera.position); sun.target.position.copy(tg); sun.position.copy(tg).addScaledVector(sunDir,50); } };
-  const L=LH.makeLighthouse(ctx); FALLING.push(dt=>{ L.tick(dt, t); return false; });
+  const L=LH.makeLighthouse(ctx); let lt=0; FALLING.push(dt=>{ lt+=dt; L.tick(dt, lt); return false; });
   return L; }
 function shellGame(P, back){
   const plays=TX.cups||0; if (plays>=5) return dialog(P.name, P.voice, ['That\'s enough cups for one day! Come back next time the circus is in town.'], back);
@@ -7588,7 +7588,7 @@ function swingTarget(){
   let best=null, bd=2.2;
   const look=(px,pz,v)=>{ const dx=px-player.pos.x, dz=pz-player.pos.z, d=Math.hypot(dx,dz); if (d>=bd) return;
     let a=Math.atan2(dx,dz)-player.face; a=Math.atan2(Math.sin(a),Math.cos(a)); if (Math.abs(a)>1.15 && d>0.9) return; best=v; bd=d; };
-  for (const e of ents) if (isNpc(e) && !e.rag && !e.talking && npcInSpace(e)) look(e.pos.x, e.pos.z, { npc:e });
+  for (const e of ents) if (isNpc(e) && Math.abs(e.pos.y-player.pos.y)<4 && !e.rag && !e.talking && npcInSpace(e)) look(e.pos.x, e.pos.z, { npc:e });
   for (const r of remotes.values()) if (r.obj.visible && !r.rg) look(r.pos.x, r.pos.z, { remote:r });
   return best; }
 const TOOL_VERBS = { axe:['Chop','Hit'], shovel:['Dig','Dig up','Hit'], net:['Catch','Swing!'], can:['Water'] };

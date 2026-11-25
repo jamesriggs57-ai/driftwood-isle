@@ -77,12 +77,12 @@ export function buildTower(seed=1){
   onWall(7.4, LT.a0+2.1, p=>{ mk(G.box(0.9,0.06,0.26), wood, 0,0,0.12,p); for (let k=0;k<5;k++) mk(G.box(0.12,0.3+r()*0.08,0.22), M([0x8a3a3a,0x3a5a8a,0x4a7a4a,0x8a6a3a,0x5a3a6a][k]), -0.32+k*0.15,0.18,0.12,p); });
   onWall(10.3, LT.a0+4.8, p=>{ mk(G.cyl(0.2,0.2,0.08,16), brass, 0,0,0.05,p).rotation.x=Math.PI/2; mk(G.cyl(0.16,0.16,0.09,16), M(0xf4efe0), 0,0,0.06,p).rotation.x=Math.PI/2; mk(G.box(0.02,0.13,0.02), dark, 0.03,0.03,0.11,p).rotation.z=-0.6; });
   // the gallery: a deck that overhangs the shaft (with a hole where the stair comes up), brackets, a railing
-  const deck=new THREE.Group(); g.add(deck); const deckM=new THREE.MeshStandardMaterial({ color:0x4a4a54, roughness:0.8, side:THREE.DoubleSide });
+  const deck=new THREE.Group(), brackets=[]; g.add(deck); const deckM=new THREE.MeshStandardMaterial({ color:0x4a4a54, roughness:0.8, side:THREE.DoubleSide });
   { const ring=new THREE.Mesh(new THREE.RingGeometry(LT.holeR, LT.deckR, 40, 1), deckM); ring.rotation.x=-Math.PI/2; ring.position.y=LT.G; ring.receiveShadow=true; deck.add(ring);
     const under=ring.clone(); under.position.y=LT.G-0.2; deck.add(under);
     mk(new THREE.CylinderGeometry(LT.deckR,LT.deckR,0.2,40,1,true), deckM, 0,LT.G-0.1,0,deck);
     mk(new THREE.CylinderGeometry(LT.holeR,LT.holeR,0.2,20,1,false,LT.a1,TAU-2.2), deckM, 0,LT.G-0.1,0,deck);   // the stairwell opening runs from a1-2.2 round to a1
-    for (let i=0;i<12;i++){ const a=i/12*TAU, b=mk(G.box(0.14,0.7,0.9), dark, Math.sin(a)*(LT.rTop+0.4),LT.G-0.5,Math.cos(a)*(LT.rTop+0.4),deck); b.rotation.y=a; b.rotation.x=0.5; }
+    for (let i=0;i<12;i++){ const a=i/12*TAU, b=mk(G.box(0.1,0.45,0.85), dark, Math.sin(a)*(LT.rTop+0.42),LT.G-0.42,Math.cos(a)*(LT.rTop+0.42),deck); b.rotation.set(-0.55, a, 0, 'YXZ'); b.userData.a=a; brackets.push(b); }   // struts from the wall up to the deck's edge
     for (let i=0;i<24;i++){ const a=i/24*TAU; mk(G.box(0.05,0.95,0.05), dark, Math.sin(a)*LT.railR,LT.G+0.47,Math.cos(a)*LT.railR,deck).castShadow=false; }
     for (const y of [0.95,0.5]){ const t=mk(G.tor(LT.railR,0.03,6,64), dark, 0,LT.G+y,0,deck); t.rotation.x=Math.PI/2; t.castShadow=false; } }
   // the lamp room: an iron parapet, glass all round with a door gap facing the stair, a domed red roof
@@ -113,7 +113,7 @@ export function buildTower(seed=1){
   const scope=new THREE.Group(); { const a=Math.PI+0.55; scope.position.set(Math.sin(a)*2.62,LT.G,Math.cos(a)*2.62); scope.rotation.y=a; deck.add(scope);
     for (let k=0;k<3;k++){ const b=k/3*TAU, l=mk(G.cyl(0.02,0.02,1.2,4), wood, -Math.sin(b)*0.166,0.56,-Math.cos(b)*0.166,scope); l.rotation.set(0.28,b,0,'YXZ'); }
     const tube=mk(G.cyl(0.07,0.09,0.8,10), brass, 0,1.18,0.1,scope); tube.rotation.x=Math.PI/2-0.25; }
-  g.userData = { segs, lens, beam, beamM, vane:lamp.userData.vane, inside:insides };
+  g.userData = { segs, brackets, lens, beam, beamM, vane:lamp.userData.vane, inside:insides };
   return g;
 }
 
@@ -157,7 +157,8 @@ export function makeLighthouse(ctx){
   const pose = (a, rr, h, face) => { const p=at(a, rr, h); P.pos.copy(p); P.obj.position.copy(p); if (face!==undefined){ P.face=face; P.obj.rotation.y=face; } };
   const walkAnim = (t, k) => { const u=P.obj.userData; if (!u.legs) return; const ph=t*11; u.legs[0].rotation.x=Math.sin(ph)*0.7*k; u.legs[1].rotation.x=-Math.sin(ph)*0.7*k; if (u.arms){ u.arms[0].rotation.x=-Math.sin(ph)*0.6*k; u.arms[1].rotation.x=Math.sin(ph)*0.6*k; } if (u.body) u.body.position.y=Math.abs(Math.sin(ph))*0.07*k; };
   const still = () => { const u=P.obj.userData; (u.legs||[]).forEach(l=>l.rotation.x*=0.8); (u.arms||[]).forEach(a=>a.rotation.x*=0.8); if (u.body) u.body.position.y*=0.8; };
-  const cutaway = (on, camW) => { const local = camW!==undefined ? camW-rot : 0; U.segs.forEach((sg,i)=>{ sg.visible = !on || Math.abs(angD(segMid(i), local))>1.2; }); };
+  const cutaway = (on, camW) => { const local = camW!==undefined ? camW-rot : 0; U.segs.forEach((sg,i)=>{ sg.visible = !on || Math.abs(angD(segMid(i), local))>1.2; });
+    (U.brackets||[]).forEach(b=>{ b.visible = !on || Math.abs(angD(b.userData.a, local))>1.0; }); };   // the deck's struts would hide you near the top
   // where you are on the stair for f in 0..1, in local terms
   const helix = f => { const a=LT.a0+f*LT.turns*TAU; return { a, h:LT.base+f*(LT.G-LT.base) }; };
   const CLIMB_T = 10, IN_T = 1.1, OUT_T = 1.1, PAN_T = 9;

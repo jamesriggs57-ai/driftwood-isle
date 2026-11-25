@@ -176,7 +176,6 @@ renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.15;
 renderer.shadowMap.enabled = true; renderer.shadowMap.type = isMobile ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;   // v1.30: cheaper shadow edges on phones
-renderer.shadowMap.autoUpdate = false;   // v1.30: shadows are redrawn every other frame (see frame())
 const scene = new THREE.Scene();
 scene.fog = new THREE.Fog(0xbfe6f0, 42, 150);
 const camera = new THREE.PerspectiveCamera(38, 1, 0.3, 900);
@@ -5744,9 +5743,9 @@ const TOOL_LABEL = { axe:'Chop', shovel:'Dig', rod:'Cast', net:'Catch', can:'Wat
 /* ---------- Main loop ---------- */
 const clock=new THREE.Clock(); let t=0, secT=0, saveT=0, started=false;
 /* v1.30 performance: the game draws at most 30 frames a second on every device, and about 5 a second while a menu
-   or the character maker covers the island. Shadows are redrawn every other frame (15 a second), or every frame
-   while building, placing, moving things or looking into a tank. */
-const FRAME_MS=1000/30, MENU_MS=200; let lastDraw=-1e9, shadowTick=0;
+   or the character maker covers the island. (v1.31: shadows are redrawn every drawn frame again; every other frame
+   made moving characters' shadows trail behind them.) */
+const FRAME_MS=1000/30, MENU_MS=200; let lastDraw=-1e9;
 const menuCovering = () => (scrim.classList.contains('show') || !!document.getElementById('crCv')) && !buildMode && !tankView && !placing && !layoutMode && !magicMode;
 function frame(now){
   requestAnimationFrame(frame);
@@ -5764,7 +5763,6 @@ function frame(now){
     const lnOn=activeEvents().some(e=>e.id==='lantern-night');
     for(const l of lanterns){ l.visible=lnOn; if(lnOn){ const u=l.userData; u.y+=dt*u.s; if(u.y>18){ u.y=0; u.a=Math.random()*TAU; } l.position.set(Math.cos(u.a+t*0.01)*u.d, 1+u.y, Math.sin(u.a+t*0.01)*u.d); l.children[1].material.opacity=Math.min(1,u.y/2)*(1-u.y/18)*0.9; } } }
   updatePrecip(dt,t); updateParticles(dt); updateFX(dt); updateCamera(dt);
-  if (++shadowTick%2===0 || buildMode || placing || layoutMode || magicMode || tankView) renderer.shadowMap.needsUpdate=true;
   if (tankView){ tankView.update(t, dt, innerWidth/innerHeight); renderer.render(tankView.scene, tankView.cam); } else renderer.render(scene,camera);
 }
 // v1.30 battery saver: 1x resolution, no shadows, half the grass and clover

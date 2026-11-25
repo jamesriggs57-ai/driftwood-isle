@@ -285,7 +285,7 @@ Each island has 3 flower species (picked from the island's seed) that grow wild 
 ## v1.30: runs cooler
 
 - The game draws at most 30 frames a second on every device (the character maker too), and about 5 a second while a menu or the character maker covers the island.
-- Shadows are redrawn every other frame (15 a second) instead of every frame, and every frame only while building, placing or moving things, reshaping land or looking into a tank. Phones use cheaper shadow edges.
+- Phones use cheaper shadow edges. (v1.31: shadows went back to being redrawn every frame; redrawing them every other frame made moving characters' shadows trail.)
 - Resolution is capped at 1.5x the screen's pixel size (was 2x on computers, 1.75x on phones).
 - Menu > Battery saver: 1x resolution, no shadows, half the grass and clover. Saved per island.
 Code: `frame()`, `menuCovering`, `applySaver` and `pixelRatio` in `main.js`.

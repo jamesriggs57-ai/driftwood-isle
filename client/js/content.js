@@ -62,6 +62,7 @@ def('bread',     {name:'Country Loaf',   kind:'food', price:260, buy:520, stack:
 def('bathsalts', {name:'Herb Bath Salts', kind:'material', price:300, stack:20, story:true, model:{t:'bathsalts'}, desc:'Sprig\'s mix of sea salt, dried flowers and garden herbs, for Tobin\'s bathhouse.'});
 def('crowbar',   {name:'Crowbar',        kind:'material', price:0, stack:1, noSell:true, noGift:true, story:true, model:{t:'crowbar'}, desc:'A heavy iron bar from Pemberton\'s forge, for prying open a wreck\'s hold.'});
 def('wrecklens', {name:'Lantern Lens',   kind:'material', price:0, stack:1, noSell:true, noGift:true, story:true, model:{t:'wrecklens'}, desc:'A thick glass lens from Marlo that throws a lantern\'s light a long way through dark water.'});
+def('bellframe', {name:'Diving Bell Frame', kind:'material', price:0, stack:1, noSell:true, noGift:true, story:true, model:{t:'bellframe'}, desc:'A stout timber frame from the workshop, to hang Hazel\'s diving bell from.'});
 def('chartpiece',{name:'Treasure Chart Piece', kind:'relic', price:0, stack:4, noSell:true, noGift:true, story:true, model:{t:'chartpiece'}, desc:'A torn corner of an old sea chart, inked with a compass rose. Hazel says there are four.'});
 export const CORAL_KINDS = ['brain','staghorn','fan','table'];
 export const CORAL_NAMES = { brain:'Brain', staghorn:'Staghorn', fan:'Sea Fan', table:'Table' };
@@ -304,7 +305,7 @@ furn('longtable','Long Table',8000,1.5,{shop:'story',stack:1});
 furn('reeftank','Reef Tank',22000,0.75,{shop:'story',glow:true,stack:1});
 // v1.39 story furniture: Lumi's glow jar, salvage from Hazel's wreck, and keepsakes the trade-route towns send by post
 furn('glowjar','Glow Jar',3200,0.3,{shop:'story',glow:true});
-furn('shipwheel','Ship\'s Wheel',9000,0.6,{shop:'story',stack:1,salvage:'deck'});
+furn('helmwheel','Captain\'s Helm',9000,0.6,{shop:'story',stack:1,salvage:'deck'});
 furn('figurehead','Mermaid Figurehead',16000,0.6,{shop:'story',stack:1,salvage:'deck'});
 furn('seachest','Sea Chest',7000,0.6,{shop:'story',stack:1,salvage:'hold'});
 furn('shiplantern','Ship\'s Lantern',5000,0.35,{shop:'story',glow:true,salvage:'hold'});

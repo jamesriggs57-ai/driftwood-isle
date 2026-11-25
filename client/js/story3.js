@@ -34,6 +34,7 @@ ITEM_BUILDERS.bathsalts = (g) => { mk(G.cyl(0.14,0.14,0.28,14), glass(0xeef8f8,0
 ITEM_BUILDERS.crowbar = (g) => { const ir=IRON(); const bar=mk(G.cyl(0.025,0.025,0.8,8), ir, 0,0.05,0,g); bar.rotation.z=Math.PI/2; const hook=mk(G.tor(0.08,0.025,6,10,Math.PI), ir, 0.4,0.12,0,g); hook.rotation.z=-Math.PI/2;
   mk(G.box(0.08,0.02,0.06), ir, -0.43,0.05,0,g); };
 ITEM_BUILDERS.wrecklens = (g) => { const r=mk(G.tor(0.18,0.03,8,24), BRASS(), 0,0.22,0,g); mk(G.cyl(0.17,0.17,0.05,24), glass(0xd8f0ff,0.55), 0,0.22,0,g).rotation.x=Math.PI/2; r.rotation.y=0; mk(G.box(0.08,0.1,0.04), BRASS(), 0,0.04,0,g); addGlow(g, 0.22, 0.6, 0xd8f0ff); };
+ITEM_BUILDERS.bellframe = (g) => { const w=OAK(); for (const s of [-1,1]){ const a=mk(G.box(0.06,0.7,0.06), w, s*0.18,0.33,0,g); a.rotation.z=-s*0.25; } mk(G.box(0.5,0.06,0.06), w, 0,0.66,0,g); mk(G.box(0.5,0.05,0.3), w, 0,0.03,0,g); mk(G.tor(0.04,0.01,4,8), IRON(), 0,0.6,0,g); };
 ITEM_BUILDERS.chartpiece = (g) => { const sh=new THREE.Shape(); sh.moveTo(-0.25,-0.2); sh.lineTo(0.28,-0.22); sh.lineTo(0.2,0.12); sh.lineTo(0.05,0.24); sh.lineTo(-0.27,0.18); sh.lineTo(-0.25,-0.2);
   const p=mk(new THREE.ShapeGeometry(sh), M(0xe8d8a8,{ side:THREE.DoubleSide, roughness:1 }), 0,0.02,0,g); p.rotation.x=-Math.PI/2;
   const ink=M(0x6a4a2a); for (let i=0;i<4;i++){ const l=mk(G.box(0.012,0.003,0.3), ink, 0,0.026,0,g); l.rotation.y=i*Math.PI/4; } mk(G.tor(0.08,0.008,4,16), ink, 0,0.027,0,g).rotation.x=Math.PI/2;
@@ -43,7 +44,7 @@ ITEM_BUILDERS.chartpiece = (g) => { const sh=new THREE.Shape(); sh.moveTo(-0.25,
 Object.assign(FURN_BUILDERS, {
   glowjar(g){ mk(G.cyl(0.18,0.2,0.42,16), glass(0xeefaf0,0.28), 0,0.23,0,g); mk(G.cyl(0.13,0.15,0.06,12), M(0xa8784a), 0,0.47,0,g); const h=mk(G.tor(0.09,0.012,5,12,Math.PI), IRON(), 0,0.5,0,g);
     const lit=glowMat(0xd8ff6a); for (let i=0;i<7;i++) mk(G.sph(0.022,6,5), lit, Math.cos(i*2.4)*0.09, 0.1+i*0.045, Math.sin(i*2.4)*0.09, g); mk(G.box(0.2,0.012,0.08), M(0x5f8a3c), 0,0.03,0,g); addGlow(g, 0.25, 1.0, 0xd8ff6a); },
-  shipwheel(g){ const w=OAK(), br=BRASS(); mk(G.box(0.3,0.8,0.24), w, 0,0.4,0,g); const hub=new THREE.Group(); hub.position.set(0,1.0,0.16); g.add(hub);
+  helmwheel(g){ const w=OAK(), br=BRASS(); mk(G.box(0.3,0.8,0.24), w, 0,0.4,0,g); const hub=new THREE.Group(); hub.position.set(0,1.0,0.16); g.add(hub);
     mk(G.tor(0.42,0.04,8,24), w, 0,0,0,hub); mk(G.cyl(0.08,0.08,0.1,12), br, 0,0,0,hub).rotation.x=Math.PI/2;
     for (let i=0;i<8;i++){ const a=i/8*TAU, s=mk(G.cyl(0.022,0.022,0.84,6), w, 0,0,0,hub); s.rotation.z=a; const hd=mk(G.cyl(0.03,0.02,0.18,6), w, Math.sin(a)*0.52, Math.cos(a)*0.52, 0, hub); hd.rotation.z=-a; } },
   figurehead(g){ const w=M(0xc8a070,{ roughness:0.8 }), paint=M(0x5a8ab8); mk(G.box(0.5,0.1,0.5), OAK(), 0,0.05,0,g); const fg=new THREE.Group(); fg.position.y=0.1; fg.rotation.x=-0.25; g.add(fg);

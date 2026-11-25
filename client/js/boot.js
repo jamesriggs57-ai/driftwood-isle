@@ -10,7 +10,7 @@ import { LAYOUTS, GUEST_LAYOUTS, TERRAINS, TOWNS, generateLayout, drawIslandPrev
 
 const SAVE_KEY = 'driftwood-isle-save-v1';
 const PLAYER_KEYS = ['player','clams','inv','seen','rec','friend','pack','tools','toolEver','toolOffer','equip','stats','craft','craftHint','caught','settings','quests','potions','bike','cook','fed','rare','wardrobe','ach','look','contacts','letters'];
-const WORLD_KEYS = ['island','seed','placed','ground','plants','cut','home','shops','museum','nativeFruit','layout','house','fund','gen','terra','magic','fruitPicked','refLamps','stumps','town','mentor','gardens'];
+const WORLD_KEYS = ['island','seed','placed','ground','plants','cut','home','shops','museum','nativeFruit','layout','house','fund','gen','terra','magic','fruitPicked','refLamps','stumps','town','mentor','gardens','story','reef','pinesCut'];
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' })[c]);
 

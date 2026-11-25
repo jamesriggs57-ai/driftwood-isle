@@ -226,7 +226,8 @@ const FISH_FORM = {
   snapper:{ H:0.18, spiny:true }, cod:{ H:0.15, barbel:true, dorsals:3 }, lanternfish:{ H:0.14 }, barrel:{ H:0.19 }, dace:{ H:0.13 }, carp:{ H:0.18, barbel:true }, smelt:{ H:0.11, adipose:true },
   trout:{ H:0.15, adipose:true }, darter:{ H:0.12, spiny:true, dorsals:2 }, salmon:{ H:0.16, adipose:true, hook:true }, pike:{ H:0.12, duck:true, rearDorsal:true }, char:{ H:0.15, adipose:true },
   bluegill:{ H:0.21, flat:0.38, spiny:true, ear:true }, killifish:{ H:0.12 }, goldfish:{ H:0.19, tail:'flowy' }, mooncarp:{ H:0.18, barbel:true }, koi:{ H:0.17, barbel:true, tail:'flowy' },
-  shark:{ H:0.14, tail:'shark' }, sunfish:{ H:0.3, flat:0.35 }, flounder:{ H:0.2, flat:0.22 }, puffer:{ H:0.24, flat:0.9 }, eel:{ H:0.1 }, loach:{ H:0.1, barbel:true }, catfish:{ H:0.11, whisk:true },
+  wrasse:{ H:0.15 }, goby:{ H:0.13 }, blenny:{ H:0.13, dorsals:2 }, bannerfin:{ H:0.32, flat:0.3, tail:'flowy' }, parrotfish:{ H:0.2, flat:0.42 }, grouper:{ H:0.2, spiny:true },
+    shark:{ H:0.14, tail:'shark' }, sunfish:{ H:0.3, flat:0.35 }, flounder:{ H:0.2, flat:0.22 }, puffer:{ H:0.24, flat:0.9 }, eel:{ H:0.1 }, loach:{ H:0.1, barbel:true }, catfish:{ H:0.11, whisk:true },
 };
 // body radius along the fish (t: 0 snout .. 1 tail root): blunt rounded head, deep shoulders, narrow tail root
 function profR(t, H, form){ const sh=form.duck?0.08:0.2;

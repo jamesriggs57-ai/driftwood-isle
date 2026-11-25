@@ -13,7 +13,7 @@ const DAY = 86400e3;
 const SESSION_DAYS = 30;
 const GUEST = { clams: 10000, minRarity: 3 };
 // Parts of a save that belong to the island (shared with residents) vs to the player
-export const WORLD_KEYS = ['island', 'seed', 'placed', 'ground', 'plants', 'cut', 'home', 'shops', 'museum', 'nativeFruit', 'layout', 'house', 'fund', 'gen', 'terra', 'magic', 'fruitPicked', 'refLamps', 'stumps', 'town', 'mentor', 'gardens'];
+export const WORLD_KEYS = ['island', 'seed', 'placed', 'ground', 'plants', 'cut', 'home', 'shops', 'museum', 'nativeFruit', 'layout', 'house', 'fund', 'gen', 'terra', 'magic', 'fruitPicked', 'refLamps', 'stumps', 'town', 'mentor', 'gardens', 'story', 'reef', 'pinesCut'];
 
 /* ---------- helpers ---------- */
 const json = (data, status = 200, headers = {}) => new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store', ...headers } });

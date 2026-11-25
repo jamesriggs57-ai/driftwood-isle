@@ -47,6 +47,10 @@ const FISH_LOOK = {
   salmon:{ pat:'salmon' }, pike:{ pat:'bean', mark:0xe8e8a0 }, char:{ pat:'speck', mark:0xfff6d0, n:60, iri:0.5 }, tadpole:{ pat:'speck', mark:0x6a6a4a, n:40 },
   bluegill:{ pat:'bars', mark:0x3a5a7a, gill:0x1a2a6a }, crayfish:{ pat:'segments', mark:0x8a2a1a }, killifish:{ pat:'line', iri:0.5, fin:0x4a8ad8 }, goldfish:{ pat:'gold', flowy:true },
   turtle:{ pat:'hex', mark:0x3a4a2a }, mooncarp:{ pat:'scales', iri:1, pearl:true }, koi:{ pat:'koi' },
+  // v1.37 Cay Bay reef fish
+  wrasse:{ pat:'rainbow', iri:0.7 }, goby:{ pat:'spots', mark:0x2a9ae0, n:26 }, blenny:{ pat:'bands', bands:[0.3,0.6], band:0xf2c040, edge:0x2a1a5a },
+  bannerfin:{ pat:'bands', bands:[0.18,0.55], band:0x1a1a1a, edge:0x1a1a1a, fin:0xf6dc50 }, velvetray:{ pat:'spots', mark:0xf4f4ff, n:70 },
+  parrotfish:{ pat:'scales', big:true, iri:0.8 }, grouper:{ pat:'spots', mark:0x2a8ae0, n:80 }, goldseahorse:{ pat:'rings', mark:0xc88010 },
 };
 export const fishLook = id => FISH_LOOK[id] || { pat:'scales' };
 export function fishSkin(id, d){ return once('fish:'+id, ()=>{

@@ -38,6 +38,14 @@ for (const [th,[nm,c]] of Object.entries(TICKET_THEMES)) def('ticket_'+th, { nam
 def('iron',     {name:'Iron Nugget',    kind:'material', price:375, model:{t:'iron'}});
 def('weed',     {name:'Clump of Weeds', kind:'material', price:10,  model:{t:'weed'}});
 def('stump',    {name:'Tree Stump',     kind:'material', price:180, stack:10, model:{t:'stump'}});   // dug up with a shovel; woodworkers turn it into stump furniture
+// v1.37 island stories: planks from Bramble's workshop, coral for the reef in Cay Bay (models in reef.js)
+def('plank',    {name:'Plank',          kind:'material', price:300, model:{t:'plank'}, desc:'Sawn pine from Bramble\'s workshop. Boats, bridges and big builds need them.'});
+def('fitting',  {name:'Iron Fitting',   kind:'material', price:900, model:{t:'fitting'}, desc:'Forged iron hinges and brackets. Big boats need them. Nobody on the island can make them yet.'});
+export const CORAL_KINDS = ['brain','staghorn','fan','table'];
+export const CORAL_NAMES = { brain:'Brain', staghorn:'Staghorn', fan:'Sea Fan', table:'Table' };
+for (const k of CORAL_KINDS){
+  def('frag_'+k,    { name:`${CORAL_NAMES[k]} Coral Fragment`, kind:'coral', price:40, model:{t:'coralfrag', k}, desc:'A broken piece of coral, washed up on the beach. Sprig might be able to grow it.' });
+  def('starter_'+k, { name:`${CORAL_NAMES[k]} Coral Starter`,  kind:'coral', price:150, stack:20, model:{t:'coralstarter', k}, desc:'A young coral on a little clay plug, ready to go back to the reef. Row out to the cays and drop it on the old rubble.' }); }
 
 /* ---------- Beach finds ---------- */
 def('scallop',   {name:'Scallop',      kind:'shell', price:60,  rarity:5,   model:{t:'shell', s:'scallop', c:0xf5b9a0}});
@@ -86,6 +94,17 @@ fish('barrel','Old Barrelfish',1500,'sea','XL',ALL,[16,8],1,[80,160],0.013,{c:0x
 fish('ray','Dawn Ray',2500,'sea','XL',range(4,11),[4,9],0.6,[80,200],0.006,{c:0x7a8fb0,c2:0xf0d8c8,l:1.4,s:'ray'});
 fish('sunfish','Ocean Sunfish',4000,'sea','XL',[7,8,9],[9,16],0.4,[100,250],0.03,{c:0x9aa8b4,c2:0xdfe6ec,l:1.4,s:'sun'});
 fish('shark','Tide Shark',8000,'sea','XL',[6,7,8,9],[16,4],0.25,[150,350],0.006,{c:0x6a7a8a,c2:0xe8eef2,l:1.8,s:'shark'});
+// v1.37 Cay Bay: reef fish that only live in the bay once its reef grows back. Each coral kind brings two species.
+// Worth about double a sea fish of the same rarity, as a reward for the long job of restoring the reef.
+fish('wrasse','Sunset Wrasse',650,'bay','S',ALL,null,5.5,[10,25],0.012,{c:0xf0703f,c2:0xffd25a,l:0.8});
+fish('goby','Lantern Goby',550,'bay','S',ALL,null,6,[4,9],0.014,{c:0xf2dc5a,c2:0xfff4d0,l:0.55});
+fish('blenny','Fan Blenny',600,'bay','S',ALL,null,5,[6,12],0.012,{c:0x6a4ad0,c2:0xf2c040,l:0.6});
+fish('bannerfin','Bannerfin',1800,'bay','M',ALL,[6,20],3.5,[15,25],0.02,{c:0xf6f2e2,c2:0xf6dc50,l:0.9});
+fish('velvetray','Velvet Ray',2000,'bay','L',ALL,null,3,[50,110],0.006,{c:0x34385a,c2:0xf0f0f8,l:1.3,s:'ray'});
+fish('parrotfish','Reef Parrotfish',2200,'bay','M',ALL,[5,19],3,[30,60],0.016,{c:0x2fbca0,c2:0xf47ab8,l:1.0});
+fish('grouper','Coral Grouper',6000,'bay','L',ALL,null,1.6,[50,100],0.018,{c:0xd8463a,c2:0xf2a070,l:1.3});
+fish('goldseahorse','Gilded Seahorse',30000,'bay','S',ALL,null,0.9,[8,18],0.004,{c:0xf8c830,c2:0xfff0a0,l:0.6,s:'horse'});
+export const CORAL_FISH = { brain:['wrasse','grouper'], staghorn:['goby','bannerfin'], fan:['blenny','velvetray'], table:['parrotfish','goldseahorse'] };
 // River
 fish('dace','River Dace',140,'river','S',ALL,null,6,[8,18],0.011,{c:0xa8b4a0,c2:0xeef0e0,l:0.7});
 fish('loach','Pebble Loach',200,'river','S',ALL,null,5,[8,16],0.007,{c:0x9a8a6a,c2:0xd8ccb0,l:0.8,s:'eel'});

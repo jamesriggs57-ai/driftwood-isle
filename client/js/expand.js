@@ -10,10 +10,14 @@ import * as THREE from 'three';
 import { TAU, clamp, lerp, smooth, mulberry32, hashStr, fbm, vnoise } from './util.js';
 import { M, mk, G, glowMat, addGlow } from './models.js';
 import { mergeStatic } from './cottage.js';
+import { buildGrandfatherStump } from './reef.js';
 
-export const ISLE_ORDER = ['meadow', 'dunes', 'bluff', 'crags'];
+// v1.37: Old Pinewood (Bramble's dream) rises third. Islands raised before v1.37 keep the order they rose in (S.terra.isleK).
+export const ISLE_ORDER = ['meadow', 'dunes', 'pines', 'bluff', 'crags'];
+export const OLD_ORDER = ['meadow', 'dunes', 'bluff', 'crags'];
 export const ISLE_INFO = {
   meadow:{ name:'Clover Meadow', bridge:'causeway', gap:26, blurb:'rolling grass, wildflowers and an orchard of fruit that doesn\'t grow on the main island', sand:false },
+  pines: { name:'Old Pinewood', bridge:'causeway', gap:26, blurb:'a misty ridge of tall old pines that grow back the day after you cut them, ferns and mossy boulders, and room for Bramble\'s workshop', sand:false },
   dunes: { name:'Sandpiper Dunes', bridge:'boardwalk', gap:30, blurb:'sand hills, palms and an old shipwreck; the beach there is good for shells', sand:true },
   bluff: { name:'Lantern Bluff', bridge:'trestle', gap:30, blurb:'a high plateau of pines on sheer cliffs, with a lighthouse and good rocks to mine', sand:false },
   crags: { name:'Hollow Crags', bridge:'rope', gap:20, blurb:'mossy stone spires and old ruins out past the bluff, across a rope bridge; rocks heavy with iron', sand:false },
@@ -28,6 +32,10 @@ export const ISLE_QUESTS = [
     ask:['The meadow took. Good. The sea is jealous now, and it\'s offering more.','There\'s a sandbank down there that used to be dunes. Shipwrecks too, I think. Lovely for beachcombing.',
       'Bring me 10 beach finds, 20 branches and 6 coconuts. It wants to know what a beach is supposed to feel like. And 120,000 clams.'],
     done:['Shells, branches, coconuts. Just so. Now, a little hum, a little wiggle...'] },
+  { kind:'pines', clams:180000, need:[['wood',60],['stone',20]], days:3,
+    ask:['{who}\'s workshop. Yes, I heard. Half the island has heard about it.','There is an old pine forest sunk off the east shore. The trees there were planted by people long gone, and their roots still remember.',
+      'Raised, they would grow back as fast as you cut them. Bring me 60 wood so the roots know what they are for, 20 stone for the footings, and 180,000 clams.'],
+    done:['Wood and stone, and the clams. The old forest is listening. Stand back, and mind the pine cones.'] },
   { kind:'bluff', clams:220000, need:[['stone',40],['iron',8],['clay',10]], days:3,
     ask:['This one is bigger. Taller. There\'s a bluff out north, all stone, sitting on the seabed sulking.','It would need a trestle bridge up to the top. And somewhere up there an old lighthouse is waiting to be lit again.',
       'Bring me 40 stone, 8 iron nuggets and 10 clay. And 220,000 clams. Bluffs are heavy.'],
@@ -37,6 +45,7 @@ export const ISLE_QUESTS = [
       'Bring me 15 iron nuggets, 30 stone and 2 fossils. The crags like old things. And 350,000 clams. This is the big one.'],
     done:['Iron, stone, fossils. The crags will be pleased. Well. Less grumpy.'] },
 ];
+export const isleQuestFor = kind => ISLE_QUESTS.find(q=>q.kind===kind);
 export const ISLE_STEP = 0.55, ISLE_OFF = 0.85;
 const quant = (v, riser=0.2) => { if (v<=ISLE_OFF) return v; const q=(v-ISLE_OFF)/ISLE_STEP, k=Math.floor(q), f=q-k; return ISLE_OFF+ISLE_STEP*(k+smooth(1-riser,1,f)); };
 export const PLATEAU = ISLE_OFF + ISLE_STEP*8;   // 5.25 m: the bluff and crag tops, level with each other so the rope bridge can hang between them
@@ -44,12 +53,13 @@ export const PLATEAU = ISLE_OFF + ISLE_STEP*8;   // 5.25 m: the bluff and crag t
 /* ---------- Where they go ----------
    o: { seed, SC, shore(a) -> main island shore radius at angle a, ok(a) -> can a bridge land on the main island there }
    Meadow, dunes and bluff each hang off the main island at their own angle; the crags hang off the bluff. */
-export function planIsles(n, o){
-  const out=[], R=50*o.SC, used=[], r=mulberry32((o.seed|0)+90210);
+export function planIsles(kinds, o){
+  if (typeof kinds==='number') kinds=OLD_ORDER.slice(0,kinds);
+  const out=[], R=50*o.SC, used=[], r=mulberry32((o.seed|0)+90210), n=kinds.length;
   const angDist=(a,b)=>Math.abs(Math.atan2(Math.sin(a-b),Math.cos(a-b)));
-  const prefer={ meadow:Math.PI, dunes:Math.PI*0.62, bluff:-Math.PI*0.42 };
-  for (let k=0;k<Math.min(n,4);k++){
-    const kind=ISLE_ORDER[k], info=ISLE_INFO[kind], I={ k, kind, name:info.name, sand:info.sand, ph:[r()*TAU, r()*TAU, r()*TAU] };
+  const prefer={ meadow:Math.PI, dunes:Math.PI*0.62, bluff:-Math.PI*0.42, pines:Math.PI*0.2 };
+  for (let k=0;k<Math.min(n,5);k++){
+    const kind=kinds[k], info=ISLE_INFO[kind], I={ k, kind, name:info.name, sand:info.sand, ph:[r()*TAU, r()*TAU, r()*TAU] };
     I.r = R*0.51*(kind==='bluff'||kind==='crags' ? 1.08 : 1);   // about a quarter of the main island's area (cliff isles a bit wider: their edges are cliff)
     I.br={ type:info.bridge, gap:info.gap*Math.min(1.25, 0.85+0.15*o.SC), w:info.bridge==='rope'?0.95:1.2 };
     if (kind!=='crags'){
@@ -60,11 +70,11 @@ export function planIsles(n, o){
       const a=best??prefer[kind]; used.push(a); I.a=a; I.dir=[Math.cos(a), Math.sin(a)]; I.from='main';
       const shore=o.shore(a); I.cx=I.dir[0]*(shore+I.br.gap+I.r*0.97); I.cz=I.dir[1]*(shore+I.br.gap+I.r*0.97);
     } else {
-      const B=out[2]; if (!B) break;
+      const B=out.find(J=>J.kind==='bluff'); if (!B) break;
       // out past the bluff, turned away from the main island so it never comes back toward it
       let a=Math.atan2(B.cz, B.cx) + 0.75; const tryAt=aa=>[B.cx+Math.cos(aa)*(B.r*0.97+I.br.gap+I.r*0.97), B.cz+Math.sin(aa)*(B.r*0.97+I.br.gap+I.r*0.97)];
       let [x,z]=tryAt(a); if (out.some(J=>J!==B && Math.hypot(x-J.cx,z-J.cz)<J.r+I.r+20)){ a=Math.atan2(B.cz,B.cx)-0.75; [x,z]=tryAt(a); }
-      I.a=a; I.dir=[Math.cos(a), Math.sin(a)]; I.from=2; I.cx=x; I.cz=z;
+      I.a=a; I.dir=[Math.cos(a), Math.sin(a)]; I.from=out.indexOf(B); I.cx=x; I.cz=z;
     }
     const ext=I.r*1.3+8; I.box=[I.cx-ext, I.cz-ext, I.cx+ext, I.cz+ext];
     // spires on the crags (sheer, you walk round them), a lighthouse knoll on the bluff, a windmill hill on the meadow
@@ -87,6 +97,11 @@ export function isleRaw(I, x, z){
   if (K==='meadow'){
     const base=-2.7+3.05*smooth(1.12,0.98,t)+0.95*smooth(0.95,0.86,t), m=smooth(0.92,0.62,t);
     const lift=m*(1.5*smooth(0.3,0.78,fbm(x*0.03+I.k*7,z*0.03-3)) + 1.1*smooth(0.55,0.0,Math.hypot(x-I.mark[0],z-I.mark[1])/I.r));
+    return t>1.05 ? base : quant(base+lift); }
+  if (K==='pines'){   // v1.37 a terraced ridge across the far side, low ground by the bridge
+    const base=-2.7+3.05*smooth(1.12,0.98,t)+0.95*smooth(0.95,0.86,t), m=smooth(0.93,0.6,t), dx=x-I.cx, dz=z-I.cz, along=(dx*I.dir[0]+dz*I.dir[1])/I.r;
+    const ridge=smooth(0.62,0.05,Math.abs(along-0.22+0.12*Math.sin((dx*-I.dir[1]+dz*I.dir[0])/I.r*3+I.ph[0])));
+    const lift=m*(2.6*ridge + 0.9*smooth(0.35,0.8,fbm(x*0.04+I.k*5,z*0.04+2)));
     return t>1.05 ? base : quant(base+lift); }
   if (K==='dunes'){
     const base=-2.7+3.05*smooth(1.16,0.97,t)+0.55*smooth(0.8,0.55,t), m=smooth(0.85,0.5,t);
@@ -164,6 +179,7 @@ export function buildIsleBridge(B, groundAt){
 export function buildLandmark(kind, seed){
   const g=new THREE.Group(), r=mulberry32(seed|0), stone=M(0xb8b0a0,{flatShading:true}), stone2=M(0x9a948a,{flatShading:true}), wood=M(0x8a5e3a), dark=M(0x5a3e28), white=M(0xf4efe6), red=M(0xc8503d), moss=M(0x5f8a3e);
   g.userData.spin=null; g.userData.desc='';
+  if (kind==='pines') return buildGrandfatherStump();
   if (kind==='meadow'){ // a stone windmill with cloth sails that turn in the wind
     mk(G.cyl(1.6,2.2,6.2,12), stone, 0,3.1,0,g); mk(G.cyl(1.7,1.7,0.2,12), stone2, 0,6.2,0,g);
     const cap=mk(G.cone(2.0,2.2,12), M(0x7a4a3a), 0,7.4,0,g); cap.castShadow=true;

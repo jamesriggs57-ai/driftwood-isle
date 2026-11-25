@@ -43,6 +43,8 @@ html,body{margin:0;height:100%;overflow:hidden;background:#9fd8e8;font-family:'F
 #swingBtn:active{transform:translateY(3px);box-shadow:0 1px 0 #b8642a}
 #hud.layout #swingBtn,.uihide #swingBtn,#hud.menuprev #swingBtn,#hud.building #swingBtn{visibility:hidden}
 #hud.magic #swingBtn{display:none}
+/* v1.37 out in Cay Bay: no building, bikes or tool switching from the boat */
+#hud.inbay #bBuild,#hud.inbay #toolBtn,#hud.inbay #bCraft,#hud.inbay .bikeBtn,#hud.inbay #bBike,#hud.inbay #bSled{display:none!important}
 #toolPop{position:fixed;display:none;flex-wrap:wrap;gap:6px;justify-content:center;background:var(--cream);border:3px solid var(--line);border-radius:22px;padding:8px;box-shadow:0 8px 24px rgba(0,0,0,.2);pointer-events:auto;z-index:12}
 #toolPop.show{display:flex}
 .tp{position:relative;width:74px;border:3px solid var(--line);background:#fff;border-radius:16px;padding:4px 2px 8px;font-family:inherit;font-size:11px;font-weight:600;color:var(--brown);display:flex;flex-direction:column;align-items:center;cursor:pointer;overflow:hidden}

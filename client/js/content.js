@@ -333,26 +333,26 @@ export const TOOLS = {
   net:    { name:'Net',          does:'Catch bugs', stat:'bugs', tiers:[
     { name:'Flimsy Net',   cost:400,   uses:30,  bonus:0 },
     { name:'Sturdy Net',   cost:2500,  uses:90,  bonus:0.12, req:{ tool:0, desc:'Own a Flimsy Net first' } },
-    { name:'Golden Net',   cost:40000, uses:300, bonus:0.25, req:{ tool:1, stat:40, desc:'Catch 40 bugs' } },
+    { name:'Golden Net',   cost:20000, uses:500, bonus:0.25, req:{ tool:1, stat:40, desc:'Catch 40 bugs' } },
     { name:'Heirloom Net', cost:120000, uses:0, forever:true, bonus:0.25, req:{ tool:2, stat:120, desc:'Own a Golden Net and catch 120 bugs' } } ] },
   rod:    { name:'Fishing Rod',  does:'Catch fish', stat:'fish', tiers:[
     { name:'Flimsy Rod',   cost:400,   uses:30,  bonus:0 },
     { name:'Sturdy Rod',   cost:2500,  uses:90,  bonus:0.12, req:{ tool:0, desc:'Own a Flimsy Rod first' } },
-    { name:'Golden Rod',   cost:40000, uses:300, bonus:0.25, req:{ tool:1, stat:40, desc:'Catch 40 fish' } },
+    { name:'Golden Rod',   cost:20000, uses:500, bonus:0.25, req:{ tool:1, stat:40, desc:'Catch 40 fish' } },
     { name:'Heirloom Rod', cost:120000, uses:0, forever:true, bonus:0.25, req:{ tool:2, stat:120, desc:'Own a Golden Rod and catch 120 fish' } } ] },
   shovel: { name:'Shovel',       does:'Dig fossils, plant saplings, dig up plants and stumps', stat:'dug', tiers:[
     { name:'Flimsy Shovel',cost:500,   uses:30,  bonus:0 },
     { name:'Sturdy Shovel',cost:2500,  uses:90,  bonus:0.15, req:{ tool:0, desc:'Own a Flimsy Shovel first' } },
-    { name:'Golden Shovel',cost:40000, uses:300, bonus:0.3, req:{ tool:1, stat:30, desc:'Dig up 30 things' } },
+    { name:'Golden Shovel',cost:20000, uses:500, bonus:0.3, req:{ tool:1, stat:30, desc:'Dig up 30 things' } },
     { name:'Heirloom Shovel',cost:120000, uses:0, forever:true, bonus:0.3, req:{ tool:2, stat:100, desc:'Own a Golden Shovel and dig up 100 things' } } ] },
   axe:    { name:'Axe',          does:'Chop wood. Sturdy and Golden axes can cut trees down', stat:'chopped', tiers:[
     { name:'Flimsy Axe',   cost:600,   uses:30,  bonus:0, nofell:true },
     { name:'Sturdy Axe',   cost:3000,  uses:90,  bonus:0, req:{ tool:0, desc:'Own a Flimsy Axe first' } },
-    { name:'Golden Axe',   cost:40000, uses:300, bonus:1, req:{ tool:1, stat:60, desc:'Chop 60 times' } },
+    { name:'Golden Axe',   cost:20000, uses:500, bonus:1, req:{ tool:1, stat:60, desc:'Chop 60 times' } },
     { name:'Heirloom Axe', cost:120000, uses:0, forever:true, bonus:1, req:{ tool:2, stat:180, desc:'Own a Golden Axe and chop 180 times' } } ] },
   can:    { name:'Watering Can', does:'Water plants so they grow faster', stat:'watered', tiers:[
     { name:'Watering Can', cost:500,   uses:40,  bonus:0 },
-    { name:'Golden Can',   cost:30000, uses:300, bonus:1, req:{ tool:0, stat:40, desc:'Water 40 times' } },
+    { name:'Golden Can',   cost:20000, uses:500, bonus:1, req:{ tool:0, stat:40, desc:'Water 40 times' } },
     { name:'Heirloom Can', cost:90000, uses:0, forever:true, bonus:1, req:{ tool:1, stat:120, desc:'Own a Golden Can and water 120 times' } } ] },
 };
 

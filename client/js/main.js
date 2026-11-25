@@ -3534,7 +3534,7 @@ const PITCH_PERK = {
   shovel:['Lasts three times as long.', 'Now and then it turns up a little pile of clams with whatever you dig. And it lasts ages.', 'Never breaks. Not ever.'],
   rod:  ['Lasts three times as long and gives you a little more time when something bites.', 'An even longer bite window, and it lasts ages.', 'Never breaks. Not ever.'],
   net:  ['Lasts three times as long and makes catching a bit easier.', 'Makes catching a whole lot easier, and it lasts ages.', 'Never breaks. Not ever.'],
-  can:  ['Lasts seven times as long as yours.', 'Never breaks. Not ever.'],
+  can:  ['Lasts more than twelve times as long as yours.', 'Never breaks. Not ever.'],
 };
 const PITCH_DID = { axe:'You\'ve been chopping up a storm', shovel:'You\'ve dug up half the island', rod:'You\'ve been pulling fish out left and right', net:'You\'ve been catching bugs left and right', can:'You\'ve been keeping every plant on the island watered' };
 function pitchTool(k, p, after){

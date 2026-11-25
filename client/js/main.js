@@ -5736,7 +5736,7 @@ function anglerWants(){ if (TX.angler) return TX.angler; const r=tripRand('angle
 // v1.39 fixes: the lighthouse is climbable (lighthouse.js); this wires it to the rest of the game
 function setupLighthouse(lh, P){
   const g=lh.g; OUT.add(LH.buildFarIsles(S.seed));
-  const ctx={ tower:g, cx:lh.x, cz:lh.z, rot:g.rotation.y, player, camera, scene, camTarget, groundY, Thing, Snd, toast, dialog, fade, save, stopMove, interact, nearestEnt, updateSky, updateCamera,
+  const ctx={ tower:g, cx:lh.x, cz:lh.z, rot:g.rotation.y, player, camera, scene, get camTarget(){ return camTarget; } /* declared further down, so read it late */, groundY, Thing, Snd, toast, dialog, fade, save, stopMove, interact, nearestEnt, updateSky, updateCamera,
     get TX(){ return TX; }, keeperSpec:P||null, folkKeeper:(x,z,face)=>folkKeeper(P, x, z, roleMenu(P), face), hud:$('#hud'),
     step:()=>Snd.click(), night:()=>World.night, dialogOpen:()=>!!dlgState, getCamYaw:()=>camYaw, setCamYaw:v=>{ camYaw=v; }, setPerch:p=>{ PERCH=p; },
     busy:()=>!!(dlgState || placing || buildMode || magicMode || cine || Fishing.state!=='idle' || knockedDown()),

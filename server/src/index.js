@@ -7,7 +7,7 @@
    - Items move between players only through the server (mail, direct gifts, trades). Clams never move.
    - Live visits: one Durable Object room per island relays positions and emotes and settles trades.
    ===================================================================== */
-import { ITEMS, BACKPACKS, BASE_SLOTS } from '../../client/js/content.js';
+import { ITEMS, BACKPACKS, BASE_SLOTS, LETTERS } from '../../client/js/content.js';
 
 const DAY = 86400e3;
 const SESSION_DAYS = 30;
@@ -304,13 +304,19 @@ async function api(req, env, url) {
     if (to === me.id || !(await areFriends(env, me.id, to))) return err(403, 'You can only send gifts to friends.');
     const s = await loadSave(env, me.id); if (!s) return err(400, 'No save.');
     if ((b.baseVersion | 0) !== s.version) return json({ error: 'conflict', version: s.version }, 409);
-    const item = takeAt(s.data, b.slot | 0, String(b.id || '')); if (!item) return err(400, 'That item is not in your bag anymore.');
+    // v1.27: a letter is one of the preset templates (never free text), optionally with an item tucked in
+    const letter = b.letter === undefined ? null : String(b.letter);
+    if (letter !== null && !LETTERS[letter]) return err(400, 'Unknown letter.');
+    let item = null;
+    if (b.id || letter === null) { item = takeAt(s.data, b.slot | 0, String(b.id || '')); if (!item) return err(400, 'That item is not in your bag anymore.'); }
+    const payload = letter !== null ? { ...(item || {}), letter, fromName: me.displayName, isle: cleanText(s.data.island || '', 40) } : item;
     const ok = await tx(env, [
       guardVersion(env, me.id, s.version),
-      casSaveStmt(env, me.id, s.data, s.version),
-      env.DB.prepare('INSERT INTO mail (to_id, from_id, item, direct, created) VALUES (?, ?, ?, ?, ?)').bind(to, me.id, JSON.stringify(item), b.direct ? 1 : 0, Date.now()),
+      ...(item ? [casSaveStmt(env, me.id, s.data, s.version)] : []),
+      env.DB.prepare('INSERT INTO mail (to_id, from_id, item, direct, created) VALUES (?, ?, ?, ?, ?)').bind(to, me.id, JSON.stringify(payload), b.direct ? 1 : 0, Date.now()),
     ]);
     if (!ok) return json({ error: 'conflict' }, 409);
+    if (!item) return json({ version: s.version });
     return json({ version: s.version + 1, inv: s.data.inv, equip: s.data.equip ?? null });
   }
   if (p === '/api/mail' && M === 'GET') {
@@ -322,8 +328,12 @@ async function api(req, env, url) {
     const row = await env.DB.prepare('SELECT * FROM mail WHERE id = ? AND to_id = ? AND claimed = 0').bind(+m[1], me.id).first();
     if (!row) return err(404, 'Already opened.');
     const s = await loadSave(env, me.id); if (!s) return err(400, 'No save.');
-    if ((b.baseVersion | 0) !== s.version) return json({ error: 'conflict', version: s.version }, 409);
     const item = JSON.parse(row.item);
+    if (!item.id) {   // v1.27: a letter with nothing tucked in: just open it (the bag doesn't change, so no version check)
+      await env.DB.prepare('UPDATE mail SET claimed = 1 WHERE id = ?').bind(row.id).run();
+      return json({ version: s.version, item });
+    }
+    if ((b.baseVersion | 0) !== s.version) return json({ error: 'conflict', version: s.version }, 409);
     if (!addItem(s.data, item.id, item.m)) return err(409, 'full');
     const ok = await tx(env, [guardVersion(env, me.id, s.version), guardUnclaimed(env, row.id), casSaveStmt(env, me.id, s.data, s.version), env.DB.prepare('UPDATE mail SET claimed = 1 WHERE id = ?').bind(row.id)]);
     if (!ok) return json({ error: 'conflict' }, 409);

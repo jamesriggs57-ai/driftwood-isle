@@ -5,7 +5,7 @@
 import { api, signUpScreen } from './boot.js';
 
 const SAVE_KEY = 'driftwood-isle-save-v1';
-const PLAYER_KEYS = ['player','clams','inv','seen','rec','friend','pack','tools','toolEver','toolOffer','equip','stats','craft','craftHint','caught','settings','quests','potions','bike','cook','fed','rare','wardrobe','ach','look'];
+const PLAYER_KEYS = ['player','clams','inv','seen','rec','friend','pack','tools','toolEver','toolOffer','equip','stats','craft','craftHint','caught','settings','quests','potions','bike','cook','fed','rare','wardrobe','ach','look','contacts','letters'];
 const WORLD_KEYS = ['island','seed','placed','ground','plants','cut','home','shops','museum','nativeFruit','layout','house','fund','gen','terra','magic','fruitPicked','refLamps','stumps','town','mentor','gardens'];
 const EMOTES = [['wave','Hi!'],['happy','Yay!'],['laugh','Haha!'],['heart','Love it!'],['surprised','Whoa!'],['sad','Aww...'],['thinking','Hmm...'],['sleepy','Zzz'],['thanks','Thanks!'],['bye','Bye!']];
 const $ = s => document.querySelector(s);
@@ -213,8 +213,8 @@ async function renderPanel() {
     body.innerHTML = '<div class="muted">Loading...</div>';
     const r = await api('/api/mail'); if (panelTab !== 'mail') return;
     const list = r.mail || [];
-    body.innerHTML = `<div class="muted" style="margin-bottom:8px">Gifts from friends land here. Only items can be sent, never clams.</div>` + (list.length ? list.map(m => `<div class="row"><span class="it"><img src="${G().itemThumb(m.item.id)}"><span><b>${esc(G().ITEMS[m.item.id]?.name || m.item.id)}</b><br><span class="muted">from ${esc(m.from)}</span></span></span><button class="btn sm" data-claim="${m.id}">Take</button></div>`).join('') : '<div class="muted">Your mailbox is empty.</div>');
-    body.querySelectorAll('[data-claim]').forEach(b => b.onclick = async () => { b.disabled = true; const ok = await claim(+b.dataset.claim); if (ok) renderPanel(); else b.disabled = false; });
+    body.innerHTML = `<div class="muted" style="margin-bottom:8px">Gifts and letters from friends land here. Only items can be sent, never clams.</div>` + (list.length ? list.map(m => m.item.letter && !m.item.id ? `<div class="row"><span><b>A letter</b><br><span class="muted">from ${esc(m.from)}</span></span><button class="btn sm" data-claim="${m.id}">Read</button></div>` : `<div class="row"><span class="it"><img src="${G().itemThumb(m.item.id)}"><span><b>${esc(G().ITEMS[m.item.id]?.name || m.item.id)}</b>${m.item.letter ? ' <span class="muted">and a letter</span>' : ''}<br><span class="muted">from ${esc(m.from)}</span></span></span><button class="btn sm" data-claim="${m.id}">Take</button></div>`).join('') : '<div class="muted">Your mailbox is empty.</div>');
+    body.querySelectorAll('[data-claim]').forEach(b => b.onclick = async () => { b.disabled = true; const ok = await claim(+b.dataset.claim); if (ok === true) renderPanel(); else if (!ok) b.disabled = false; });
   }
   if (panelTab === 'here') renderHere();
 }
@@ -268,8 +268,16 @@ async function claim(id) {
   await flush();
   const r = await api(`/api/mail/${id}/claim`, { method: 'POST', body: { baseVersion: ownVer } });
   if (!r.ok) { G().net.toast(r.error === 'full' ? 'Your bag is full. Make room first.' : r.error === 'conflict' ? 'Your bag changed. Try again.' : (r.error || 'Could not open it.')); return false; }
-  applyServerBag(r); G().net.toast(`You got ${G().ITEMS[r.item.id]?.name || 'a gift'}!`); return true;
+  if (r.inv) applyServerBag(r); else if (r.version) ownVer = r.version;
+  if (r.item && r.item.id) G().net.toast(`You got ${G().ITEMS[r.item.id]?.name || 'a gift'}!`);
+  if (r.item && r.item.letter){ showLetter(r.item, r.from || 'a friend'); return 'letter'; }
+  return true;
 }
+// v1.27: a friend's template letter, shown in the mail tab
+function showLetter(item, from) { const L = G().LETTERS && G().LETTERS[item.letter]; if (!L) return; const S = G().S;
+  const lines = L.text.map(l => l.replace(/\{to\}/g, S.player || 'friend').replace(/\{p\}/g, item.fromName || from).replace(/\{isle\}/g, item.isle || 'their island'));
+  const body = $('#netBody'); body.innerHTML = `<div class="letter">${lines.map(l => `<p>${esc(l)}</p>`).join('')}</div>${item.id ? `<div class="muted">A ${esc(G().ITEMS[item.id]?.name || 'gift')} was tucked inside. It's in your bag.</div>` : ''}<button class="btn alt" id="lOk" style="margin-top:8px">Back to mail</button>`;
+  $('#lOk').onclick = () => renderPanel(); }
 // Someone handed us something in person: take it right away if there's room
 async function openMail(directOnly, fromName) {
   const r = await api('/api/mail'); const list = (r.mail || []).filter(m => !directOnly || m.direct);
@@ -298,7 +306,11 @@ export function afterGame() {
     list: () => api('/api/friends'),
     visit: async id => { await flush(); sessionStorage.setItem('dw-visit', id); location.reload(); },
     home: async () => { await flush(); location.href = location.pathname; },
-    invite: () => openPanel('friends'), friends: () => openPanel('friends'), account: () => openPanel('island') };
+    invite: () => openPanel('friends'), friends: () => openPanel('friends'), account: () => openPanel('island'),
+    // v1.27: a template letter (and maybe a gift from the bag) to a friend's mailbox
+    letter: async (to, letter, slot) => { await flush(); const S = G().S, it = slot !== null && slot !== undefined ? S.inv[slot] : null;
+      const r = await api('/api/mail', { method: 'POST', body: { to, letter, ...(it ? { slot, id: it.id } : {}), baseVersion: ownVer } });
+      if (r.ok) applyServerBag(r); return r; } };
   if (online()) {
     api('/api/me').then(r => { if (r.ok) { myId = r.user.id; B.myId = myId; } });
     connect(); posTimer = setInterval(tickPos, 200);

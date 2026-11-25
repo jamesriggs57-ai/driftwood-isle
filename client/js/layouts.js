@@ -6,6 +6,7 @@
    The three preset layouts share one river, pond and dock. Generated islands ('gen') make their own.
    ===================================================================== */
 import { TAU, clamp, lerp, mulberry32, polyDist } from './util.js';
+import { tripPlan, TOWN_KINDS } from './voyage.js';
 
 export const LAYOUTS = {
   classic: {
@@ -207,6 +208,7 @@ export function drawIslandPreview(cv, L){
    ===================================================================== */
 export const TRIP_THEMES = {
   plain:     { name:'A quiet island',  terrain:'hilly', blurb:'An island a lot like yours.' },
+  town:      { name:'A little town',   terrain:'hilly', blurb:'A small town with people to meet.' },
   orchard:   { name:'Orchard Isle',    terrain:'flat',  blurb:'Fruit trees of every kind.', fruit:4 },
   bloom:     { name:'Bloom Isle',      terrain:'flat',  blurb:'Wild flowers and crops that don\'t grow on your island.', flowers:3 },
   frost:     { name:'Frost Isle',      terrain:'hilly', blurb:'Snowy all year, with winter critters out any month.' },
@@ -215,39 +217,126 @@ export const TRIP_THEMES = {
   fossil:    { name:'Fossil Bluffs',   terrain:'mountainous', blurb:'Dig spots everywhere you look.' },
   shipwreck: { name:'Shipwreck Cove',  terrain:'hilly', blurb:'An old wreck on the beach, and bottles washing up.' },
   castaway:  { name:'Castaway Isle',   terrain:'flat',  blurb:'Someone is camping here. Maybe they\'d like a real home.' },
+  // v1.27 rare and legendary islands (flat fee luck only, never on a ticket)
+  clamstone: { name:'Clamstone Isle',  terrain:'mountainous', blurb:'Every rock here spits out clams.' },
+  grove:     { name:'Golden Grove',    terrain:'flat',  blurb:'Golden sap and heartwood in every tree.', fruit:0.5 },
+  wizgarden: { name:'The Wizard\'s Garden', terrain:'hilly', blurb:'Wendell\'s old teacher lives here.', flowers:3 },
+  library:   { name:'The Plan Library', terrain:'hilly', blurb:'Shelves of rare woodworking plans.' },
+  workshop:  { name:'The Wishing Workshop', terrain:'flat', blurb:'An old craftsman who can make anything at all.' },
+  starfall:  { name:'Starfall Isle',   terrain:'flat',  blurb:'Always night. Falling stars land as starstones.' },
+  attic:     { name:'The Collector\'s Attic', terrain:'hilly', blurb:'A curator with a spare of everything.' },
+  shimmer:   { name:'Shimmer Lagoon',  terrain:'flat',  blurb:'Only very rare and legendary fish swim here.', lagoon:true },
 };
 const FAR = 4000;
 export function generateTrip(gen){
-  for (let attempt=0; attempt<20; attempt++){ const L=tryTrip((gen.seed|0)+attempt*7919, gen.theme); if (L) return L; }
-  return tryTrip(gen.seed|0, gen.theme, true);
+  for (let attempt=0; attempt<20; attempt++){ const L=tryTrip((gen.seed|0)+attempt*7919, gen.theme, false, gen.seed|0); if (L) return L; }
+  return tryTrip(gen.seed|0, gen.theme, true, gen.seed|0);
 }
-function tryTrip(seed, theme, force){
-  const T = TRIP_THEMES[theme] || TRIP_THEMES.plain, terrain = T.terrain, r = mulberry32(seed ^ 0x7a1b);
+// A wobbly line across the island (for channels): from (x0,z0) to (x1,z1) with a gentle sideways wiggle
+function wiggleLine(r, x0,z0, x1,z1, n, amp){ const pts=[], dx=x1-x0, dz=z1-z0, L=Math.hypot(dx,dz), nx=-dz/L, nz=dx/L, ph=r()*6.28;
+  for (let i=0;i<=n;i++){ const f=i/n, w=Math.sin(f*Math.PI)*Math.sin(f*7+ph)*amp; pts.push([+(x0+dx*f+nx*w).toFixed(1), +(z0+dz*f+nz*w).toFixed(1)]); } return pts; }
+// A bridge across a polyline at segment i, fraction t: [x, z, ux, uz] (ux,uz points across the water)
+function bridgeAt(pts, i, t){ const a=pts[i], b=pts[i+1], cx=a[0]+(b[0]-a[0])*t, cz=a[1]+(b[1]-a[1])*t, dx=b[0]-a[0], dz=b[1]-a[1], L=Math.hypot(dx,dz); return [+cx.toFixed(2), +cz.toFixed(2), -dz/L, dx/L]; }
+function tryTrip(seed, theme, force, planSeed){
+  const T = TRIP_THEMES[theme] || TRIP_THEMES.plain, plan = tripPlan(theme, planSeed===undefined ? seed : planSeed), style = plan.style;
+  let terrain = T.terrain; if (style==='dunes' || style==='swamp' || style==='ring' || style==='archipelago') terrain='flat'; if (style==='mesa') terrain='mountainous';
+  if (plan.secrets.includes('cave')) terrain = terrain==='flat' ? 'hilly' : terrain;
+  const r = mulberry32(seed ^ 0x7a1b);
   const scale = T.small ? 0.6 : 0.72, R = 50*scale, rr=(a,b)=>a+r()*(b-a);
   const ph=[rr(0,TAU), rr(0,TAU), rr(0,TAU)];
   const base = FLORA[terrain] || FLORA.hilly;
   const flora = { trees:base.trees, fruit:(T.fruit||1)*base.fruit, flowers:(T.flowers||1)*base.flowers, palms:base.palms*(T.small?1.6:1) };
-  const L = { gen:true, trip:true, theme, name:T.name, terrain, town:'trip', R, ph, scale, bumps:[], mounds:[], flora, homes:{},
-    places:{ plaza:[0,0], board:[FAR,FAR] } };
+  const L = { gen:true, trip:true, theme, name:plan.name||T.name, terrain, town:'trip', R, ph, scale, bumps:[], mounds:[], flora, homes:{}, style, plan,
+    places:{ plaza:[0,0], board:[FAR,FAR] }, xw:[], xbridges:[], pools:[], rings:[], pads:[] };
   const radiusAt = a => islandRadius(L, a), tOf=(x,z)=>Math.hypot(x,z)/radiusAt(Math.atan2(z,x));
   const angDist = (a,b) => Math.abs(Math.atan2(Math.sin(a-b), Math.cos(a-b)));
-  // a short creek out to the coast, away from the dock on the east
-  let river=null;
-  for (let k=0;k<60 && !river;k++){ const as=rr(0,TAU), am=as+(r()<0.5?1:-1)*rr(0.3,0.7); if (angDist(am,0)<0.9 || angDist(as,0)<0.7) continue;
-    const pts=[]; for (let i=0;i<=3;i++){ const f=i/3, a=lerp(as,am,f), rad=lerp(0.42*R, radiusAt(am)*1.3, f), w=Math.sin(f*Math.PI)*rr(-3,3); pts.push([Math.cos(a)*rad-Math.sin(a)*w, Math.sin(a)*rad+Math.cos(a)*w]); }
-    if (polyDist(0,0,pts) < 10) continue; river=pts.map(p=>[+p[0].toFixed(1), +p[1].toFixed(1)]); }
-  if (!river) return null;
-  L.river=river; L.bridges=[[1,0.5]];
-  let pond=null;
-  for (let k=0;k<80 && !pond;k++){ const a=rr(0,TAU), d=rr(0.3,0.55)*R, x=Math.cos(a)*d, z=Math.sin(a)*d;
-    if (polyDist(x,z,river)<10 || (x>0.3*R && Math.abs(z-4)<10) || tOf(x,z)>0.65 || Math.hypot(x,z)<8) continue; pond={ x:+x.toFixed(1), z:+z.toFixed(1), r:+rr(3.2,4.2).toFixed(1) }; }
-  if (!pond) return null;
-  L.pond=pond;
-  const hills=(n,A0,A1,R0,R1)=>{ for (let i=0,k=0;i<n && k<200;k++){ const a=rr(0,TAU), d=rr(0.2,0.6)*R, x=Math.cos(a)*d, z=Math.sin(a)*d;
-      if (Math.hypot(x,z)<8 || polyDist(x,z,river)<6 || Math.hypot(x-pond.x,z-pond.z)<8 || (x>0.3*R && Math.abs(z-4)<8)) continue; L.mounds.push([+x.toFixed(1),+z.toFixed(1),+rr(A0,A1).toFixed(2),+rr(R0,R1).toFixed(1)]); i++; } };
-  if (terrain==='flat'){ hills(2,0.4,0.8,7,11); L.liftAmp=0.4; }
-  else if (terrain==='mountainous'){ hills(2,2.4,3.4,9,13); hills(2,1.0,1.8,6,9); L.liftAmp=1.2; }
-  else { hills(4,1.0,2.0,7,12); L.liftAmp=0.9; }
+  const wet = (x,z,pad) => { if (L.river && polyDist(x,z,L.river)<pad) return true; if (L.pond && Math.hypot(x-L.pond.x,z-L.pond.z)<L.pond.r+pad) return true;
+    for (const W of L.xw) if (polyDist(x,z,W.pts)<W.w+pad) return true; for (const [px,pz,pr] of L.pools) if (Math.hypot(x-px,z-pz)<pr+pad) return true; return false; };
+  const nearDock = (x,z,pad=8) => x>0.3*R && Math.abs(z-4)<pad;
+  const noPond = { x:FAR, z:FAR, r:1 };
+  // ---- the creek (most styles) ----
+  const creek = () => { for (let k=0;k<60;k++){ const as=rr(0,TAU), am=as+(r()<0.5?1:-1)*rr(0.3,0.7); if (angDist(am,0)<0.9 || angDist(as,0)<0.7) continue;
+      const pts=[]; for (let i=0;i<=3;i++){ const f=i/3, a=lerp(as,am,f), rad=lerp(0.42*R, radiusAt(am)*1.3, f), w=Math.sin(f*Math.PI)*rr(-3,3); pts.push([Math.cos(a)*rad-Math.sin(a)*w, Math.sin(a)*rad+Math.cos(a)*w]); }
+      if (polyDist(0,0,pts) < 10) continue; return pts.map(p=>[+p[0].toFixed(1), +p[1].toFixed(1)]); } return null; };
+  const findPond = () => { for (let k=0;k<80;k++){ const a=rr(0,TAU), d=rr(0.3,0.55)*R, x=Math.cos(a)*d, z=Math.sin(a)*d;
+      if (wet(x,z,10) || nearDock(x,z,10) || tOf(x,z)>0.65 || Math.hypot(x,z)<8) continue; return { x:+x.toFixed(1), z:+z.toFixed(1), r:+rr(3.2,4.2).toFixed(1) }; } return null; };
+  const hills=(n,A0,A1,R0,R1,d0=0.2,d1=0.6)=>{ for (let i=0,k=0;i<n && k<200;k++){ const a=rr(0,TAU), d=rr(d0,d1)*R, x=Math.cos(a)*d, z=Math.sin(a)*d;
+      if (Math.hypot(x,z)<8 || wet(x,z,6) || nearDock(x,z,8)) continue; L.mounds.push([+x.toFixed(1),+z.toFixed(1),+rr(A0,A1).toFixed(2),+rr(R0,R1).toFixed(1)]); i++; } };
+
+  if (style==='rivers'){   // three channels running north to south, two bridges each
+    const xs=[-0.5*R, -0.08*R, 0.33*R], ch=xs.map(x0=>wiggleLine(r, x0+rr(-2,2), -1.35*R, x0+rr(-2,2), 1.35*R, 8, 3.5));
+    L.river=ch[0]; L.bridges=[[2,rr(0.3,0.7)],[5,rr(0.3,0.7)]]; L.riverW=1.7;
+    for (const c of ch.slice(1)){ L.xw.push({ pts:c, w:1.7, type:'river' }); L.xbridges.push(bridgeAt(c, 2, rr(0.3,0.7)), bridgeAt(c, 5, rr(0.3,0.7))); }
+    L.pond=findPond()||noPond; hills(2,0.5,1.0,6,9); L.liftAmp=0.5;
+  } else if (style==='archipelago'){   // channels from a little central lagoon out to sea: three islets with rope bridges
+    const angs=[1.9+rr(-0.15,0.15), 3.8+rr(-0.15,0.15), 5.5+rr(-0.1,0.1)], ch=angs.map(a=>wiggleLine(r, Math.cos(a)*0.12*R, Math.sin(a)*0.12*R, Math.cos(a)*1.35*R, Math.sin(a)*1.35*R, 6, 2.5));
+    L.river=ch[0]; L.bridges=[[2,rr(0.3,0.7)]]; L.riverW=2.1; L.riverType='sea';
+    for (const c of ch.slice(1)){ L.xw.push({ pts:c, w:2.1, type:'sea' }); L.xbridges.push(bridgeAt(c, 2, rr(0.3,0.7))); }
+    L.pools.push([0,0,0.17*R,'sea']); L.pond=findPond()||noPond; hills(2,0.4,0.8,5,8,0.35,0.6); L.liftAmp=0.35; L.ropeBridges=true;
+  } else if (style==='ring'){   // a big lagoon in the middle, one channel out to the sea
+    L.pools.push([0,0,0.4*R,'sea']); const a=Math.PI+rr(-0.4,0.4);
+    L.river=wiggleLine(r, Math.cos(a)*0.38*R, Math.sin(a)*0.38*R, Math.cos(a)*1.3*R, Math.sin(a)*1.3*R, 4, 1.5); L.bridges=[[1,0.6]]; L.riverType='sea';
+    L.pond=noPond; L.liftAmp=0.3;
+  } else if (style==='dunes'){   // all sand: low dunes, palms, no creek or pond
+    L.river=[[FAR,FAR],[FAR+20,FAR]]; L.bridges=[[0,0.5]]; L.pond=noPond; L.sand=true; hills(6,0.5,1.3,6,10,0.1,0.65); L.liftAmp=0.25;
+    L.flora={ trees:{ pine:1, cedar:1, oak:1 }, fruit:0.25, flowers:0.15, palms:3.2 }; L.treeMul=0.25;
+  } else {
+    L.river=creek(); if (!L.river) return null; L.bridges=[[1,0.5]];
+    if (style==='swamp'){ L.pond=findPond()||noPond;   // pools and reeds everywhere
+      for (let i=0,k=0;i<13 && k<400;k++){ const a=rr(0,TAU), d=Math.sqrt(r())*0.7*R, x=Math.cos(a)*d, z=Math.sin(a)*d, pr=rr(1.6,3.0);
+        if (Math.hypot(x,z)<5 || wet(x,z,pr+3) || nearDock(x,z,10) || tOf(x,z)>0.78) continue; L.pools.push([+x.toFixed(1),+z.toFixed(1),+pr.toFixed(1),'pond']); i++; }
+      L.liftAmp=0.2; L.reeds=true; L.flora={ trees:{ birch:3, oak:2, maple:1 }, fruit:0.5, flowers:0.8, palms:0.4 }; L.treeMul=0.7; }
+    else {
+      L.pond=findPond(); if (!L.pond) return null;
+      if (style==='mesa'){ const a=rr(0,TAU), cx=Math.cos(a)*0.12*R, cz=Math.sin(a)*0.12*R;
+        L.mounds.push([+cx.toFixed(1),+cz.toFixed(1),2.6,+(0.55*R).toFixed(1)], [+cx.toFixed(1),+cz.toFixed(1),2.4,+(0.36*R).toFixed(1)], [+cx.toFixed(1),+cz.toFixed(1),2.2,+(0.2*R).toFixed(1)]); L.liftAmp=0.6; L.mesa=[cx,cz]; }
+      else if (style==='crater'){ L.rings.push([0,0,3.2,0.3*R,0.78*R]); L.liftAmp=0.25; L.meadow=[0,0,0.27*R]; L.flora={ ...flora, flowers:flora.flowers*0.7 }; }
+      else if (style==='forest'){ hills(3,0.8,1.6,7,11); L.liftAmp=0.7; L.treeMul=3.4; L.flora={ trees:{ oak:3, pine:3, birch:2, maple:2, cedar:2 }, fruit:0.6, flowers:0.5, palms:0.4 }; }
+      else if (terrain==='flat'){ hills(2,0.4,0.8,7,11); L.liftAmp=0.4; }
+      else if (terrain==='mountainous'){ hills(2,2.4,3.4,9,13); hills(2,1.0,1.8,6,9); L.liftAmp=1.2; }
+      else { hills(4,1.0,2.0,7,12); L.liftAmp=0.9; }
+    }
+  }
+  if (T.lagoon){ L.pools.push([0,-0.05*R,0.3*R,'sea']); }   // Shimmer Lagoon's lagoon
+
+  // ---- surprises on the land itself ----
+  const coastAngle = (avoid, maxR=99) => { for (let k=0;k<160;k++){ const a=rr(0,TAU); if (angDist(a,0)<1.0 || radiusAt(a)>maxR) continue; if (avoid && avoid.some(b=>angDist(a,b)<0.7)) continue;
+      const x=Math.cos(a)*radiusAt(a), z=Math.sin(a)*radiusAt(a); if (wet(x*0.9,z*0.9,7)) continue; return a; } return null; };
+  const used=[];
+  for (const s of plan.secrets){
+    if (s==='cave'){ L.falls={ h:2.75 }; if (L.river && L.river[0]){ const [sx,sz]=L.river[0]; if (Math.hypot(sx,sz)>0.5*R) L.falls=null; } }
+    else if (s==='tide' || s==='ruins'){ const a=coastAngle(used, 0.88*R); if (a===null) continue; used.push(a);   // the islet has to fit inside the world's edge
+      const rc=radiusAt(a), ir=s==='ruins'?4.2:3.6, d=Math.min(rc+ir+5.5, 40.5), ix=Math.cos(a)*d, iz=Math.sin(a)*d;
+      const sx=Math.cos(a)*rc*0.93, sz=Math.sin(a)*rc*0.93;
+      L.islet={ x:+ix.toFixed(1), z:+iz.toFixed(1), r:ir, top: s==='ruins'?0.85:0.56, kind:s };
+      if (s==='tide') L.bar=[[+sx.toFixed(1),+sz.toFixed(1)],[+((sx+ix)/2+Math.sin(a)*1.5).toFixed(1),+((sz+iz)/2-Math.cos(a)*1.5).toFixed(1)],[+ix.toFixed(1),+iz.toFixed(1)]];
+      else { const st=[], n=Math.ceil(Math.hypot(ix-sx,iz-sz)/1.55); for (let i=1;i<n;i++){ const f=i/n; st.push([+(sx+(ix-sx)*f+Math.sin(f*9)*0.4).toFixed(2), +(sz+(iz-sz)*f).toFixed(2)]); } L.stones=st; } }
+    else if (s==='tortoise'){ const a=coastAngle(used); if (a===null) continue; used.push(a); const d=radiusAt(a)*0.9; L.tortoise={ x:+(Math.cos(a)*d).toFixed(1), z:+(Math.sin(a)*d).toFixed(1), a, r:3.2, h:1.9 }; }
+    else if (s==='spring' || s==='mushroom'){ for (let k=0;k<120;k++){ const a=rr(0,TAU), d=rr(0.25,0.6)*R, x=Math.cos(a)*d, z=Math.sin(a)*d;
+        if (wet(x,z,7) || nearDock(x,z,12) || (L.tortoise && Math.hypot(x-L.tortoise.x,z-L.tortoise.z)<10) || (L.mesa && Math.hypot(x-L.mesa[0],z-L.mesa[1])<0.5*R)) continue;
+        if (s==='spring'){ L.pools.push([+x.toFixed(1),+z.toFixed(1),2.3,'spring']); L.spring=[+x.toFixed(1),+z.toFixed(1)]; L.pads.push([+x.toFixed(1),+z.toFixed(1),4.5]); }
+        else { L.mush=[+x.toFixed(1),+z.toFixed(1),2.4]; L.pads.push([+x.toFixed(1),+z.toFixed(1),3.6]); }
+        break; } }
+  }
+  // ---- room for a little town: flat spots for its buildings ----
+  if (plan.kind){
+    const K=plan.kind, spots=[], ok=(x,z,rad)=>!wet(x,z,rad+3) && !nearDock(x,z,rad+8) && !spots.some(s=>Math.hypot(x-s.x,z-s.z)<s.r+rad+3) && !(L.tortoise && Math.hypot(x-L.tortoise.x,z-L.tortoise.z)<rad+6) && !(L.mush && Math.hypot(x-L.mush[0],z-L.mush[1])<rad+5) && !(L.spring && Math.hypot(x-L.spring[0],z-L.spring[1])<rad+6) && !(L.mesa && Math.hypot(x-L.mesa[0],z-L.mesa[1])<0.42*R);
+    const place=(role, rad, tMin, tMax, near)=>{ for (let k=0;k<600;k++){ let x,z;
+        if (k===300 && !near){ tMin=Math.min(tMin,0.12); tMax=Math.max(tMax,0.8); }   // crowded island: look further afield
+        if (near && k>=300){ const a=rr(0,TAU), d=rr(0.12,0.8)*radiusAt(a); x=Math.cos(a)*d; z=Math.sin(a)*d; } else if (near){ const a=rr(0,TAU), d=rad+near.r+rr(2.5,6); x=near.x+Math.cos(a)*d; z=near.z+Math.sin(a)*d; } else { const a=rr(0,TAU), d=rr(tMin,tMax)*radiusAt(a); x=Math.cos(a)*d; z=Math.sin(a)*d; }
+        const t=tOf(x,z); if (t<tMin-0.05 || t>tMax+0.05 || !ok(x,z,rad)) continue; const s={ role, x:+x.toFixed(1), z:+z.toFixed(1), r:rad }; spots.push(s); return s; } return null; };
+    const n=TOWN_KINDS[K].folk;
+    if (K==='lighthouse'){ const lh=place('lighthouse', 3.2, 0.74, 0.8); if (lh) place('house', 4, 0.3, 0.7, lh); }
+    else if (K==='monastery'){ const m=place('monastery', 5.5, 0.15, 0.45); if (m){ L.mounds.push([m.x, m.z, 2.4, 11]); place('house', 4, 0.2, 0.7, m); } }
+    else if (K==='circus'){ const c=place('tent', 5.5, 0.1, 0.5); if (c){ for (let i=0;i<2;i++) place('wagon', 3, 0.1, 0.65, c); } }
+    else if (K==='smugglers'){ const c=place('cove', 4, 0.7, 0.78); if (c) place('house', 4, 0.3, 0.7, c); }
+    else if (K==='board'){ const b=place('board', 2.5, 0.05, 0.4); if (b) for (let i=0;i<n;i++) place('house', 4, 0.1, 0.7, b); }
+    else if (K==='hamlet'){ const h=place('house', 4, 0.6, 0.7); if (h){ place('house', 4, 0.5, 0.72, h); place('house', 4, 0.5, 0.72, h); place('pier', 2.5, 0.8, 0.86, null); } }
+    if (!spots.length && !force) return null;
+    L.village={ kind:K, spots }; for (const s of spots) if (s.role!=='pier' && s.role!=='cove' && s.role!=='lighthouse') L.pads.push([s.x, s.z, s.r+0.5]); else if (s.role!=='pier') L.pads.push([s.x, s.z, s.r]);
+  }
+  // rare and legendary islands: a spot for the host's house or sign
+  if (['workshop','attic','wizgarden','library'].includes(theme)){ for (let k=0;k<200;k++){ const a=rr(0,TAU), d=rr(0.1,0.4)*R, x=Math.cos(a)*d, z=Math.sin(a)*d; if (wet(x,z,8) || nearDock(x,z,12)) continue; L.host=[+x.toFixed(1),+z.toFixed(1)]; L.pads.push([L.host[0],L.host[1],5]); break; } }
   // home-island places, parked out of the world
   ['museum','shop','aquarium','garden','tower','home'].forEach((k,i)=>{ L.places[k]=[FAR+i*40, FAR]; });
   L.lot={ x:FAR+200, z:FAR }; RESIDENT_IDS.forEach((id,i)=>{ L.homes[id]=[FAR+400+i*40, FAR]; });

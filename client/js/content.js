@@ -1030,3 +1030,25 @@ export const DO_TASKS = { bug:['Catch {n} bug{s}',250], bugnight:['Catch {n} bug
   water:['Water {n} plant{s}',60], plant:['Plant {n} thing{s}',150], harvest:['Harvest {n} crop{s}',100], fruit:['Pick up {n} piece{s} of fruit',110], shell:['Pick up {n} beach find{s}',110],
   weed:['Pull {n} weed{s}',50], cook:['Cook {n} meal{s}',300], craft:['Make {n} thing{s} at a workbench',400], donate:['Donate {n} thing{s} to the museum',600], sold:['Sell {n} thing{s}',60],
   talk:['Say hello to {n} neighbor{s}',90], gift:['Give {n} gift{s} to islanders',300], place:['Place {n} piece{s} of furniture',150], potion:['Drink {n} potion{s}',1500] };
+
+/* =====================================================================
+   v1.27 CONTENT: pen pal letters and trip finds.
+   LETTERS are the only letters anyone can send (no free text). The server checks letter ids against this list
+   when a letter is mailed to a friend, so keep the ids stable. {to} = who it's for, {p} = sender, {isle} = sender's island.
+   ===================================================================== */
+export const LETTERS = {
+  hello:  { label:'Just saying hi',     text:['Dear {to},','Just a little note to say hello! Things are cozy over on {isle}. I hope your days are going nicely too.','Your pen pal, {p}'] },
+  thanks: { label:'Thank you',          text:['Dear {to},','Thank you for being so kind. It really stayed with me, and I wanted you to know.','Gratefully, {p}'] },
+  miss:   { label:'I miss you',         text:['Dear {to},','It\'s been a while and I keep thinking about our chats. I hope we see each other again soon.','Missing you, {p}'] },
+  found:  { label:'Guess what I found', text:['Dear {to},','Guess what I found today! I thought of you right away, so I had to write.','Excitedly, {p}'] },
+  visit:  { label:'Come visit',         text:['Dear {to},','If you ever find yourself sailing past {isle}, come say hi. The door\'s always open.','Hoping to see you, {p}'] },
+  weather:{ label:'How\'s the weather', text:['Dear {to},','How\'s the weather out your way? Here it\'s the kind of day that makes you want to sit outside and do nothing at all.','Lazily, {p}'] },
+  cheer:  { label:'Cheer up',           text:['Dear {to},','Just in case today was a long one: you\'re doing great. Really.','Cheering for you, {p}'] },
+  gift:   { label:'A little something', text:['Dear {to},','I tucked a little something in with this letter. I hope it makes you smile.','Warmly, {p}'] },
+};
+export const LETTER_IDS = Object.keys(LETTERS);
+
+// The lighthouse keeper's thank-you (only found on boat trips)
+furn('beaconlamp','Lighthouse Lantern',8000,0.4,{ b:'lantern', shop:'trip', rarity:FR.r, glow:true });
+// A torn page in a bottle (opened where you find it, never kept in the bag)
+def('bottle_note', { name:'Message in a Bottle', kind:'note', price:0, stack:1, model:{ t:'ticket', c:0xc8a060 } });

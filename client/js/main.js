@@ -6,12 +6,13 @@ import * as THREE from 'three';
 import { TAU, clamp, lerp, smooth, mulberry32, hashStr, hash2, vnoise, fbm, weightedPick, inHours, inMonths, fmt, polyDist, segDist, Time, seasonOf } from './util.js';
 import { ITEMS, NATIVE_FRUITS, PLANTS, TOOLS, WOODWORK, BACKPACKS, BASE_SLOTS, HOUSE_LEVELS, RESIDENTS, DIALOGUE, PEDDLER, EVENTS, rarityLabel, RARITY_COLORS, SHOPS, INVEST, KEEPERS, MUSEUM, BUILD,
   FOREIGN_FRUIT_PRICE, FRUIT_REGROW_DAYS, POTIONS, WIZARD, MAGIC, STORY, FAVOR_ASKS, CROPS, RECIPES, ARRIVE, MENTOR, islandSeedPool, ISLAND_SEED_BUY, GARDEN_FENCES, GARDEN_DECOR, FR, RARE_WORK, RARE_ODDS, PLAN_PRICE,
-  WEAR_IDS, FAVOR_THEMES, DO_TASKS, ORIGINAL_RESIDENTS } from './content.js';
+  WEAR_IDS, FAVOR_THEMES, DO_TASKS, ORIGINAL_RESIDENTS, LETTERS, LETTER_IDS } from './content.js';
 import { ACHIEVEMENTS, ACH_GROUPS } from './achieve.js';
 import { BY_SLOT, SLOT_NAMES } from './wardrobe-data.js';
 import { CELL, buildSoil, buildFences, buildStake, buildGardenSign, buildScarecrow, buildLanternPost, buildFlowerArch } from './farm.js';
 import { Snd } from './audio.js';
 import { LAYOUTS, DEFAULT_SHAPE, islandRadius, generateLayout, bluffD, generateTrip, TRIP_THEMES } from './layouts.js';
+import * as VY from './voyage.js';
 import { buildBike, MODEL, M, mk, G, outline, windowMat, glowMats, glowMat, glowSprites, addGlow, textSprite, PALETTE, buildItemModel, thumb, toolThumb, FURN_BUILDERS, MF,
   buildTree, buildStump, buildShrub, buildFlower, buildTool, buildAnimal, buildPlayer, buildHouse, buildStall, buildBoard, buildPlankDeck, buildRoom, buildBird, buildGull, buildDuck, buildWeedClump } from './models.js';
 import './furn.js';
@@ -68,7 +69,7 @@ const BOOT = window.__BOOT || { mode:'guest' };
 const GUEST = BOOT.mode==='guest', VISIT = BOOT.mode==='visit', CAN_EDIT = !VISIT || BOOT.role==='resident';
 // v1.26: on a boat trip to a little island with no town. Your own things come along; the island is gone when you sail home.
 const TRIP = BOOT.mode==='trip', TRIP_THEME = TRIP ? ((BOOT.trip && BOOT.trip.theme) || 'plain') : null;
-if (TRIP_THEME==='moonlit'){ const h0=Time.hour.bind(Time); Time.hour=function(){ return 22.5 + (h0()%1)*0.8; }; }   // always night
+if (TRIP_THEME==='moonlit' || TRIP_THEME==='starfall'){ const h0=Time.hour.bind(Time); Time.hour=function(){ return 22.5 + (h0()%1)*0.8; }; }   // always night
 if (TRIP_THEME==='frost'){ Time.month=function(){ return 1; }; World.season='winter'; }   // always winter
 const GUEST_CAP = { clams:10000, cells:12, minRarity:3 };   // guest mode: wallet cap, house size, common and uncommon only
 const allowedFind = it => !GUEST || (it.rarity ?? 5) >= GUEST_CAP.minRarity;
@@ -85,12 +86,16 @@ if (!S.magic) S.magic = {};                       // wizard tower (unlocked by a
    (they already have a day on the clock or a player name) keep everyone they had. */
 const START_RES=['pippa','bramble','mabel'], MOVE_ORDER=['lumi','otis','clover','juniper'];
 if (!S.town){ const older = !!S.day || !!S.player; S.town = { res: older ? ORIGINAL_RESIDENTS.slice() : START_RES.slice(), next:null, last:null, hall:0, fund:0, met:{}, deco:0 }; }
+// v1.27: pen pals who moved here from other islands are kept in S.town.extra (part of the island, so residents and visitors see them too)
+if (Array.isArray(S.town.extra)) for (const sp of S.town.extra) if (sp && sp.id && sp.room && !RESIDENTS.some(R=>R.id===sp.id)) RESIDENTS.push(JSON.parse(JSON.stringify(sp)));
 S.town.met=S.town.met||{}; S.town.res=S.town.res.filter(id=>RESIDENTS.some(R=>R.id===id));
 // v1.26: newer islanders get a home spot on this island when they first book a plot; it's kept here
 S.town.homes=S.town.homes||{}; S.town.left=S.town.left||{};
 const isOrig = id => ORIGINAL_RESIDENTS.includes(id);
 for (const R of RESIDENTS) if (!isOrig(R.id)) R.home = S.town.homes[R.id] ? S.town.homes[R.id].slice() : null;
 const livesHere = id => S.town.res.includes(id);
+// v1.27: pen pals carry the look they had on their own island
+const resLook = (spec, seed=S.seed) => spec.look || CH.lookCode(CH.residentLook(seed, spec.id, RESIDENTS.indexOf(spec)));
 /* v1.19: clothes you own (wear them from Change my look) and achievements you've earned */
 S.wardrobe = Array.isArray(S.wardrobe) ? S.wardrobe.filter(id=>ITEMS[id] && ITEMS[id].kind==='wear') : [];
 if (S.stats) S.stats.maxClams=Math.max(S.stats.maxClams||0, S.clams||0);
@@ -211,6 +216,25 @@ function numAt(h, f){ const [a,b,t]=keyLerp(h,f); return lerp(a,b,t); }
 /* ---------- Island shape (heightAt is the single source of truth) ---------- */
 const RIVER = LAY.river;
 const POND = LAY.pond;
+/* v1.27 trip island shapes: extra channels (XW), round pools (POOLS), an offshore islet with a sandbar or stepping stones,
+   and a giant tortoise's shell (a smooth mound the shell model sits on, so you can walk up onto it). */
+const XW = LAY.xw || [], POOLS = LAY.pools || [];
+function xWaterCarve(x,z,h){
+  for (const W of XW){ const d=polyDist(x,z,W.pts); if (d<W.w+2.7) h=lerp(Math.min(h,-1.15), h, smooth(W.w, W.w+2.6, d)); }
+  for (const [px,pz,pr,ty] of POOLS){ const d=Math.hypot(x-px,z-pz); if (d<pr+2.4) h=lerp(Math.min(h, ty==='sea'?-1.6:ty==='spring'?-0.7:-1.1), h, smooth(pr-0.4, pr+2.2, d)); }
+  return h; }
+const xWaterNear = (x,z,pad=0) => { for (const W of XW) if (polyDist(x,z,W.pts)<W.w+pad) return W.type||'river'; for (const [px,pz,pr,ty] of POOLS) if (Math.hypot(x-px,z-pz)<pr+pad) return ty||'pond'; return null; };
+function isletLand(x,z,h){ const I=LAY.islet, d=Math.hypot(x-I.x,z-I.z);
+  if (d<I.r+3) h=Math.max(h, lerp(-2.2, I.top, smooth(I.r+2.6, I.r-0.6, d)));
+  if (LAY.bar){ const db=polyDist(x,z,LAY.bar); if (db<2.6) h=Math.max(h, lerp(-1.4, 0.3, smooth(2.6, 1.1, db))); }
+  if (LAY.stones) for (const [sx,sz] of LAY.stones){ const ds=Math.hypot(x-sx,z-sz); if (ds<1.6) h=Math.max(h, lerp(-1.2, 0.34, smooth(1.6, 0.95, ds))); }
+  return h; }
+const groundUnderShell = (T, d, h) => { const k=d/T.r; return Math.max(h, 0.4 + T.h*Math.sqrt(Math.max(0,1-k*k))*0.98); };
+// low tide: the sandbar out to the islet is dry for 12 minutes out of every 30
+let _plr=null;   // the player, once it exists (walkable() is used before then)
+const lowTide = () => ((Date.now()/60000)%30) < 12;
+const tideMinutes = () => { const m=(Date.now()/60000)%30; return m<12 ? Math.ceil(12-m) : Math.ceil(30-m); };
+const onBar = (x,z) => !!LAY.bar && polyDist(x,z,LAY.bar)<2.0 && Math.hypot(x-LAY.islet.x,z-LAY.islet.z)>LAY.islet.r-0.4 && Math.hypot(x,z)/islandRadius(LAY, Math.atan2(z,x))>0.97;
 function islandR(a){ return islandRadius(LAY, a); }
 // Cliff coast direction: c > 0 on the cliff side (for the preset Highlands this is the old cos(angle) on the west)
 const cliffC = a => LAY.cliff ? -Math.cos(a - LAY.cliff.a) : 0;
@@ -225,8 +249,11 @@ function baseHeight(x, z){
   const inland = smooth(0.95, 0.78, t);
   h += inland*(fbm(x*0.045+3, z*0.045+7)-0.5)*1.2;
   for (const [bx,bz,A,r0,r1] of LAY.bumps) h += A*smooth(r0, r1, Math.hypot(x-bx, z-bz))*inland;
-  const dR=polyDist(x,z,RIVER); if (dR<4.4){ const k=smooth(1.7,4.3,dR); h = lerp(Math.min(h,-1.15), h, k); }
+  const RW=LAY.riverW||1.7, dR=polyDist(x,z,RIVER); if (dR<RW+2.7){ const k=smooth(RW,RW+2.6,dR); h = lerp(Math.min(h,-1.15), h, k); }
   const dP=Math.hypot(x-POND.x, z-POND.z); if (dP<7.5) h = lerp(Math.min(h,-1.2), h, smooth(POND.r-0.4, POND.r+2.2, dP));
+  if (XW.length || POOLS.length) h=xWaterCarve(x,z,h);
+  if (LAY.islet) h=isletLand(x,z,h);
+  if (LAY.tortoise){ const T=LAY.tortoise, d=Math.hypot(x-T.x,z-T.z); if (d<T.r) h=Math.max(h, groundUnderShell(T, d, h)); }
   return h;
 }
 /* v0.6 terrain preview, layered on top of the original island.
@@ -251,6 +278,7 @@ const onDock = (x,z) => x>DOCK.x0 && x<DOCK.x1 && Math.abs(z-DOCK.z)<DOCK.w;
 // Bridges are placed across the river where paths need to cross
 function makeBridge(i, t, len=8.5, w=1.35){ const a=RIVER[i], b=RIVER[i+1]; const cx=lerp(a[0],b[0],t), cz=lerp(a[1],b[1],t); const dx=b[0]-a[0], dz=b[1]-a[1], L=Math.hypot(dx,dz); return { x:cx, z:cz, ux:-dz/L, uz:dx/L, len, w }; }
 const BRIDGES = LAY.bridges.map(([i,t])=>makeBridge(i,t));
+for (const [x,z,ux,uz] of (LAY.xbridges||[])) BRIDGES.push({ x, z, ux, uz, len:(LAY.riverW||1.7)>2?9.6:8.5, w:1.35 });   // v1.27 bridges over extra channels
 function bridgeLocal(b,x,z){ const dx=x-b.x, dz=z-b.z; return [dx*b.ux+dz*b.uz, -dx*b.uz+dz*b.ux]; }
 function onBridge(x,z){ for(const b of BRIDGES){ const [u,v]=bridgeLocal(b,x,z); if(Math.abs(u)<b.len/2 && Math.abs(v)<b.w) return b; } return null; }
 const bridgeY = (b,x,z) => { const [u]=bridgeLocal(b,x,z); return 0.45+0.45*Math.cos(clamp(u/(b.len/2),-1,1)*Math.PI/2); };
@@ -284,9 +312,9 @@ const roomWalk = (R,x,z) => R.walk ? R.walk(x,z) : (Math.abs(x-R.ox)<R.w/2-0.4 &
 
 function groundY(x,z){ if (x>500) return 0; const b=onBridge(x,z); if(b) return bridgeY(b,x,z); if (onDock(x,z)) return DOCK.y; return Math.max(rawHeight(x,z), -0.2); }
 const onWall = (x,z) => { if (!HG.wall) return false; const i=Math.round((x-HG.x0)/HG.step), j=Math.round((z-HG.z0)/HG.step); return i>=0&&j>=0&&i<HG.n&&j<HG.n && HG.wall[j*HG.n+i]===1; };   // sheer bluff edges
-function walkable(x,z){ if (x>500){ const R=roomAt(x,z); return !!R && roomWalk(R,x,z); } return onDock(x,z) || !!onBridge(x,z) || (rawHeight(x,z) > 0.1 && hillSlope(x,z) < MAX_SLOPE && !(FALLS.length && inFallPool(x,z)) && !onWall(x,z)); }
+function walkable(x,z){ if (x>500){ const R=roomAt(x,z); return !!R && roomWalk(R,x,z); } return onDock(x,z) || !!onBridge(x,z) || (rawHeight(x,z) > 0.1 && hillSlope(x,z) < MAX_SLOPE && !(FALLS.length && inFallPool(x,z)) && !onWall(x,z) && !(LAY.bar && !lowTide() && onBar(x,z) && !(_plr && onBar(_plr.pos.x,_plr.pos.z)))); }
 function isFishWater(x,z){ return x<500 && !walkable(x,z) && rawHeight(x,z) < -0.15; }
-function waterType(x,z){ if (Math.hypot(x-POND.x,z-POND.z)<POND.r+1.5) return 'pond'; const c=TERRA_ANY && terraAt(x,z); if (c && c.w) return c.w===2?'river':'pond'; const r=Math.hypot(x,z), t=r/islandR(Math.atan2(z,x)); if (polyDist(x,z,RIVER)<3.2 && t<1.0) return 'river'; return 'sea'; }
+function waterType(x,z){ if (Math.hypot(x-POND.x,z-POND.z)<POND.r+1.5) return 'pond'; { const xt=(XW.length||POOLS.length) && xWaterNear(x,z,1.5); if (xt) return xt; } const c=TERRA_ANY && terraAt(x,z); if (c && c.w) return c.w===2?'river':'pond'; const r=Math.hypot(x,z), t=r/islandR(Math.atan2(z,x)); if (polyDist(x,z,RIVER)<(LAY.riverW||1.7)+1.5 && t<1.0) return LAY.riverType||'river'; return 'sea'; }
 const isBeach = (x,z) => { const h=rawHeight(x,z), t=Math.hypot(x,z)/islandR(Math.atan2(z,x)); return h>0.15 && h<SAND_H && t>0.88; };
 
 /* Layout: where buildings sit. Door is in front (+z).
@@ -464,7 +492,8 @@ const newPathDist = (x,z) => { let m=1e9; for(const p of PATHS_NEW) m=Math.min(m
   // where terrain may change at all: inland, away from the river, pond and coast
   const natMask=(x,z)=>{ const a=Math.atan2(z,x), t=Math.hypot(x,z)/islandR(a); let m=smooth(0.86,0.72,t);
     if (LAY.cliff){ const c=cliffC(a); m=lerp(m, smooth(0.995,0.97,t), smooth(-0.15,-0.6,c)); m=lerp(m, smooth(0.78,0.66,t), smooth(0.15,0.6,c)); }
-    if(m<=0) return 0; return m*smooth(5,10,polyDist(x,z,RIVER))*smooth(8,13,Math.hypot(x-POND.x,z-POND.z)); };
+    if(m<=0) return 0; m*=smooth(5,10,polyDist(x,z,RIVER))*smooth(8,13,Math.hypot(x-POND.x,z-POND.z));
+    for (const W of XW) m*=smooth(W.w+3,W.w+8,polyDist(x,z,W.pts)); for (const [px,pz,pr] of POOLS) m*=smooth(pr+2,pr+6,Math.hypot(x-px,z-pz)); return m; };
   const pathNear=(x,z)=>{ let m=1e9; for(const p of PATHS){ m=Math.min(m, polyDist(x,z,p)); if(m<1.8) break; } return m; };
   {
     const { step, off, riser }=TIER, B=LAY.bluff, CL=LAY.cliff, amp=LAY.liftAmp??1.2;
@@ -475,12 +504,15 @@ const newPathDist = (x,z) => { let m=1e9; for(const p of PATHS_NEW) m=Math.min(m
       const w=lerp(0.7, 11, rw); bluffWall = w<3 && Math.abs(d)<w/2+0.45; return B.h*smooth(-w/2, w/2, d); };
     const lift=(x,z)=>{ let v=amp*smooth(0.35,0.8,fbm(x*0.022+5,z*0.022+9)) + (CL && CL.lift ? CL.lift*smooth(CL.d0,CL.d1,x*Math.cos(CL.a)+z*Math.sin(CL.a)) : 0) + (B ? bluffLift(x,z) : 0);
       const wx=x+(fbm(x*0.06+21,z*0.06+3)-0.5)*10, wz=z+(fbm(x*0.06-7,z*0.06+17)-0.5)*10;   // warped so terraces have natural, wobbly outlines
-      for(const [cx,cz,A,R] of MOUNDS){ const d=Math.hypot(wx-cx,wz-cz)/R; if(d<1) v+=A*(0.5+0.5*Math.cos(Math.PI*d)); } return v; };
+      for(const [cx,cz,A,R] of MOUNDS){ const d=Math.hypot(wx-cx,wz-cz)/R; if(d<1) v+=A*(0.5+0.5*Math.cos(Math.PI*d)); }
+      if (LAY.rings) for (const [cx,cz,A,r0,r1] of LAY.rings){ const d=Math.hypot(wx-cx,wz-cz), w=(r1-r0)/2, k=Math.abs(d-(r0+r1)/2)/w; if (k<1) v+=A*(0.5+0.5*Math.cos(Math.PI*k)); }   // v1.27 crater rims
+      return v; };
     const cont=(x,z)=>baseHeight(x,z)+lift(x,z)*natMask(x,z);
     const quant=(v,r=riser)=>{ if(v<=off) return v; const q=(v-off)/step, k=Math.floor(q), f=q-k; return off+step*(k+smooth(1-r,1,f)); };
     const flatOf=v=>{ if(v<=off) return v; const k=Math.floor((v-off)/step); return off+step*(k+(1-riser)/2); };   // middle of the terrace v sits on
     // every building gets its own flat terrace
-    const pads=Object.entries(PLACES).map(([k,p])=>{ const cx=p[0], cz=p[1]+(k==='museum'?3:1); return [cx,cz,k==='plaza'?7:5.5,flatOf(cont(cx,cz))]; });
+    const pads=Object.entries(PLACES).filter(([k])=>!(TRIP && k==='plaza')).map(([k,p])=>{ const cx=p[0], cz=p[1]+(k==='museum'?3:1); return [cx,cz,k==='plaza'?7:5.5,flatOf(cont(cx,cz))]; });
+    for (const [px,pz,pr] of (LAY.pads||[])) pads.push([px,pz,pr,flatOf(cont(px,pz))]);   // v1.27 flat ground for trip towns and surprises
     const lc=[(lot[0]+lot[2])/2,(lot[1]+lot[3])/2], lotV=flatOf(cont(lc[0],lc[1]));
     for(let j=0;j<n;j++) for(let i=0;i<n;i++){ const x=HG.x0+i*HG.step, z=HG.z0+j*HG.step;
       const nm=natMask(x,z); let pw=0;
@@ -563,7 +595,8 @@ function buildTerrain(){
   const grass = PAL.grass.map(h=>new THREE.Color(h));
   for(let i=0;i<pos.count;i++){
     const x=pos.getX(i), z=pos.getZ(i), y=rawHeight(x,z); pos.setY(i,y);
-    const inland = polyDist(x,z,RIVER)<4.5 || Math.hypot(x-POND.x,z-POND.z)<7.5 || (TERRA_ANY && terraWet(x,z)>0) || (FALLS.length && nearFall(x,z,-6));
+    const xt = (XW.length||POOLS.length) ? xWaterNear(x,z,2.4) : null;
+    const inland = (polyDist(x,z,RIVER)<(LAY.riverW||1.7)+2.8 && LAY.riverType!=='sea') || Math.hypot(x-POND.x,z-POND.z)<7.5 || (TERRA_ANY && terraWet(x,z)>0) || (FALLS.length && nearFall(x,z,-6)) || (xt && xt!=='sea');
     if (y < 0) { if (inland) c.copy(RIVERBED).lerp(DEEP, smooth(-0.2,-1.3,y)*0.5); else { c.copy(SEABED).lerp(DEEP, smooth(-0.1,-2.2,y)); c.lerp(SAND, smooth(-0.6,0,y)*0.6); } }
     else if (y < 0.18) c.copy(inland?new THREE.Color(0x9a8a6a):WETSAND);
     else if (y < SAND_H && !inland) c.copy(SAND).offsetHSL(0,0,(vnoise(x*1.3,z*1.3)-0.5)*0.04);
@@ -576,6 +609,7 @@ function buildTerrain(){
       if (!inland) c.lerp(SAND, smooth(SAND_H+0.2, SAND_H, y)); else if (y<SAND_H) c.lerp(new THREE.Color(0x9a8a6a), smooth(SAND_H,0.2,y));
       if (HG.h && TERRAIN_STYLE==='tiers'){ const sl=hillSample(HG.s,x,z); if (sl>0.18 && pd>1.4) c.lerp(TIER_EDGE, smooth(0.18,0.6,sl)*0.75);
         if (sl>1.5 || onWall(x,z)) c.lerp(CLIFF_ROCK, Math.max(smooth(1.5,2.6,sl), onWall(x,z)?0.85:0)*0.9).offsetHSL(0,0,(vnoise(x*1.7,z*1.7)-0.5)*0.06); }   // sheer faces show bare rock
+      if (LAY.sand && !inland){ c.lerp(SAND, 0.9).offsetHSL(0,0,(vnoise(x*0.9,z*0.9)-0.5)*0.06); gw[i]*=0.15; }   // v1.27 Dune Isle: sand all the way up
     }
     cols[i*3]=c.r; cols[i*3+1]=c.g; cols[i*3+2]=c.b;
   }
@@ -800,14 +834,14 @@ class Tree extends Ent {
     const n=this.fruitLeft();
     if (n>0){ track('shake'); S.day.fruit[this.key]=0; if (!VISIT) (S.fruitPicked=S.fruitPicked||{})[this.key]=dayNum(today()); for(let i=0;i<n;i++) setTimeout(()=>dropNear(this.fruit, this.pos, 1.6), 250+i*120); }
     else if (!S.day.branch[this.key] && Math.random()<0.7){ S.day.branch[this.key]=true; setTimeout(()=>dropNear('softwood', this.pos, 1.6), 300); }
-    const sap=(S.day.sap=S.day.sap||{}); if (!sap[this.key]){ sap[this.key]=1; rareRoll('shake', 'goldsap', this.pos); }
+    const sap=(S.day.sap=S.day.sap||{}); if (!sap[this.key]){ sap[this.key]=1; if (TRIP_THEME==='grove' && !this.rec){ if (haulLeft()>0){ const p=this.pos.clone(); setTimeout(()=>{ dropNear('goldsap', p, 1.4); sparkle(p.clone().add(new THREE.Vector3(0,1.4,0))); }, 380); } else capNote(); } else rareRoll('shake', 'goldsap', this.pos); }
     save(); setTimeout(()=>this.refresh(),250);
   }
   chop(){
     const tier=toolTier('axe'); if(!useTool('axe')) return;
     const n=(S.day.chop[this.key]||0); S.day.chop[this.key]=n+1; S.stats.chopped++; track('chop');
     this.shake=0.7; Snd.chop(); puff(this.pos.clone().add(new THREE.Vector3(0,1,0)), 0xd8b080, 5, 0.4, 1.5, 0.8, 0.5);
-    if (n<3){ dropNear('wood', this.pos, 1.6); if (tier>=2) dropNear('wood', this.pos, 1.6); rareRoll('chop', 'heartwood', this.pos); }
+    if (n<3){ dropNear('wood', this.pos, 1.6); if (tier>=2) dropNear('wood', this.pos, 1.6); if (TRIP_THEME==='grove' && !this.rec && n===0){ if (haulLeft()>0) dropNear('heartwood', this.pos, 1.6); else capNote(); } else rareRoll('chop', 'heartwood', this.pos); }
     else if (TOOLS.axe.tiers[tier].nofell) toast('Too flimsy to fell it.');
     else { Snd.timber(); dropNear('wood', this.pos, 1.6);
       if (this.rec){ S.plants.splice(S.plants.indexOf(this.rec),1); } else S.cut[this.key]='gone';
@@ -836,7 +870,8 @@ class Rock extends Ent {
     const used=S.day.rock[this.idx]||0; this.hit=1; Snd.thunk(); puff(this.pos.clone().add(new THREE.Vector3(0,0.6,0)), 0xb8bec4, 5, 0.6, 2, 0.8, 0.5);
     if (used>=4){ toast('The rock is all tapped out for today.'); return; }
     if (!useTool(t)) return; S.day.rock[this.idx]=used+1;
-    if (this.idx===S.day.lucky){ const amt=[100,200,400,800][used]; addClams(amt); Snd.coin(); toast('A pouch of '+amt+' clams popped out!'); }
+    if (TRIP_THEME==='clamstone'){ const left=haulLeft(); if (left<=0){ capNote(); dropNear('stone', this.pos, 1.7); } else { const amt=Math.min(left, [1000,2000,4000,8000][used]); addClams(amt); Snd.coin(); toast('A pouch of '+fmt(amt)+' clams popped out!'); } }   // v1.27
+    else if (this.idx===S.day.lucky){ const amt=[100,200,400,800][used]; addClams(amt); Snd.coin(); toast('A pouch of '+amt+' clams popped out!'); }
     else { const x=Math.random(); dropNear(x<0.6?'stone':(x<0.88?'clay':'iron'), this.pos, 1.7); rareRoll(World.night>0.5?'rockNight':'rock', 'starstone', this.pos); }
     save();
   }
@@ -858,7 +893,8 @@ class GroundItem extends Ent {
   constructor(rec){ super('item',rec.x,rec.z,0.35); this.rec=rec; this.reach=1.2; const it=ITEMS[rec.id]; const m=rec.bottle?buildBottle(rec.id):buildItemModel(rec.id); m.scale.setScalar(it.kind==='furniture'?0.6:0.95); const g=new THREE.Group(); g.add(m);
     if (it.rare || it.kind==='plan') this.aura=addAura(g, RARITY_COLORS[rarityLabel(it.rarity)], 0.35, 1.3); this.attach(g); this.hitSphere(0.45,0.3); this.spin=Math.random()*TAU; this.bounce=rec.fresh?1:0; delete rec.fresh; }
   label(){ return 'Pick up'; }
-  act(){ if (!this.rec.beach && noEdit()) return; const id=this.rec.id;
+  act(){ if (this.rec.note){ const i=S.ground.indexOf(this.rec); if (i>=0) S.ground.splice(i,1); this.remove(); save(); Snd.pop(); openNote(this.rec); return; }   // v1.27 bottles with a map or a letter
+    if (!this.rec.beach && noEdit()) return; const id=this.rec.id;
     if (ITEMS[id].kind==='plan'){ const fresh=learnPlan(id); if (!fresh){ addClams(ITEMS[id].price); toast(`You already know that plan. Pemberton gave you ${fmt(ITEMS[id].price)} clams for the paper.`); }
       Snd.pop(); const i=S.ground.indexOf(this.rec); if(i>=0) S.ground.splice(i,1); this.remove(); save(); return; }
     const res=addItem(id, this.rec.m); if(!res){ toast('Your bag is full. Sell or drop something first.'); return; }
@@ -1057,6 +1093,11 @@ class Building extends Ent {
   constructor(kind,x,z,r,obj,labelText,onAct){ super(kind,x,z,r); this.solid=true; this.reach=r+1.4; this._l=labelText; this._a=onAct; this.attach(obj); }
   label(){ return typeof this._l==='function'?this._l():this._l; } act(){ this._a(this); }
 }
+// v1.27: a generic thing to interact with (signs, chests, desks); label and action are functions
+class Thing extends Ent {   // a generic object: label and action are functions
+  constructor(kind,x,z,r,obj,label,act,o={}){ super(kind,x,z,r); this.solid=o.solid!==false; this.reach=o.reach||r+1.3; this._l=label; this._a=act; this.tick=o.update||null; this.attach(obj); if (o.hit) this.hitSphere(o.hit[0], o.hit[1]); }
+  label(){ return typeof this._l==='function' ? this._l(this) : this._l; } act(){ if (this._a) this._a(this); } update(dt,t){ if (this.tick) this.tick(this,dt,t); }
+}
 
 /* ---------- Residents ---------- */
 const asleepNow = () => { const h=Time.hour(); return h>=23 || h<6; };
@@ -1064,7 +1105,7 @@ const HOME_ODDS=0.28;
 class Resident extends Ent {
   constructor(spec){
     const [hx,hz]=spec.home; super('resident',hx+1,hz+3.4,0.45); this.spec=spec; this.reach=1.7; this.solid=true;
-    this.attach(buildAnimal({ ...spec, look:CH.lookCode(CH.residentLook(S.seed, spec.id, RESIDENTS.indexOf(spec))) })); this.hitSphere(0.9,1.0);
+    this.attach(buildAnimal({ ...spec, look:resLook(spec) })); this.hitSphere(0.9,1.0);
     this.state='idle'; this.timer=1+Math.random()*3; this.target=null; this.face=0; this.stuckT=0; this.talking=false; this.loc='out'; this.lying=false;
     this.zzz=textSprite('z','#6a7ab8'); this.zzz.visible=false; scene.add(this.zzz);
   }
@@ -1272,7 +1313,9 @@ const FISH_NIGHT=new THREE.Color(0x9fe0f0);   // at night fish show as a pale gl
 const fishes=[];
 function fishPool(type){ const h=Time.hour(), m=Time.month(); return Object.values(ITEMS).filter(i=>i.kind==='fish' && i.where===type && inMonths(m,i.months) && inHours(h,i.hours)); }
 function waterSpot(){ for(let k=0;k<40;k++){ const a=Math.random()*TAU, d=4+Math.random()*12; const x=player.pos.x+Math.cos(a)*d, z=player.pos.z+Math.sin(a)*d; if(isFishWater(x,z) && rawHeight(x,z)<-0.45 && !onDock(x,z) && !onBridge(x,z)) return [x,z]; } return null; }
-function spawnFish(){ const p=waterSpot(); if(!p) return; const type=waterType(p[0],p[1]); const pool=fishPool(type).filter(allowedFind); if(!pool.length) return; const sp=tierPick(Math.random, pool, i=>luckW(i,'fish'), 'fish');
+function spawnFish(){ const p=waterSpot(); if(!p) return; const type=waterType(p[0],p[1]);
+  if (TRIP_THEME==='shimmer' && haulLeft()<=0) return;   // v1.27: Shimmer Lagoon only holds so much
+  const pool=(TRIP_THEME==='shimmer' && type!=='spring' ? Object.values(ITEMS).filter(i=>i.kind==='fish' && (i.rarity??5)<1.5) : fishPool(type)).filter(allowedFind); if(!pool.length) return; const sp=tierPick(Math.random, pool, i=>luckW(i,'fish'), 'fish');
   // v1.26: the fish's length is decided when it spawns, and its shadow shows it: a big shadow is a big one for its species
   const meta=rollStats(sp.id), sz=(SIZE_SCALE[sp.size]||0.85)*(0.8+0.45*(meta.f||0));
   const m=new THREE.Mesh(shadowGeo, shadowMat); m.scale.set(sz*1.6,0.05,sz*0.8); m.position.set(p[0],-0.25,p[1]); m.visible=false; OUT.add(m);   // the water shader draws the shadow (see Water)
@@ -1294,7 +1337,7 @@ function castAt(pt){
 function reel(){
   const f=Fishing.fish;
   if (Fishing.state==='bite' && f){ useTool('rod'); const meta=f.meta||rollStats(f.id), id=f.id; Snd.splash(); FX.fishCatch(id, bobber.position.clone()); setTimeout(()=>sparkle(player.pos.clone().add(new THREE.Vector3(0,2.3,0))), 600);
-    const kept=r=>{ setTimeout(()=>Snd.fanfare(),150); S.caught++; S.stats.fish++; track('fish'); const best=recordCatch(id, meta); catchToast(id, meta, r==='new', best); rareRoll('catch', 'moonpearl', player.pos, 'fish'); save(); };
+    const kept=r=>{ setTimeout(()=>Snd.fanfare(),150); S.caught++; S.stats.fish++; track('fish'); if (TRIP && S.day.tx && S.day.tx.soak>0){ S.day.tx.soak--; if (!S.day.tx.soak) setTimeout(()=>toast('The hot spring\'s warmth has worn off.'), 2500); } const best=recordCatch(id, meta); catchToast(id, meta, r==='new', best); rareRoll('catch', 'moonpearl', player.pos, 'fish'); save(); };
     const r=addItem(id, meta); if(!r) setTimeout(()=>fullBagCatch(id, meta, kept), 250); else kept(r);
     f.m.parent && f.m.parent.remove(f.m); fishes.splice(fishes.indexOf(f),1);
   } else if (f && (f.state==='nibble'||f.state==='approach')){ toast('Too soon!'); f.state='flee'; f.t=0; Snd.splash(); }
@@ -1307,8 +1350,8 @@ function updateFishing(dt,t){
     if (f.state==='swim'){ if(f.m.position.distanceTo(player.pos)>45){ f.state='flee'; f.t=0.9; continue; } const x=f.home.x+Math.sin(f.ph*0.3)*1.8, z=f.home.z+Math.cos(f.ph*0.23)*1.8; if(isFishWater(x,z)){ const a=Math.atan2(z-f.m.position.z, x-f.m.position.x); f.m.position.x=x; f.m.position.z=z; f.m.rotation.y=-a; } }
     else if (f.state==='approach'){ f.hes=(f.hes||0)-dt; const d=Fishing.pt.clone().sub(f.m.position); d.y=0; const L=d.length();
       if (f.hes>0){ f.m.rotation.y+=Math.sin(t*3+f.ph)*dt*0.6; }   // hesitating, deciding whether it's worth it
-      else if(L>0.55){ d.normalize(); f.m.position.addScaledVector(d, dt*0.75); f.m.rotation.y=-Math.atan2(d.z,d.x); if (Math.random()<dt*0.2) f.hes=0.4+Math.random()*0.9; }
-      else { f.state='nibble'; f.t=0.9+Math.random()*1.4; const rar=ITEMS[f.id].rarity; f.nib=2+Math.floor(Math.random()*(rar<1.5?5:4)); } }
+      else if(L>0.55){ d.normalize(); f.m.position.addScaledVector(d, dt*(TRIP && S.day.tx && S.day.tx.soak>0 ? 2.2 : 0.75)); f.m.rotation.y=-Math.atan2(d.z,d.x); if (Math.random()<dt*0.2) f.hes=0.4+Math.random()*0.9; }
+      else { f.state='nibble'; f.t=0.9+Math.random()*1.4; const rar=ITEMS[f.id].rarity; f.nib=2+Math.floor(Math.random()*(rar<1.5?5:4)); if (TRIP && S.day.tx && S.day.tx.soak>0){ f.nib=0; f.t=0.4; } } }
     else if (f.state==='nibble'){ f.t-=dt; if(f.t<=0){
         if (f.nib>0 && Math.random()<0.04){ loseInterest(f); continue; }   // sometimes it just swims off
         if(f.nib>0){ f.nib--; f.t=0.5+Math.random()*1.6; Snd.plip(); ripple(bobber.position.x,bobber.position.z,0.5); Fishing.dip=0.22; } else { f.state='bite'; Fishing.state='bite'; Fishing.t=0; Fishing.win=biteWindow(f); Snd.splash(); ripple(bobber.position.x,bobber.position.z,1.3); } } }
@@ -1448,10 +1491,12 @@ const reserved=[]; const reserve=(x,z,r)=>reserved.push([x,z,r]);
 const isFree=(x,z,r)=>{ for(const [a,b,c] of reserved) if(Math.hypot(x-a,z-b)<c+r) return false; return true; };
 reserve(0,0,3.5); reserve(...PLACES0.board,2.5); reserve(...PLACES0.shop,4.5); reserve(PLACES0.home[0],PLACES0.home[1]+1,5.5);
 for (const R of RESIDENTS) if (PLACES0[R.id]) reserve(PLACES0[R.id][0],PLACES0[R.id][1]+1,5.5);
-reserve(DOCK.x0-2,DOCK.z-3,4); reserve(DOCK.x0,DOCK.z,3); for(const b of BRIDGES){ reserve(...bEnd(b,1),2.5); reserve(...bEnd(b,-1),2.5); }
+reserve(DOCK.x0-2,DOCK.z-3,4); reserve(DOCK.x0,DOCK.z,3);
+for (const [px,pz,pr] of (LAY.pads||[])) reserve(px,pz,pr+1.5);   // v1.27 trip towns and surprises
+if (LAY.islet) reserve(LAY.islet.x, LAY.islet.z, LAY.islet.r+1); for(const b of BRIDGES){ reserve(...bEnd(b,1),2.5); reserve(...bEnd(b,-1),2.5); }
 function randLand(r, minH, maxH, rad, tries=60, near){
   for(let k=0;k<tries;k++){ let x,z; if(near){ const a=r()*TAU, d=4+r()*near[2]; x=near[0]+Math.cos(a)*d; z=near[1]+Math.sin(a)*d; } else { const a=r()*TAU, d=Math.sqrt(r())*56*SC; x=Math.cos(a)*d; z=Math.sin(a)*d; }
-    const h=layoutPhase?baseHeight(x,z):rawHeight(x,z); if(h>minH && h<maxH && isFree(x,z,rad) && pathDist(x,z)>1.6 && !onDock(x,z) && !onBridge(x,z) && polyDist(x,z,RIVER)>4.6 && Math.hypot(x-POND.x,z-POND.z)>7.5 && (layoutPhase || (!inRects(x,z,rad+0.5) && !inLotZone(x,z,rad)))) return [x,z]; }
+    const h=layoutPhase?baseHeight(x,z):rawHeight(x,z); if(h>minH && h<maxH && isFree(x,z,rad) && pathDist(x,z)>1.6 && !onDock(x,z) && !onBridge(x,z) && polyDist(x,z,RIVER)>4.6 && Math.hypot(x-POND.x,z-POND.z)>7.5 && !((XW.length||POOLS.length) && xWaterNear(x,z,3.2)) && !(LAY.tortoise && Math.hypot(x-LAY.tortoise.x,z-LAY.tortoise.z)<LAY.tortoise.r+1.2) && (layoutPhase || (!inRects(x,z,rad+0.5) && !inLotZone(x,z,rad)))) return [x,z]; }
   return null;
 }
 
@@ -1575,7 +1620,7 @@ const shopTier = id => S.shops[id]?.tier||0;
 class Keeper extends Ent {
   constructor(spec, x, z, onTalk){ super('keeper',x,z,0.45); this.spec=spec; this.onTalk=onTalk; this.solid=true; this.reach=2.6; this.attach((spec.build||buildKeeper)(spec)); this.hitSphere(0.9,1.0); this.face=0; }
   label(){ return 'Talk'; }
-  act(){ Snd.pop(); this.onTalk(this); }
+  act(){ Snd.pop(); try { noteKeeper(this.spec); } catch(e){} this.onTalk(this); }
   update(dt,t){ const u=this.obj.userData; jelly(this.obj, this.jel=this.jel||{}, dt, false, t); u.head.rotation.z=Math.sin(t*1.3)*0.06;
     const d=Math.hypot(player.pos.x-this.pos.x, player.pos.z-this.pos.z);
     // stand keepers potter about: turn to tidy the stand now and then, with a little bob, then look out at the road
@@ -1830,6 +1875,7 @@ function talkHall(){
   const menu=()=>dialog(k.name, v, [], null, [
     ...favorChoices(npcOf('clementine'), ()=>menu()),
     { label:'Town projects', fn:()=>openHallPanel() },
+    ...(VISIT||GUEST?[]:[{ label:'Pen pals and letters', fn:()=>openContacts() }]),
     ...(VISIT?[]:[{ label: !S.home.built ? 'A house?' : loanOpen() ? 'Pay my loan' : 'Home loan', fn:()=>talkLoan(menu) }]),
     { label:'New neighbors?', fn:()=>{ const nxt=T.next && RESIDENTS.find(R=>R.id===T.next.id), cap=townCap();
         const lines = nxt ? [`${nxt.name} is moving in ${dayNum(T.next.day)<=dayNum(today())?'today':'tomorrow'}! The boxes are already on the plot.`]
@@ -2185,7 +2231,14 @@ function buildPortalStation(){
   const cmat=new THREE.MeshStandardMaterial({ color:0xb89aff, emissive:0x6a3ad0, emissiveIntensity:0.8, roughness:0.3 });
   for (const [cx,cz,s] of [[-W/2+0.7,-D/2+0.7,1],[W/2-0.7,-D/2+0.7,0.8],[-W/2+0.6,D/2-1.6,0.6],[W/2-0.6,D/2-1.6,0.7]]){ const c=new THREE.Mesh(new THREE.OctahedronGeometry(0.4*s,0), cmat); c.scale.y=2.2; c.position.set(R.ox+cx, 0.9*s, R.oz+cz); R.group.add(c); addGlow(c, 0, 2.0, 0xb89aff); }
   new InviteBooth(R.ox-W/2+1.4, R.oz+0.6);
+  if (!VISIT && !GUEST) new Thing('paldesk', R.ox+W/2-1.4, R.oz+0.6, 0.6, buildPalDesk(), 'Letters', ()=>openContacts(), { reach:1.9, hit:[0.8,0.8] });   // v1.27
   refreshPortals(true); }
+// v1.27: a writing desk for pen pal letters, in the Portal Station
+function buildPalDesk(){ const g=new THREE.Group(), wood=M(0x8a5a3a), brass=M(0xc9a04a);
+  mk(G.box(1.2,0.08,0.75), wood, 0,0.9,0,g); for (const [x,z] of [[-0.5,-0.3],[0.5,-0.3],[-0.5,0.3],[0.5,0.3]]) mk(G.box(0.08,0.9,0.08), wood, x,0.45,z,g);
+  mk(G.box(1.1,0.6,0.25), wood, 0,1.24,-0.28,g); for (let i=0;i<4;i++) mk(G.box(0.22,0.14,0.02), M(0xf4e6c8), -0.36+i*0.24,1.32,-0.15,g);
+  mk(G.box(0.32,0.02,0.22), M(0xfaf4e4), 0.1,0.95,0.08,g); const q=mk(G.cyl(0.012,0.02,0.4,6), M(0xf4f0f0), 0.38,1.08,0.05,g); q.rotation.z=-0.5; mk(G.cyl(0.06,0.06,0.08,10), M(0x2a2438), 0.42,0.98,0.12,g);
+  const tag=nameTag('Pen pals'); tag.position.y=2.1; g.add(tag); g.rotation.y=-Math.PI/2; return g; }
 class InviteBooth extends Ent {
   constructor(x,z){ super('booth',x,z,0.6); this.reach=1.9; this.solid=true;
     const g=new THREE.Group(), brass=M(0xc9a04a), wood=M(0x8a5a3a);
@@ -2609,6 +2662,7 @@ function cellPreview(k, p){
   return g; }
 function drawMarks(){ const M=magicMode; const g=M.marks; while(g.children.length) g.remove(g.children[0]);
   for (const [k,p] of Object.entries(M.pend)) g.add(cellPreview(k,p)); }
+const voucherOff = cost => Math.min(cost, (S.rare && S.rare.voucher)|0);   // v1.27: a spell voucher from the Wizard's Garden
 const pendCost = () => Object.values(magicMode.pend).reduce((a,p)=>a + Math.abs(p.d||0)*(p.d>0?MAGIC.raise:MAGIC.lower) + (p.w===1||p.w===2?MAGIC.water:0) + (p.w===0?MAGIC.fill:0) + (p.L===1?LAND_COST:p.L===0?SEA_COST:0), 0);
 /* Making land: Wendell raises the seabed next to the shore into new low ground, one 2.5 m square at a time.
    Opens once the Grand Town Hall stands. New land has to touch the island (or other new land) and can't block the dock. */
@@ -2651,10 +2705,10 @@ function landTap(x,z){
 }
 function renderMagicBar(){
   const M=magicMode, bar=$('#magicBar'); if(!M) return; bar.classList.add('show');
-  if (M.kind==='move'){ const it=MOVABLE().find(x=>x[0]===M.key), cost=it[2];
+  if (M.kind==='move'){ const it=MOVABLE().find(x=>x[0]===M.key), cost=it[2]-voucherOff(it[2]);
     bar.innerHTML=`<div><b>Move: ${it[1]}</b></div>
       <div class="row2"><div class="msg">${M.ok?`Looks good! ${fmt(cost)} clams.`:`<span style="color:#c0503a">${M.why||'Pick a spot.'}</span>`}</div><button class="btn alt" id="mgNo">Cancel</button><button class="btn" id="mgOk" ${!M.ok||S.clams<cost?'disabled':''}>Cast ${fmt(cost)}</button></div>`; }
-  else { const n=Object.keys(M.pend).length, cost=pendCost();
+  else { const n=Object.keys(M.pend).length, cost=pendCost()-voucherOff(pendCost());
     const tools=[['raise','Raise'],['lower','Lower'],['pond','Pond'],['river','River'],['fill','Fill water'],...(landMagicOK()?[['land','New land'],['sea','Back to sea']]:[]),['undo','Undo']];
     bar.innerHTML=`<div class="tools">${tools.map(([k,l])=>`<button class="tool${M.tool===k?' on':''}" data-tl="${k}">${l}</button>`).join('')}</div>
       <div class="row2"><div class="msg">${n?`${n} spot${n>1?'s':''} planned · <b>${fmt(cost)} clams</b>`:'Tap the ground to plan changes.'}<br><span class="muted">Raise/lower ${fmt(MAGIC.raise)} per terrace, water ${fmt(MAGIC.water)}, filling ${fmt(MAGIC.fill)}${landMagicOK()?`, new land ${fmt(LAND_COST)}, back to sea ${fmt(SEA_COST)}`:''}.</span></div><button class="btn alt" id="mgNo">Cancel</button><button class="btn" id="mgOk" ${!n||S.clams<cost?'disabled':''}>Cast</button></div>`;
@@ -2671,18 +2725,19 @@ function pendBounds(){ const ks=Object.keys(magicMode.pend); let x0=1e9,x1=-1e9,
   const cx=(x0+x1)/2, cz=(z0+z1)/2; return { cx, cz, x0, x1, z0, z1, span:Math.max(x1-x0, z1-z0) }; }
 function castMagic(){
   const M=magicMode; if(!M) return;
-  const cost = M.kind==='move' ? MOVABLE().find(x=>x[0]===M.key)[2] : pendCost();
+  const full = M.kind==='move' ? MOVABLE().find(x=>x[0]===M.key)[2] : pendCost(), off=voucherOff(full), cost=full-off;
   if (M.kind==='move' ? (!M.ok || S.clams<cost) : (!Object.keys(M.pend).length || S.clams<cost)) return;
   if (!M.confirmed){
     // show the whole plan before paying
     if (M.kind==='move'){ const [x,z]=M.at; M.camT.set(x, groundY(x,z), z); M.dist=30; }
     else { const b=pendBounds(); M.camT.set(b.cx, groundY(b.cx,b.cz), b.cz); M.dist=clamp(b.span*1.7+12, 18, 46); }
     Snd.click(); const bar=$('#magicBar'); bar.classList.remove('show');
-    dialog(WIZARD.name, WIZARD.voice, [M.kind==='move' ? `There it is. Like that? ${fmt(cost)} clams.` : `That's the plan, then. Like that? ${fmt(cost)} clams.`], null, [
+    dialog(WIZARD.name, WIZARD.voice, [M.kind==='move' ? `There it is. Like that? ${fmt(cost)} clams.` : `That's the plan, then. Like that? ${fmt(cost)} clams.`, ...(off?[`Bellamy's voucher covers ${fmt(off)} of it. Fancy that, the old goat still remembers me.`]:[])], null, [
       { label:'Cast it!', fn:()=>{ M.confirmed=true; castMagic(); } },
       { label:'Keep fiddling', alt:true, fn:()=>{ if (magicMode) renderMagicBar(); } } ]);
     return; }
   const P = M.kind==='move' ? { kind:'move', key:M.key, at:M.at.slice() } : Object.assign({ kind:'land', pend:M.pend }, pendBounds());
+  if (off) S.rare.voucher-=off;
   if (M.kind==='move'){ S.clams-=cost; track('moved'); (S.terra.moved=S.terra.moved||{})[M.key]=M.at.slice(); if (M.key==='tower') S.magic.at=M.at.slice(); }
   else { S.clams-=cost; track('terra', Object.keys(M.pend).length);
     for (const [k,p] of Object.entries(M.pend)){ const c=Object.assign({}, TERRA[k]||{}); if (p.d) c.d=(c.d||0)+p.d; if (c.d===0) delete c.d; if (p.w!==undefined){ if (p.w) c.w=p.w; else delete c.w; } if (p.L!==undefined){ if (p.L) c.L=1; else delete c.L; } if (Object.keys(c).length) TERRA[k]=c; else delete TERRA[k]; }
@@ -2841,7 +2896,7 @@ const changedSpot = p => { const [x,z]=p;
   return false; };
 const clearForNew = p => !!inRects(p[0],p[1],2.4) || newPathDist(p[0],p[1])<2.3 || inLotZone(p[0],p[1],1.4) || ['museum','aquarium','garden'].some(k=>Math.hypot(p[0]-PLACES[k][0], p[1]-PLACES[k][1]-(k==='museum'?6:4))<3.2)
   || ((ALTERED || REROUTED || !!PLACES.hall || !!PLACES.portal) && changedSpot(p)) || keptOut(p[0],p[1]);
-{ const r=mulberry32(S.seed); let idx=0; const add=(type,fruit,minH,maxH)=>{ const p=randLand(r,minH,maxH,2.8); if(!p) return; reserve(p[0],p[1],2.3); const key='n'+(idx++);
+{ const r=mulberry32(S.seed); let idx=0, TS=(LAY.treeMul||1)>2?0.55:1; const add=(type,fruit,minH,maxH)=>{ const p=randLand(r,minH,maxH,2.8*TS); if(!p) return; reserve(p[0],p[1],2.3*TS); const key='n'+(idx++);
     if (typeof type==='function') type=type(p); if(S.cut[key]==='gone' || clearForNew(p)){ return; } trees.push(new Tree(key,p[0],p[1],type,fruit)); };
   if (!LAY.gen){
     for(let i=0;i<14;i++) add('fruittree',S.nativeFruit,SAND_H+0.2,9);
@@ -2851,12 +2906,12 @@ const clearForNew = p => !!inRects(p[0],p[1],2.4) || newPathDist(p[0],p[1])<2.3 
   } else {   // generated islands: what grows depends on the terrain, and high ground leans to pines and cedars
     const F=LAY.flora, kinds=Object.entries(F.trees), tot=kinds.reduce((a,k)=>a+k[1],0);
     const kindAt = p => { if (rawHeight(p[0],p[1])>3.3 && r()<0.75) return r()<0.6?'pine':'cedar'; let x=r()*tot; for(const [k,w] of kinds){ x-=w; if(x<=0) return k; } return kinds[0][0]; };
-    const TK = LAY.trip ? 0.3 : 1;   // trip islands are about a quarter the size
-    for(let i=0;i<Math.round(24*F.fruit*TK);i++) add('fruittree', TRIP_THEME==='orchard' ? NATIVE_FRUITS[i%NATIVE_FRUITS.length] : S.nativeFruit, SAND_H+0.2,12);
+    const TK = LAY.trip ? 0.3*(LAY.treeMul||1) : 1;   // trip islands are about a quarter the size (v1.27: Thicket Isle is dense, Dune Isle nearly bare)
+    for(let i=0;i<Math.round(24*F.fruit*(LAY.trip?0.3:1));i++) add('fruittree', TRIP_THEME==='orchard' ? NATIVE_FRUITS[i%NATIVE_FRUITS.length] : S.nativeFruit, SAND_H+0.2,12);
     for(let i=0;i<Math.round(115*TK);i++) add(kindAt,null,SAND_H+0.2,12);
-    for(let i=0;i<Math.round(20*F.palms*TK);i++) add('palm','coconut',0.25,SAND_H);
+    for(let i=0;i<Math.round(20*F.palms*(LAY.trip?0.3:1));i++) add('palm','coconut',0.25,LAY.sand?SAND_H+1.6:SAND_H);
   }
-  const nRocks = LAY.trip ? (TRIP_THEME==='fossil' ? 8 : 4) : LAY.gen ? (LAY.terrain==='mountainous'||LAY.terrain==='cliffs' ? 16 : 12) : 9;
+  const nRocks = LAY.trip ? (TRIP_THEME==='fossil' ? 8 : TRIP_THEME==='clamstone' ? 14 : 4) : LAY.gen ? (LAY.terrain==='mountainous'||LAY.terrain==='cliffs' ? 16 : 12) : 9;
   for(let i=0;i<nRocks;i++){ const p=randLand(r,SAND_H+0.1,12,2.2); if(!p) continue; reserve(p[0],p[1],2); if(clearForNew(p)) continue; rocks.push(new Rock(i,p[0],p[1],r)); }
 }
 layoutPhase=false;
@@ -2871,7 +2926,7 @@ function spawnPlants(){ for(const e of plantEnts) if(!e.removed) e.remove(); pla
 // grass tufts, wild flowers, fallen leaves, driftwood (instanced)
 const COVER0=OUT.children.length;
 { const r=mulberry32(S.seed+7); const dummy=new THREE.Object3D(); const col=new THREE.Color();
-  const okGrass=(x,z,pd=1.3)=>{ const h=rawHeight(x,z); return !(h<SAND_H+0.15||pathDist(x,z)<pd||polyDist(x,z,RIVER)<4.3); };
+  const okGrass=(x,z,pd=1.3)=>{ const h=rawHeight(x,z); return !(h<SAND_H+0.15||pathDist(x,z)<pd||polyDist(x,z,RIVER)<4.3||(LAY.sand && vnoise(x*0.15,z*0.15)<0.78)); };   // v1.27: only the odd tuft on Dune Isle
   // grass: tufts of curved blades in three shapes, gathered into clumps that are denser in some places, swaying in the wind
   { const tuftN=Math.round((isMobile?3600:5800)*Math.min(1.7,SC*SC)), TV=3, per=Math.ceil(tuftN/TV)+8, gm=GC.swayMat({ height:0.45, amp:0.05 });
     const tms=[...Array(TV)].map((_,v)=>{ const im=new THREE.InstancedMesh(GC.tuftGeo(v), gm, per); im.count=0; im.receiveShadow=true; im.castShadow=false; return im; }); GC.tickWind(tms[0]);
@@ -2932,7 +2987,7 @@ const residents = RESIDENTS.filter(R=>livesHere(R.id)).map(R=>new Resident(R));
 spawnAmbient();
 
 /* ---------- Player ---------- */
-const player = { pos:new THREE.Vector3(PLACES.home[0]+1.5, 0, PLACES.home[1]+4.4), face:0, target:null, targetEnt:null, cb:null, act:0, obj:buildPlayer({ look:S.look }), stuck:0, lastD:0, speedFrac:0 };
+const player = { pos:new THREE.Vector3(PLACES.home[0]+1.5, 0, PLACES.home[1]+4.4), face:0, target:null, targetEnt:null, cb:null, act:0, obj:buildPlayer({ look:S.look }), stuck:0, lastD:0, speedFrac:0 }; _plr=player;
 if (TRIP) player.pos.set(DOCK.x0+3.2, 0, DOCK.z+0.3);   // you step off the boat onto the dock
 player.pos.y=groundY(player.pos.x,player.pos.z); scene.add(player.obj);
 const marker=(()=>{ const m=new THREE.Mesh(new THREE.RingGeometry(0.25,0.38,24).rotateX(-Math.PI/2), new THREE.MeshBasicMaterial({ color:0xffffff, transparent:true, opacity:0.8, depthWrite:false })); m.visible=false; scene.add(m); return m; })();
@@ -2953,7 +3008,7 @@ function rollDay(){
   const w=r(); const weather = TRIP_THEME==='moonlit' ? 'sunny' : TRIP_THEME==='frost' ? 'snow' : w<0.6?'sunny':(w<0.82?'cloudy':(season==='winter'?'snow':'rain'));
   const digs=[], weeds=[];
   // v1.26 trip themes: more spots, never better odds
-  const nDig = TRIP ? (TRIP_THEME==='fossil' ? 36 : 8) : 6, nShell = TRIP ? ({ coral:26, shipwreck:14 }[TRIP_THEME]||8) : 8, nRare = TRIP ? ({ coral:4, shipwreck:5 }[TRIP_THEME]||1) : 1;
+  const nDig = TRIP ? (TRIP_THEME==='fossil' ? 36 : LAY.style==='dunes' ? 16 : 8) : 6, nShell = TRIP ? ({ coral:26, shipwreck:14 }[TRIP_THEME]||8) : 8, nRare = TRIP ? ({ coral:4, shipwreck:5 }[TRIP_THEME]||1) : 1;
   for(let i=0;i<nDig;i++){ let p=null; for(let k=0;k<8;k++){ p=randLand(r,SAND_H+0.15,9,1.2); if(!p || !hiddenSpot(p[0],p[1])) break; } if(p) digs.push({x:p[0],z:p[1],dug:false}); }
   for(let i=0;i<7;i++){ const p=randLand(r,SAND_H+0.2,9,0.6); if(p) weeds.push({x:p[0],z:p[1],pulled:false}); }
   const pickN=(pool,n)=>{ const a=pool.slice(), o=[]; while(o.length<n && a.length) o.push(a.splice(Math.floor(r()*a.length),1)[0].id); return o; };
@@ -3160,7 +3215,7 @@ function greetingFor(res){
   return fill(pool[Math.floor(Math.random()*pool.length)], c);
 }
 function talkTo(res){
-  const P=DIALOGUE[res.spec.personality], c={ c:res.spec.catch };
+  const P=DIALOGUE[res.spec.personality], c={ c:res.spec.catch }; try { noteResident(res.spec); } catch(e){}
   if (res.asleep){ dialog(res.spec.name, res.spec.voice, [fill(P.sleep[0],c)]); return; }
   res.talking=true; Snd.pop(); const end=()=>{ res.talking=false; };
   if (S.town.met[res.spec.id]===false){ S.town.met[res.spec.id]=true; S.friend[res.spec.id]=(S.friend[res.spec.id]||0)+1; save();
@@ -3780,13 +3835,14 @@ function talkSkipperHome(){
   const go=(theme, ticket)=>{
     if (noEdit()) return;
     if (!ticket && S.clams<TRIP_FEE){ dialog(nm, v, [`It's ${fmt(TRIP_FEE)} clams for a trip. Come back when you've got it.`]); return; }
-    const r=Math.random(); let th=theme;
-    if (!th){ const x=Math.random(); th = x<0.85 ? 'plain' : x<0.97 ? ['orchard','bloom','frost'][Math.floor(Math.random()*3)] : ['moonlit','castaway'][Math.floor(Math.random()*2)]; }
-    const fruits=NATIVE_FRUITS.filter(f=>f!==S.nativeFruit), T=TRIP_THEMES[th];
-    const trip={ seed:(Math.random()*1e9)|0, theme:th, name:T.name, fruit:fruits[Math.floor(Math.random()*fruits.length)], start:invCounts(), seen:Object.keys(S.seen||{}), from:S.island };
+    let th=theme || VY.rollTrip();   // v1.27 odds: see voyage.js
+    const seed=(Math.random()*1e9)|0, plan=VY.tripPlan(th, seed), fruits=NATIVE_FRUITS.filter(f=>f!==S.nativeFruit), T=TRIP_THEMES[th], name=plan.name||T.name, blurb=plan.blurb||T.blurb;
+    const trip={ seed, theme:th, name, fruit:fruits[Math.floor(Math.random()*fruits.length)], start:invCounts(), seen:Object.keys(S.seen||{}), from:S.island };
     if (ticket) removeItem(ticket,1); else S.clams-=TRIP_FEE;
     updateHUD(); save();
-    dialog(nm, v, [th==='plain' ? 'All aboard! Let\'s see where the wind takes us.' : `All aboard for ${T.name}! ${T.blurb}`], async ()=>{
+    const sp=VY.SPECIAL[th], say = sp ? [sp.tier==='legendary' ? 'Wait... the wind\'s pulling us somewhere strange. I\'ve only ever heard sailors\' stories about this.' : 'Well, would you look at that. The current\'s taking us somewhere special today.', `Next stop: ${name}. ${blurb}`]
+      : th==='plain' && plan.style==='normal' ? ['All aboard! Let\'s see where the wind takes us.'] : [`All aboard for ${name}! ${blurb}`];
+    dialog(nm, v, say, async ()=>{
       try { sessionStorage.setItem('dw-trip', JSON.stringify(trip)); sessionStorage.removeItem('dw-trip-world'); } catch(e){}
       document.documentElement.classList.add('magicret'); Snd.swoosh();
       try { if (BOOT.flush) await BOOT.flush(); } catch(e){}
@@ -3844,6 +3900,543 @@ if (TRIP){
       const mast=mk(G.cyl(0.1,0.12,4,6), wood, 0.4,1.6,0,w); mast.rotation.z=0.9; mk(G.box(1.4,0.9,0.05), M(0xe8dcc0), 1.6,2.2,0.3,w).rotation.z=0.6;
       w.position.set(x, groundY(x,z)-0.3, z); w.rotation.y=-a; OUT.add(w); setRects('wreck', [[x-2.2,z-2.2,x+2.2,z+2.2]]); break; } }
 }
+/* =====================================================================
+   v1.27 VOYAGES: surprises on quiet islands, little towns with people to meet, rare and legendary islands,
+   and pen pals. Layout shapes live in layouts.js; odds, names and people in voyage.js.
+   Everything a trip island remembers (chests opened, the map read, what you've traded) is in S.day.tx, which stays
+   with the island until you sail home.
+   ===================================================================== */
+const PLAN = TRIP ? (LAY.plan || VY.tripPlan(TRIP_THEME, S.seed)) : null;
+const TX = TRIP ? (S.day.tx = S.day.tx || {}) : null;
+const SPECIAL_ISLE = TRIP && VY.SPECIAL[TRIP_THEME] ? VY.SPECIAL[TRIP_THEME] : null;
+const OWN = TRIP ? (BOOT.own || {}) : S;   // your own island's save, even while you're away
+const tripRand = k => mulberry32(hashStr(S.seed+':v127:'+k));
+const atNight = () => { const h=Time.hour(); return h>=19.5 || h<5; };
+
+/* ---- haul cap for rare and legendary islands: clams plus the sell value of what you've gathered here ---- */
+if (TRIP && TX.clams0===undefined){ TX.clams0=S.clams; save(); }
+function haulValue(){
+  const t=BOOT.trip||{}, start=t.start||{}, now=invCounts(), gift=(TX&&TX.gifted)||{}; let v=Math.max(0, S.clams-(TX.clams0??S.clams));
+  for (const [id,n] of Object.entries(now)){ const d=n-(start[id]||0)-(gift[id]||0); if (d>0 && ITEMS[id]) v+=d*(ITEMS[id].price||0); }
+  return v; }
+const haulLeft = () => SPECIAL_ISLE ? VY.HAUL_CAP-haulValue() : 1e12;
+function capNote(){ if (TX.capTold) return; TX.capTold=true; save(); toast('This island has given all it has to give.', null, '', `You've gathered ${fmt(VY.HAUL_CAP)} clams' worth here. Gifts don't count.`); }
+const noteGift = (id, n=1) => { if (!TX) return; (TX.gifted=TX.gifted||{})[id]=((TX.gifted||{})[id]||0)+n; save(); };
+
+/* ---- small models ---- */
+function buildSignpost(text){ const g=new THREE.Group(), wood=M(0x8a5e3a);
+  mk(G.box(0.14,1.3,0.14), wood, 0,0.65,0,g); mk(G.box(1.3,0.55,0.08), M(0xc89a62), 0,1.15,0.06,g);
+  if (text){ const t=nameTag(text); t.position.y=1.95; g.add(t); } return g; }
+function buildChest(open){ const g=new THREE.Group(), wood=M(0x8a5a32), gold=M(0xe8b830,{ metalness:0.4, roughness:0.4 });
+  mk(G.box(0.95,0.5,0.62), wood, 0,0.25,0,g); for (const x of [-0.36,0.36]) mk(G.box(0.08,0.52,0.64), gold, x,0.25,0,g);
+  const lid=new THREE.Group(); lid.position.set(0,0.5,-0.31); g.add(lid);
+  const top=mk(new THREE.CylinderGeometry(0.31,0.31,0.95,14,1,false,0,Math.PI), wood, 0,0,0.31,lid); top.rotation.z=Math.PI/2;
+  mk(G.box(0.14,0.16,0.06), gold, 0,-0.02,0.63,lid); if (open){ lid.rotation.x=-1.9; addGlow(g, 0.6, 1.6, 0xffe08a); } return g; }
+function buildMushroomRing(rad){ const g=new THREE.Group(), caps=[], stem=M(0xf2ead8);
+  for (let i=0;i<14;i++){ const a=i/14*TAU+Math.sin(i*3.1)*0.15, s=1.25+((i*37)%10)/14, x=Math.cos(a)*rad, z=Math.sin(a)*rad;
+    mk(G.cyl(0.07*s,0.09*s,0.34*s,8), stem, x,0.17*s,z,g); const cm=new THREE.MeshStandardMaterial({ color:i%3?0xd8584a:0xb874e0, emissive:i%3?0x9a2a6a:0x7a3ad8, emissiveIntensity:0.05, roughness:0.5 });
+    const c=mk(G.sph(0.2*s,12,8,0,TAU,0,Math.PI/2), cm, x,0.32*s,z,g); c.scale.y=0.7; caps.push(cm);
+    for (let k=0;k<3;k++) mk(G.sph(0.03*s,6,4), M(0xffffff), x+Math.cos(k*2)*0.1*s, 0.42*s, z+Math.sin(k*2)*0.1*s, g); }
+  g.userData.caps=caps; return g; }
+function buildTempleRuins(){ const g=new THREE.Group(), st=M(0xc8c0a8,{ flatShading:true }), moss=M(0x6a9a4a);
+  mk(G.box(5.2,0.35,4.2), st, 0,0.12,0,g);
+  [[-1.9,-1.4,2.6],[1.9,-1.4,1.4],[-1.9,1.4,1.0],[1.9,1.4,2.2]].forEach(([x,z,h])=>{ const c=mk(G.cyl(0.32,0.36,h,10), st, x,0.3+h/2,z,g); const m=mk(G.sph(0.33,8,4,0,TAU,0,Math.PI/2), moss, x,0.3+h,z,g); m.scale.y=0.4; });
+  mk(G.box(4.6,0.45,0.7), st, 0,2.95,-1.4,g).rotation.z=0.05;
+  for (let i=0;i<6;i++) mk(G.dod(0.3+((i*13)%7)/20), st, -2.4+i, 0.25, 2.3+((i*7)%3)*0.2, g).rotation.set(i,i*2,i);
+  return g; }
+function buildTortoise(T){ const g=new THREE.Group(), prof=[]; const N=16;
+  for (let i=0;i<=N;i++){ const k=i/N; prof.push(new THREE.Vector2(Math.max(0.001,k*T.r*1.02), 0.38+T.h*Math.pow(Math.max(0,1-k*k),0.65)+0.05)); }
+  prof.reverse(); const shell=mk(new THREE.LatheGeometry(prof, 28), M(0x5f7a3a), 0,0,0,g); shell.castShadow=true;
+  const plate=M(0x8aa04a);
+  for (let i=0;i<7;i++){ const k=i===0?0:0.55, a=i/6*TAU, x=Math.cos(a)*k*T.r, z=Math.sin(a)*k*T.r, y=0.38+T.h*Math.pow(Math.max(0,1-k*k),0.65)+0.06;
+    const p=mk(G.cyl(0.75,0.85,0.08,6), plate, x,y,z,g); if (i) p.lookAt(x*2.2, y+T.h*1.4, z*2.2), p.rotateX(Math.PI/2); }
+  const skin=M(0x9aa07a), out=-1;   // the head faces out to sea
+  const head=new THREE.Group(); head.position.set(T.r*1.05, 0.75, 0); g.add(head);
+  mk(G.sph(0.62,14,10), skin, 0.25,0,0,head).scale.set(1.3,0.9,1); mk(G.cyl(0.38,0.45,0.7,10), skin, -0.25,-0.1,0,head).rotation.z=Math.PI/2;
+  for (const z of [-0.28,0.28]) mk(G.box(0.03,0.04,0.2), M(0x2a2a22), 0.62,0.15,z,head).rotation.y=Math.PI/2;
+  for (const [x,z] of [[0.6,-0.75],[0.6,0.75],[-0.6,-0.75],[-0.6,0.75]]) mk(G.cyl(0.42,0.5,0.7,10), skin, x*T.r,0.35,z*T.r,g);
+  g.userData.head=head; return g; }
+function buildLighthouse(){ const g=new THREE.Group(), red=M(0xd8483a), white=M(0xf4f0e6), dark=M(0x3a3a44);
+  mk(G.cyl(1.9,2.1,0.6,16), M(0xa8a098), 0,0.3,0,g);
+  for (let i=0;i<5;i++){ const y0=0.6+i*1.7, r0=1.55-i*0.09, r1=1.55-(i+1)*0.09; mk(G.cyl(r1,r0,1.7,18), i%2?white:red, 0,y0+0.85,0,g); }
+  const top=0.6+5*1.7; mk(G.cyl(1.35,1.2,0.18,18), dark, 0,top+0.09,0,g);
+  const lamp=mk(G.cyl(0.75,0.75,1.1,12), glowMat(0xfff0b0), 0,top+0.75,0,g); addGlow(g, top+0.8, 6, 0xfff0b0);
+  for (let i=0;i<8;i++){ const a=i/8*TAU; mk(G.box(0.06,1.1,0.06), dark, Math.cos(a)*0.8,top+0.75,Math.sin(a)*0.8,g); }
+  mk(G.cone(1.05,0.9,16), red, 0,top+1.75,0,g); mk(G.sph(0.14,8,6), dark, 0,top+2.25,0,g);
+  mk(G.box(0.9,1.5,0.1), M(0x5a3e28), 0,1.35,1.52,g);   // door
+  for (let i=0;i<3;i++) mk(G.box(0.36,0.46,0.06), windowMat, 0,3.2+i*2.2,1.48-i*0.12,g);
+  return g; }
+function buildCircusTent(){ const g=new THREE.Group(), A=M(0xd8403a), B=M(0xf6efe0), n=12;
+  for (let i=0;i<n;i++){ const m=i%2?A:B; mk(new THREE.CylinderGeometry(4.2,4.2,2.4,3,1,true,i/n*TAU,TAU/n), m, 0,1.2,0,g).material.side=THREE.DoubleSide;
+    mk(new THREE.ConeGeometry(4.6,3.2,3,1,true,i/n*TAU,TAU/n), m, 0,4.0,0,g).material.side=THREE.DoubleSide; }
+  mk(G.cyl(0.08,0.08,1.6,6), M(0x8a5e3a), 0,6.2,0,g); const flag=mk(G.box(0.7,0.4,0.03), M(0xf0c030), 0.38,6.8,0,g); g.userData.flag=flag;
+  mk(G.box(1.5,2.0,0.1), M(0x2a1a28), 0,1.0,4.15,g);   // the way in
+  for (const x of [-1.0,1.0]) mk(G.box(0.12,2.2,0.12), M(0xe8b830), x,1.1,4.25,g);
+  return g; }
+function buildWagon(c){ const g=new THREE.Group(), body=M(c), trim=M(0xf0c030), wh=M(0x5a3e28);
+  mk(G.box(2.4,1.4,1.5), body, 0,1.2,0,g); const roof=mk(new THREE.CylinderGeometry(0.85,0.85,2.5,14,1,false,0,Math.PI), M(0xf6efe0), 0,1.9,0,g); roof.rotation.z=Math.PI/2; roof.rotation.y=Math.PI/2;
+  for (const [x,z] of [[-0.8,-0.8],[0.8,-0.8],[-0.8,0.8],[0.8,0.8]]){ const w=mk(G.cyl(0.42,0.42,0.12,12), wh, x,0.42,z,g); w.rotation.x=Math.PI/2; }
+  mk(G.box(2.45,0.12,1.55), trim, 0,0.55,0,g); mk(G.box(0.5,0.5,0.05), windowMat, 0.5,1.3,0.77,g); return g; }
+function buildCove(){ const g=new THREE.Group(), rock=M(0x8a8478,{ flatShading:true }), dark=new THREE.MeshBasicMaterial({ color:0x15120f });
+  for (let i=0;i<9;i++){ const a=Math.PI*(i/8), x=Math.cos(a)*2.3, y=Math.sin(a)*2.0+0.2, s=0.9+((i*29)%7)/10; mk(G.dod(s), rock, x,y,-0.4,g).rotation.set(i,i*0.7,0); }
+  mk(G.dod(1.4), rock, -2.8,0.6,-0.8,g); mk(G.dod(1.2), rock, 2.9,0.5,-0.7,g);
+  const back=new THREE.Mesh(new THREE.CircleGeometry(1.7,20,0,Math.PI), dark); back.position.set(0,0.2,-0.5); g.add(back);
+  const crate=M(0xa07848); [[1.6,0.35,1.2,0.7],[2.3,0.3,0.6,0.6],[1.9,0.95,1.0,0.5]].forEach(([x,y,z,s])=>mk(G.box(s,s,s), crate, x,y,z,g).rotation.y=x);
+  for (const [x,z] of [[-1.7,1.1],[-2.2,0.6]]) mk(G.cyl(0.32,0.32,0.75,12), M(0x7a5232), x,0.38,z,g);
+  const l=new THREE.Group(); l.position.set(-1.3,0,1.6); g.add(l); mk(G.cyl(0.04,0.05,1.5,6), M(0x3a3028), 0,0.75,0,l); mk(G.box(0.26,0.32,0.26), glowMat(0xffc860), 0,1.55,0,l); addGlow(l, 1.55, 2.2);
+  return g; }
+function buildFishRack(){ const g=new THREE.Group(), wood=M(0x8a5e3a);
+  for (const x of [-1,1]) mk(G.box(0.12,1.6,0.12), wood, x,0.8,0,g); mk(G.cyl(0.04,0.04,2.2,6), wood, 0,1.5,0,g).rotation.z=Math.PI/2;
+  for (let i=0;i<5;i++){ const f=mk(G.sph(0.14,8,6), M([0x7a9ab8,0xc8a060,0x9aa0a8][i%3]), -0.8+i*0.4,1.22,0,g); f.scale.set(0.5,1.6,0.4); } return g; }
+function buildBellTower(){ const g=new THREE.Group(), st=M(0xd8d0c0), roof=M(0x7a4a3a);
+  mk(G.box(1.8,5.2,1.8), st, 0,2.6,0,g); mk(G.box(2.1,0.25,2.1), M(0xb8b0a0), 0,5.3,0,g);
+  const bell=mk(G.cyl(0.25,0.45,0.6,12), M(0xc8a040,{ metalness:0.5, roughness:0.35 }), 0,4.4,0.95,g); g.userData.bell=bell;
+  mk(G.cone(1.5,1.6,4), roof, 0,6.2,0,g).rotation.y=Math.PI/4; return g; }
+function buildStar(){ const g=new THREE.Group(); const m=mk(G.ico(0.28,0), new THREE.MeshBasicMaterial({ color:0xfff4b0 }), 0,0,0,g); addGlow(g, 0, 2.4, 0xfff0a0); g.userData.core=m; return g; }
+
+/* ---- things to interact with ---- */
+// a spot you dig with the shovel; invisible until something tells you it's there (shown=false means no mark at all)
+class SecretDig extends Ent {
+  constructor(x,z,ready,onDig,mark){ super('sdig',x,z,0.4); this.reach=1.4; this.ready=ready; this.onDig=onDig; const g=new THREE.Group();
+    if (mark){ for (const a of [0.6,-0.6]){ const m=mk(G.box(0.7,0.03,0.12), M(0x6a4a30), 0,0.03,0,g); m.rotation.y=a; m.castShadow=false; } }
+    this.attach(g); this.hitSphere(0.5,0.2); }
+  label(){ return this.ready() ? 'Dig' : null; }
+  act(){ if (!this.ready() || !needTool('shovel') || !useTool('shovel')) return; Snd.dig(); puff(this.pos.clone().add(new THREE.Vector3(0,0.2,0)), 0xb08a5a, 8, 0.6, 2.5, 1, 0.6); FX.hole(this.pos.clone(), 0.5, 1.6); S.stats.dug++; track('dig'); this.remove(); this.onDig(this.pos.clone()); save(); }
+}
+// treasure chests: what's inside depends on where you found it
+function chestLoot(key){
+  const r=tripRand('loot:'+key), out=[], clams=Math.round((1500+r()*3000)/50)*50;
+  const furn=Object.values(ITEMS).filter(i=>i.kind==='furniture' && (i.shop==='stall'||i.shop==='rare') && allowedFind(i));
+  const x=r();
+  if (x<0.55) out.push(weightedPick(r, furn, i=>(i.rarity??5)<3?3:1).id);
+  else if (x<0.75 && !GUEST) out.push(randomTicket());
+  else if (x<0.95) out.push('style');
+  else out.push(['goldsap','heartwood','starstone','moonpearl','glimmermoss'][Math.floor(r()*5)]);
+  return { clams, items:out }; }
+function openTreasure(key, at){
+  const L=chestLoot(key), lines=[]; addClams(L.clams); Snd.coin(); lines.push(`+${fmt(L.clams)} clams`);
+  for (const id of L.items){ if (id==='style'){ const got=grantRandomStyle(); if (got) lines.push('Swatch book: '+got); continue; }
+    const res=addItem(id); if (!res) dropNear(id, at, 1.2); lines.push(ITEMS[id].name+(res?'':' (on the ground, your bag is full)')); }
+  Snd.fanfare(); sparkle(at.clone().add(new THREE.Vector3(0,1,0))); toast('Treasure!', null, 'new', lines.join('<br>')); }
+function placeChest(key, x, z, rot=0){
+  if (!TX.chests) TX.chests={}; const opened=()=>!!TX.chests[key];
+  const t=new Thing('chest', x, z, 0.55, buildChest(opened()), ()=>opened()?null:'Open', th=>{ if (opened()) return; TX.chests[key]=1; save(); const ry=th.obj.rotation.y; th.swap(buildChest(true)); th.obj.rotation.y=ry; openTreasure(key, th.pos); }, { hit:[0.6,0.4] });
+  t.obj.rotation.y=rot; return t; }
+const placeSign = (x,z,title,lines,rot=0) => { const t=new Thing('sign', x, z, 0.35, buildSignpost(title), 'Read', ()=>dialog(title, 500, typeof lines==='function'?lines():lines), { reach:1.8, hit:[0.7,1.1] }); t.obj.rotation.y=rot; return t; };
+// clear wild trees and rocks off a patch of ground (for buildings and secrets)
+function clearPatch(x,z,rad){ for (const e of ents.slice()){ if (e.removed) continue; const d=Math.hypot(e.pos.x-x, e.pos.z-z); if (d<rad && ((e instanceof Tree && !e.rec) || e instanceof Rock || e instanceof Weed || e instanceof Stump)) e.remove(); } }
+// somewhere open near a point
+function openSpotNear(x,z,minD,maxD,r){ for (let k=0;k<200;k++){ const a=r()*TAU, d=minD+r()*(maxD-minD), px=x+Math.cos(a)*d, pz=z+Math.sin(a)*d;
+    if (walkable(px,pz) && !blocked(px,pz,0.8) && rawHeight(px,pz)>SAND_H-0.1 && !onDock(px,pz) && !onBridge(px,pz)) return [px,pz]; } return null; }
+
+/* ---- the treasure map and letters in bottles ---- */
+function landmarkFor(x,z){
+  const L=[]; for (const r of rocks) if (!r.removed) L.push([r.pos.x, r.pos.z, 'the big grey rock']);
+  if (POND.x<1000) L.push([POND.x, POND.z, 'the middle of the pond']);
+  L.push([DOCK.x0, DOCK.z, 'the end of the dock where you landed']);
+  for (const b of BRIDGES) if (b.x<1000) L.push([b.x, b.z, 'the bridge']);
+  if (LAY.tortoise) L.push([LAY.tortoise.x, LAY.tortoise.z, 'the sleeping tortoise']);
+  let best=null, bd=1e9; for (const l of L){ const d=Math.hypot(l[0]-x, l[1]-z); if (d>4 && d<bd){ bd=d; best=l; } }
+  return best || [0,0,'the middle of the island']; }
+function mapClue(m){ const [lx,lz,name]=landmarkFor(m.x, m.z), dx=Math.round(m.x-lx), dz=Math.round(m.z-lz), parts=[];
+  if (dz) parts.push(`${Math.abs(dz)} pace${Math.abs(dz)===1?'':'s'} ${dz<0?'north':'south'}`); if (dx) parts.push(`${Math.abs(dx)} pace${Math.abs(dx)===1?'':'s'} ${dx>0?'east':'west'}`);
+  return `Start at ${name}. Walk ${parts.join(', then ')}. Dig where the X is.`; }
+function setupTreasureMap(){
+  const r=tripRand('map'); if (!TX.map){ let p=null; for (let k=0;k<300 && !p;k++){ const a=r()*TAU, d=(0.15+r()*0.55)*islandR(a), x=Math.cos(a)*d, z=Math.sin(a)*d;
+      if (walkable(x,z) && !blocked(x,z,0.8) && rawHeight(x,z)>SAND_H+0.1 && Math.hypot(x-DOCK.x0,z-DOCK.z)>12 && !hiddenSpot(x,z) && !(LAY.tortoise && Math.hypot(x-LAY.tortoise.x,z-LAY.tortoise.z)<5)) p=[x,z]; }
+    if (!p) return; TX.map={ x:+p[0].toFixed(1), z:+p[1].toFixed(1), read:false, dug:false };
+    const b=beachSpot(r); if (b) S.ground.push({ id:'bottle_note', x:b[0], z:b[1], beach:true, bottle:true, note:'map' }); save(); }
+  TX.map.clue=mapClue(TX.map);
+  if (!TX.map.dug) new SecretDig(TX.map.x, TX.map.z, ()=>TX.map.read, pos=>{ TX.map.dug=true; save(); placeChest('map', pos.x, pos.z, -0.4); Snd.jingle(); toast('X marks the spot!', null, 'new', 'A chest was buried here.'); });
+  else placeChest('map', TX.map.x, TX.map.z, -0.4); }
+function readTreasureMap(){
+  TX.map.read=true; save();
+  openPanel('A torn treasure map'); const w=Math.max(240, Math.min(pBody.clientWidth-8, 520)), cv=document.createElement('canvas'), dpr=Math.min(2, devicePixelRatio||1);
+  cv.width=Math.round(w*dpr); cv.height=Math.round(w*dpr); cv.style.cssText=`width:${w}px;height:${w}px;border-radius:14px;display:block;margin:0 auto;filter:sepia(.55) saturate(.8)`;
+  pBody.appendChild(cv); const off=document.createElement('canvas'); off.width=w; off.height=w; drawIslandMap(off, { treasureOnly:true }); const ctx=cv.getContext('2d'); ctx.scale(dpr,dpr); ctx.drawImage(off,0,0);
+  const note=document.createElement('div'); note.className='notice'; note.style.marginTop='10px'; note.innerHTML=`<b>Scrawled on the back:</b><br>${TX.map.clue}<div class="muted" style="margin-top:6px">The X shows on your own map now too. Bring a shovel.</div>`; pBody.appendChild(note); }
+function bottleLetter(){
+  const r=tripRand('bottle'), from=VY.placeName(r)+' Isle', P=VY.makeFolk(S.seed+':bottle', 0, from, null);
+  const lines={ cheerful:'Hello, whoever you are!! I\'m throwing this into the sea to see if anyone finds it. If you do, you\'re my new pen pal!',
+    gruff:'If you found this, the sea works. Write back if you want. I won\'t hold my breath.', dreamy:'To whoever the tide chose: I wrote this under a full moon. Maybe it found you for a reason.',
+    sporty:'Bottle toss, personal best distance! If you\'re reading this, write me back!', caring:'To whoever finds this: I hope you\'re well and eating properly. Write to me if you\'d like a friend.',
+    elegant:'To the fortunate finder of this bottle: I am seeking a correspondent of taste. Do write.', lazy:'Hi. I\'m bored. Write back maybe. Or not. No pressure.' }[P.personality];
+  addContact({ id:P.id, name:P.name, kind:'trip', from, spec:P, summary:`${VY.persWord(P.personality)} ${VY.speciesName(P.look).toLowerCase()} who sent a letter in a bottle from ${from}.`, penpal:true });
+  const gift=['scallop','cowrie','sanddollar','starfish'][Math.floor(r()*4)];
+  openPanel('A letter in a bottle'); pBody.innerHTML=`<div class="letter"><p>To whoever finds this,</p><p>${lines}</p><p>${P.name}, ${from}</p></div>
+    <div class="notice" style="margin-top:10px"><b>${P.name}</b> is in your pen pals now. Write back from the town hall, the Portal Station, or Menu &gt; Pen pals.</div>`;
+  const res=addItem(gift); if (res) itemToast(gift, res==='new', 'Found'); else dropNear(gift, player.pos, 1);
+  Snd.jingle(); }
+function openNote(rec){ if (rec.note==='map') readTreasureMap(); else if (rec.note==='letter') bottleLetter(); }
+
+/* ---- the islands' own surprises ---- */
+function setupCave(){
+  const F=FALLS[0]; if (!F) return; const r=tripRand('cave');
+  for (let k=0;k<160;k++){ const side=k%2?1:-1, v=side*(3.2+r()*3.2), u=-0.6+r()*1.8, x=F.sx+F.dx*u-F.dz*v, z=F.sz+F.dz*u+F.dx*v;
+    if (!walkable(x,z) || blocked(x,z,0.7)) continue; const bx=x+F.dx*1.8, bz=z+F.dz*1.8; if (rawHeight(bx,bz) < rawHeight(x,z)+1.0) continue;
+    const g=new THREE.Group(), rock=M(0x7a7468,{ flatShading:true }), dark=new THREE.MeshBasicMaterial({ color:0x0e0c0a });
+    const hole=new THREE.Mesh(new THREE.CircleGeometry(1.25,20,0,Math.PI), dark); hole.position.set(0,0.05,0); g.add(hole);
+    for (let i=0;i<7;i++){ const a=Math.PI*i/6; mk(G.dod(0.45+((i*11)%5)/12), rock, Math.cos(a)*1.4, Math.sin(a)*1.3, 0.1, g).rotation.set(i,i*2,0); }
+    for (let i=0;i<5;i++){ const s=mk(G.cone(0.08,0.4,5), rock, -0.8+i*0.4, 1.0-((i*3)%2)*0.15, 0.15, g); s.rotation.x=Math.PI; }
+    const ang=Math.atan2(-F.dx, -F.dz); g.position.set(x+F.dx*0.95, groundY(x,z), z+F.dz*0.95); g.rotation.y=ang; OUT.add(g);
+    clearPatch(x,z,2.2); placeChest('cave', x+F.dx*0.4, z+F.dz*0.4, ang); TX.cavePos=[x,z]; return; } }
+function setupIslet(){
+  const I=LAY.islet; clearPatch(I.x, I.z, I.r+1);
+  if (I.kind==='tide'){
+    placeChest('tide', I.x+0.6, I.z-0.4, Math.atan2(-I.x,-I.z));
+    const p=LAY.bar[0], q=LAY.bar[1], a=Math.atan2(q[1]-p[1], q[0]-p[0]), sx=p[0]-Math.cos(a)*2.4+Math.sin(a)*1.6, sz=p[1]-Math.sin(a)*2.4-Math.cos(a)*1.6;
+    if (walkable(sx,sz)) placeSign(sx, sz, 'Sandbar', ()=>[lowTide() ? `The tide is out. The sandbar to the little islet is dry for about ${tideMinutes()} more minute${tideMinutes()===1?'':'s'}.` : `The tide is in. The sandbar shows again in about ${tideMinutes()} minute${tideMinutes()===1?'':'s'}.`, 'Low tide comes every half hour and lasts about 12 minutes. Don\'t worry about getting stuck out there.'], -a+Math.PI/2);
+    // water over the sandbar at high tide
+    const g=new THREE.Group(), mat=new THREE.MeshStandardMaterial({ color:0x4cc3d6, transparent:true, opacity:0.82, roughness:0.3 });
+    for (let i=0;i<LAY.bar.length-1;i++){ const A=LAY.bar[i], B=LAY.bar[i+1], L=Math.hypot(B[0]-A[0],B[1]-A[1]); const m=new THREE.Mesh(new THREE.PlaneGeometry(L+2.2, 4.6), mat); m.rotation.x=-Math.PI/2; m.rotation.z=-Math.atan2(B[1]-A[1],B[0]-A[0]); m.position.set((A[0]+B[0])/2, 0.42, (A[1]+B[1])/2); g.add(m); }
+    OUT.add(g); new Thing('tide', p[0], p[1], 0.1, new THREE.Group(), null, null, { solid:false, update:()=>{ g.visible=!lowTide(); } }); }
+  else {   // sunken temple ruins with a fossil inside
+    const g=buildTempleRuins(); g.position.set(I.x, groundY(I.x,I.z)-0.1, I.z); g.rotation.y=Math.atan2(I.x,I.z); OUT.add(g);
+    for (const [x,z] of LAY.stones){ const s=mk(G.cyl(0.85,0.95,0.3,9), M(0xa8a090,{ flatShading:true }), 0,0,0); s.position.set(x, 0.22, z); s.rotation.y=x; OUT.add(s); }
+    if (!TX.templeDug) new SecretDig(I.x, I.z+0.4, ()=>true, pos=>{ TX.templeDug=true; const f=tierPick(Math.random, Object.values(ITEMS).filter(i=>i.kind==='fossil' && allowedFind(i)), i=>luckW(i,'dig'), 'dig'); setTimeout(()=>dropNear(f.id, pos, 0.3, true), 200); toast('Something old was buried in the temple floor.'); }, true);
+    placeSign(LAY.stones[0][0]-0.2, LAY.stones[0][1]+1.6, 'Old stones', ['Stepping stones lead out to a half-sunken temple.', 'Locals say something was buried in its floor long ago.']); } }
+function setupTortoise(){
+  const T=LAY.tortoise, g=buildTortoise(T); g.position.set(T.x, 0, T.z); g.rotation.y=-T.a; OUT.add(g);
+  const zz=textSprite('z','#6a7ab8'); zz.position.set(T.x+Math.cos(T.a)*(T.r+1.4), 2.3, T.z+Math.sin(T.a)*(T.r+1.4)); scene.add(zz); TX._zz=zz;
+  const hx=T.x+Math.cos(T.a)*(T.r+0.9), hz=T.z+Math.sin(T.a)*(T.r+0.9);
+  new Thing('tortoise', hx, hz, 0.8, new THREE.Group(), 'Talk', ()=>dialog('Giant Tortoise', 120, ['Zzz... mmh... a visitor...', 'Climb up if you like... everyone does... my shell itches anyway... zzz...']), { reach:2.2, hit:[1.0,0.8], solid:false });
+  if (!TX.shellDug) new SecretDig(T.x, T.z, ()=>true, pos=>{ TX.shellDug=true; save(); placeChest('shell', pos.x, pos.z, -T.a); toast('Something was tucked between the shell plates!'); }, true);
+  else placeChest('shell', T.x, T.z, -T.a); }
+function setupMushrooms(){
+  const [x,z,rad]=LAY.mush, g=buildMushroomRing(rad); g.position.set(x, groundY(x,z), z); OUT.add(g); clearPatch(x,z,rad+1);
+  new Thing('mushring', x, z, 0.1, new THREE.Group(), null, null, { solid:false, update:(th,dt,t)=>{
+    const night=atNight(), inside=Math.hypot(player.pos.x-x, player.pos.z-z)<rad-0.3;
+    for (const m of g.userData.caps) m.emissiveIntensity = night ? 0.7+Math.sin(t*2+m.id)*0.3 : 0.05;
+    if (!inside) return;
+    if (!night){ if (!TX.mushTold){ TX.mushTold=1; save(); toast('The mushrooms look sleepy.', null, '', 'Maybe they wake up after dark.'); } return; }
+    if (!TX.mushDone){ TX.mushDone=1; save(); Snd.jingle(); sparkle(player.pos.clone().add(new THREE.Vector3(0,1.4,0))); setTimeout(()=>{ dropNear('glimmermoss', player.pos, 1.2); toast('The ring lit up all at once...', thumb('glimmermoss'), 'new', 'Glimmer Moss grew right at your feet.'); }, 600); } } }); }
+function setupSpring(){
+  const [x,z]=LAY.spring, r=tripRand('spring');
+  { const milky=new THREE.Mesh(new THREE.CircleGeometry(3.4,28), new THREE.MeshStandardMaterial({ color:0xa8f0e4, transparent:true, opacity:0.55, roughness:0.2, depthWrite:false })); milky.rotation.x=-Math.PI/2; milky.position.set(x,0.06,z); OUT.add(milky); }
+  for (let i=0;i<11;i++){ const a=i/11*TAU, s=mk(G.dod(0.45+r()*0.3), M(0x8a8478,{ flatShading:true }), 0,0,0); const px=x+Math.cos(a)*4.1, pz=z+Math.sin(a)*4.1; s.position.set(px, groundY(px,pz)+0.1, pz); s.rotation.set(i,i,0); OUT.add(s); }
+  const at=openSpotNear(x,z,4.6,5.6,r)||[x+4.8,z];
+  new Thing('spring', at[0], at[1], 0.3, buildSignpost('Hot spring'), ()=> (TX.soak||0)>0 ? 'Read' : 'Soak', ()=>{
+    if ((TX.soak||0)>0){ dialog('Hot spring', 500, [`You're still nice and warm. Your next ${TX.soak} catch${TX.soak===1?'':'es'} will bite faster.`]); return; }
+    TX.soak=5; save(); Snd.splash(); dialog('Hot spring', 500, ['You sink into the warm water. Ahhh...', 'You feel loose and patient. Fish will bite faster for your next 5 catches.']); }, { reach:2.0, hit:[0.7,1.0] });
+  new Thing('steam', x, z, 0.1, new THREE.Group(), null, null, { solid:false, update:(th,dt)=>{ if (Math.random()<dt*3) puff(new THREE.Vector3(x+(Math.random()-0.5)*3, 0.0, z+(Math.random()-0.5)*3), 0xffffff, 1, 0.3, 1.6, 1.4, 1.6); } }); }
+
+/* ---- people out there ---- */
+const folkGreet = P => { const h=Time.hour(), D=DIALOGUE[P.personality]; const k=h<10?'morning':h<17?'day':h<21?'evening':'night'; const l=(D[k]||D.day); return l[Math.floor(Math.random()*l.length)]; };
+function folkMenu(P, keeper, extra){
+  const c={ c:P.catch }, v=P.voice, D=DIALOGUE[P.personality];
+  addContact({ id:P.id, name:P.name, kind:'trip', from:P.from, spec:P, summary:`${VY.persWord(P.personality)} ${VY.speciesName(P.look).toLowerCase()} from ${P.from}.${P.role?' '+({ angler:'An old angler.', monk:'A monk at the abbey.', ring:'Runs the circus games.', keeper:'Keeps the lighthouse.', smuggler:'Sells things you can\'t get anywhere else.' }[P.role]||''):''}` });
+  const day=(TX.talk=TX.talk||{});
+  const menu=()=>dialog(P.name, v, [], null, [
+    ...(extra ? extra(menu) : []),
+    { label:'Chat', fn:()=>{ const first=!day[P.id]; if (first){ day[P.id]=1; S.friend[P.id]=(S.friend[P.id]||0)+1; save(); } const L=VY.FOLK_CHAT[P.personality]; dialog(P.name, v, [fill(L[Math.floor(Math.random()*L.length)], c)], menu); } },
+    { label:'Give a gift', fn:()=>{ if ((TX.gave||{})[P.id]){ dialog(P.name, v, [fill('You already gave me something, {c}! That\'s plenty.', c)], menu); return; }
+        openBag('give', i=>{ panelClose=null; closePanel(); const s=S.inv[i], it=ITEMS[s.id]; removeAt(i,1); (TX.gave=TX.gave||{})[P.id]=1;
+          const tier=P.loves.includes(it.kind)?'love':P.likes.includes(it.kind)?'like':'meh'; S.friend[P.id]=(S.friend[P.id]||0)+(tier==='love'?3:tier==='like'?2:1); save();
+          if (tier==='love'){ Snd.jingle(); sparkle(keeper.pos.clone().add(new THREE.Vector3(0,2,0))); }
+          dialog(P.name, v, [fill(D[tier][0], { c:P.catch, item:it.name })], menu); }, ()=>menu()); } },
+    ...(!(S.contacts && S.contacts[P.id] && S.contacts[P.id].penpal) ? [{ label:'Want to be pen pals?', fn:()=>{ const C=S.contacts[P.id]; if (C) C.penpal=true; S.friend[P.id]=(S.friend[P.id]||0)+1; save();
+        dialog(P.name, v, [fill(VY.PENPAL_ASK[P.personality], c), 'You can write to me from your town hall or your Portal Station.'], menu); } }] : []),
+    { label:'Bye!', alt:true, fn:()=>{} } ]);
+  dialog(P.name, v, [fill(folkGreet(P), c)], menu); }
+function folkKeeper(P, x, z, extra, face){
+  const spec={ name:P.name, voice:P.voice, folk:true, build:()=>buildAnimal({ ...P }) };
+  const k=new Keeper(spec, x, z, kp=>folkMenu(P, kp, extra)); k.rest=face||0; return k; }
+
+/* ---- little towns ---- */
+const HUT_ROOFS=[0xd8604d,0x6a8ad8,0x7ab04a,0xe8a040,0x9a6ac0];
+// cottages stand like islanders' homes: a round footprint, door to the front
+function placeCottage(kind, x, z, obj, label, act, r=HOUSE_R[1]){ const b=new Building(kind, x, z, r, obj, label, act); b.doorPt=doorOf(b); b.reach=r+1.4; return b; }
+function townBuilding(s, i, P){
+  clearPatch(s.x, s.z, s.r+1.2);
+  if (s.role==='house'){ const id='trip_'+S.seed+'_'+i, obj=buildCottage(id, { roofC:HUT_ROOFS[i%HUT_ROOFS.length], accent:P?P.room.accent:0x6a9ad8 });
+    const b=placeCottage('tb'+i, s.x, s.z, obj, 'Knock', ()=>{ Snd.door(); toast(P ? `${P.name} isn't inside. They're out and about.` : 'Nobody answers.'); }); return b; }
+  const g = s.role==='lighthouse' ? buildLighthouse() : s.role==='tent' ? buildCircusTent() : s.role==='wagon' ? buildWagon([0x3a7ad8,0x7ab04a,0xd8604d][i%3]) : s.role==='cove' ? buildCove() : s.role==='board' ? buildBoard() : null;
+  if (!g) return null;
+  const toSea = Math.atan2(s.x, s.z); if (s.role==='lighthouse' || s.role==='cove') g.rotation.y=toSea+Math.PI; else g.rotation.y=Math.atan2(-s.x,-s.z)+Math.PI;
+  g.position.set(s.x, groundY(s.x,s.z), s.z); OUT.add(g); const R=s.role==='tent'?4.4:s.role==='lighthouse'?1.9:s.role==='wagon'?1.5:s.role==='cove'?2.6:0.8;
+  setRects('tb'+i, [[s.x-R,s.z-R,s.x+R,s.z+R]]); return g; }
+function inFront(s, d){ const a=Math.atan2(-s.x,-s.z); return [s.x+Math.sin(a)*d, s.z+Math.cos(a)*d]; }
+function setupTown(){
+  const T=LAY.village; if (!T) return; const K=T.kind, n=VY.TOWN_KINDS[K].folk;
+  const roles={ hamlet:['angler'], monastery:['monk','monk'], circus:['ring'], lighthouse:['keeper'], smugglers:['smuggler'], board:[] }[K]||[];
+  const folk=[]; for (let i=0;i<n;i++) folk.push(VY.makeFolk(S.seed, i, PLAN.name, roles[i]||null));
+  const spots=T.spots, byRole=r=>spots.find(s=>s.role===r), houses=spots.filter(s=>s.role==='house');
+  // the monastery's people live in the abbey; everyone else gets a cottage if there's one for them
+  const owners=new Map(); let j=(K==='monastery'||K==='lighthouse')?folk.length:K==='smugglers'?1:0; for (const h of houses){ if (j<folk.length) owners.set(h, folk[j++]); }
+  const housed=new Set([...owners.values()].map(P=>P.id));
+  spots.forEach((s,i)=>{ const P=owners.get(s)||null, b=townBuilding(s, i, P);
+    if (P){ const d=(b && b.doorPt) ? b.doorPt : inFront(s,4), p=openSpotNear(d[0], d[1], 1.4, 3.4, tripRand('f'+i))||d; folkKeeper(P, p[0], p[1], roleMenu(P), Math.atan2(-p[0],-p[1])+Math.PI); } });
+  const standBy=(P, s, dist)=>{ const d=inFront(s, dist), p=openSpotNear(d[0], d[1], 0.5, 3, tripRand('sb'+P.id))||d; folkKeeper(P, p[0], p[1], roleMenu(P), Math.atan2(-p[0],-p[1])); };
+  if (K==='lighthouse'){ const lh=byRole('lighthouse'); if (lh){ const a=Math.atan2(lh.x,lh.z)+Math.PI; new Thing('lhdoor', lh.x+Math.sin(a)*2.3, lh.z+Math.cos(a)*2.3, 0.4, new THREE.Group(), ()=>TX.climbed?'Look':'Climb up', ()=>climbLighthouse(), { solid:false, reach:1.8, hit:[0.8,1.0] }); } }
+  if (K==='monastery'){ const m=byRole('monastery'); if (m){ clearPatch(m.x, m.z, m.r+2); const obj=buildCottage('abbey_'+S.seed, { roofC:0x7a4a3a, accent:0xb8a070 }); obj.scale.setScalar(1.15);
+      placeCottage('abbey', m.x-1.2, m.z, obj, 'Knock', ()=>{ Snd.door(); toast('The abbey is quiet. The monks are out in the garden.'); }, 3.1);
+      const tw=buildBellTower(), p=[m.x+3.4, m.z-1.6]; tw.position.set(p[0], groundY(p[0],p[1]), p[1]); OUT.add(tw); setRects('bell',[[p[0]-1,p[1]-1,p[0]+1,p[1]+1]]); } }
+  if (K==='hamlet'){ const h=houses[0]; if (h){ const p=openSpotNear(h.x, h.z, 6, 9, tripRand('rack')); if (p){ const g=buildFishRack(); g.position.set(p[0], groundY(p[0],p[1]), p[1]); g.rotation.y=Math.atan2(p[0],p[1]); OUT.add(g); setRects('rack',[[p[0]-1.2,p[1]-0.3,p[0]+1.2,p[1]+0.3]]); } } }
+  if (K==='board'){ const b=byRole('board'); if (b) new Thing('nboard', b.x, b.z+0.6, 0.8, new THREE.Group(), 'Read', ()=>openNoticeBoard(folk), { solid:false, reach:2.2, hit:[1.0,1.0] }); }
+  let anchor = byRole('lighthouse')||byRole('tent')||byRole('cove')||byRole('monastery')||spots[0];
+  if (!anchor){ const p=openSpotNear(DOCK.x0-9, DOCK.z, 2, 9, tripRand('anchor')); if (p) anchor={ x:p[0], z:p[1], r:1, role:'square' }; }
+  for (const P of folk){ if (housed.has(P.id) || !anchor) continue; standBy(P, anchor, anchor.role==='tent'?6.3:anchor.role==='lighthouse'?4.2:anchor.role==='monastery'?6.2:4.5); }
+  TX.folk=folk.map(p=>p.id); }
+function roleMenu(P){
+  if (P.role==='angler') return back=>{ const want=anglerWants(); if (!want) return [];
+    const it=ITEMS[want], have=countItem(want)>0, left=3-(TX.anglerSold||0);
+    return [{ label: have && left>0 ? `Sell a ${it.name} (${fmt(it.price*3)})` : 'What are you after?', fn:()=>{
+      if (!have || left<=0) return dialog(P.name, P.voice, [left<=0 ? 'That\'s all the '+it.name+' I need today. Thank you kindly.' : `I've a craving for ${it.name}. Bring me one and I'll pay triple: ${fmt(it.price*3)} clams.`, 'They\'re around here somewhere, if you\'re patient.'], back);
+      const slot=S.inv.findIndex(s=>s.id===want); removeAt(slot,1); TX.anglerSold=(TX.anglerSold||0)+1; addClams(it.price*3); Snd.coin(); save();
+      dialog(P.name, P.voice, [`A fine ${it.name}! ${fmt(it.price*3)} clams, as promised.`], back); } }]; };
+  if (P.role==='monk') return back=>[{ label:'The seed trade', fn:()=>{
+      const left=2-(TX.monk||0), fruit=S.inv.filter(s=>ITEMS[s.id].kind==='fruit').reduce((a,s)=>a+s.n,0);
+      if (left<=0) return dialog(P.name, P.voice, ['Our seed beds are resting now. Thank you for your kindness.'], back);
+      if (fruit<5) return dialog(P.name, P.voice, ['Bring us five pieces of fruit for the kitchen, any kind, and I will give you seeds from our garden.', 'They grow things here your island has never seen.'], back);
+      dialog(P.name, P.voice, ['Five pieces of fruit for a handful of our seeds?'], null, [
+        { label:'Here you go', fn:()=>{ let need=5; for (let i=S.inv.length-1;i>=0 && need>0;i--){ const s=S.inv[i]; if (ITEMS[s.id].kind!=='fruit') continue; const k=Math.min(need,s.n); removeAt(i,k); need-=k; }
+            const home=OWN.gen && OWN.gen.terrain ? islandSeedPool(OWN.seed, OWN.gen.terrain) : islandSeedPool(OWN.seed||0, 'hilly');
+            const pool=Object.keys(CROPS).map(c=>c+'_seeds').filter(id=>ITEMS[id] && !home.includes(id)), id=pool[Math.floor(Math.random()*pool.length)]||'tomato_seeds';
+            let got=0; for (let k=0;k<5;k++) if (addItem(id)) got++; for (let k=got;k<5;k++) dropNear(id, player.pos, 1);
+            TX.monk=(TX.monk||0)+1; save(); Snd.jingle(); dialog(P.name, P.voice, [`${ITEMS[id].name}. They don't grow on your island, so take good care of them.`], back); } },
+        { label:'Not now', alt:true, fn:back } ]); } }];
+  if (P.role==='ring') return back=>[{ label:'Play the cup game (300)', fn:()=>shellGame(P, back) }];
+  if (P.role==='keeper') return back=>[{ label:'The lighthouse', fn:()=>{
+      if (!TX.climbed) return dialog(P.name, P.voice, ['Go on up, the door\'s open. 112 steps. Then come tell me what you think of the view.'], back);
+      if (TX.lantern) return dialog(P.name, P.voice, ['Best view in the world, isn\'t it? Come back any time.'], back);
+      TX.lantern=1; noteGift('beaconlamp'); save(); const res=addItem('beaconlamp'); if (!res) dropNear('beaconlamp', player.pos, 1.2);
+      dialog(P.name, P.voice, ['You climbed it! Hardly anyone does.', 'Here. An old lantern from the lamp room. It deserves a window to shine out of.'], ()=>{ itemToast('beaconlamp', res==='new', 'Received'); back(); }); } }];
+  if (P.role==='smuggler') return back=>[{ label:'What are you selling?', fn:()=>smugglerShop(P) }];
+  return null;
+}
+function anglerWants(){ if (TX.angler) return TX.angler; const r=tripRand('angler'), pool=Object.values(ITEMS).filter(i=>i.kind==='fish' && (i.rarity??5)>=3 && (i.where==='sea'||i.where==='river') && inMonths(Time.month(), i.months) && allowedFind(i));
+  if (!pool.length) return null; TX.angler=pool[Math.floor(r()*pool.length)].id; save(); return TX.angler; }
+function climbLighthouse(){ if (TX.climbed){ dialog('Lighthouse', 500, ['The lamp room is warm and smells of brass polish.']); return; } TX.climbed=1; save(); Snd.door();
+  dialog('Lighthouse', 500, ['You climb, and climb, and climb. 112 steps.', 'At the top the whole sea opens up. You can see three other islands from here, and a boat that might be Skipper Wick\'s.', 'You should tell the keeper you made it.']); }
+function shellGame(P, back){
+  const plays=TX.cups||0; if (plays>=5) return dialog(P.name, P.voice, ['That\'s enough cups for one day! Come back next time the circus is in town.'], back);
+  if (S.clams<300) return dialog(P.name, P.voice, ['Three hundred clams a go. Come back when your pockets jingle!'], back);
+  addClams(-300); TX.cups=plays+1; save(); const win=Math.floor(Math.random()*3);
+  const pickCup=i=>{ if (i===win){ const tk=GUEST?null:randomTicket(); Snd.fanfare(); if (tk){ const res=addItem(tk); if (!res) dropNear(tk, player.pos, 1); dialog(P.name, P.voice, ['Under that one! You win a boat ticket!'], ()=>{ itemToast(tk, res==='new', 'Won'); back(); }); } else dialog(P.name, P.voice, ['A winner! ...But tickets need an account. Have a round of applause instead!'], back); }
+    else { Snd.fail(); dialog(P.name, P.voice, [`Nope! It was the ${['left','middle','right'][win]} one. Again?`], back); } };
+  dialog(P.name, P.voice, ['Watch closely... shuffle, shuffle, shuffle... Where\'s the pea?'], null, [{ label:'Left', fn:()=>pickCup(0) }, { label:'Middle', fn:()=>pickCup(1) }, { label:'Right', fn:()=>pickCup(2) }]); }
+function smugglerShop(P){
+  if (!TX.smug){ const r=tripRand('smug'), pool=Object.values(ITEMS).filter(i=>(i.kind==='furniture' && ['favor','gift','rare'].includes(i.shop)) || (i.kind==='wear' && i.shop==='favor')); const o=[];
+    while (o.length<3 && pool.length) o.push(pool.splice(Math.floor(r()*pool.length),1)[0].id); TX.smug={ stock:o, sold:{} }; save(); }
+  const price=id=>Math.round(((ITEMS[id].buy||ITEMS[id].price*4||4000)*2)/100)*100;
+  const render=()=>{ openPanel(`${P.name}'s crates`); pBody.innerHTML='<div class="muted" style="margin-bottom:8px">"Don\'t ask where it came from. You won\'t find these in any shop."</div>'+TX.smug.stock.map(id=>{ const it=ITEMS[id], sold=TX.smug.sold[id];
+      return `<div class="row"><img src="${thumb(id)}"><div class="grow"><div class="nm">${it.name}</div><div class="sub">${sold?'Sold':fmt(price(id))+' clams'}</div></div>${sold?'':`<button class="btn" data-b="${id}" ${S.clams<price(id)?'disabled':''}>Buy</button>`}</div>`; }).join('');
+    pBody.querySelectorAll('[data-b]').forEach(b=>b.onclick=()=>{ const id=b.dataset.b, p=price(id); if (S.clams<p || TX.smug.sold[id]) return;
+      if (ITEMS[id].kind==='wear'){ if (!S.wardrobe.includes(id)) S.wardrobe.push(id); } else if (!addItem(id)){ toast('Your bag is full.'); return; }
+      addClams(-p); TX.smug.sold[id]=1; save(); Snd.coin(); toast(`Bought ${ITEMS[id].name}.`); render(); }); };
+  render(); }
+function openNoticeBoard(folk){
+  if (!TX.board){ const r=tripRand('board'), asks=[['wood',6,'firewood for the winter'],['stone',4,'stones for a garden wall'],['softwood',5,'kindling'],['scallop',2,'shells for a wind chime'],['weed',5,'weeds for the compost heap'],['coconut',2,'coconuts for a pie'],['clay',2,'clay for pots']];
+    const list=[]; for (let i=0;i<3;i++){ const a=asks.splice(Math.floor(r()*asks.length),1)[0], who=folk[i%folk.length]; list.push({ id:a[0], n:a[1], why:a[2], who:who.id, name:who.name, done:false }); } TX.board=list; save(); }
+  const render=()=>{ openPanel('Village noticeboard');
+    pBody.innerHTML='<div class="muted" style="margin-bottom:8px">Help a neighbor out. Each favor pays a boat ticket.</div>'+TX.board.map((f,i)=>{ const have=countItem(f.id);
+      return `<div class="row"><img src="${thumb(f.id)}"><div class="grow"><div class="nm">${f.name} needs ${f.n} ${ITEMS[f.id].name}</div><div class="sub">${f.done?'Done, thank you!':`For ${f.why}. You have ${have}.`}</div></div>${f.done?'':`<button class="btn" data-f="${i}" ${have<f.n?'disabled':''}>Give</button>`}</div>`; }).join('');
+    pBody.querySelectorAll('[data-f]').forEach(b=>b.onclick=()=>{ const f=TX.board[+b.dataset.f]; if (f.done || countItem(f.id)<f.n) return; removeItem(f.id, f.n); f.done=true; S.friend[f.who]=(S.friend[f.who]||0)+2;
+      const tk=GUEST?null:randomTicket(); if (tk){ const res=addItem(tk); if (!res) dropNear(tk, player.pos, 1); itemToast(tk, res==='new', 'Received'); } Snd.jingle(); save(); render(); }); };
+  render(); }
+
+/* ---- rare and legendary islands ---- */
+const HOSTS = {
+  workshop: { name:'Tamsin', voice:300, acc:['apron'], accC:0x8a5a3a, roof:0x8a5a3a },
+  attic:    { name:'Mothwick', voice:240, acc:['glasses'], accC:0x333333, roof:0x6a6aa8 },
+  wizgarden:{ name:'Bellamy', voice:200, acc:['beanie'], accC:0x5a4a8a, roof:0x5a4a8a },
+  library:  { name:'Pagewell', voice:420, acc:['glasses'], accC:0x333333, roof:0x7a4a3a },
+};
+function setupSpecial(){
+  const th=TRIP_THEME, nearDock=(d=6)=>openSpotNear(DOCK.x0-4, DOCK.z, 3, d, tripRand('sign'));
+  const sp=nearDock(); const lines={ clamstone:['Clamstone Isle','Every rock on this island has clams in it. Hit them all!'], grove:['Golden Grove','Shake a tree for golden sap. Chop one for heartwood.'],
+    starfall:['Starfall Isle','The stars fall here every night. Pick them up before the tide takes them.'], shimmer:['Shimmer Lagoon','Only the rarest fish swim in these waters. Bring a good rod.'] }[th];
+  if (sp && lines) placeSign(sp[0], sp[1], lines[0], [lines[1], `(There's only so much on any island. About ${fmt(VY.HAUL_CAP)} clams' worth, then it's spent.)`]);
+  const H=HOSTS[th]; if (H && LAY.host){ const [hx,hz]=LAY.host; clearPatch(hx,hz,6);
+    const obj=buildCottage('host_'+th, { roofC:H.roof, accent:0xe8c070 }); const b=placeCottage('host', hx, hz, obj, 'Knock', ()=>{ Snd.door(); toast(`${H.name} is outside.`); });
+    const d=b.doorPt, p=openSpotNear(d[0], d[1], 1.4, 3, tripRand('host'))||d;
+    const spec={ name:H.name, voice:H.voice, build:()=>buildAnimal({ look:CH.lookCode(CH.randomLook(tripRand('hostlook'), 0.2)), acc:H.acc, accC:H.accC }) };
+    const k=new Keeper(spec, p[0], p[1], ()=>({ workshop:talkWorkshop, attic:talkAttic, wizgarden:talkWizGarden, library:talkLibrary })[th](H)); k.rest=Math.atan2(-p[0],-p[1]); }
+  if (th==='starfall' && !TX.stars0){ TX.stars0=1; const r=tripRand('stars'); for (let i=0;i<22;i++){ const p=randLand(r, SAND_H+0.1, 12, 0.5); if (p) S.ground.push({ id:'starstone', x:p[0], z:p[1] }); } save(); spawnDaily(); }
+}
+function talkWorkshop(H){ const v=H.voice, nm=H.name;
+  if (TX.wish) return dialog(nm, v, ['Enjoy it. Made with care, that one.']);
+  if (!TX.wishAsk) return dialog(nm, v, ['A visitor! I make things. Anything at all, if I have a mind to.', 'But my hands are cold and my woodpile is empty. Bring me 10 wood and I\'ll make you whatever you like.'], ()=>{ TX.wishAsk=1; save(); });
+  if (countItem('wood')<10) return dialog(nm, v, [`Ten pieces of wood, that's all. You have ${countItem('wood')}. The trees here chop nicely.`]);
+  dialog(nm, v, ['Ah, that\'ll do nicely. Now then. Name it. Any piece of furniture there is, and I\'ll make it.'], ()=>{ removeItem('wood',10); save(); openWishList(H); }); }
+function openWishList(H){
+  const all=Object.values(ITEMS).filter(i=>i.kind==='furniture').sort((a,b)=>a.name.localeCompare(b.name));
+  const render=q=>{ const list=all.filter(i=>!q || i.name.toLowerCase().includes(q.toLowerCase()));
+    pBody.innerHTML=`<input id="wq" placeholder="Search furniture" value="${q||''}" style="width:100%;padding:8px;border-radius:10px;border:2px solid #e3cfa8;margin-bottom:8px;font:inherit">`+list.map(i=>`<div class="row"><img src="${thumb(i.id)}"><div class="grow"><div class="nm">${i.name}</div><div class="sub">${rarityLabel(i.rarity??5)}${i.legendary?' showpiece':''}</div></div><button class="btn" data-w="${i.id}">This one</button></div>`).join('');
+    const inp=pBody.querySelector('#wq'); inp.oninput=()=>{ const v=inp.value, at=inp.selectionStart; render(v); const n=pBody.querySelector('#wq'); n.focus(); n.setSelectionRange(at,at); };
+    pBody.querySelectorAll('[data-w]').forEach(b=>b.onclick=()=>{ const id=b.dataset.w; TX.wish=id; noteGift(id); save(); panelClose=null; closePanel();
+      const res=addItem(id); if (!res) dropNear(id, player.pos, 1.4); Snd.fanfare(); dialog(H.name, H.voice, [`The ${ITEMS[id].name}. A fine choice. Give me a moment...`, 'There. Made with my own two hands. Take good care of it.'], ()=>itemToast(id, res==='new', 'Received')); }); };
+  openPanel('Wish for anything'); render(''); }
+function talkAttic(H){ const v=H.voice, nm=H.name;
+  if (TX.attic) return dialog(nm, v, ['Mind the dust. Everything up here has a story.']);
+  const have=(OWN.museum && OWN.museum.items) || {}, missing=Object.values(ITEMS).filter(i=>MUSEUM.kinds.includes(i.kind) && !have[i.id] && allowedFind(i));
+  if (!missing.length) return dialog(nm, v, ['Your museum has everything? Everything?! Then I have nothing to teach you. Remarkable.']);
+  dialog(nm, v, ['I collect spares. Two of everything, in case one gets lonely.', 'Your museum is missing a few things, I hear. Pick one. It\'s yours.'], ()=>{
+    openPanel('Pick one specimen'); pBody.innerHTML=missing.sort((a,b)=>(a.rarity??5)-(b.rarity??5)).map(i=>`<div class="row"><img src="${thumb(i.id)}"><div class="grow"><div class="nm">${i.name}</div><div class="sub">${kindName(i.kind)} · ${rarityLabel(i.rarity??5)}</div></div><button class="btn" data-a="${i.id}">Take</button></div>`).join('');
+    pBody.querySelectorAll('[data-a]').forEach(b=>b.onclick=()=>{ const id=b.dataset.a, it=ITEMS[id]; TX.attic=id; noteGift(id); save(); panelClose=null; closePanel();
+      const meta=(it.kind==='fish'||it.kind==='bug') ? rollStats(id) : undefined; const res=addItem(id, meta); if (!res) dropNear(id, player.pos, 1.2, false, meta);
+      Snd.fanfare(); dialog(nm, v, [`The ${it.name}. Good eye. Professor Thistle will be thrilled.`], ()=>itemToast(id, res==='new', 'Received')); }); }); }
+function talkWizGarden(H){ const v=H.voice, nm=H.name;
+  if (TX.voucher) return dialog(nm, v, ['Tell Wendell to stand up straight. And to stop using pigeons for weather reports.']);
+  dialog(nm, v, ['Hm? A visitor. From Wendell\'s island, I can smell it. Pigeons and old potions.', 'I taught that boy everything he knows. Which is not much, but enough.', 'Here. A spell voucher. Give it to Wendell and he\'ll cast one big spell for free: move a building, or reshape a stretch of land, up to 50,000 clams of work.'], ()=>{
+    TX.voucher=1; S.rare.voucher=(S.rare.voucher||0)+50000; save(); Snd.fanfare(); toast('Spell voucher', null, 'new', 'Wendell will take up to 50,000 clams off your next spell.'); }); }
+function talkLibrary(H){ const v=H.voice, nm=H.name;
+  if (TX.libPlan) return dialog(nm, v, ['Shh. ...Oh, it\'s you. Enjoy your plan.']);
+  const u=unfoundPlans();
+  if (!u.length) return dialog(nm, v, ['You know every plan on these shelves already! Then take these instead. Every woodworker needs them.'], ()=>{ TX.libPlan='mats'; save(); for (const id of ['heartwood','goldsap','starstone']){ noteGift(id); const res=addItem(id); if (!res) dropNear(id, player.pos, 1.2); } Snd.jingle(); });
+  dialog(nm, v, ['Welcome to the Plan Library. Every rare woodworking plan ever drawn is on these shelves.', 'Visitors may take one. Choose carefully.'], ()=>{
+    openPanel('Choose a plan'); pBody.innerHTML=u.map(r=>`<div class="row"><img src="${thumb(r.id)}"><div class="grow"><div class="nm">${ITEMS[r.id].name}</div><div class="sub">Needs ${Object.entries(r.mats).map(([k,n])=>n+' '+ITEMS[k].name).join(', ')}</div></div><button class="btn" data-p="${r.plan}">Take</button></div>`).join('');
+    pBody.querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>{ TX.libPlan=b.dataset.p; save(); panelClose=null; closePanel(); learnPlan(b.dataset.p); }); }); }
+let starT=20;
+function starfallTick(dt){ if (TRIP_THEME!=='starfall' || World.inside) return; starT-=dt; if (starT>0) return; starT=25+Math.random()*30;
+  if (haulLeft()<=0) return capNote(); const p=openSpotNear(player.pos.x, player.pos.z, 4, 14, Math.random); if (!p) return;
+  const s=buildStar(), y0=26, from=new THREE.Vector3(p[0]+14, y0, p[1]-10), to=new THREE.Vector3(p[0], groundY(p[0],p[1])+0.3, p[1]); s.position.copy(from); scene.add(s); let t=0;
+  FALLING.push(dt=>{ t+=dt/1.4; s.position.lerpVectors(from, to, Math.min(1,t)); if (Math.random()<0.6) puff(s.position.clone(), 0xfff4b0, 1, 0.2, 0, 0.8, 0.5); if (t>=1){ scene.remove(s); Snd.jingle(); puff(to.clone(), 0xfff4b0, 10, 1, 2, 1, 0.8); dropNear('starstone', to, 0.2, true); return true; } return false; }); }
+const FALLING=[];
+
+/* ---- set the island up ---- */
+if (TRIP){
+  if (PLAN.secrets.includes('map')) setupTreasureMap();
+  if (PLAN.secrets.includes('bottle') && !TX.bottle){ TX.bottle=1; const b=beachSpot(tripRand('bottlespot')); if (b){ S.ground.push({ id:'bottle_note', x:b[0], z:b[1], beach:true, bottle:true, note:'letter' }); } save(); spawnDaily(); }
+  else if (PLAN.secrets.includes('map') && TX.map && !TX.mapSpawned){ TX.mapSpawned=1; save(); spawnDaily(); }
+  if (PLAN.secrets.includes('cave')) setupCave();
+  if (LAY.islet) setupIslet();
+  if (LAY.tortoise) setupTortoise();
+  if (LAY.mush) setupMushrooms();
+  if (LAY.spring) setupSpring();
+  if (LAY.reeds){ const r=tripRand('reeds'); for (const [px,pz,pr] of POOLS){ for (let i=0;i<8;i++){ const a=r()*TAU, d=pr+0.4+r()*0.8, x=px+Math.cos(a)*d, z=pz+Math.sin(a)*d; if (!walkable(x,z)) continue; const g=new THREE.Group(); for (let k=0;k<5;k++){ const b=mk(G.cyl(0.02,0.035,0.9+r()*0.6,5), M(0x7a9a4a), (r()-0.5)*0.4, 0.5, (r()-0.5)*0.4, g); b.rotation.z=(r()-0.5)*0.4; } mk(G.cap(0.06,0.18,4,6), M(0x6a4a30), 0, 1.25, 0, g); g.position.set(x, groundY(x,z), z); OUT.add(g); } } }
+  if (LAY.meadow){ const [mx,mz,mr]=LAY.meadow, r=tripRand('meadow'); for (let i=0;i<40;i++){ const a=r()*TAU, d=Math.sqrt(r())*mr, x=mx+Math.cos(a)*d, z=mz+Math.sin(a)*d; if (!walkable(x,z) || blocked(x,z,0.4)) continue; const sp=['tulip','daisy','cosmos','poppy','pansy'][Math.floor(r()*5)]; const fl=buildFlower(sp, 3, PLANTS[sp].colors[Math.floor(r()*PLANTS[sp].colors.length)]); fl.position.set(x, groundY(x,z), z); OUT.add(fl); } }
+  if (LAY.village) setupTown();
+  if (SPECIAL_ISLE) setupSpecial();
+  if (LAY.ropeBridges) for (const b of BRIDGES){ for (const s of [-1,1]) for (const e of [-1,1]){ const x=b.x+b.ux*e*(b.len/2)+(-b.uz)*s*b.w, z=b.z+b.uz*e*(b.len/2)+b.ux*s*b.w; mk(G.cyl(0.07,0.08,1.4,6), M(0x7a5a3a), x, groundY(x,z)+0.5, z, OUT); } }
+}
+// a pen pal who followed a castaway invite or a bottle home is handled by the contacts below
+
+/* =====================================================================
+   PEN PALS: everyone you talk to goes into your contacts (islanders, shopkeepers, people you meet on trips, friends).
+   Write them letters from a few set templates, tuck in a gift, and they write back the next day. Good pen pals from
+   other islands can be invited to move in.
+   S.contacts = { id: { name, kind:'res'|'keeper'|'trip', summary, from, spec?, penpal, sent, got, met } }   (player save)
+   S.letters  = { inbox:[{ id, from, name, lines, gift, at, read }], out:[{ to, tpl, gift, day }] }             (player save)
+   ===================================================================== */
+if (!S.contacts || typeof S.contacts!=='object') S.contacts={};
+if (!S.letters || typeof S.letters!=='object') S.letters={ inbox:[], out:[] };
+S.letters.inbox=S.letters.inbox||[]; S.letters.out=S.letters.out||[];
+const PENPAL_MOVE = { friend:8, letters:2 };   // how close a pen pal from another island needs to be before they'll move in
+function addContact(c){ if (GUEST) return; const was=S.contacts[c.id], now=Object.assign({ met:Date.now(), sent:0, got:0 }, was||{}, c);
+  if (was && was.penpal) now.penpal=true; if (was && was.spec && !c.spec) now.spec=was.spec;
+  const fresh=!was; S.contacts[c.id]=now; save(); if (fresh) setTimeout(()=>toast(`${c.name} was added to your contacts.`, null, '', 'Write to them from Menu > Pen pals.'), 700); }
+function noteKeeper(spec){ if (!spec || spec.folk || !spec.name) return; const nk=spec.name.toLowerCase().replace(/[^a-z ]/g,''), parts=nk.split(' ');
+  const key=parts[parts.length-1], sum=VY.KEEPER_SUMMARY[key]||VY.KEEPER_SUMMARY[parts[0]];
+  const id='k_'+nk.replace(/ /g,''); const R=RESIDENTS.find(x=>x.name===spec.name); if (R) return noteResident(R);
+  addContact({ id, name:spec.name, kind:'keeper', summary: sum || `Met on ${S.island}.`, voice:spec.voice }); }
+function noteResident(R){ const sp=VY.speciesName(resLook(R, TRIP && BOOT.own ? BOOT.own.seed : S.seed)).toLowerCase();
+  const here = !TRIP && !VISIT && livesHere(R.id), where = here ? `lives on ${S.island}` : VISIT ? `lives on ${S.island}` : `you met on ${S.island}`;
+  addContact({ id:R.id, name:R.name, kind:'res', summary:`${VY.persWord(R.personality)} ${sp} who ${where}.`, ...(R.look ? { spec:R } : {}) }); }
+const contactPerson = id => { const C=S.contacts[id]; if (!C) return null; if (C.spec) return C.spec; const R=RESIDENTS.find(x=>x.id===id); if (R) return R; return { name:C.name, personality:'caring', catch:'', loves:[], likes:['furniture','food'] }; };
+function sendLetter(id, tpl, slot){
+  const C=S.contacts[id]; if (!C || !LETTERS[tpl]) return false;
+  let gift=null; if (slot!==null && slot!==undefined && S.inv[slot]){ const s=S.inv[slot]; gift={ id:s.id, m:s.m }; removeAt(slot,1); }
+  S.letters.out.push({ to:id, tpl, gift, day:today() }); C.sent=(C.sent||0)+1; C.last=today(); S.friend[id]=(S.friend[id]||0)+1; save(); Snd.swoosh(); return true; }
+const sentToday = id => S.letters.out.some(o=>o.to===id && o.day===today()) || (S.contacts[id] && S.contacts[id].last===today());
+// letters you sent yesterday or before get their answers
+function deliverReplies(){
+  if (TRIP || VISIT || GUEST) return; const now=dayNum(today()); let n=0;
+  for (const o of S.letters.out.slice()){ if (now<=dayNum(o.day)) continue; S.letters.out.splice(S.letters.out.indexOf(o),1);
+    const C=S.contacts[o.to]; if (!C) continue; const P=contactPerson(o.to); let tier=null, giftName=null;
+    if (o.gift && ITEMS[o.gift.id]){ const it=ITEMS[o.gift.id]; giftName=it.name; tier=(P.loves||[]).includes(it.kind)?'love':(P.likes||[]).includes(it.kind)?'like':'meh'; S.friend[o.to]=(S.friend[o.to]||0)+(tier==='love'?3:tier==='like'?2:1); }
+    const lines=VY.penpalReply({ name:C.name, personality:P.personality||'caring', catch:P.catch||'' }, o.tpl, giftName, tier, S.player);
+    let back=null; const f=S.friend[o.to]||0;
+    if (f>=4 && Math.random()<(tier==='love'?0.6:0.3)){ const pool=Object.values(ITEMS).filter(i=>i.kind==='furniture' && i.shop==='stall' && inMonths(Time.month(), i.months) && (i.rarity??5)>=3); back=pool.length ? pool[Math.floor(Math.random()*pool.length)].id : null; if (back) lines.splice(lines.length-1, 0, 'I put something in the envelope for you, too.'); }
+    if (C.kind==='trip' && f>=PENPAL_MOVE.friend && (C.got||0)+1>=PENPAL_MOVE.letters && !C.hinted){ C.hinted=true; lines.splice(lines.length-1, 0, 'Sometimes I wonder what it would be like to live on your island...'); }
+    S.letters.inbox.unshift({ id:'L'+Date.now().toString(36)+n, from:o.to, name:C.name, lines, gift:back?{ id:back }:null, at:today(), read:false }); C.got=(C.got||0)+1; n++; }
+  // now and then a good pen pal writes first
+  const key='pp:'+today(); if (!S.letters.spont || S.letters.spont!==today()){ S.letters.spont=today(); const pals=Object.entries(S.contacts).filter(([id,c])=>c.penpal && (S.friend[id]||0)>=3);
+    if (pals.length && mulberry32(hashStr(key+S.seed))()<0.2){ const [id,c]=pals[Math.floor(Math.random()*pals.length)], P=contactPerson(id);
+      S.letters.inbox.unshift({ id:'L'+Date.now().toString(36)+'s', from:id, name:c.name, lines:VY.penpalReply({ name:c.name, personality:P.personality||'caring', catch:P.catch||'' }, 'hello', null, null, S.player), at:today(), read:false }); n++; } }
+  if (S.letters.inbox.length>60) S.letters.inbox.length=60;
+  save(); const unread=S.letters.inbox.filter(l=>!l.read).length; if (n && unread) setTimeout(()=>toast(`You have ${unread} new letter${unread>1?'s':''}!`, null, 'new', 'Read them from Menu > Pen pals.'), 4200); }
+const canInvite = id => { const C=S.contacts[id], T=S.town; if (!C || C.kind!=='trip' || !C.spec || TRIP || VISIT || GUEST) return { ok:false };
+  if (livesHere(id)) return { ok:false, why:`${C.name} already lives here.` };
+  if ((S.friend[id]||0)<PENPAL_MOVE.friend || (C.got||0)<PENPAL_MOVE.letters) return { ok:false, why:`You and ${C.name} need to be better pen pals first. Keep writing.` };
+  if ((T.hall||0)<1) return { ok:false, why:'Build the town hall first. Newcomers need it before they can settle.' };
+  if (T.res.length>=TOWN_MAX) return { ok:false, why:`Every plot is taken (${TOWN_MAX} islanders).` };
+  if (T.next) return { ok:false, why:'Someone is already moving in. Try again after they arrive.' };
+  return { ok:true }; };
+function invitePenpal(id){
+  const ck=canInvite(id); if (!ck.ok) return ck.why; const C=S.contacts[id], spec=JSON.parse(JSON.stringify(C.spec)); spec.home=null;
+  S.town.extra=(S.town.extra||[]).filter(x=>x.id!==id); S.town.extra.push(spec); let R=RESIDENTS.find(x=>x.id===id); if (!R){ R=JSON.parse(JSON.stringify(spec)); RESIDENTS.push(R); }
+  const sp=findHomeSpot(id); if (!sp) return 'There isn\'t a free spot on the island for a new house right now.';
+  claimHomeSpot(R, sp); S.town.next={ id, day:dayKeyOf(dayNum(today())+1) }; delete S.town.left[id]; save(); applyTown(); return null; }
+
+/* ---- the contacts and letters panel ---- */
+const esc = t => String(t??'').replace(/[&<>"]/g, c=>({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c]));
+function hearts(id){ const f=S.friend[id]||0, n=Math.min(5, Math.floor(f/3)); return '<span style="color:#e2604d">'+'&#9829;'.repeat(n)+'</span><span style="color:#d8c8b0">'+'&#9829;'.repeat(5-n)+'</span>'; }
+function avatar(C){ const L=CH.parseLook((C.spec && C.spec.look) || ''), col=((CH.SPECIES[L.sp]||{}).schemes||[{fur:0xe8c8a0}])[L.c||0].fur; return `<span style="display:inline-flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:50%;background:#${col.toString(16).padStart(6,'0')};border:2px solid #8b6b50;font-weight:700;color:#5b4336;flex:none">${esc(C.name[0]||'?')}</span>`; }
+let palsTab='contacts', palsFriends=null;
+async function openContacts(tab){
+  if (GUEST){ toast('Pen pals need an account.'); return; }
+  palsTab=tab||palsTab; openPanel('Pen pals'); deliverReplies();
+  if (BOOT.portal && BOOT.portal.online && !palsFriends){ try { const f=await BOOT.portal.list(); const m={}; for (const v of (f.canVisit||[])) m[v.ownerId]={ id:v.ownerId, name:v.name, island:v.island }; for (const v of (f.visitors||[])) m[v.friendId]=m[v.friendId]||{ id:v.friendId, name:v.name }; palsFriends=Object.values(m); } catch(e){ palsFriends=[]; } }
+  renderPals(); }
+function renderPals(){
+  const unread=S.letters.inbox.filter(l=>!l.read).length;
+  let h=`<div style="display:flex;gap:6px;margin-bottom:10px"><button class="btn ${palsTab==='contacts'?'':'alt'}" data-tab="contacts">Contacts</button><button class="btn ${palsTab==='letters'?'':'alt'}" data-tab="letters">Letters${unread?` (${unread})`:''}</button></div>`;
+  if (palsTab==='contacts'){
+    const list=Object.entries(S.contacts).sort((a,b)=>(b[1].penpal?1:0)-(a[1].penpal?1:0) || (S.friend[b[0]]||0)-(S.friend[a[0]]||0));
+    const groups=[['Pen pals from other islands',e=>e[1].kind==='trip'],['Your islanders',e=>e[1].kind==='res'],['Shopkeepers and helpers',e=>e[1].kind==='keeper']];
+    if (!list.length && !(palsFriends||[]).length) h+='<div class="notice">Nobody here yet. Everyone you talk to shows up here: your islanders, shopkeepers, and people you meet on boat trips.</div>';
+    for (const [title,f] of groups){ const g=list.filter(f); if (!g.length) continue; h+=`<div class="muted" style="margin:8px 0 4px;font-weight:600">${title}</div>`;
+      for (const [id,C] of g) h+=`<div class="row" data-c="${esc(id)}" style="cursor:pointer;gap:10px">${avatar(C)}<div class="grow"><div class="nm">${esc(C.name)}${C.penpal?' <span class="muted" style="font-weight:400">· pen pal</span>':''}</div><div class="sub">${esc(C.summary||'')}</div><div class="sub">${hearts(id)}</div></div><button class="btn sm" data-w="${esc(id)}" ${sentToday(id)?'disabled':''}>${sentToday(id)?'Sent':'Write'}</button></div>`; }
+    if ((palsFriends||[]).length){ h+='<div class="muted" style="margin:8px 0 4px;font-weight:600">Friends</div>'; for (const F of palsFriends) h+=`<div class="row" style="gap:10px">${avatar({ name:F.name })}<div class="grow"><div class="nm">${esc(F.name)}</div><div class="sub">A friend${F.island?' from '+esc(F.island):''}. Letters go to their mailbox.</div></div><button class="btn sm" data-fw="${esc(F.id)}" data-fn="${esc(F.name)}">Write</button></div>`; }
+  } else {
+    if (!S.letters.inbox.length) h+='<div class="notice">No letters yet. Write to someone and they\'ll answer the next day.</div>';
+    for (const L of S.letters.inbox) h+=`<div class="row" data-l="${L.id}" style="cursor:pointer">${avatar(S.contacts[L.from]||{ name:L.name })}<div class="grow" style="margin-left:10px"><div class="nm">${L.read?'':'<span style="color:#d08a10">New</span> '}From ${esc(L.name)}</div><div class="sub">${esc(L.lines[1]||'').slice(0,70)}${(L.lines[1]||'').length>70?'...':''}</div></div>${L.gift && !L.gift.taken?'<span class="muted">+ gift</span>':''}</div>`;
+    if (BOOT.portal && BOOT.portal.online) h+='<div class="muted" style="margin-top:10px">Letters and gifts from friends arrive in Friends &gt; Mail.</div>';
+  }
+  pBody.innerHTML=h;
+  pBody.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{ palsTab=b.dataset.tab; Snd.click(); renderPals(); });
+  pBody.querySelectorAll('[data-w]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); writeLetter(b.dataset.w); });
+  pBody.querySelectorAll('[data-fw]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); writeLetter(null, { id:b.dataset.fw, name:b.dataset.fn }); });
+  pBody.querySelectorAll('[data-c]').forEach(r=>r.onclick=()=>contactDetail(r.dataset.c));
+  pBody.querySelectorAll('[data-l]').forEach(r=>r.onclick=()=>readLetter(r.dataset.l)); }
+function contactDetail(id){
+  const C=S.contacts[id]; if (!C) return; const ck=canInvite(id), trip=C.kind==='trip';
+  pBody.innerHTML=`<div style="display:flex;gap:12px;align-items:center;margin-bottom:10px">${avatar(C)}<div><div class="nm" style="font-size:18px">${esc(C.name)}</div><div>${hearts(id)}</div></div></div>
+    <div class="notice">${esc(C.summary||'')}${C.from?`<br><span class="muted">From ${esc(C.from)}</span>`:''}<br><span class="muted">Letters sent: ${C.sent||0} · Letters back: ${C.got||0}</span></div>
+    <button class="btn" id="cWrite" ${sentToday(id)?'disabled':''}>${sentToday(id)?'Letter sent today':'Write a letter'}</button>
+    ${trip && !livesHere(id) ? `<button class="btn alt" id="cMove" style="margin-left:6px" ${ck.ok?'':'disabled'}>Invite to move in</button><div class="muted" style="margin-top:6px">${ck.ok ? `${esc(C.name)} would love to live on ${esc(S.island)}. They'd move in tomorrow.` : esc(ck.why||'')}</div>` : ''}
+    <div style="margin-top:12px"><button class="btn alt" id="cBack">Back</button></div>`;
+  pBody.querySelector('#cWrite').onclick=()=>writeLetter(id);
+  pBody.querySelector('#cBack').onclick=()=>renderPals();
+  const mv=pBody.querySelector('#cMove'); if (mv) mv.onclick=()=>{ const err=invitePenpal(id); if (err){ toast(err); return; } const P=contactPerson(id);
+    Snd.fanfare(); pBody.innerHTML=`<div class="letter"><p>${esc(fill(VY.MOVE_ASK[P.personality]||VY.MOVE_ASK.caring, { c:P.catch||'' }))}</p><p>${esc(C.name)}</p></div><div class="notice" style="margin-top:10px"><b>${esc(C.name)} is moving in tomorrow!</b><br><span class="muted">Their plot is already marked out.</span></div><button class="btn alt" id="cBack2" style="margin-top:8px">Back</button>`;
+    pBody.querySelector('#cBack2').onclick=()=>renderPals(); }; }
+function writeLetter(id, friend){
+  const C=id ? S.contacts[id] : friend; if (!C) return; let tpl=null, slot=null;
+  const render=()=>{ const prev=tpl ? LETTERS[tpl].text.map(l=>l.replace(/\{to\}/g, C.name).replace(/\{p\}/g, S.player||'me').replace(/\{isle\}/g, (TRIP&&OWN.island)||S.island||'my island')) : null;
+    pBody.innerHTML=`<div class="muted" style="margin-bottom:6px">To <b>${esc(C.name)}</b>. Pick what to say:</div><div style="display:flex;flex-wrap:wrap;gap:6px">${LETTER_IDS.map(k=>`<button class="btn sm ${tpl===k?'':'alt'}" data-t="${k}">${LETTERS[k].label}</button>`).join('')}</div>
+      ${prev?`<div class="letter" style="margin-top:10px">${prev.map(l=>`<p>${esc(l)}</p>`).join('')}</div>`:''}
+      <div class="row" style="margin-top:10px">${slot!==null && S.inv[slot] ? `<img src="${thumb(S.inv[slot].id)}"><div class="grow"><div class="nm">Gift: ${ITEMS[S.inv[slot].id].name}</div></div><button class="btn sm alt" id="gNo">Remove</button>` : `<div class="grow muted">No gift tucked in.</div><button class="btn sm alt" id="gAdd">Add a gift</button>`}</div>
+      <div style="margin-top:10px"><button class="btn" id="lSend" ${tpl?'':'disabled'}>Send</button> <button class="btn alt" id="lBack">Back</button></div>`;
+    pBody.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>{ tpl=b.dataset.t; Snd.click(); render(); });
+    const ga=pBody.querySelector('#gAdd'); if (ga) ga.onclick=()=>{ openBag('give', i=>{ slot=i; openPanel('Pen pals'); render(); }, ()=>{ openPanel('Pen pals'); render(); }); };
+    const gn=pBody.querySelector('#gNo'); if (gn) gn.onclick=()=>{ slot=null; render(); };
+    pBody.querySelector('#lBack').onclick=()=>renderPals();
+    pBody.querySelector('#lSend').onclick=async ()=>{ if (!tpl) return;
+      if (friend){ const r=await BOOT.portal.letter(friend.id, tpl, slot); if (!r || !r.ok){ toast((r&&r.error)||'Could not send the letter.'); return; } toast(`Letter sent to ${friend.name}.`); Snd.swoosh(); renderPals(); return; }
+      if (!sendLetter(id, tpl, slot)) return; toast(`Letter sent to ${C.name}.`, null, '', 'They\'ll write back tomorrow.'); renderPals(); }; };
+  render(); }
+function readLetter(lid){
+  const L=S.letters.inbox.find(x=>x.id===lid); if (!L) return; L.read=true; save();
+  pBody.innerHTML=`<div class="letter">${L.lines.map(l=>`<p>${esc(l)}</p>`).join('')}</div>
+    ${L.gift ? (L.gift.taken ? '<div class="muted" style="margin-top:8px">You took the gift that came with this letter.</div>' : `<div class="row" style="margin-top:10px"><img src="${thumb(L.gift.id)}"><div class="grow"><div class="nm">${ITEMS[L.gift.id].name}</div><div class="sub">Tucked in the envelope</div></div><button class="btn" id="lTake">Take it</button></div>`) : ''}
+    <div style="margin-top:10px">${S.contacts[L.from]?`<button class="btn" id="lReply" ${sentToday(L.from)?'disabled':''}>${sentToday(L.from)?'You wrote today':'Write back'}</button> `:''}<button class="btn alt" id="lBack">Back</button></div>`;
+  const tk=pBody.querySelector('#lTake'); if (tk) tk.onclick=()=>{ const res=addItem(L.gift.id); if (!res){ toast('Your bag is full.'); return; } L.gift.taken=true; save(); itemToast(L.gift.id, res==='new', 'Received'); readLetter(lid); };
+  const rp=pBody.querySelector('#lReply'); if (rp) rp.onclick=()=>writeLetter(L.from);
+  pBody.querySelector('#lBack').onclick=()=>renderPals(); }
+setTimeout(()=>deliverReplies(), 3000);
+
 function talkCurator(){
   const k=KEEPERS.thistle, v=k.voice;
   const menu=()=>dialog(k.name, v, [], null, [
@@ -4524,7 +5117,7 @@ const keyName = k => k===' '?'Space' : k.length===1 ? k.toUpperCase() : k[0].toU
 function openMenu(){
   const c=CT();
   const render=()=>{
-    pBody.innerHTML=`<div class="notice"><b>${S.player}</b> of <b>${S.island}</b><br><span class="muted">Caught: ${S.caught} · Discovered: ${discovered()} · Bag: ${slotsMax()} slots</span><br><button class="btn alt" id="mLook" style="margin-top:8px">Change my look</button> <button class="btn alt" id="mAch" style="margin-top:8px">Achievements</button> <button class="btn alt" id="mParty" style="margin-top:8px">Party games</button></div>
+    pBody.innerHTML=`<div class="notice"><b>${S.player}</b> of <b>${S.island}</b><br><span class="muted">Caught: ${S.caught} · Discovered: ${discovered()} · Bag: ${slotsMax()} slots</span><br><button class="btn alt" id="mLook" style="margin-top:8px">Change my look</button> <button class="btn alt" id="mAch" style="margin-top:8px">Achievements</button>${GUEST?'':' <button class="btn alt" id="mPals" style="margin-top:8px">Pen pals</button>'} <button class="btn alt" id="mParty" style="margin-top:8px">Party games</button></div>
     <label class="f">Sound <select id="mSnd"><option value="1">On</option><option value="0">Off</option></select></label>
     <label class="f">Music volume</label><input type="range" id="mMus" min="0" max="1" step="0.05" value="${S.settings.music}">
     <label class="f">Brightness</label><input type="range" id="mBr" min="0.7" max="1.7" step="0.05" value="${S.settings.bright}">
@@ -4554,6 +5147,7 @@ function openMenu(){
     $('#mParty').onclick=()=>{ closePanel(); setTimeout(()=>PARTY.open(), 50); };
     $('#mLook').onclick=async()=>{ closePanel(); const L=await openCreator({ look:CH.parseLook(S.look), title:'Change your look', cancel:true, owned:wardrobeOwned() }); if (L){ const code=CH.lookCode(L); if (code!==S.look) track('look'); setPlayerLook(code); checkAch(); } };
     $('#mAch').onclick=()=>{ closePanel(); setTimeout(()=>openAchievements(), 60); };
+    { const mp=$('#mPals'); if (mp) mp.onclick=()=>{ closePanel(); setTimeout(()=>openContacts(), 60); }; }
     const snd=$('#mSnd'); snd.value=S.settings.sound?'1':'0'; snd.onchange=()=>{ Snd.setOn(snd.value==='1'); save(); };
     $('#mMus').oninput=e=>{ Snd.setMusic(+e.target.value); save(); };
     $('#mBr').oninput=e=>{ S.settings.bright=+e.target.value; save(); updateSky(); };
@@ -4666,6 +5260,8 @@ function drawIslandMap(cv){
   for (const R of RESIDENTS) if (R.home && livesHere(R.id)) mark(R.home, '#ffffff', R.name);
   ctx.font='600 12px Fredoka, sans-serif'; ctx.textAlign='center'; ctx.textBaseline='top';
   for (const [x,y,t,big] of labels){ ctx.font=(big?'700 13px':'600 12px')+' Fredoka, sans-serif'; ctx.lineWidth=3.5; ctx.strokeStyle='rgba(255,250,238,.95)'; ctx.strokeText(t,x,y); ctx.fillStyle='#4a3628'; ctx.fillText(t,x,y); }
+  // v1.27: the treasure map's X, once you've read it
+  if (TRIP && S.day && S.day.tx && S.day.tx.map && S.day.tx.map.read && !S.day.tx.map.dug){ const m=S.day.tx.map, x=X(m.x), y=Z(m.z); ctx.strokeStyle='#c8302a'; ctx.lineWidth=4; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(x-8,y-8); ctx.lineTo(x+8,y+8); ctx.moveTo(x+8,y-8); ctx.lineTo(x-8,y+8); ctx.stroke(); }
   // you are here
   if (!World.inside){ const px=X(player.pos.x), pz=Z(player.pos.z), f=player.face||0; ctx.save(); ctx.translate(px,pz); ctx.rotate(-f+Math.PI);
     ctx.fillStyle='#e2483d'; ctx.strokeStyle='#fff'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(0,-9); ctx.lineTo(7,7); ctx.lineTo(0,3); ctx.lineTo(-7,7); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore(); }
@@ -5128,6 +5724,7 @@ function frame(){
   secT+=dt; if(secT>1){ secT=0; if(rollDay()){ spawnDaily(); ensureFavors(); refreshStoreItems(); applyTown(); toast('A new day on '+(S.island||'the island')+'!'); } refreshStands(); setSledBtn(); updateSky(); updateHUD(); updatePotionHUD(); achTick(); }
   saveT+=dt; if(saveT>15){ saveT=0; save(); }
   updateRemotes(dt,t); updateSnow(dt); PARTY.update(dt,t);
+  if (TRIP){ starfallTick(dt); for (let i=FALLING.length-1;i>=0;i--) if (FALLING[i](dt)) FALLING.splice(i,1); }
   if (started && !tankView){ updateHold(dt); if (meBody.rag) updateRag(meBody,dt,t); else movePlayer(dt,t); bonkCool=Math.max(0,bonkCool-dt); updateBugs(dt); updateFishing(dt,t); updateCatchMeter(dt); tickDialog(dt); updateActButton(); updateCutaway(); }
   for(const e of ents.slice()){ if (e.removed) continue; if (e.rag){ updateRag(e,dt,t); continue; } if (e instanceof Resident || e instanceof Peddler || Math.abs(e.pos.x-player.pos.x)<40) e.update(dt,t); }
   WU.uTime.value=t; if (!World.inside){ updateWater(t); updateAmbient(dt,t); updateFalls(dt,t);
@@ -5153,7 +5750,7 @@ function setPlayerLook(code){ S.look=code; save(); player.obj=swapLook(player.ob
 /* ---------- Start screen ---------- */
 const isNew=!S.player || (BOOT.mode==='account' && !S.island);
 if (isNew && S.player) $('#inName').value=S.player;
-if (!isNew){ $('#newForm').classList.add('hide'); $('#backMsg').classList.remove('hide'); $('#backMsg').textContent= TRIP ? `You sailed to ${S.island}. ${(TRIP_THEMES[TRIP_THEME]||{}).blurb||''} Talk to Skipper Wick on the dock to sail home.` : 'Welcome back to '+S.island+', '+S.player+'!'; $('#bStart').textContent='Continue'; }
+if (!isNew){ $('#newForm').classList.add('hide'); $('#backMsg').classList.remove('hide'); $('#backMsg').textContent= TRIP ? `You sailed to ${S.island}. ${(PLAN&&PLAN.blurb)||(TRIP_THEMES[TRIP_THEME]||{}).blurb||''} Talk to Skipper Wick on the dock to sail home.` : 'Welcome back to '+S.island+', '+S.player+'!'; $('#bStart').textContent='Continue'; }
 $('#loading').textContent='';
 $('#bStart').onclick=async()=>{
   if (!S.look && (MAGIC_RET||PORTAL_RET) && !isNew){ S.look=CH.lookCode(CH.defaultLook()); player.obj=swapLook(player.obj, buildPlayer({ look:S.look })); }
@@ -5484,7 +6081,7 @@ const PARTY = createParty({ scene, player, meBody, remotes, groundY, walkable, r
   updateRag:(e,dt,t)=>updateRag(e,dt,t), jelly:(o,st,dt,mv,t,sp)=>jelly(o,st,dt,mv,t,sp),
   // practice buddies: copies of islanders who live here (the real one steps away while the game is on)
   buddies:(n)=>residents.filter(r=>!r.removed && !r.talking).sort(()=>Math.random()-0.5).slice(0,n).map(r=>({ id:'bot:'+r.spec.id, name:r.spec.name, voice:r.spec.voice,
-    obj:buildAnimal({ ...r.spec, look:CH.lookCode(CH.residentLook(S.seed, r.spec.id, RESIDENTS.indexOf(r.spec))) }),
+    obj:buildAnimal({ ...r.spec, look:resLook(r.spec) }),
     away:()=>{ r.partyAway={ parent:r.obj.parent, solid:r.solid }; if (r.rag) endRag(r); r.solid=false; if (r.obj.parent) r.obj.parent.remove(r.obj); },
     keep:()=>{ if (r.partyAway && r.obj.parent){ r.partyAway.parent=r.obj.parent; r.obj.parent.remove(r.obj); } },
     back:()=>{ const a=r.partyAway; if (!a) return; delete r.partyAway; r.solid=a.solid; if (a.parent && !r.obj.parent) a.parent.add(r.obj); } })),
@@ -5492,6 +6089,8 @@ const PARTY = createParty({ scene, player, meBody, remotes, groundY, walkable, r
 window.__game = { v123:{ toolPitch, pitchTool, buyTool, talkShop, get storeVisit(){ return storeVisit; } }, v120:{ track, checkAch, achValue, grantWear, ownsWear, openAchievements, makeFavor, rollFavors, favorChoices, npcOf, clothesStock, wardrobeOwned, get Q(){ return Q; } }, party:PARTY, v119:{ tierPick, openChest, townCap:()=>townCap() }, v13:{ shopStock:w=>shopStock(w), learnPlan, rareRoll, knowsPlan, unfoundPlans, stockWeight, RARE_WORK, GroundItem, ShopItem, Furniture }, v1:{ scene, camera, OUT, updateSky, updateHUD, snowPass, SNOW_U, townNewDay, applyTown, talkHall, openHallPanel, buildPlaza, refreshStoreItems, buildStoreAll, buildShop, buildMuseumAll, spawnExhibits, mentorMoment, teachWoodworking, openCraft, doCook, nearStation, toggleSled, setSled, get sledding(){ return sledding; }, sledV, eatFood, Plant, fullBagCatch, KB, landSeaTap, terraLand, LAMPS:()=>LAMPS, hasUpstairs, ShopItem, Stairs, get exhibits(){ return exhibits; }, onDisplay, museumNeeds, museumExpand, museumFitState, museumTanks, renderer, nearestEnt:()=>nearestEnt(), doAction:()=>doAction(), openTankView, closeTankView, get tankView(){ return tankView; }, KEEPOUT, dayKeyOf, World, startPlacing, checkPlace, get placing(){ return placing; }, FX, homeStock, buyHome, draftUnowned, get homeRack(){ return homeRack; }, openShop, openBuild:(o)=>openBuild(o), closeBuild, get buildMode(){ return buildMode; }, ents, Tree, Stump, Weed, Bug, bugs, player, interact, layoutBar, pickNote, itemToast, reel, Fishing, fishes, spawnFish, WU, relayout, enterRoom:(id)=>enterRoom(id), trees }, get S(){ return S; }, dbg:{ setCine:(c)=>{ cine=c; }, showChoices:(t,c)=>showChoices(t,c), dialog:(...a)=>dialog(...a), setRiding:(v)=>setRiding(v), enterRoom:(id)=>enterRoom(id), openBuild:()=>openBuild(), rooms:()=>Object.keys(ROOMS), get yaw(){ return camYaw; }, set yaw(v){ camYaw=v; }, get riding(){ return riding; }, get snow(){ return SNOW_U.value; }, setWeather:(w)=>{ weatherOverride=w; World.weather=w; snowT=0; }, get dlg(){ return !!dlgState; } }, walkable, blocked, groundY, launchRag, ragdolls, swing, meBody, refreshPortals, portalArches, get portalEnt(){ return portalEnt; }, enterRoom, PLACES, net:{ party:(id,d)=>PARTY.onNet(id,d), bonked, visibleRemotes:()=>[...remotes.values()].filter(r=>r.obj.visible).map(r=>[r.name,+r.pos.x.toFixed(1),+r.pos.z.toFixed(1)]), remoteUpsert, remotePos, remoteLeave, remoteEmote, playerState, setInventory, toast:(m)=>toast(m), updateHUD:()=>updateHUD(), get started(){ return started; } }, ITEMS, itemThumb:(id)=>thumb(id), layoutInfo:()=>({ id:LAYOUT_ID, PLACES, PATHS, LOT, rects:RECTS.map(r=>r.slice(0,4)), lot:lotRect() }), terrainH:(x,z)=>rawHeight(x,z), terrainSlope:(x,z)=>hillSlope(x,z), interact, spawnBug:(id,x,z)=>new Bug(id,x,z), tapOdds:()=>Object.fromEntries(Object.keys(TAP_BASE).map(k=>[k, +tapChance({rarity:k}).toFixed(2)])), placingObj:()=>placing&&placing.m, toScreen:v=>{ const p=v.clone().project(camera); return [(p.x*0.5+0.5)*innerWidth, (-p.y*0.5+0.5)*innerHeight]; }, rebuildHome:()=>{ buildPlayerHouse(); rebuildHomeRoom(); }, openBuild, closeBuild, get buildMode(){ return buildMode; }, talkShop, openDonate, talkCurator, spawnMossby, onFelled, findPath, startPlacing, LOT, RECTS, shopEnts, museumEnt, houseEnt:()=>houseEnt, Time, player, ents, ITEMS, residents, World, ROOMS, goTo, handleTap, doAction, updateSky, rollDay, spawnDaily, castAt, Fishing, fishes, bugs, openBag, openBook, openShop, openBoard, openMenu, openCraft, doCraft, WOODWORK, enterRoom, exitRoom, equip, startLayout, endLayout, trees, applyControls, magic:{ startMagic, endMagic, landTap, magicPlace, castMagic, get mode(){ return magicMode; }, raiseTower, talkWizard, drinkPotion, potionOn, luckW, rollFavors, Q, favorChoices, findTowerSpot, get tower(){ return towerEnt; }, PLACES, TERRA, FALLS } };
 // v1.26 test hooks
 window.__game.v126 = { townNewDay, applyTown, findHomeSpot, claimHomeSpot, townCap, incomeNewDay, refreshIncome, talkIncome, incCollect, incOf, INCOME, incEnts, openMap, talkSkipperHome, talkSkipperTrip, tripGoHome, tripRecap, storyWho, askToLeave, canAskToLeave, pitchOnBuy, merchantDay, get peddler(){ return peddler; }, get skipper(){ return skipper; }, newSquares, LOAN_MAX_SQ, TRIP, TRIP_THEME, residents, residentHomes, plotEnts, KEEPOUT, Q, PATHS, camTarget, updateCamera, set camDist(v){ camDist=v; }, get camDist(){ return camDist; }, set camYaw(v){ camYaw=v; } };
+window.__game.LETTERS = LETTERS;
+window.__game.v127 = { roleMenu, folkMenu, smugglerShop, openNoticeBoard, shellGame, talkWorkshop, talkAttic, talkWizGarden, talkLibrary, anglerWants, climbLighthouse, setupTown, get PLAN(){ return PLAN; }, get TX(){ return TX; }, LAY, haulValue, haulLeft, openContacts, deliverReplies, sendLetter, addContact, canInvite, invitePenpal, readTreasureMap, bottleLetter, openNote, contactPerson, XW, POOLS, lowTide, BRIDGES, DOCK, waterType, VY, Thing };
 // v1.25 test hooks for the house builder
 window.__game.house = { LT, previewBuild:(w)=>previewBuild(w), renderBuild:(k)=>renderBuild(k), homeBlocked, planIssue, setBuildView:(v)=>setBuildView(v), mossPaintAt, buildMossLayer, roofHit, houseFrame, rebuildFloor, HOME_IDS, get houseEnt(){ return houseEnt; }, edgeTap, stairsTap, landProblem, closeBuild };
 window.__game.farm = { openPlantPanel, startGridPlacing, plantGrid, checkGrid, openGarden, rebuildGardens, gardenAtXZ, islandSeeds, harvestRec, perimeter, get fenceSegs(){ return FENCE_SEGS; }, fenceHit, get placing(){ return placing; }, plantEnts, gardenEnts, CELL };

@@ -289,3 +289,8 @@ Each island has 3 flower species (picked from the island's seed) that grow wild 
 - Resolution is capped at 1.5x the screen's pixel size (was 2x on computers, 1.75x on phones).
 - Menu > Battery saver: 1x resolution, no shadows, half the grass and clover. Saved per island.
 Code: `frame()`, `menuCovering`, `applySaver` and `pixelRatio` in `main.js`.
+
+## v1.32: furniture never gets lost when the house changes
+- Bug: building or remodeling the house sent any furniture that no longer fit the new walls back to the bag. A storage chest went to the bag as an empty chest, so everything inside it was deleted. On load, outdoor furniture in a bad spot was also bagged, and simply deleted if the bag was full.
+- Now furniture slides to the nearest free floor in the same room (outdoors: nearest free ground). Only plain furniture can still go to the bag, never a chest with something in it. If there's no room anywhere, it's put by the front door (indoors) or left where it was (outdoors), never deleted.
+- Tested locally: 25 filled chests across the tent, then the base house built. Old code: 5 chests bagged, 70 items gone. New code: all 25 chests and all 400 items kept, also after a reload.

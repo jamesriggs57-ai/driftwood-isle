@@ -1480,6 +1480,13 @@ let ignoreRects=false;
 // Room kept free for buildings that grow later (museum, town hall, shops): trees and rocks don't grow there
 const KEEPOUT=[]; const keptOut=(x,z)=>KEEPOUT.some(([a,b,r])=>Math.hypot(x-a,z-b)<r);
 function blocked(x,z,r,self){ if (!ignoreRects && inRects(x,z,r)) return true; if (FENCE_SEGS && FENCE_SEGS.length && x<500 && fenceHit(x,z,r)) return true; for(const e of ents){ if(!e.solid||e===self||e.removed) continue; if(Math.abs(x-e.pos.x)>6||Math.abs(z-e.pos.z)>6) continue; if(Math.hypot(x-e.pos.x,z-e.pos.z) < e.r+r) return true; } return false; }
+// v1.32: does this placed thing hold other things (a storage chest with something in it)?
+const hasStore = rec => !!(rec && Array.isArray(rec.store) && rec.store.length);
+// v1.32: nearest spot (spiralling out from x,z up to maxR) where something of radius r can stand
+function freeSpotNear(x,z,r,self,maxR=10,ok=null){ const good=(px,pz)=>walkable(px,pz) && !blocked(px,pz,r,self) && (!ok || ok(px,pz)); if (good(x,z)) return [x,z];
+  for (let d=0.25; d<=maxR; d+=0.25){ const n=Math.max(8, Math.round(d*12));
+    for (let k=0;k<n;k++){ const a=k/n*Math.PI*2, px=x+Math.cos(a)*d, pz=z+Math.sin(a)*d; if (good(px,pz)) return [px,pz]; } }
+  return null; }
 /* Would something lying at (x,z) be hidden from the camera? The camera looks north from the south (+z),
    so a tree canopy, a rock or a building just south of a spot covers it. */
 function hiddenSpot(x,z){
@@ -3074,7 +3081,13 @@ function ensureFavors(){ if (VISIT || TRIP || Q.rolledFor===S.day.key) return; r
   for (const [k,v] of Object.entries(S.fruitPicked||{})) if (dayNum(S.day.key)-v >= FRUIT_REGROW_DAYS) delete S.fruitPicked[k]; save(); }
 ensureFavors();
 // furniture: validate saved positions (the island changed shape in v2)
-for (const rec of S.placed.slice()){ const inRoom=rec.x>500; if (!inRoom && (!walkable(rec.x,rec.z) || blocked(rec.x,rec.z,ITEMS[rec.id].r))){ S.placed.splice(S.placed.indexOf(rec),1); S.inv.length<slotsMax() ? S.inv.push({id:rec.id,n:1}) : null; continue; } new Furniture(rec); }
+/* v1.32: furniture in a bad spot is nudged to the nearest free spot instead of going to the bag. Before this, a chest's contents
+   were thrown away when it went to the bag, and anything that didn't fit a full bag was deleted outright. */
+for (const rec of S.placed.slice()){ const inRoom=rec.x>500, r=ITEMS[rec.id]?ITEMS[rec.id].r:0.4;
+  if (!inRoom && (!walkable(rec.x,rec.z) || blocked(rec.x,rec.z,r))){ const sp=freeSpotNear(rec.x,rec.z,r,null,8);
+    if (sp){ rec.x=sp[0]; rec.z=sp[1]; }
+    else if (!hasStore(rec) && S.inv.length<slotsMax()){ S.placed.splice(S.placed.indexOf(rec),1); S.inv.push({id:rec.id,n:1}); continue; } }   // otherwise leave it where it was: never lose it
+  new Furniture(rec); }
 for (const res of residents) if (res.wantsHome()) res.setLoc('in');
 S.gardens=S.gardens||[]; rebuildGardens();
 
@@ -4630,7 +4643,13 @@ function applyHome(d){
   // furniture inside that no longer fits goes back to your bag
   let back=0; const R=ROOMS.home;
   for (const rec of S.placed.slice()){ const inHome=HOME_SLOT.some(k=>{ const [ox,oz]=roomOrigin(k); return rec.x>ox-BUILD.OX*BUILD.IC-2 && rec.x<ox+(BUILD.GW-BUILD.OX)*BUILD.IC+2 && rec.z>oz-BUILD.OZ*BUILD.IC-2 && rec.z<oz+(BUILD.GD-BUILD.OZ)*BUILD.IC+2; }); if (!inHome || walkable(rec.x,rec.z)) continue; const e=ents.find(x=>x instanceof Furniture && x.rec===rec);
-    if (addItem(rec.id)){ S.placed.splice(S.placed.indexOf(rec),1); if(e) e.remove(); back++; } else { rec.x=R.entry[0]; rec.z=R.entry[1]-1; if(e){ e.pos.set(rec.x,0,rec.z); e.obj.position.copy(e.pos); } } }
+    // v1.32: slide it to the nearest free floor in the new house first. Only plain furniture may go to the bag, never a chest
+    // with things in it (the bag only holds the chest itself, so everything inside was lost). Last resort: by the front door.
+    const r=ITEMS[rec.id]?ITEMS[rec.id].r:0.4, slot=Math.round((rec.x-700)/60), sp=freeSpotNear(rec.x,rec.z,r,e,14,(px,pz)=>Math.round((px-700)/60)===slot && Math.abs(pz-700)<30);   // stay in this floor's room slot
+    const moveTo=(x,z)=>{ rec.x=x; rec.z=z; if(e){ e.pos.set(x,0,z); e.obj.position.copy(e.pos); } };
+    if (sp) moveTo(sp[0],sp[1]);
+    else if (!hasStore(rec) && addItem(rec.id)){ S.placed.splice(S.placed.indexOf(rec),1); if(e) e.remove(); back++; }
+    else moveTo(R.entry[0], R.entry[1]-1); }
   save(); Snd.fanfare(); sparkle(new THREE.Vector3(LOT.x, groundY(LOT.x,LOT.z)+3, LOT.z));
   return back;
 }

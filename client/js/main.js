@@ -2837,7 +2837,8 @@ var S2B = { tea:null, teaKey:'', forge:null, forgeKey:'', hall:null, hallKey:'' 
 function storySpot(tag, near, dmin, dmax, rad, zoff=0){
   const r=mulberry32(hashStr(tag+':v138:'+S.seed));
   const ok=(x,z)=>walkable(x,z) && !inRects(x,z,0.3) && !gardenAtXZ(x,z) && !keptOut(x,z) && !onBridge(x,z) && !onDock(x,z) && rawHeight(x,z)>SAND_H+0.25;
-  for (let n=0;n<4000;n++){ const a=r()*TAU, d=dmin+r()*(dmax-dmin), x=near[0]+Math.cos(a)*d, z=near[1]+Math.sin(a)*d, cz=z+zoff;
+  // strict first; if this island has no room there, widen the ring and drop the near-a-path rule rather than never building
+  for (let n=0;n<9000;n++){ const pass=n<4000?0:n<7000?1:2, a=r()*TAU, d=dmin+r()*(dmax*(1+pass*0.7)-dmin), x=near[0]+Math.cos(a)*d, z=near[1]+Math.sin(a)*d, cz=z+zoff;
     if (isleAt(x,cz) || inLotZone(x,cz,rad)) continue;
     if (Object.entries(PLACES).some(([k,p])=>p && Math.hypot(x-p[0],cz-p[1])<rad+(k==='plaza'?5:k==='board'?1.5:4))) continue;
     if (RESIDENTS.some(R=>R.home && Math.hypot(x-R.home[0],cz-R.home[1])<rad+4)) continue;
@@ -2846,7 +2847,7 @@ function storySpot(tag, near, dmin, dmax, rad, zoff=0){
     let fine=ok(x,cz), lo=99, hi=-99;
     for (let i=0;i<16 && fine;i++){ const aa=i/16*TAU; for (const rr of [rad, rad*0.55]){ const px=x+Math.cos(aa)*rr, pz=cz+Math.sin(aa)*rr; if (!ok(px,pz)){ fine=false; break; } const h=rawHeight(px,pz); lo=Math.min(lo,h); hi=Math.max(hi,h); } }
     if (!fine || hi-lo>0.8) continue;
-    const pd=visPathDist(x,cz); if (pd<rad*0.7 || pd>rad+7) continue;
+    const pd=visPathDist(x,cz); if (pd<rad*0.7 || (pass<2 && pd>rad+7+pass*6)) continue;
     if (S.plants.some(q=>Math.hypot(q.x-x,q.z-cz)<rad+0.5) || S.placed.some(q=>q.x<500 && Math.hypot(q.x-x,q.z-cz)<rad+0.5)) continue;
     if (ents.some(e=>!e.removed && e.solid && e.pos.x<500 && !(e instanceof Resident) && !(e instanceof Keeper) && !(e instanceof Tree && !e.rec) && Math.hypot(e.pos.x-x,e.pos.z-cz)<rad+e.r)) continue;
     return [+x.toFixed(1), +z.toFixed(1)]; }

@@ -238,9 +238,10 @@ Object.assign(FURN_BUILDERS, {
     mk(G.box(1.7,0.1,0.1), dark, 0,2.35,-1.07,g); mk(G.box(1.7,0.1,0.1), dark, 0,2.35,1.07,g); for (const x of [-0.82,0.82]) mk(G.box(0.1,0.1,2.2), dark, x,2.35,0,g);
     mk(G.box(1.64,0.9,0.08), wood, 0,1.05,-1.08,g); mk(G.box(1.64,0.5,0.08), wood, 0,0.6,1.08,g);
     for (const x of [-0.82,0.82]) for (const z of [-0.98,0.98]){ const d=mk(G.box(0.05,1.7,0.3), drape, x,1.5,z,g); d.castShadow=false; } },
-  boatshelf(g){ const hull=M(0x3a6a8a), wood=tmat('board',0xc8945a,1,0.3), trim=M(0xf4ead6); const s=new THREE.Shape(); s.moveTo(-0.9,0); s.quadraticCurveTo(-0.95,0.9,-0.55,1.9); s.lineTo(0.55,1.9); s.quadraticCurveTo(0.95,0.9,0.9,0);
+  boatshelf(g){ const hull=M(0x3a6a8a), wood=tmat('board',0xc8945a,1,0.3), trim=M(0xf4ead6); const s=new THREE.Shape(); s.moveTo(-0.9,0); s.quadraticCurveTo(-0.95,0.9,-0.55,1.9); s.lineTo(0.55,1.9); s.quadraticCurveTo(0.95,0.9,0.9,0); s.lineTo(-0.9,0);
+    const hole=new THREE.Path(); hole.moveTo(-0.8,0.06); hole.lineTo(0.8,0.06); hole.quadraticCurveTo(0.84,0.9,0.47,1.82); hole.lineTo(-0.47,1.82); hole.quadraticCurveTo(-0.84,0.9,-0.8,0.06); s.holes.push(hole);
     const sides=new THREE.ExtrudeGeometry(s,{ depth:0.4, bevelEnabled:false }); sides.translate(0,0,-0.2); const h=mk(sides, hull, 0,0,0,g);
-    const back=mk(G.box(1.6,1.75,0.04), wood, 0,0.95,-0.17,g); for (const y of [0.1,0.55,1.0,1.45]){ mk(G.box(1.6,0.05,0.34), wood, 0,y,0.02,g); }
+    const bs=new THREE.Shape(hole.getPoints(12)); const back=mk(new THREE.ShapeGeometry(bs), wood, 0,0,-0.16,g); for (const [y,w] of [[0.1,1.6],[0.55,1.6],[1.0,1.46],[1.45,1.2]]){ mk(G.box(w,0.05,0.34), wood, 0,y,0.02,g); }
     const bc=[0xd8604d,0x6a9ad8,0x7cb85a,0xf0c040,0x8a6ad8,0xe8a0c0]; let k=0; for (const y of [0.13,0.58,1.03]) for (let i=0;i<7;i++){ const b=mk(G.box(0.12,0.32+((i*7+k)%4)*0.04,0.24), M(bc[(i+k)%bc.length]), -0.6+i*0.19, y+0.18, 0.02, g); b.rotation.z=(i===6?0.2:0); k++; }
     mk(G.box(1.2,0.05,0.42), trim, 0,1.92,0,g); mk(G.cyl(0.03,0.03,0.9,6), M(0x8a5e3a), 0,2.35,0,g); mk(G.box(0.02,0.55,0.5), trim, 0.02,2.4,0.2,g); mk(G.tor(0.09,0.02,5,12), M(0xf4ead6), -0.6,1.7,0.22,g); },
   longtable(g){ const wood=tmat('board',0xb07a4a,2,0.4), dark=M(0x6a4428);

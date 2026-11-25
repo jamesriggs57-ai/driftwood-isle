@@ -169,11 +169,14 @@ function recordCatch(id, m){
 const canvas = $('#c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias:true, powerPreference:'high-performance' });
 const isMobile = isTouchDevice;
-renderer.setPixelRatio(Math.min(devicePixelRatio, isMobile?1.75:2));
+// v1.30 performance: at most 1.5x resolution (1x with battery saver)
+const pixelRatio = () => S.settings.saver ? 1 : Math.min(devicePixelRatio||1, 1.5);
+renderer.setPixelRatio(pixelRatio());
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.15;
-renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = isMobile ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;   // v1.30: cheaper shadow edges on phones
+renderer.shadowMap.autoUpdate = false;   // v1.30: shadows are redrawn every other frame (see frame())
 const scene = new THREE.Scene();
 scene.fog = new THREE.Fog(0xbfe6f0, 42, 150);
 const camera = new THREE.PerspectiveCamera(38, 1, 0.3, 900);
@@ -194,6 +197,7 @@ const hemi = new THREE.HemisphereLight(0xffffff, 0x6a8a50, 1); scene.add(hemi);
 const sun = new THREE.DirectionalLight(0xffffff, 2); sun.castShadow = true;
 sun.shadow.mapSize.set(isMobile?1024:2048, isMobile?1024:2048);
 Object.assign(sun.shadow.camera, { left:-26, right:26, top:26, bottom:-26, near:1, far:120 });
+sun.castShadow = !S.settings.saver;
 sun.shadow.bias=-0.0006; sun.shadow.normalBias=0.03; scene.add(sun); scene.add(sun.target);
 
 const SKY_KEYS = [
@@ -2945,14 +2949,14 @@ const COVER0=OUT.children.length;
       for(let j=0;j<cl&&n<tuftN;j++){ const xx=x+(r()-0.5)*0.6, zz=z+(r()-0.5)*0.6; if(!okGrass(xx,zz,1.15)) continue; const im=tms[Math.floor(r()*TV)]; if(im.count>=per) continue;
         dummy.position.set(xx, rawHeight(xx,zz)-0.015, zz); dummy.rotation.set((r()-0.5)*0.25,r()*TAU,(r()-0.5)*0.25); dummy.scale.setScalar(0.75+r()*0.7); dummy.updateMatrix(); im.setMatrixAt(im.count,dummy.matrix);
         col.copy(gcol[Math.floor(r()*gcol.length)]).offsetHSL((r()-0.5)*0.02,0,(r()-0.5)*0.07+(dens-0.5)*0.05); im.setColorAt(im.count,col); im.count++; n++; } }
-    tms.forEach(im=>OUT.add(im)); }
+    tms.forEach(im=>{ im.userData.thin=im.count; OUT.add(im); }); }
   // clover: low trefoil patches tucked into the grass in drifts
   if (World.season!=='winter'){ const CN=Math.round((isMobile?1100:1700)*Math.min(1.7,SC*SC)), per=Math.ceil(CN/2)+4, cm=new THREE.MeshStandardMaterial({ vertexColors:true, roughness:0.85, side:THREE.DoubleSide });
     const cls=[0,1].map(v=>{ const im=new THREE.InstancedMesh(GC.cloverGeo(v), cm, per); im.count=0; im.receiveShadow=true; im.castShadow=false; return im; });
     const cc=new THREE.Color(PAL.grass[1]).offsetHSL(0.035,0.12,-0.13);
     for(let k=0;k<CN*6;k++){ const x=(r()-0.5)*112*SC, z=(r()-0.5)*112*SC; if(!okGrass(x,z,1.0) || vnoise(x*0.09-2,z*0.09+4)<0.5) continue; const im=cls[k%2]; if(im.count>=per) break;
       dummy.position.set(x, rawHeight(x,z)-0.01, z); dummy.rotation.set(0,r()*TAU,0); dummy.scale.setScalar(1.3+r()*0.8); dummy.updateMatrix(); im.setMatrixAt(im.count,dummy.matrix); im.setColorAt(im.count, col.copy(cc).offsetHSL((r()-0.5)*0.02,0,(r()-0.5)*0.06)); im.count++; }
-    cls.forEach(im=>OUT.add(im)); }
+    cls.forEach(im=>{ im.userData.thin=im.count; OUT.add(im); }); }
   // wild flowers: daisies and little cups on leafy stems, in small drifts of one color
   if (PAL.flower.length){ const fN=Math.round(900*SC*SC*(LAY.flora?LAY.flora.flowers:1)), sm=GC.swayMat({ height:0.36, amp:0.03, rough:0.8 }), pm=GC.swayMat({ height:0.36, amp:0.03, rough:0.55 });
     const stems=new THREE.InstancedMesh(GC.flowerStemGeo(), sm, fN), daisy=new THREE.InstancedMesh(GC.petalsDaisyGeo(), pm, fN), cup=new THREE.InstancedMesh(GC.petalsCupGeo(), pm, fN), ctr=new THREE.InstancedMesh(GC.flowerCenterGeo(), pm, fN);
@@ -5139,6 +5143,7 @@ function openMenu(){
     <label class="f">Sound <select id="mSnd"><option value="1">On</option><option value="0">Off</option></select></label>
     <label class="f">Music volume</label><input type="range" id="mMus" min="0" max="1" step="0.05" value="${S.settings.music}">
     <label class="f">Brightness</label><input type="range" id="mBr" min="0.7" max="1.7" step="0.05" value="${S.settings.bright}">
+    <label class="f">Battery saver <select id="mSaver"><option value="0">Off</option><option value="1">On</option></select></label><div class="muted" style="font-size:13px">Lower resolution, no shadows and less grass. Runs cooler.</div>
     <div class="notice" style="margin-top:14px"><b>Controls</b>
       ${isTouchDevice?'':`<div class="muted" style="margin:4px 0 6px">WASD or the arrow keys walk (hold Shift to sneak). Drag with the mouse, or swipe sideways with two fingers on a trackpad, to look around. Click things that are close by to use them.</div>
       ${KEY_ROWS.map(([k,n])=>`<div class="row" style="padding:4px 0"><div class="grow">${n}</div><button class="btn alt" data-kb="${k}" style="min-width:70px">${keyName(KB()[k])}</button></div>`).join('')}
@@ -5169,6 +5174,7 @@ function openMenu(){
     const snd=$('#mSnd'); snd.value=S.settings.sound?'1':'0'; snd.onchange=()=>{ Snd.setOn(snd.value==='1'); save(); };
     $('#mMus').oninput=e=>{ Snd.setMusic(+e.target.value); save(); };
     $('#mBr').oninput=e=>{ S.settings.bright=+e.target.value; save(); updateSky(); };
+    { const sv=$('#mSaver'); sv.value=S.settings.saver?'1':'0'; sv.onchange=()=>{ S.settings.saver=sv.value==='1'; save(); applySaver(); }; }
     const sync=()=>{ $('#cJoy').style.display=c.move==='joystick'?'':'none'; save(); applyControls(); };
     pBody.querySelectorAll('[data-kb]').forEach(b=>b.onclick=()=>{ b.textContent='Press a key...'; Snd.click();
       keyCapture=k=>{ keyCapture=null; if (k!=='escape' && !['w','a','s','d',' ','shift','arrowup','arrowdown','arrowleft','arrowright','enter'].includes(k)){ const kb=KB(); const clash=Object.keys(kb).find(x=>kb[x]===k && x!==b.dataset.kb); if (clash) kb[clash]=kb[b.dataset.kb]; kb[b.dataset.kb]=k; save(); applyControls(); } else if (k!=='escape') toast('That key is already used for walking or talking.'); render(); }; });
@@ -5737,7 +5743,15 @@ const TOOL_LABEL = { axe:'Chop', shovel:'Dig', rod:'Cast', net:'Catch', can:'Wat
 
 /* ---------- Main loop ---------- */
 const clock=new THREE.Clock(); let t=0, secT=0, saveT=0, started=false;
-function frame(){
+/* v1.30 performance: the game draws at most 30 frames a second on every device, and about 5 a second while a menu
+   or the character maker covers the island. Shadows are redrawn every other frame (15 a second), or every frame
+   while building, placing, moving things or looking into a tank. */
+const FRAME_MS=1000/30, MENU_MS=200; let lastDraw=-1e9, shadowTick=0;
+const menuCovering = () => (scrim.classList.contains('show') || !!document.getElementById('crCv')) && !buildMode && !tankView && !placing && !layoutMode && !magicMode;
+function frame(now){
+  requestAnimationFrame(frame);
+  if (now - lastDraw < (menuCovering() ? MENU_MS : FRAME_MS)*0.9) return;
+  lastDraw=now;
   const dt=Math.min(0.05, clock.getDelta()); t+=dt;
   secT+=dt; if(secT>1){ secT=0; if(rollDay()){ spawnDaily(); ensureFavors(); refreshStoreItems(); applyTown(); toast('A new day on '+(S.island||'the island')+'!'); } refreshStands(); setSledBtn(); updateSky(); updateHUD(); updatePotionHUD(); achTick(); }
   saveT+=dt; if(saveT>15){ saveT=0; save(); }
@@ -5750,9 +5764,13 @@ function frame(){
     const lnOn=activeEvents().some(e=>e.id==='lantern-night');
     for(const l of lanterns){ l.visible=lnOn; if(lnOn){ const u=l.userData; u.y+=dt*u.s; if(u.y>18){ u.y=0; u.a=Math.random()*TAU; } l.position.set(Math.cos(u.a+t*0.01)*u.d, 1+u.y, Math.sin(u.a+t*0.01)*u.d); l.children[1].material.opacity=Math.min(1,u.y/2)*(1-u.y/18)*0.9; } } }
   updatePrecip(dt,t); updateParticles(dt); updateFX(dt); updateCamera(dt);
+  if (++shadowTick%2===0 || buildMode || placing || layoutMode || magicMode || tankView) renderer.shadowMap.needsUpdate=true;
   if (tankView){ tankView.update(t, dt, innerWidth/innerHeight); renderer.render(tankView.scene, tankView.cam); } else renderer.render(scene,camera);
-  requestAnimationFrame(frame);
 }
+// v1.30 battery saver: 1x resolution, no shadows, half the grass and clover
+function applySaver(){ const on=!!S.settings.saver; renderer.setPixelRatio(pixelRatio()); resize(); sun.castShadow=!on; renderer.shadowMap.needsUpdate=true;
+  OUT.traverse(o=>{ if (o.isInstancedMesh && o.userData.thin) o.count = on ? Math.ceil(o.userData.thin/2) : o.userData.thin; }); }
+if (S.settings.saver) applySaver();
 updateSky(); updateHUD(); camTarget.copy(player.pos); updateCamera(1); updateHeld(); updateToolBtn(); applyControls();
 requestAnimationFrame(frame);
 

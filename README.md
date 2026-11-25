@@ -281,3 +281,11 @@ How it works: boot.js starts in `trip` mode when `sessionStorage['dw-trip']` is 
 ## v1.29: wildflowers
 
 Each island has 3 flower species (picked from the island's seed) that grow wild in little clumps: 10 on your island, 5 on trip islands, 24 of every species on Bloom Isle. Picking a clump takes it whole and gives the flower plus 1 to 3 of its seeds, so you can start a flower bed for free. Clumps are topped back up each day and wilt away in winter (Bloom Isle never has winter). The scenery flowers in the grass are unchanged and still can't be picked. Code: `islandFlowerPool` in `content.js`, `buildWildFlower` in `models.js`, `Plant.pickWild` and the wildflower block in `rollDay` in `main.js`.
+
+## v1.30: runs cooler
+
+- The game draws at most 30 frames a second on every device (the character maker too), and about 5 a second while a menu or the character maker covers the island.
+- Shadows are redrawn every other frame (15 a second) instead of every frame, and every frame only while building, placing or moving things, reshaping land or looking into a tank. Phones use cheaper shadow edges.
+- Resolution is capped at 1.5x the screen's pixel size (was 2x on computers, 1.75x on phones).
+- Menu > Battery saver: 1x resolution, no shadows, half the grass and clover. Saved per island.
+Code: `frame()`, `menuCovering`, `applySaver` and `pixelRatio` in `main.js`.

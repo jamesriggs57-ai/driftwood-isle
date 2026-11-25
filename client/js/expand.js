@@ -185,10 +185,25 @@ export function buildLandmark(kind, seed){
     const cap=mk(G.cone(2.0,2.2,12), M(0x7a4a3a), 0,7.4,0,g); cap.castShadow=true;
     mk(G.box(0.9,1.6,0.1), dark, 0,0.8,2.15,g); for (const y of [2.6,4.4]) mk(G.box(0.6,0.7,0.1), M(0x3a4a5a), 0,y,1.98-y*0.07,g);
     const hub=new THREE.Group(); hub.position.set(0,6.4,1.95); g.add(hub); mk(G.cyl(0.25,0.25,0.5,10), dark, 0,0,0,hub).rotation.x=Math.PI/2;
+    // v1.39: the sails start out rotted (tattered grey cloth) until Barley's new ones go up; main.js calls setMill
+    const sailM=M(0xf4ecd8), rotM=M(0x9a9080,{ roughness:1 }), good=[], torn=[];
     for (let i=0;i<4;i++){ const arm=new THREE.Group(); arm.rotation.z=i*Math.PI/2; hub.add(arm); mk(G.box(0.18,4.2,0.12), wood, 0,2.1,0.1,arm);
-      const sail=mk(G.box(1.1,3.2,0.04), M(0xf4ecd8), 0.62,2.4,0.14,arm); sail.castShadow=true; for (let k=0;k<4;k++) mk(G.box(1.1,0.04,0.06), wood, 0.62,1.0+k*0.9,0.16,arm); }
-    g.userData.spin=hub; g.userData.desc='An old stone windmill. The sails still turn, slow and creaky, whenever the wind comes off the sea.';
-    g.userData.rects=[[-2.3,-2.3,2.3,2.3]]; }
+      const sail=mk(G.box(1.1,3.2,0.04), sailM, 0.62,2.4,0.14,arm); sail.castShadow=true; good.push(sail); for (let k=0;k<4;k++) mk(G.box(1.1,0.04,0.06), wood, 0.62,1.0+k*0.9,0.16,arm);
+      for (let k=0;k<3;k++){ const t=mk(G.box(0.5+r()*0.5,0.5+r()*0.4,0.03), rotM, 0.45+r()*0.3, 1.2+k*1.05, 0.14, arm); t.rotation.z=(r()-0.5)*0.5; t.visible=false; torn.push(t); } }
+    // the water wheel and its wooden millrace on the east side (hidden until Wendell digs the stream)
+    const wheel=new THREE.Group(); wheel.position.set(2.45,1.3,0); wheel.visible=false; g.add(wheel);
+    const wh=new THREE.Group(); wheel.add(wh); const wd2=M(0x7a5a3a);
+    for (const s2 of [-0.32,0.32]){ const rim=mk(G.tor(1.15,0.07,6,20), wd2, s2,0,0,wh); rim.rotation.y=Math.PI/2; }
+    for (let i=0;i<10;i++){ const a=i/10*TAU, sp=mk(G.box(0.06,2.2,0.06), wd2, 0,0,0,wh); sp.rotation.x=a; const pd=mk(G.box(0.7,0.08,0.34), wood, 0, Math.cos(a)*1.15, Math.sin(a)*1.15, wh); pd.rotation.x=a; }
+    mk(G.cyl(0.14,0.14,0.9,8), dark, 0,0,0,wh).rotation.z=Math.PI/2;
+    const race=mk(G.box(0.8,0.3,7), wd2, 0.15,-1.15,-0.5,wheel), water=mk(G.box(0.62,0.04,6.9), M(0x5aa8c8,{ roughness:0.15, metalness:0.1, transparent:true, opacity:0.85 }), 0.15,-1.03,-0.5,wheel); water.castShadow=false;
+    for (const z of [-3.6,-1.2,1.2]) mk(G.box(0.12,1.0,0.12), dark, 0.62,-1.5,z,wheel);
+    g.userData.spin=hub; g.userData.wheel=wh; g.userData.desc='An old stone windmill. The sails are rotted through and they barely turn, creaking whenever the wind comes off the sea.';
+    g.userData.setMill=(o={})=>{ const ok=!!o.sails; good.forEach(m=>m.visible=ok); torn.forEach(m=>m.visible=!ok); g.userData.spinRate=ok?1:0.15; wheel.visible=!!o.wheel;
+      g.userData.desc = !ok ? 'An old stone windmill. The sails are rotted through and they barely turn, creaking whenever the wind comes off the sea.'
+        : o.wheel ? 'Barley\'s mill. The sails turn, the water wheel turns, and there\'s flour dust on everything.' : 'The old windmill, with new sails. They turn steady and white whenever the wind comes off the sea.'; };
+    g.userData.setMill({ sails:false });
+    g.userData.rects=[[-2.3,-2.3,3.3,2.3]]; }
   if (kind==='dunes'){ // a shipwreck half buried in the sand
     const hull=new THREE.Group(); hull.rotation.z=0.22; hull.rotation.y=0.3; hull.position.y=1.45; g.add(hull);   // the keel sits just under the sand, the ribs stick up out of it
     for (let i=0;i<9;i++){ const x=-4+i*1.0, s=Math.sin((i+0.5)/9*Math.PI); const rib=mk(new THREE.TorusGeometry(1.6*s+0.4, 0.12, 6, 14, Math.PI), dark, x, 0.2, 0, hull); rib.rotation.y=Math.PI/2; rib.rotation.x=Math.PI; }

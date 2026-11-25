@@ -4237,7 +4237,7 @@ let streamT=0;
 function updateStreaming(dt,t){
   if (World.inside) return;
   for (const I of ISLES){ if (I.queue && I.queue.length){ I.queue.shift()(); break; } }   // one piece of one isle per frame
-  for (const I of ISLES) if (I.shown && I.lmObj){ const u=I.lmObj.userData; if (u.spin) u.spin.rotation.z-=dt*0.5;
+  for (const I of ISLES) if (I.shown && I.lmObj){ const u=I.lmObj.userData; if (u.spin) u.spin.rotation.z-=dt*0.5*(u.spinRate??1); if (u.wheel && u.wheel.parent.visible) u.wheel.rotation.x+=dt*0.8;
       if (u.beam){ u.beam.rotation.y+=dt*0.6; u.beamMat.opacity=0.22*World.night; } }
   for (const I of ISLES) if (I.shown && I.mist){ const h=Time.hour(), k=(1-smooth(9,12,h))*smooth(4,6.5,h)*0.75+0.18; for (const sp of I.mist.children){ sp.material.opacity=k*(0.5+0.5*Math.sin(t*0.1+sp.userData.ph)); sp.position.x+=Math.sin(t*0.05+sp.userData.ph)*dt*0.4; } }
   for (const I of ISLES) if (I.shown && I.swing){ const onIt=!!onBridge(player.pos.x,player.pos.z) && onBridge(player.pos.x,player.pos.z)===I.bridge; I.swingA=lerp(I.swingA||0.015, onIt?0.05:0.015, Math.min(1,dt*2)); I.swing.rotation.x=Math.sin(t*1.3)*I.swingA; }

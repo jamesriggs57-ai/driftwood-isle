@@ -3484,12 +3484,12 @@ function makeWreckRoom(){
   // salvage and logbook pages
   for (const layer of S3.WRECK_LAYERS){ const pieces=Object.values(ITEMS).filter(i=>i.salvage===layer).map(i=>i.id);
     pieces.slice(0,2).forEach((id,i)=>{ const [lx,lz]=u.spots[layer][i], m=buildItemModel(id); m.scale.setScalar(0.9);
-      const th=new Thing('salvage', ox+lx, oz+lz, 0.5, m, ()=>(SY.wreck.got||{})[id]?null:'Salvage', t2=>{ const G0=(SY.wreck.got=SY.wreck.got||{}); if (G0[id]) return; if (!canAdd(id)){ toast('Your bag is full.'); return; }
+      const th=new Thing('salvage', ox+lx, oz+lz, 0.5, m, ()=>(SY.wreck.got||{})[id] || !wreckOpen(layer)?null:'Salvage', t2=>{ const G0=(SY.wreck.got=SY.wreck.got||{}); if (G0[id] || !wreckOpen(layer)) return; if (!canAdd(id)){ toast('Your bag is full.'); return; }
           addItem(id); G0[id]=true; save(); Snd.jingle(); itemToast(id, true, 'Salvaged'); t2.obj.visible=false; }, { solid:false, reach:1.6 });
       th.obj.visible=!(SY.wreck.got||{})[id]; });
     const pz = layer==='vault' ? -D/2+1.4 : u.spots[layer][0][1]+1.6, px = layer==='vault' ? 0 : -W/2+1.4, pg=new THREE.Group();
     if (layer!=='vault'){ for (let i=0;i<3;i++){ const s=mk(G.box(0.34,0.02,0.44), M(0xe8dcc0), (i-1)*0.06, 0.05+i*0.02, 0, pg); s.rotation.y=i*0.3; } }
-    const pth=new Thing('pages', ox+px, oz+pz, 0.4, pg, ()=>(SY.wreck.pages||0)>=PAGES_AT[layer]?null:(layer==='vault'?'Open the strongbox':'Pick up'), t2=>{ const W0=SY.wreck; if ((W0.pages||0)>=PAGES_AT[layer]) return;
+    const pth=new Thing('pages', ox+px, oz+pz, 0.4, pg, ()=>(SY.wreck.pages||0)>=PAGES_AT[layer] || !wreckOpen(layer)?null:(layer==='vault'?'Open the strongbox':'Pick up'), t2=>{ const W0=SY.wreck; if ((W0.pages||0)>=PAGES_AT[layer] || !wreckOpen(layer)) return;
         const from=(W0.pages||0)+1; W0.pages=PAGES_AT[layer]; save(); Snd.jingle(); pg.visible=false; toast(`Logbook pages ${from} to ${W0.pages}`, null, 'new', `Damp, but you can read them. ${holderName('wreck')} will want to see.`); }, { solid:false, reach:1.5 });
     pg.visible=(SY.wreck.pages||0)<PAGES_AT[layer]; }
   wreckGates(); }
@@ -3639,7 +3639,8 @@ function storyNewDay3(now){
     if (B.st==='building' && now>B.bday){ B.st='open'; B.built=now; B.owner=dreamHolder('bath'); B.news='open'; }
     for (const u of BATH_UP) if (B[u.key]===1 && now>B.upDay){ B[u.key]=2; B.news=u.key; } }
   // the glade: tonight's conditions decide how it looks
-  const G0=SY.glade; if (G0 && gladeOpen()){ const c=gladeConds(); G0.cond=c; G0.stage=gladeStageOf(c); }
+  // the glade grows one stage a night toward what its conditions allow, and fades at once if they slip
+  const G0=SY.glade; if (G0 && gladeOpen()){ const c=gladeConds(), to=gladeStageOf(c), was=G0.stage||0; G0.cond=c; G0.stage = to>was ? was+1 : to; }
   // the wreck
   const W0=SY.wreck; if (W0){ if (W0.glass===1 && now>W0.glassDay){ W0.glass=2; W0.news='glass'; } if (W0.lens===1 && now>W0.lensDay) W0.lens=2; }
   const A=SY.antiq; if (A && A.st==='pending' && now>A.day){ A.st='open'; A.built=now; if (SY.wreck) SY.wreck.owner=dreamHolder('wreck'); A.news=true; } }

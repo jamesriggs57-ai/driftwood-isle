@@ -157,7 +157,7 @@ export function buildForge(){
   for (let i=0;i<8;i++) mk(G.dod(0.18), M(0x6a5248,{ flatShading:true, metalness:0.3 }), W/2-0.3+(i%3)*0.3, 0.15+Math.floor(i/3)*0.15, D/2+0.9+(i%2)*0.25, g);
   hangingSign(g, 1.2, 2.75, D/2+0.02, 'Forge', '#e8e4dc', '#3a3a42', Math.PI);
   wallLantern(front, 2.2, 1.9, 0.02); mossTop(g, W/2-0.4, 0.38, -D/2+0.2, 0.9, 0.3, 7, 5);
-  mergeStatic(g, new Set([coals]));
+  mergeStatic(g, [coals]);
   g.userData.door=[1.2, D/2]; g.userData.size={ W, D }; g.userData.rects=[[-W/2-2.2,-D/2-0.2,W/2+0.3,D/2+0.2]]; g.userData.chimney=ch; return g; }
 
 /* ---------- Thistle's Reef Hall: a round glass-roofed pavilion with a wave frieze, beside the museum ---------- */

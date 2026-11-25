@@ -2947,7 +2947,7 @@ STAKES.wick={ unit:'ticket_moonlit', place:'in the night voyages', extraWord:t=>
 // what Wick says about the lighthouse (called from his menu)
 function wickChoices(go, back){
   if (VISIT || GUEST || !SY.light) return []; const L=SY.light, v=SKIPPER.voice, nm=SKIPPER.name, out=[];
-  if (!lightLit()) return [{ label:'About the lighthouse...', fn:()=>dialog(nm, v, [L.lens===2 ? 'Marlo\'s lens is up there already. Now it wants a frame and something to burn.' : 'It\'d want a new lens. Marlo knows glass. Bramble could build a frame. And the old keepers burned moonpearls, three at a time.'], back) }];
+  if (!lightLit()) return [{ label:'About the lighthouse...', fn:()=>dialog(nm, v, [L.lens===2 ? 'Marlo\'s lens is up there already. Now it wants a frame and something to burn.' : `It'd want a new lens. Marlo knows glass. ${holderName('shop')} could build a frame. And the old keepers burned moonpearls, three at a time.`], back) }];
   if (stakeOfferDue('wick')) out.push({ label:'How are the night voyages?', fn:()=>{ stakeOffer('wick'); dialog(nm, v, STAKES.wick.offer, back); } });
   const wait=7-(sday2()-(L.lastNV??-99));
   out.push(wait<=0 ? { label:`Night voyage (${fmt(NIGHT_FEE)})`, fn:()=>go('moonlit', null, null, NIGHT_FEE) }
@@ -3071,7 +3071,7 @@ function bindCommission(render){
 
 /* ---------- the day turning over, beats, gossip, the board ---------- */
 function storyNewDay2(now){
-  if (!SY.tea && SY.apiary && SY.apiary.st==='done' && incOf('orchard').tier>=0) SY.tea={ st:'pending', at:now+1 };
+  if (!SY.tea && SY.apiary && SY.apiary.st==='done' && incOf('orchard').tier>=0) SY.tea={ st:'pending', due:now+1 };
   if (SY.tea && SY.tea.st==='building' && now>SY.tea.bday){ SY.tea.st='open'; SY.tea.built=now; SY.tea.owner=dreamHolder('tea'); SY.tea.news=true; }
   if (SY.light && SY.light.lens===1 && now>SY.light.lensDay) SY.light.lens=2;
   if (SY.forge && SY.forge.st==='building' && now>SY.forge.bday){ SY.forge.st='open'; SY.forge.built=now; SY.forge.news=true; }
@@ -3086,7 +3086,7 @@ function story2News(){ const N=[];
 function storyBeat2(res){
   const id=res.spec.id, now=sday2(), D=SY.tea; if (!D || !isFor('tea', id)) return null;
   if (D.sold && !D.sold.told && D.sold.to===id){ D.sold.told=true; save(); return { lines:[`${npcName(D.sold.from)} left me the tea room. I'll keep the kettle on.`] }; }
-  if (D.st==='pending' && now>=D.at){ D.st='project'; save(); setTimeout(()=>refreshTea(), 0); return { lines: asWritten('tea') ? BEATS2.tea.dream : BEATS2.tea.dreamg }; }
+  if (D.st==='pending' && now>=D.due){ D.st='project'; save(); setTimeout(()=>refreshTea(), 0); return { lines: asWritten('tea') ? BEATS2.tea.dream : BEATS2.tea.dreamg }; }
   if (D.st==='open' && !D.toldOpen){ D.toldOpen=true; save(); return { lines:BEATS2.tea.open }; }
   if (D.st==='open' && stakeOfferDue('tea')){ stakeOffer('tea', res); return { lines:STAKES.tea.offer }; }
   return null; }
@@ -3119,7 +3119,7 @@ function dev138(what){
   if (what==='relics'){ if (q){ for (const id of (q.Qd.relics||[])) if (!countItem(id)) addItem(id); msg.push('Relics for the '+q.kind+' in your bag.'); } }
   if (what==='stories'){
     if (!SY.apiary || SY.apiary.st!=='done'){ SY.apiary={ st:'done', d:sday2(), done:sday2() }; incOf('bees').tier=Math.max(0, incOf('bees').tier); const o=incOf('orchard'); if (o.tier<0){ o.tier=0; o.since=o.last=sday2(); o.acc=0; } msg.push('Apiary done, orchard funded.'); }
-    else if (!SY.tea){ SY.tea={ st:'project', at:null }; msg.push('Tea room project started.'); }
+    else if (!SY.tea){ SY.tea={ st:'project' }; msg.push('Tea room project started.'); }
     else if (SY.tea.st!=='open'){ SY.tea.st='building'; SY.tea.bday=sday2()-1; storyNewDay2(sday2()); msg.push('Tea room open.'); }
     else if (!SY.light){ SY.light={ st:'parts', lens:2 }; addItem('lampframe'); for (let i=0;i<3;i++) addItem('moonpearl'); msg.push('Lighthouse parts in hand: go fit the lamp.'); }
     else if (!lightLit()){ SY.light.st='lit'; SY.light.litDay=sday2(); msg.push('Lighthouse lit.'); }
@@ -5329,6 +5329,8 @@ function talkSkipperHome(){
       try { if (BOOT.flush) await BOOT.flush(); } catch(e){}
       setTimeout(()=>location.reload(), 600); });
   };
+  if (ISLE_K.includes('bluff') && !SY.light && CAN_EDIT && !VISIT && !GUEST){ SY.light={ st:'parts', lens:0, d:sday() }; save();   // v1.38 Wick's dream
+    dialog(nm, v, ['See that old lighthouse up on the bluff? I\'ve been staring at it all week.','A lit lighthouse and I could take folks out after dark. The far isles look different at night.',`It'd want a new lens. Marlo knows glass. ${holderName('shop')} could build a frame. And the old keepers burned moonpearls, three at a time.`], ()=>talkSkipperHome()); return; }
   dialog(nm, v, ['Ahoy! Fancy a trip? I know a lot of little islands out there.', `Somewhere new costs ${fmt(TRIP_FEE)} clams. Got a ticket? I\'ll take you right where it says.`], null, [
     { label:`Somewhere new (${fmt(TRIP_FEE)})`, fn:()=>go(null, null) },
     ...[...new Set(tickets.map(t=>t.id))].map(id=>({ label:`Use ${ITEMS[id].name.replace('Ticket to ','ticket: ')}`, fn:()=>go(ITEMS[id].theme, id) })),

@@ -540,15 +540,15 @@ def('mossby_acorn',{ name:'Mossby\'s Acorn', kind:'sapling', plant:'oak', price:
    specialists pay more for what they love and won't touch the rest. Investing (later in the game) upgrades them. ---------- */
 export const SHOPS = {
   general:{ id:'general', name:'Pemberton\'s General Store', keeper:'pemberton', buys:null, hours:null,
-    sell:[1.0,1.03,1.06,1.1], discount:[0,0.05,0.1,0.15], slots:[6,8,10,12],
+    sell:[1.0,1.03,1.06,1.1], discount:[0,0.05,0.1,0.15], slots:[4,5,6,8],   // v1.36: thinner stock (was 6/8/10/12)
     tiers:['Market Stall','Corner Shop','General Store','Grand Emporium'],
-    perks:['', 'Two more furniture slots, rare pieces a little more often, 5% off, +3% when you sell', 'Two more slots, rare pieces almost twice as often, very rare twice as often, 10% off, +6% when you sell', 'Two more slots, rare pieces over twice as often, very rare 3x as often, 15% off, +10% when you sell'] },
+    perks:['', 'One more furniture slot, rare pieces a little more often, 5% off, +3% when you sell', 'One more slot, rare pieces almost twice as often, very rare twice as often, 10% off, +6% when you sell', 'Two more slots, rare pieces over twice as often, very rare 3x as often, 15% off, +10% when you sell'] },
   aquarium:{ id:'aquarium', name:'Tidepool Aquarium Supply', keeper:'marlo', buys:['fish'], hours:[8,22],
-    sell:[1.2,1.3,1.4,1.5], discount:[0,0.05,0.1,0.15], slots:[3,4,5,6],
+    sell:[1.2,1.3,1.4,1.5], discount:[0,0.05,0.1,0.15], slots:[2,3,3,4],   // v1.36 (was 3/4/5/6)
     tiers:['Bait Shack','Aquarium Supply','Tidepool Aquarium','Grand Aquarium Hall'],
     perks:['', 'Fish sell for 130%, ship\'s wheels and buoy lamps', 'Fish sell for 140%, coral lamps', 'Fish sell for 150%, the Grand Aquarium'] },
   garden:{ id:'garden', name:'Sprig\'s Bug & Bloom', keeper:'sprig', buys:['bug','flower'], hours:[8,22],
-    sell:[1.2,1.3,1.4,1.5], discount:[0,0.05,0.1,0.15], slots:[4,5,6,8],
+    sell:[1.2,1.3,1.4,1.5], discount:[0,0.05,0.1,0.15], slots:[2,3,4,5],   // v1.36 (was 4/5/6/8)
     tiers:['Seed Cart','Bug & Bloom','Bug & Bloom Greenhouse','Botanical Conservatory'],
     perks:['', 'Bugs and flowers sell for 130%, saplings and moth lanterns', 'Bugs and flowers sell for 140%, rose arches', 'Bugs and flowers sell for 150%, garden fountains'] },
 };

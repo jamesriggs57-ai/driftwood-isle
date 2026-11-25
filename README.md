@@ -323,3 +323,22 @@ Code: `frame()`, `menuCovering`, `applySaver` and `pixelRatio` in `main.js`.
 **More to say** (`talk.js`). Each of the 12 islanders has their own lines (about 14 each, some naming neighbors, which only show when that neighbor lives here), answers to "Ask about..." (themselves, the island, what they think of a neighbor), and 3 little branching conversations with choices that raise friendship. A conversation comes up at most once every 21 days; some need another one first. Saved in `S.talk`.
 
 **Group boat trips.** When friends are on your island with you, Skipper Wick asks who's coming: just you, both of you, all of you, or pick. Each friend gets a "Come along?" from the Skipper and follows on their own boat to the same island (same seed and theme). Everyone has their own copy of what's on the island, like visiting, and you see each other through a live room just for that trip (`/api/live/trip/<24 hex>`, a random token only sent through your own island's live room). Only the leader pays. A friend who was visiting you goes back to your island when they sail home. Code: `pickCrew`, `onTripNet`, `joinTrip` in `main.js`; `tripRoom` in `online.js`.
+
+## v1.36: new land, moving things after you invest, shopkeeper chat, thinner shops
+
+**Wendell's new land** (`client/js/expand.js`). Once his tower is up and you've backed a shop, Wendell starts talking about land under the sea. Four isles, one at a time, each about a quarter the size of the main island, each for a pile of materials and clams:
+Clover Meadow (60,000; long plank causeway; a windmill, wildflowers, an orchard of a fruit the main island doesn't grow), Sandpiper Dunes (120,000; boardwalk with lanterns; a shipwreck, palms, extra beach finds), Lantern Bluff (220,000, needs the town hall; a trestle bridge up to a cliff-top plateau with a lighthouse, pines and rocks), Hollow Crags (350,000; a rope bridge from the bluff to stone spires and ruins; rocks that drop more iron). Each waits 3 days after the last. The save stores only how many have risen and the angle each rose at (`terra.isles`, `terra.isleA`), so the shapes rebuild the same every time.
+
+**Only what's near is built.** An isle's full ground, trees, rocks, grass, bridge and landmark are built a piece per frame when you come within about 70 m of its shore, and hidden again past about 105 m. From farther off you see a cheap low-detail ground mesh. Each isle has its own sheet of water. Today's dig spots, weeds and beach finds on an isle are rolled when you first get there that day.
+
+**Ground cover chunks.** Grass, clover, flowers, pebbles, mushrooms and leaves used to be one island-wide batch per kind, always drawn whole. They're now cut into 45 m chunks; chunks off screen or more than about 85 m away are skipped. On a phone-sized screen (mountainous island, headless test) this drew about a third fewer triangles for about 10% more draw calls.
+
+**Moving things after you invest.** After investing in Pemberton's, Marlo's or Sprig's shop, when the town hall or the museum's new wing finishes, or after funding or upgrading Hollis's hives, Russet's orchard gear or Quill's ledger, whoever runs it offers to move it. It's free and needs no wizard. (Gill's boat stays put: it needs deep water.)
+
+**Talking islanders into things.** Islanders with friendship 5+ have "About your house...": ask them to move it or redecorate. Pick the argument that suits their personality; best friends (15+) agree to anything; a wrong guess means try again tomorrow. Moving is free. Redecorating changes walls, colors, roof, door, windows, floor and wallpaper; each personality has a few favorites that earn extra friendship. Each islander moves or redecorates at most once a week (`town.house`, `town.decor`).
+
+**Shopkeepers chat.** Pemberton, Marlo and Sprig greet you and offer Let's shop / Chat / Ask about... / Bye instead of opening the shop straight away. Wendell chats too. Lines are in `talk.js` (`KEEPER_CHAT`, `KEEPER_ASK`).
+
+**Thinner shops.** General store furniture 4/5/6/8 a day by tier (was 6/8/10/12), storage chest about half the days (was always), Marlo 2/3/3/4 (was 3/4/5/6), Sprig 2/3/4/5 (was 4/5/6/8) plus fewer seed packets, Pemberton's garden counter 3 items (was 6), clothes 4 a day (was 7), home goods one fewer, and each day one kind of tool is sold out if you already own one.
+
+**Testing shortcut.** With `#dev`, Menu > Testing tools has "Raise the next isle".

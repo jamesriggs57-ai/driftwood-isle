@@ -288,8 +288,12 @@ const STYLES = {
   marigold:{ W:4.4, D:3.6, walls:'timber', wallC:0xfff4e0, beamC:0x6a4a30, roof:'thatch', roofC:0xd0a860, moss:0.4, H:[2.4], door:{ type:'dutch', hood:'none' }, win:{ type:'cross', shut:true, box:true }, chimney:'brick', extras:['bed','ivyL'], gableWin:'both' },
 };
 export const COTTAGE_IDS = Object.keys(STYLES);
+export const cottageStyle = id => STYLES[id] || STYLES[COTTAGE_IDS[hashStr(id||'x')%COTTAGE_IDS.length]];
 export function buildCottage(id, o={}){
-  const st=STYLES[id] || STYLES[COTTAGE_IDS[hashStr(id||'x')%COTTAGE_IDS.length]], r=mulberry32(hashStr(id||'x')), g=new THREE.Group();
+  // v1.36 o.over: an islander's redecorated look (walls, colors, roof, door, windows) on top of their own style
+  const st0=STYLES[id] || STYLES[COTTAGE_IDS[hashStr(id||'x')%COTTAGE_IDS.length]], ov=o.over||{}, r=mulberry32(hashStr(id||'x')), g=new THREE.Group();
+  const st=Object.assign({}, st0, ov, { door:Object.assign({}, st0.door, ov.door||{}), win:Object.assign({}, st0.win, ov.win||{}) });
+  if (ov.walls==='timber' && !st.beamC) st.beamC=0x4a3226;
   const roofC = st.roofC || o.roofC || 0xe0745a, accent = o.accent || 0x6a9ad8, B=0.4, W=st.W, D=st.D;
   const trimFor = st.walls==='log' ? 0x6a4a30 : st.walls==='timber' ? st.beamC : 0xffffff;
   // stone base course

@@ -506,3 +506,75 @@ export const TREES_ANY = {
     { label:'Fruit', f:1, say:['Fruit. Good. Grows on trees. Barely any effort. Smart, {c}.'] },
     { label:'Whatever you\'re having', f:2, say:['...You want half? I don\'t usually share. You\'re different, though. Here.'] } ] }],
 };
+
+/* =====================================================================
+   v1.36 SHOPKEEPERS: things to say before (or instead of) shopping, and questions you can ask them.
+   KEEPER_CHAT[id]   ordinary chat lines (one is picked; the first chat each day counts toward their goodwill)
+   KEEPER_ASK[id]    { self, shop, tip }: "Tell me about yourself", "How's business?", "Any tips?" (tips are true about the game)
+   Same tokens as above: {p} your name, {isle}, {season}, {fruit}.
+   ===================================================================== */
+export const KEEPER_CHAT = {
+  pemberton: [
+    'Restocked the nails this morning. Nobody buys nails. I restock them anyway. A shop without nails is just a room.',
+    'You know what sells best on {isle}? Whatever I just ran out of. Every time.',
+    'My grandmother ran a shop on a river barge. Sold buttons and string and gossip. Mostly gossip.',
+    'Somebody left a single sock in the honor jar last night. I put it on the shelf. Priced it fairly.',
+    'I like a slow afternoon. Gives me time to straighten the shelves that don\'t need straightening.',
+    'Every crate that comes off the boat, I open it like it\'s my birthday. Usually it\'s just more rope.',
+    'If you ever see me napping behind the counter, I\'m not napping. I\'m listening to the floorboards.',
+    'Fair prices, no fuss. That\'s the whole sign. I had a longer sign once. Nobody read it.',
+    'Bit quiet in {season}. Folks hunker down. I hunker down too, but standing up, behind a counter.',
+    'I tried selling umbrellas once. It didn\'t rain for six weeks. I took it personally.',
+    'Some days the stock\'s thin. Boat\'s late, crates are light. That\'s island trade, {p}.',
+  ],
+  marlo: [
+    'Did you know otters hold hands when they sleep so they don\'t drift apart? I hold the counter. Same idea.',
+    'I gave all the tanks names. That one\'s Gerald. Gerald is a bucket. I\'m still working on Gerald.',
+    'Saw a fin out past the dock this morning. Big one. Didn\'t catch it. Didn\'t try. Just waved.',
+    'The tide\'s all wrong today. Or all right. Hard to tell from in here. Smells right, though.',
+    'Fish are honest. They\'re either biting or they aren\'t. No in-between with a fish.',
+    'I sleep with the window open so I can hear the waves. Also because the shop smells a bit fishy. Mostly the waves.',
+    'The boat only brings a few tanks at a time. Some days I\'ve got nothing but a bucket and a dream, {p}.',
+    'People say the sea is quiet. They\'ve never put their ear in it. Very chatty, the sea.',
+    'If you catch something weird, bring it in! I love weird. Weird is my favorite kind of fish.',
+    'I did a cartwheel off the dock this morning. Into the water. On purpose. Mostly.',
+    'Rain\'s good for business. Everyone goes fishing when it rains, and the fish get silly.',
+  ],
+  sprig: [
+    'I talked to the tomatoes this morning. They said nothing. That means they\'re happy. Probably.',
+    'Bugs aren\'t creepy! They\'re just very small people with very busy schedules.',
+    'I\'m growing a fern in a teacup. It\'s doing better than I am, honestly.',
+    'The greenhouse fogs up every morning and I draw little faces on the glass. Then they cry. Condensation, you know.',
+    'Did you know bees dance to tell each other where the flowers are? I tried it. Nobody understood.',
+    'Seeds are the best thing to sell. You sell someone a tiny thing and later it\'s a huge thing!',
+    'I only get a few seed packets a day off the boat. When they\'re gone, they\'re gone. It\'s tragic, {p}.',
+    'In {season} the light in here goes all golden around four. Best hour of the day. Come by and see.',
+    'I kept a caterpillar in a jar once. Named it Doris. One day, Doris was a moth. I\'m still not over it.',
+    'Wildflowers grow where they like. I respect that. I wish I had that kind of confidence.',
+    'If you plant {fruit} trees in a neat row I will cry. Happy crying. Organized crying.',
+  ],
+  wendell: [
+    'I turned a teacup into a frog this morning. By accident. It\'s still a frog. It seems happier.',
+    'The secret to magic is wanting something very specifically. The secret to soup is the same, really.',
+    'I was a wizard of some note, once. A footnote. Small print. But a note!',
+    'Never trust a cloud that\'s in a hurry. That\'s not magic, just good sense.',
+    'The sea around {isle} hums at night. Most people can\'t hear it. Most people are lucky.',
+    'I\'ve been reading the stars. They say "eat more vegetables". The stars have become very boring.',
+    'My cauldron bites. It isn\'t personal. It bites everyone.',
+    'A potion is just soup that has made some very bold decisions.',
+  ],
+};
+export const KEEPER_ASK = {
+  pemberton: {
+    self:['Pemberton. Bear. Shopkeeper. In that order, most days.','Came here on the same boat as the first crates. Never left. The crates left. I stayed.'],
+    shop:['Business is steady. Furniture moves, tools move, clothes move when the weather turns.','The boat only brings so much, so I can\'t promise you\'ll find what you want. Check back tomorrow. And the day after. That\'s how shops work.'],
+    tip:['Tools wear out. Buy the next one before the last one snaps, or you\'ll be shaking trees with your bare paws.','And if you\'re after something particular, back the shop. A bigger shop gets more off the boat.'] },
+  marlo: {
+    self:['I\'m Marlo! Otter. Professional swimmer, amateur shopkeeper.','I opened the shop so I\'d have a reason to talk to people about fish all day. It worked!'],
+    shop:['I pay more for fish than Pemberton does. He knows. He\'s fine with it. Mostly.','Stock\'s small and it changes every day. Whatever the boat drops off, that\'s what we\'ve got.'],
+    tip:['Fish care about the time of day and the month. Something that never bites in the morning might be all over your line at night.','Bigger fish leave bigger shadows. If you see a big one, take your time with it.'] },
+  sprig: {
+    self:['Sprig! Fox, gardener, bug enthusiast. Not a bug collector. Bug friend.','I used to work at a big nursery on the mainland. Too many rules. Here the rules are mostly "water things".'],
+    shop:['I pay extra for bugs and flowers. Everything else, take it to Pemberton.','I only get a handful of seed packets and saplings a day. The island\'s own seeds I always have, though.'],
+    tip:['Water your plants and they grow faster. Every day you skip, they might just sit there sulking.','Flowers bring bugs. Plant a patch near your house and see who turns up.'] },
+};

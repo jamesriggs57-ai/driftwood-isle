@@ -137,7 +137,7 @@ export function buildNurseryTank(){
   const sprigs=new THREE.Group(); g.add(sprigs);
   g.userData.setSprigs = list => { while (sprigs.children.length) sprigs.remove(sprigs.children[0]);
     list.slice(0,14).forEach((k,i)=>{ const col=i%7, row=Math.floor(i/7), p=new THREE.Group(); p.position.set(-W/2+0.2+col*0.25, y0+0.04, -0.15+row*0.3); sprigs.add(p);
-      mk(G.cyl(0.07,0.06,0.06,10), M(0xc8845a), 0,0.03,0,p); const c=buildCoral(k, 0, i*31+7); c.scale.multiplyScalar(0.55); c.position.y=0.06; p.add(c); }); };
+      mk(G.cyl(0.07,0.06,0.06,10), M(0xc8845a), 0,0.03,0,p); const c=buildCoral(k, 0, i*31+7); c.scale.multiplyScalar(1.0); c.position.y=0.06; p.add(c); }); };
   // bubbles rising from an air stone at one end
   const bub=[]; const bm=new THREE.MeshStandardMaterial({ color:0xffffff, transparent:true, opacity:0.55, roughness:0.1 });
   for (let i=0;i<10;i++){ const b=mk(G.sph(0.018+((i*7)%3)*0.008,8,6), bm, W/2-0.15+Math.sin(i)*0.03, y0+0.05, Math.cos(i*1.7)*0.04, g); b.castShadow=false; b.userData.o=i/10; bub.push(b); }

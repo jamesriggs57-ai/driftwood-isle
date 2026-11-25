@@ -722,6 +722,15 @@ export function islandSeedPool(seed, terrain){
   while (out.length<ISLAND_SEED_N && w.length){ const tot=w.reduce((a,[,v])=>a+v,0); let x=r()*tot, k=0; while (k<w.length-1 && (x-=w[k][1])>0) k++; out.push(w.splice(k,1)[0][0]+'_seeds'); }
   return out;
 }
+/* v1.29 wildflowers: each island has 3 flower species that grow wild in little clumps. Picking a clump takes it whole:
+   you get the flower and 1 to 3 of its seeds. Bloom Isle has every species. */
+export const WILDFLOWER_N = 3, WILDFLOWER_SEEDS = [1,3];
+export function islandFlowerPool(seed){
+  let s=(seed^0xf10e5)>>>0; const r=()=>{ s=(s+0x6D2B79F5)|0; let t=Math.imul(s^s>>>15,1|s); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; };
+  const all=Object.keys(PLANTS).filter(k=>PLANTS[k].ptype==='flower'), out=[];
+  while (out.length<WILDFLOWER_N && all.length) out.push(all.splice(Math.floor(r()*all.length),1)[0]);
+  return out;
+}
 /* ---------- v1.8: gardens. Building one is free; fences and decorations cost clams. per = clams per fence piece (one side of one square). ---------- */
 export const GARDEN_FENCES = {
   rustic: { name:'Rustic rails',   per:40 },

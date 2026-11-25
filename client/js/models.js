@@ -195,6 +195,16 @@ export function buildFlower(sp, stage=3, color){
   return g;
 }
 
+// v1.29 a wild clump: a few blooms of one species at slightly different heights and tilts, with a leafy base
+export function buildWildFlower(sp, color, seed=1){
+  let s=(seed*2654435761)>>>0; const r=()=>{ s=(s+0x6D2B79F5)|0; let t=Math.imul(s^s>>>15,1|s); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; };
+  const g=new THREE.Group(), n=3+Math.floor(r()*3), leaf=M(0x5aa040); g.scale.setScalar(1.3);   // a touch bigger than the scenery flowers so you can tell which ones you can pick
+  for (let i=0;i<n;i++){ const a=i/n*TAU+r()*0.8, d=i===0?0:0.1+r()*0.1, f=buildFlower(sp, 3, color);
+    f.position.set(Math.cos(a)*d, 0, Math.sin(a)*d); f.rotation.set((r()-0.5)*0.35, r()*TAU, (r()-0.5)*0.35); f.scale.setScalar(i===0?1.15:0.8+r()*0.3); g.add(f); }
+  for (let i=0;i<5;i++){ const a=i/5*TAU+r(), l=mk(G.sph(0.1,8,4), leaf, Math.cos(a)*0.12, 0.04, Math.sin(a)*0.12, g); l.scale.set(1.5,0.25,0.6); l.rotation.y=-a; l.castShadow=false; }
+  return g;
+}
+
 /* ---------- Item models (used in the world and for bag icons) ---------- */
 export function buildItemModel(id){
   const it=ITEMS[id], d=it.model, g=new THREE.Group();

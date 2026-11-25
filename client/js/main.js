@@ -5,7 +5,7 @@
 import * as THREE from 'three';
 import { TAU, clamp, lerp, smooth, mulberry32, hashStr, hash2, vnoise, fbm, weightedPick, inHours, inMonths, fmt, polyDist, segDist, Time, seasonOf } from './util.js';
 import { ITEMS, NATIVE_FRUITS, PLANTS, TOOLS, WOODWORK, BACKPACKS, BASE_SLOTS, HOUSE_LEVELS, RESIDENTS, DIALOGUE, PEDDLER, EVENTS, rarityLabel, RARITY_COLORS, SHOPS, INVEST, KEEPERS, MUSEUM, BUILD,
-  FOREIGN_FRUIT_PRICE, FRUIT_REGROW_DAYS, POTIONS, WIZARD, MAGIC, STORY, FAVOR_ASKS, CROPS, RECIPES, ARRIVE, MENTOR, islandSeedPool, ISLAND_SEED_BUY, GARDEN_FENCES, GARDEN_DECOR, FR, RARE_WORK, RARE_ODDS, PLAN_PRICE,
+  FOREIGN_FRUIT_PRICE, FRUIT_REGROW_DAYS, POTIONS, WIZARD, MAGIC, STORY, FAVOR_ASKS, CROPS, RECIPES, ARRIVE, MENTOR, islandSeedPool, ISLAND_SEED_BUY, islandFlowerPool, WILDFLOWER_SEEDS, GARDEN_FENCES, GARDEN_DECOR, FR, RARE_WORK, RARE_ODDS, PLAN_PRICE,
   WEAR_IDS, FAVOR_THEMES, DO_TASKS, ORIGINAL_RESIDENTS, LETTERS, LETTER_IDS } from './content.js';
 import { ACHIEVEMENTS, ACH_GROUPS } from './achieve.js';
 import { BY_SLOT, SLOT_NAMES } from './wardrobe-data.js';
@@ -14,7 +14,7 @@ import { Snd } from './audio.js';
 import { LAYOUTS, DEFAULT_SHAPE, islandRadius, generateLayout, bluffD, generateTrip, TRIP_THEMES } from './layouts.js';
 import * as VY from './voyage.js';
 import { buildBike, MODEL, M, mk, G, outline, windowMat, glowMats, glowMat, glowSprites, addGlow, textSprite, PALETTE, buildItemModel, thumb, toolThumb, FURN_BUILDERS, MF,
-  buildTree, buildStump, buildShrub, buildFlower, buildTool, buildAnimal, buildPlayer, buildHouse, buildStall, buildBoard, buildPlankDeck, buildRoom, buildBird, buildGull, buildDuck, buildWeedClump } from './models.js';
+  buildTree, buildStump, buildShrub, buildFlower, buildWildFlower, buildTool, buildAnimal, buildPlayer, buildHouse, buildStall, buildBoard, buildPlankDeck, buildRoom, buildBird, buildGull, buildDuck, buildWeedClump } from './models.js';
 import './furn.js';
 import './decor2.js';
 import { addAura, buildBottle } from './rare.js';
@@ -930,8 +930,15 @@ class Plant extends Ent {
   harvest(){ const r=harvestRec(this.rec, false); if (!r) return; Snd.pop(); puff(this.pos.clone().add(new THREE.Vector3(0,0.3,0)),0x7cc35a,6,0.5,1.5,0.7,0.5); save();
     const C=CROPS[PLANTS[this.rec.sp].crop]; toast(`${r.isNew?'New! ':''}Harvested ${r.n} ${cropWord(C,r.n)} and ${r.seeds} seed${r.seeds>1?'s':''}${r.dropped?' (some landed on the ground, your bag is full)':''}`, thumb(PLANTS[this.rec.sp].crop), r.isNew?'new':'');
     if (r.isNew) Snd.fanfare(); }
+  // v1.29 wildflowers: picking a wild clump takes it whole, flower plus 1 to 3 of its seeds
+  pickWild(){ const sp=this.rec.sp, sid=sp+'_seeds', [a,b]=WILDFLOWER_SEEDS, seeds=a+Math.floor(Math.random()*(b-a+1));
+    if (!roomFor([[sp,1],[sid,seeds]])){ toast('Your bag is full.'); Snd.fail(); return; }
+    const r=addItem(sp); for (let i=0;i<seeds;i++) addItem(sid);
+    S.plants.splice(S.plants.indexOf(this.rec),1); this.remove(); S.stats.wildPicked=(S.stats.wildPicked||0)+1; track('harvest');
+    Snd.pop(); puff(this.pos.clone().add(new THREE.Vector3(0,0.35,0)), this.rec.color??PLANTS[sp].colors[0], 6, 0.4, 1.4, 0.6, 0.5); save();
+    toast(`${r==='new'?'New! ':''}Picked a wild ${PLANTS[sp].name.toLowerCase()} and ${seeds} seed${seeds>1?'s':''}`, thumb(sp), r==='new'?'new':''); if (r==='new') Snd.fanfare(); }
   constructor(rec){ super('plant',rec.x,rec.z,0.3); this.rec=rec; this.reach=1.3; this.attach(this.model()); this.hitSphere(0.4,0.3); this.obj.rotation.y=rec.rot||0; }
-  model(){ const P=PLANTS[this.rec.sp]; return P.ptype==='crop' ? buildCrop(P.crop, this.rec.stage) : P.ptype==='flower' ? buildFlower(this.rec.sp, this.rec.stage, this.rec.color) : buildShrub(this.rec.sp, this.rec.stage, this.rec.color); }
+  model(){ const P=PLANTS[this.rec.sp]; if (this.rec.wf) return buildWildFlower(this.rec.sp, this.rec.color, hashStr(this.rec.id)); return P.ptype==='crop' ? buildCrop(P.crop, this.rec.stage) : P.ptype==='flower' ? buildFlower(this.rec.sp, this.rec.stage, this.rec.color) : buildShrub(this.rec.sp, this.rec.stage, this.rec.color); }
   rebuild(){ const ry=this.obj.rotation.y; this.swap(this.model()); this.hitSphere(0.4,0.3); this.obj.rotation.y=ry; this.solid = PLANTS[this.rec.sp].ptype==='shrub' && this.rec.stage>=2; this.r = this.solid?0.6:0.3; }
   label(){ const P=PLANTS[this.rec.sp];
     if (S.equip==='can' && this.rec.watered!==today() && (this.rec.stage<3)) return 'Water';
@@ -944,6 +951,7 @@ class Plant extends Ent {
     if ((lab==='Water'||lab==='Dig up') && noEdit()) return;
     if (lab==='Water') return waterPlant(this.rec, this.pos);
     if (lab==='Harvest') return this.harvest();
+    if (lab==='Pick' && this.rec.wf) return this.pickWild();
     if (lab==='Pick'){ const r=addItem(this.rec.sp); if(!r){ toast('Your bag is full.'); return; } this.rec.stage=2; Snd.pop(); this.rebuild(); itemToast(this.rec.sp, r==='new', 'Picked'); save(); return; }
     if (lab==='Dig up'){ if(!useTool('shovel')) return; Snd.dig(); FX.hole(this.pos.clone(), 0.32, 1.2); S.plants.splice(S.plants.indexOf(this.rec),1); this.remove(); dropNear(P.ptype==='crop'?P.crop+'_seeds':P.ptype==='flower'?this.rec.sp+'_seeds':this.rec.sp+'_start', this.pos, 0.3, true); S.stats.dug++; save(); return; }
     const st=(P.ptype==='crop'?['just planted','sprouting','growing','ready to harvest']:['just planted','sprouting','growing','fully grown'])[this.rec.stage];
@@ -980,6 +988,7 @@ const plantEntOf = rec => plantEnts.find(e=>e.rec===rec && !e.removed);
 const isRipe = rec => { const P=PLANTS[rec.sp]; return P && (P.ptype==='crop'||P.ptype==='flower') && rec.stage===3; };
 const islandTerrain = () => LAYOUT_ID==='gen' ? ((S.gen&&S.gen.terrain)||'hilly') : LAYOUT_ID==='highlands' ? 'hilly' : 'flat';
 const islandSeeds = () => islandSeedPool(S.seed, islandTerrain());
+const islandFlowers = () => islandFlowerPool(S.seed);
 
 // Fences you can't walk through. Every side that has a fence piece is a segment; the gate is left open.
 var FENCE_SEGS=[], moverFrom=null;
@@ -3018,11 +3027,20 @@ function rollDay(){
   S.ground = S.ground.filter(g=>!g.beach);
   for(let i=0;i<nShell;i++){ for(let k=0;k<30;k++){ const a=r()*TAU, d=(40+r()*16)*SC; const x=Math.cos(a)*d, z=Math.sin(a)*d; if(isBeach(x,z) && !onDock(x,z)){ S.ground.push({ id:tierPick(r,shellPool.filter(allowedFind),i=>i.rarity).id, x, z, beach:true }); break; } } }
   // v1.9: this island's own crops grow wild in a few spots, ripe. Picking one gives the crop and 1 to 4 seeds. Topped back up to 6 each day.
-  if (!VISIT){ const pool=islandSeeds(); let have=S.plants.filter(p=>p.wild).length, want=TRIP_THEME==='bloom'?18:6;
+  if (!VISIT){ const pool=islandSeeds(); let have=S.plants.filter(p=>p.wild && !p.wf).length, want=TRIP_THEME==='bloom'?18:6;
     for (let tries=0; have<want && tries<120; tries++){ const p=randLand(r,SAND_H+0.2,9,0.8); if (!p) continue; const [x,z]=p;
       if (gardenAtXZ(x,z) || visPathDist(x,z)<1.2 || blocked(x,z,0.45) || S.plants.some(q=>Math.hypot(q.x-x,q.z-z)<1.2) || trees.some(t=>!t.removed && Math.hypot(t.pos.x-x,t.pos.z-z)<1.3)) continue;
       const seed=pool[Math.floor(r()*pool.length)];
       S.plants.push({ id:'w'+key.replace(/\W/g,'')+have+Math.floor(r()*1e4), sp:ITEMS[seed].plant, x, z, stage:3, rot:r()*TAU, lastGrow:key, wild:true }); have++; } }
+  // v1.29 wildflowers: this island's 3 flower species grow wild in clumps, topped back up each day. Winter wilts them (Bloom Isle never sees winter).
+  if (!VISIT){ const wf=S.plants.filter(p=>p.wf), wild=TRIP_THEME==='bloom' || season!=='winter';
+    if (!wild){ for (const p of wf) S.plants.splice(S.plants.indexOf(p),1); }
+    else { const fr=mulberry32(hashStr(key+':wf:'+S.seed)), pool=TRIP_THEME==='bloom' ? Object.keys(PLANTS).filter(k=>PLANTS[k].ptype==='flower') : islandFlowers();
+      const want=TRIP_THEME==='bloom' ? 24 : TRIP ? 5 : 10; let have=wf.length;
+      for (let tries=0; have<want && tries<160; tries++){ const p=randLand(fr,SAND_H+0.2,9,0.8); if (!p) continue; const [x,z]=p;
+        if (gardenAtXZ(x,z) || visPathDist(x,z)<1.2 || blocked(x,z,0.45) || S.plants.some(q=>Math.hypot(q.x-x,q.z-z)<1.2) || trees.some(t=>!t.removed && Math.hypot(t.pos.x-x,t.pos.z-z)<1.3)) continue;
+        const sp=pool[Math.floor(fr()*pool.length)], cols=PLANTS[sp].colors;
+        S.plants.push({ id:'f'+key.replace(/\W/g,'')+have+Math.floor(fr()*1e4), sp, x, z, stage:3, rot:fr()*TAU, lastGrow:key, wild:true, wf:true, color:cols[Math.floor(fr()*cols.length)] }); have++; } } }
   // plants grow overnight (watered plants always grow)
   if (!VISIT) for (const p of S.plants){ if (p.lastGrow===key) continue; const watered = p.watered && p.watered!==key; if (p.stage<3 && (watered || r()<0.55)) p.stage++; p.watered=null; p.lastGrow=key; }
   S.day={ key, fruit:{}, branch:{}, chop:{}, rock:{}, lucky:Math.floor(r()*9), digs, weeds, weather, peddler:merchantDay(key),
@@ -6093,4 +6111,4 @@ window.__game.LETTERS = LETTERS;
 window.__game.v127 = { roleMenu, folkMenu, smugglerShop, openNoticeBoard, shellGame, talkWorkshop, talkAttic, talkWizGarden, talkLibrary, anglerWants, climbLighthouse, setupTown, get PLAN(){ return PLAN; }, get TX(){ return TX; }, LAY, haulValue, haulLeft, openContacts, deliverReplies, sendLetter, addContact, canInvite, invitePenpal, readTreasureMap, bottleLetter, openNote, contactPerson, XW, POOLS, lowTide, BRIDGES, DOCK, waterType, VY, Thing };
 // v1.25 test hooks for the house builder
 window.__game.house = { LT, previewBuild:(w)=>previewBuild(w), renderBuild:(k)=>renderBuild(k), homeBlocked, planIssue, setBuildView:(v)=>setBuildView(v), mossPaintAt, buildMossLayer, roofHit, houseFrame, rebuildFloor, HOME_IDS, get houseEnt(){ return houseEnt; }, edgeTap, stairsTap, landProblem, closeBuild };
-window.__game.farm = { openPlantPanel, startGridPlacing, plantGrid, checkGrid, openGarden, rebuildGardens, gardenAtXZ, islandSeeds, harvestRec, perimeter, get fenceSegs(){ return FENCE_SEGS; }, fenceHit, get placing(){ return placing; }, plantEnts, gardenEnts, CELL };
+window.__game.farm = { openPlantPanel, startGridPlacing, plantGrid, checkGrid, openGarden, rebuildGardens, gardenAtXZ, islandSeeds, islandFlowers, harvestRec, perimeter, get fenceSegs(){ return FENCE_SEGS; }, fenceHit, get placing(){ return placing; }, plantEnts, gardenEnts, CELL };

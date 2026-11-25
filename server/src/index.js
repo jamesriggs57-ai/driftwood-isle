@@ -8,6 +8,8 @@
    - Live visits: one Durable Object room per island relays positions and emotes and settles trades.
    ===================================================================== */
 import { ITEMS, BACKPACKS, BASE_SLOTS, LETTERS } from '../../client/js/content.js';
+import '../../client/js/enchant-core.js';   // v1.40: Enchanting Scroll items (define themselves in ITEMS)
+import '../../client/js/benches-core.js';  // v1.40: crafting tables and their pieces
 
 const KEEP_IDS = /^(relic_|lampframe$|cutting$)/;   // v1.38 items that can't be mailed or traded
 const DAY = 86400e3;

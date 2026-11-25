@@ -6139,7 +6139,44 @@ const PARTY = createParty({ scene, player, meBody, remotes, groundY, walkable, r
     keep:()=>{ if (r.partyAway && r.obj.parent){ r.partyAway.parent=r.obj.parent; r.obj.parent.remove(r.obj); } },
     back:()=>{ const a=r.partyAway; if (!a) return; delete r.partyAway; r.solid=a.solid; if (a.parent && !r.obj.parent) a.parent.add(r.obj); } })),
   swingAnim:(face)=>{ stopMove(); player.face=face; player.obj.rotation.y=face; player.act=0.4; bonkCool=0.35; Snd.swoosh(); } });
+/* v1.34 live island sync. online.js merges someone else's island changes into S (keeping ours), then calls this so
+   the scene matches without a reload. Furniture, dropped items, plants, stumps, felled trees, fruit and gardens update
+   right away (things that didn't change keep their objects, so nothing flickers). Buildings (house, shops, museum,
+   town) wait until you're outdoors, and everything waits while you're placing, building or casting.
+   Terrain and spell changes (terra, magic) are saved but only drawn after the next load. */
+const syncPend=new Set(); let syncTimer=null;
+function applyWorld(keys){ for (const k of keys) syncPend.add(k); runWorldSync(); }
+function runWorldSync(){
+  clearTimeout(syncTimer); if (!syncPend.size) return;
+  const later=()=>{ syncTimer=setTimeout(runWorldSync, 1000); };
+  if (placing||layoutMode||buildMode||magicMode) return later();
+  const has=k=>syncPend.has(k), done=k=>syncPend.delete(k);
+  const byRec=(test, recs, make)=>{ const keep=new Set(recs), seen=new Set();
+    for (const e of ents.slice()){ if (e.removed || !test(e)) continue; if (keep.has(e.rec) && !seen.has(e.rec)) seen.add(e.rec); else e.remove(); }
+    for (const r of recs) if (!seen.has(r)) make(r); };
+  if (has('placed')){ byRec(e=>e instanceof Furniture, S.placed, r=>{ if (ITEMS[r.id]) new Furniture(r); }); done('placed'); }
+  if (has('ground')){ byRec(e=>e instanceof GroundItem, S.ground, r=>{ if (ITEMS[r.id]) new GroundItem(r); }); done('ground'); }
+  if (has('stumps')){ byRec(e=>e instanceof Stump, S.stumps, r=>new Stump(r)); done('stumps'); }
+  if (has('plants')){ const keep=new Set(S.plants), seen=new Set();
+    for (let i=plantEnts.length-1;i>=0;i--){ const e=plantEnts[i]; if (!e.removed && keep.has(e.rec) && !seen.has(e.rec)){ seen.add(e.rec); continue; } if (!e.removed) e.remove(); plantEnts.splice(i,1); }
+    for (const rec of S.plants){ if (seen.has(rec)) continue; const P=PLANTS[rec.sp]; if (!P) continue;
+      plantEnts.push(P.ptype==='tree' ? new Tree(rec.id, rec.x, rec.z, rec.sp, rec.fruit||(rec.sp==='palm'?'coconut':null), rec) : new Plant(rec)); }
+    done('plants'); }
+  if (has('cut')){ for (const t of trees) if (!t.removed && !t.rec && S.cut[t.key]==='gone') t.remove(); done('cut'); }
+  if (has('fruitPicked')){ for (const e of ents) if (e instanceof Tree && !e.removed) e.refresh(); done('fruitPicked'); }
+  if (has('gardens')){ rebuildGardens(); done('gardens'); }
+  for (const k of ['terra','magic','layout','gen','seed','refLamps','island','nativeFruit','house','fund','mentor']) done(k);   // data only, or drawn on next load
+  if (syncPend.size){   // buildings: only from outdoors
+    if (World.inside) return later();
+    if (has('home')){ buildPlayerHouse(); rebuildHomeRoom(); done('home'); }
+    if (has('shops')){ buildStoreAll(); for (const id of ['aquarium','garden']) buildShop(id); done('shops'); }
+    if (has('museum')){ buildMuseumAll(); done('museum'); }
+    if (has('town')){ applyTown(); done('town'); }
+    syncPend.clear();
+  }
+}
 window.__game = { v123:{ toolPitch, pitchTool, buyTool, talkShop, get storeVisit(){ return storeVisit; } }, v120:{ track, checkAch, achValue, grantWear, ownsWear, openAchievements, makeFavor, rollFavors, favorChoices, npcOf, clothesStock, wardrobeOwned, get Q(){ return Q; } }, party:PARTY, v119:{ tierPick, openChest, townCap:()=>townCap() }, v13:{ shopStock:w=>shopStock(w), learnPlan, rareRoll, knowsPlan, unfoundPlans, stockWeight, RARE_WORK, GroundItem, ShopItem, Furniture }, v1:{ scene, camera, OUT, updateSky, updateHUD, snowPass, SNOW_U, townNewDay, applyTown, talkHall, openHallPanel, buildPlaza, refreshStoreItems, buildStoreAll, buildShop, buildMuseumAll, spawnExhibits, mentorMoment, teachWoodworking, openCraft, doCook, nearStation, toggleSled, setSled, get sledding(){ return sledding; }, sledV, eatFood, Plant, fullBagCatch, KB, landSeaTap, terraLand, LAMPS:()=>LAMPS, hasUpstairs, ShopItem, Stairs, get exhibits(){ return exhibits; }, onDisplay, museumNeeds, museumExpand, museumFitState, museumTanks, renderer, nearestEnt:()=>nearestEnt(), doAction:()=>doAction(), openTankView, closeTankView, get tankView(){ return tankView; }, KEEPOUT, dayKeyOf, World, startPlacing, checkPlace, get placing(){ return placing; }, FX, homeStock, buyHome, draftUnowned, get homeRack(){ return homeRack; }, openShop, openBuild:(o)=>openBuild(o), closeBuild, get buildMode(){ return buildMode; }, ents, Tree, Stump, Weed, Bug, bugs, player, interact, layoutBar, pickNote, itemToast, reel, Fishing, fishes, spawnFish, WU, relayout, enterRoom:(id)=>enterRoom(id), trees }, get S(){ return S; }, dbg:{ setCine:(c)=>{ cine=c; }, showChoices:(t,c)=>showChoices(t,c), dialog:(...a)=>dialog(...a), setRiding:(v)=>setRiding(v), enterRoom:(id)=>enterRoom(id), openBuild:()=>openBuild(), rooms:()=>Object.keys(ROOMS), get yaw(){ return camYaw; }, set yaw(v){ camYaw=v; }, get riding(){ return riding; }, get snow(){ return SNOW_U.value; }, setWeather:(w)=>{ weatherOverride=w; World.weather=w; snowT=0; }, get dlg(){ return !!dlgState; } }, walkable, blocked, groundY, launchRag, ragdolls, swing, meBody, refreshPortals, portalArches, get portalEnt(){ return portalEnt; }, enterRoom, PLACES, net:{ party:(id,d)=>PARTY.onNet(id,d), bonked, visibleRemotes:()=>[...remotes.values()].filter(r=>r.obj.visible).map(r=>[r.name,+r.pos.x.toFixed(1),+r.pos.z.toFixed(1)]), remoteUpsert, remotePos, remoteLeave, remoteEmote, playerState, setInventory, toast:(m)=>toast(m), updateHUD:()=>updateHUD(), get started(){ return started; } }, ITEMS, itemThumb:(id)=>thumb(id), layoutInfo:()=>({ id:LAYOUT_ID, PLACES, PATHS, LOT, rects:RECTS.map(r=>r.slice(0,4)), lot:lotRect() }), terrainH:(x,z)=>rawHeight(x,z), terrainSlope:(x,z)=>hillSlope(x,z), interact, spawnBug:(id,x,z)=>new Bug(id,x,z), tapOdds:()=>Object.fromEntries(Object.keys(TAP_BASE).map(k=>[k, +tapChance({rarity:k}).toFixed(2)])), placingObj:()=>placing&&placing.m, toScreen:v=>{ const p=v.clone().project(camera); return [(p.x*0.5+0.5)*innerWidth, (-p.y*0.5+0.5)*innerHeight]; }, rebuildHome:()=>{ buildPlayerHouse(); rebuildHomeRoom(); }, openBuild, closeBuild, get buildMode(){ return buildMode; }, talkShop, openDonate, talkCurator, spawnMossby, onFelled, findPath, startPlacing, LOT, RECTS, shopEnts, museumEnt, houseEnt:()=>houseEnt, Time, player, ents, ITEMS, residents, World, ROOMS, goTo, handleTap, doAction, updateSky, rollDay, spawnDaily, castAt, Fishing, fishes, bugs, openBag, openBook, openShop, openBoard, openMenu, openCraft, doCraft, WOODWORK, enterRoom, exitRoom, equip, startLayout, endLayout, trees, applyControls, magic:{ startMagic, endMagic, landTap, magicPlace, castMagic, get mode(){ return magicMode; }, raiseTower, talkWizard, drinkPotion, potionOn, luckW, rollFavors, Q, favorChoices, findTowerSpot, get tower(){ return towerEnt; }, PLACES, TERRA, FALLS } };
+window.__game.net.applyWorld = applyWorld;   // v1.34 live island sync (online.js)
 // v1.26 test hooks
 window.__game.v126 = { townNewDay, applyTown, findHomeSpot, claimHomeSpot, townCap, incomeNewDay, refreshIncome, talkIncome, incCollect, incOf, INCOME, incEnts, openMap, talkSkipperHome, talkSkipperTrip, tripGoHome, tripRecap, storyWho, askToLeave, canAskToLeave, pitchOnBuy, merchantDay, get peddler(){ return peddler; }, get skipper(){ return skipper; }, newSquares, LOAN_MAX_SQ, TRIP, TRIP_THEME, residents, residentHomes, plotEnts, KEEPOUT, Q, PATHS, camTarget, updateCamera, set camDist(v){ camDist=v; }, get camDist(){ return camDist; }, set camYaw(v){ camYaw=v; } };
 window.__game.LETTERS = LETTERS;

@@ -20,14 +20,38 @@ let base = {};
 const snap = d => Object.fromEntries(WORLD_KEYS.map(k => [k, JSON.stringify(d[k] ?? null)]));
 // Beach finds respawn every day on their own; when visiting they are your own copy and never sent back
 const worldForPush = S => { const w = pick(S, WORLD_KEYS); if (B.mode === 'visit' && Array.isArray(w.ground)) w.ground = w.ground.filter(g => !g.beach).concat(JSON.parse(base.ground || '[]').filter(g => g.beach)); return w; };
-// Three-way merge of island parts: keep our change, take theirs, or (both changed) take theirs
+/* v1.34: deep three-way merge of the island. For every part: if only one side changed it, that side's version is used;
+   if both changed it, objects are merged key by key and lists item by item (our additions and removals are re-applied
+   on top of theirs). Only when both changed the very same value does theirs win. Unchanged things keep the exact same
+   objects, so furniture, plants and so on in the scene stay hooked up to them. */
+const J = v => JSON.stringify(v ?? null);
+const isObj = v => v !== null && typeof v === 'object' && !Array.isArray(v);
+function merge3(b, l, s) {
+  const jl = J(l), js = J(s); if (jl === js) return l;
+  if (js === J(b)) return l;                                   // only we changed it
+  if (Array.isArray(l) && Array.isArray(s)) return mergeList(Array.isArray(b) ? b : [], l, s);
+  if (isObj(l) && isObj(s)) { const bb = isObj(b) ? b : {};
+    for (const k of new Set([...Object.keys(l), ...Object.keys(s)])) { const v = merge3(bb[k], l[k], s[k]); if (v === undefined) delete l[k]; else l[k] = v; }
+    return l; }
+  return s;                                                    // only they changed it, or both changed one value
+}
+function mergeList(b, l, s) {
+  const count = a => { const m = new Map(); for (const x of a) { const k = J(x); m.set(k, (m.get(k) || 0) + 1); } return m; };
+  const Bc = count(b), Lc = count(l), removed = new Map(), added = [], pool = new Map(), seen = new Map(), used = new Set();
+  for (const [k, n] of Bc) { const d = n - (Lc.get(k) || 0); if (d > 0) removed.set(k, d); }
+  for (const x of l) { const k = J(x), n = (seen.get(k) || 0) + 1; seen.set(k, n); if (n > (Bc.get(k) || 0)) added.push(x); (pool.get(k) || pool.set(k, []).get(k)).push(x); }
+  const out = [];
+  for (const x of s) { const k = J(x), r = removed.get(k) || 0; if (r > 0) { removed.set(k, r - 1); continue; }
+    const p = pool.get(k), mine = p && p.length ? p.shift() : null; if (mine) used.add(mine); out.push(mine || x); }
+  for (const x of added) if (!used.has(x)) out.push(x);        // ours, unless they made the identical change
+  return out;
+}
 function mergeWorld(S, server) {
-  let took = 0, clash = 0;
-  for (const k of WORLD_KEYS) { const L = JSON.stringify(S[k] ?? null), Bk = base[k], Sv = JSON.stringify(server[k] ?? null);
-    if (Sv === Bk || Sv === L) continue;
-    if (L !== Bk) clash++;
-    if (server[k] !== undefined) S[k] = server[k]; took++; }
-  base = snap(server); return { took, clash };
+  const changed = [];
+  for (const k of WORLD_KEYS) { if (server[k] === undefined) continue;
+    const before = J(S[k]), v = merge3(base[k] !== undefined ? JSON.parse(base[k]) : null, S[k], server[k]);
+    S[k] = v; if (J(v) !== before) changed.push(k); }
+  base = snap(server); return { took: changed.length, changed };
 }
 const own = () => B.mode === 'visit' ? B.own : null;
 
@@ -39,7 +63,7 @@ export function setup(boot) {
   if (B.mode === 'trip') B.onSave = S => { try { sessionStorage.setItem('dw-trip-world', JSON.stringify({ ground: S.ground, cut: S.cut, stumps: S.stumps, plants: S.plants, day: S.day, placed: S.placed })); } catch {} queue(); };
   if (B.mode === 'account') B.onSave = S => { cacheLocal(S); queue(); };
   if (B.mode === 'visit') { base = snap(B.save); lastWorld = JSON.stringify(worldForPush(B.save)); B.onSave = () => queue(); }
-  if (B.mode === 'account' && B.save) base = snap(B.save);
+  if (B.mode === 'account' && B.save) { base = snap(B.save); lastAnnounced = J(pick(B.save, WORLD_KEYS)); }
 }
 const pick = (o, keys) => Object.fromEntries(keys.filter(k => o[k] !== undefined).map(k => [k, o[k]]));
 function cacheLocal(S) { try { localStorage.setItem('driftwood-cloud-cache-' + B.user.id, JSON.stringify(S)); } catch {} }
@@ -59,12 +83,11 @@ async function doFlush() {
     if (B.mode === 'account') {
       for (let tries = 0; tries < 3; tries++) {
         const r = await api('/api/save', { method: 'PUT', body: { data: S, baseVersion: ownVer } });
-        if (r.ok) { ownVer = r.version; base = snap(S); return true; }
+        if (r.ok) { ownVer = r.version; base = snap(S); announce(r.version); return true; }
         if (r.status !== 409) return false;
         // someone (a resident, or you on another device) saved in between: merge the island and try again
         const cur = await api('/api/save'); if (!cur.ok || !cur.data) return false;
-        const m = mergeWorld(S, cur.data); ownVer = cur.version;
-        if (m.took) banner(`Your island was changed by a resident${m.clash ? ' (some of your last changes were replaced)' : ''}. Reload to see it.`, 'Reload', async () => { await flush(); location.reload(); });
+        const m = mergeWorld(S, cur.data); ownVer = cur.version; showWorld(m.changed);   // v1.34: shown live, no reload
       }
       conflict('Your island keeps changing somewhere else.'); return false;
     }
@@ -94,8 +117,7 @@ async function doFlush() {
         if (ws === lastWorld) break;
         const r2 = await api(`/api/visit/${B.host.id}/world`, { method: 'PUT', body: { pass: B.pass, world: w, baseVersion: hostVer } });
         if (r2.ok) { hostVer = r2.version; lastWorld = ws; base = snap(w); send({ t: 'world', v: hostVer }); break; }
-        if (r2.status === 409 && r2.world) { const m = mergeWorld(S, r2.world); hostVer = r2.version; lastWorld = JSON.stringify(worldForPush(r2.world));
-          if (m.took) banner(`${B.host.name}'s island changed while you were here. Reload to see it.`, 'Reload', async () => { await flush(); location.reload(); }); continue; }
+        if (r2.status === 409 && r2.world) { const m = mergeWorld(S, r2.world); hostVer = r2.version; lastWorld = JSON.stringify(worldForPush(r2.world)); showWorld(m.changed); continue; }
         ok = false; if (r2.status === 403) G().net.toast(r2.error || 'Your visit has ended.'); break;
       }
     }
@@ -108,6 +130,26 @@ async function refreshOwn() {
   const cur = await api('/api/save'); if (!cur.ok || !cur.data) return false;
   B.own = cur.data; ownVer = cur.version; return true;
 }
+/* v1.34 live island sync */
+let lastAnnounced = '';
+function announce(v) {   // owner: after a save that changed the island part, tell everyone in the live room
+  const w = J(pick(G().S, WORLD_KEYS)); if (w === lastAnnounced) return; lastAnnounced = w; send({ t: 'world', v });
+}
+function showWorld(keys) { if (keys && keys.length) G().net.applyWorld(keys); }
+async function doPull() {
+  const S = G().S;
+  if (B.mode === 'account') {
+    const cur = await api('/api/save'); if (!cur.ok || !cur.data || cur.version <= ownVer) return;
+    const m = mergeWorld(S, cur.data); ownVer = cur.version; lastAnnounced = J(pick(cur.data, WORLD_KEYS)); showWorld(m.changed);
+    if (J(pick(S, WORLD_KEYS)) !== lastAnnounced) queue();   // we had unsaved island changes: save them on top
+  } else if (B.mode === 'visit') {
+    const r = await api(`/api/visit/${B.host.id}/world?pass=${encodeURIComponent(B.pass)}`); if (!r.ok || !r.world || r.version <= hostVer) return;
+    const m = mergeWorld(S, r.world); hostVer = r.version; lastWorld = JSON.stringify(worldForPush(r.world)); showWorld(m.changed);
+    if (B.role === 'resident' && JSON.stringify(worldForPush(S)) !== lastWorld) queue();
+  }
+}
+// pulls go through the same queue as saves, so a pull and a save never race on the version number
+function pullWorld() { if (blocked) return; inflight = (inflight || Promise.resolve()).then(doPull, doPull).catch(() => {}); }
 function conflict(why) {
   blocked = true; clearTimeout(timer);
   banner(`${why} Reload to get the latest copy. (Changes from the last few seconds here may be lost.)`, 'Reload', () => location.reload(), true);
@@ -137,7 +179,7 @@ function onLive(m) {
     case 'emote': net.remoteEmote(m.id === myId ? 'me' : m.id, m.e); break;
     case 'game': if (m.id !== myId && m.d) net.party(m.id, m.d); break;   // party games (v1.14)
     case 'bonk': if (m.id === myId) break; if (m.to === myId) net.bonked('me', m.id, +m.dx || 0, +m.dz || 0); else if (peers.has(m.to)) net.bonked(m.to, m.id, +m.dx || 0, +m.dz || 0); break;
-    case 'world': banner(`${peers.get(m.id)?.name || 'Someone'} changed the island. Reload to see it.`, 'Reload', async () => { await flush(); location.reload(); }); break;
+    case 'world': pullWorld(); break;   // v1.34: someone changed the island: fetch and show it live
     case 'gift': openMail(true, m.name); break;
     case 'trade-ask': askTrade(m); break;
     case 'trade-open': trade = { id: m.trade, with: m.with, offer: {}, ok: {}, mine: [] }; openPanel('here'); break;

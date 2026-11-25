@@ -285,6 +285,13 @@ async function api(req, env, url) {
     const s = await loadSave(env, ownerId); if (!s) return err(404, 'That island has not been saved yet.');
     return json({ pass: pass.token, role: pass.role, host: { id: ownerId, name: host?.display_name || 'Friend', island: s.data.island || '' }, world: worldOf(s.data), version: s.version });
   }
+  // v1.34: a visitor or resident fetches the island's latest copy (after the live room says it changed), no reload needed
+  if ((m = p.match(/^\/api\/visit\/([a-f0-9]+)\/world$/)) && M === 'GET') {
+    const ownerId = m[1]; const pass = await passFor(env, url.searchParams.get('pass') || '', ownerId);
+    if (!pass || pass.friend_id !== me.id) return err(403, 'Your visit has ended.');
+    const s = await loadSave(env, ownerId); if (!s) return err(404, 'Island not found.');
+    return json({ world: worldOf(s.data), version: s.version });
+  }
   if ((m = p.match(/^\/api\/visit\/([a-f0-9]+)\/world$/)) && M === 'PUT') {
     const ownerId = m[1]; const b = await body(req);
     const pass = await passFor(env, b.pass, ownerId);

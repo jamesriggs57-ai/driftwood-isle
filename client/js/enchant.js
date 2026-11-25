@@ -7,7 +7,7 @@ import { ITEMS, TOOLS } from './content.js';
 import { M, mk, G, glowMat, addGlow, ITEM_BUILDERS } from './models.js';
 import { ENCH, FAMILIES, TWIN, TWIN_SLOTS, POWER, CRAFT, REPAIR, SCROLL_ODDS, WORDS, migrate, fits, knows, enchOf, slotsOf, rankOn, describe, toolsText, maxUses,
   canApply, needFor, missing, apply, remove, learn, repairNeed, repairClams, repair, repairForClams, craftNeed, canCraft, craft, teachable, rank3Known, scrollPick,
-  outputOf, oneSwing, luckFor, bonkPower, sureOf, bigRoll, sprayOf } from './enchant-core.js';
+  outputOf, oneSwing, luckFor, bonkPower, sureOf, bigRoll, sprayOf, sprayTargets, ONE_SWING_WOOD } from './enchant-core.js';
 export * from './enchant-core.js';
 
 const FAM_COLOR = { tough:0x8a9aa8, bonk:0xf08a3a, lucky:0x5ac06a, output:0xd8a040, sure:0x5ab0e0, big:0x3a6ad8, spray:0x7ad8f0 };
@@ -43,11 +43,14 @@ export function createEnchant(C){
     onUse(t, T){ const mx=maxUses(S(),t), en=T.ench||[]; if (!en.length || !mx) return;
       if (T.uses<=0){ setTimeout(()=>C.toast(`The ${en.map(nm).join(' and ')} enchantment${en.length>1?'s':''} went with it.`), 900); return; }
       const warn=Math.max(3, Math.round(mx*0.1)); if (T.uses===warn) setTimeout(()=>C.toast(`Your ${TOOLS[t].tiers[T.tier].name} is wearing thin. Repair it before it breaks, or its enchantments go with it.`), 600); },
-    output:t=>outputOf(S(),t), oneSwing:t=>oneSwing(S(),t),
+    output:t=>outputOf(S(),t), oneSwing:t=>oneSwing(S(),t), ONE_SWING_WOOD,
     luck:(key)=>luckFor(S(), key, S().equip),
     rareMult:(key)=>luckFor(S(), key, S().equip),
     bonk:()=>bonkPower(S(), S().equip),
     sure:t=>sureOf(S(),t), big:(kind,r)=>bigRoll(S(),kind,r), spray:()=>sprayOf(S()),
+    sprayAround:(rec, day)=>sprayTargets(S(), rec, day),
+    // a scroll in a bottle on the beach, rolled with the day's rare stream (r). Returns an item id or null.
+    dailyScroll(r){ if (!ok()) return null; const a=r(); if (a>=SCROLL_ODDS.bottle) return null; return scrollPick(S(), r); },
     // a scroll from an ordinary action (dig, fell, catch). at: a THREE.Vector3
     scrollRoll(kind, at){ if (!ok() || Math.random()>=(SCROLL_ODDS[kind]||0)) return false; const id=scrollPick(S()); if (!id) return false; const p=at.clone();
       setTimeout(()=>{ C.dropNear(id, p, 1.2); if (C.sparkle) C.sparkle(p.clone().add(new THREE.Vector3(0,1,0))); C.Snd.jingle(); C.toast('An enchanting scroll!', C.thumb(id), 'new', ENCH[ITEMS[id].ench].name); }, 1000); return true; },

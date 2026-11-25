@@ -415,7 +415,8 @@ export class IslandRoom {
         const now = Date.now(); if (now - (me.bonkT || 0) < 400) return; me.bonkT = now;
         const to = String(m.to); if (to === me.id || ![...this.peers.values()].some(p => p.id === to)) return;
         const dx = Math.max(-1, Math.min(1, +m.dx || 0)), dz = Math.max(-1, Math.min(1, +m.dz || 0));
-        this.broadcast({ t: 'bonk', id: me.id, to, dx, dz }, ws); break; }
+        const p = Math.max(0.5, Math.min(1.5, +m.p || 1));   // v1.40: Ultrabonk launch power from the sender's tool
+        this.broadcast({ t: 'bonk', id: me.id, to, dx, dz, p }, ws); break; }
       case 'game': {   // party games (v1.14): the host's game state, ball hits, join/leave. Relayed as-is; nothing here touches saves.
         const now = Date.now(); if (now - (me.gameT || 0) < 40) return; me.gameT = now;
         if (!m.d || typeof m.d !== 'object' || Array.isArray(m.d) || JSON.stringify(m.d).length > 1500) return;

@@ -18,6 +18,7 @@ import * as VY from './voyage.js';
 import * as TALK from './talk.js';
 import * as ISL from './expand.js';
 import * as RF from './reef.js';
+import { createEnchant } from './enchant.js';   // v1.40 tools and enchanting
 import { buildBike, MODEL, M, mk, G, outline, windowMat, glowMats, glowMat, glowSprites, addGlow, textSprite, PALETTE, buildItemModel, thumb, toolThumb, FURN_BUILDERS, MF,
   buildTree, buildStump, buildShrub, buildFlower, buildWildFlower, buildTool, buildAnimal, buildPlayer, buildHouse, buildStall, buildBoard, buildPlankDeck, buildRoom, buildBird, buildGull, buildDuck, buildWeedClump } from './models.js';
 import './furn.js';
@@ -86,6 +87,11 @@ const LAY = Object.assign({}, DEFAULT_SHAPE, LAYOUT_ID==='gen' ? (S.gen.trip ? g
 const SC = LAY.scale || 1;   // island size (generated islands are about twice the area)
 if (!S.terra) S.terra = { cells:{}, moved:{} };   // wizard work: reshaped land, dug water, moved buildings
 if (!S.magic) S.magic = {};                       // wizard tower (unlocked by a quest) and where it stands
+// v1.40 tools and enchanting (enchant.js). Everything is reached through lambdas, so the order of definitions below doesn't matter.
+const EN = createEnchant({ S:()=>S, toast:(...a)=>toast(...a), Snd, save:()=>save(), countItem:id=>countItem(id), removeItem:(id,n)=>removeItem(id,n), addItem:id=>addItem(id), canAdd:id=>canAdd(id),
+  dropNear:(...a)=>dropNear(...a), sparkle:p=>sparkle(p), thumb:id=>thumb(id), toolThumb:(t,k)=>toolThumb(t,k), fmt:n=>fmt(n), dialog:(...a)=>dialog(...a), openPanel:(...a)=>openPanel(...a),
+  pBody:()=>pBody, pTitle:()=>pTitle, closePanel:()=>closePanel(), reqMet:(t,k)=>reqMet(t,k), friend:id=>S.friend[id]||0, updateHeld:()=>updateHeld(), updateHUD:()=>updateHUD(), equip:t=>equip(t),
+  noEdit:()=>noEdit(), GUEST:()=>GUEST, VISIT:()=>VISIT, addClams:n=>addClams(n) });
 /* The town: who lives here so far, who's moving in next, the town hall and the island's public projects.
    New islands start with three neighbors; the rest move in rarely, and only once the town gets upgrades (see townCap). Islands from before v1.0
    (they already have a day on the clock or a player name) keep everyone they had. */
@@ -155,7 +161,7 @@ const bestFriends = () => Object.values(S.friend).filter(f=>f>=15).length;
 
 /* Size and weight for each catch */
 function rollStats(id){
-  const it=ITEMS[id]; const r=Math.random(); let f = Math.pow(r,1.7); if (Math.random()<0.05) f = 0.88+Math.random()*0.12;
+  const it=ITEMS[id]; let f = EN.big(it.kind);   // v1.40: same roll as before (r^1.7, 5% top size) unless the rod or net has Big Game
   const L = it.len[0] + (it.len[1]-it.len[0])*f;
   const grams = it.k*Math.pow(L,3);
   return { l:+L.toFixed(1), w:+grams.toFixed(it.kind==='bug'?2:0), f:+f.toFixed(3) };
@@ -884,7 +890,7 @@ const toolDef = t => TOOLS[t].tiers[toolTier(t)];
 const article = n => /^[aeiou]/i.test(n) ? 'an' : 'a';
 const isForever = t => { const T=S.tools[t]; return !!(T && TOOLS[t].tiers[T.tier] && TOOLS[t].tiers[T.tier].forever); };
 function useTool(t){
-  const T=S.tools[t]; if(!T) return false; if (isForever(t)){ save(); return true; } T.uses--;
+  const T=S.tools[t]; if(!T) return false; if (isForever(t)){ save(); return true; } T.uses--; EN.onUse(t,T);
   if (T.uses<=0){ const nm=TOOLS[t].tiers[T.tier].name; delete S.tools[t]; if(S.equip===t) S.equip=null; Snd.breakTool(); setTimeout(()=>toast(`Your ${nm} broke!`),400); updateHeld(); }
   else if (T.uses===5) setTimeout(()=>toast(`Your ${TOOLS[t].tiers[T.tier].name} is looking worn out.`),400);
   save(); return true;
@@ -923,12 +929,12 @@ class Tree extends Ent {
     save(); setTimeout(()=>this.refresh(),250);
   }
   chop(){
-    const tier=toolTier('axe'); if(!useTool('axe')) return;
-    const n=(S.day.chop[this.key]||0); S.day.chop[this.key]=n+1; S.stats.chopped++; track('chop');
+    const tier=toolTier('axe'), one=EN.oneSwing('axe'), out=EN.output('axe'); if(!useTool('axe')) return;   // v1.40
+    const n=one?3:(S.day.chop[this.key]||0); S.day.chop[this.key]=n+1; S.stats.chopped++; track('chop');
     this.shake=0.7; Snd.chop(); puff(this.pos.clone().add(new THREE.Vector3(0,1,0)), 0xd8b080, 5, 0.4, 1.5, 0.8, 0.5);
-    if (n<3){ dropNear('wood', this.pos, 1.6); if (tier>=2) dropNear('wood', this.pos, 1.6); if (TRIP_THEME==='grove' && !this.rec && n===0){ if (haulLeft()>0) dropNear('heartwood', this.pos, 1.6); else capNote(); } else rareRoll('chop', 'heartwood', this.pos); }
-    else if (TOOLS.axe.tiers[tier].nofell) toast('Too flimsy to fell it.');
-    else { Snd.timber(); dropNear('wood', this.pos, 1.6);
+    if (n<3){ for (let k=0;k<out;k++){ dropNear('wood', this.pos, 1.6); if (tier>=2) dropNear('wood', this.pos, 1.6); } if (TRIP_THEME==='grove' && !this.rec && n===0){ if (haulLeft()>0) dropNear('heartwood', this.pos, 1.6); else capNote(); } else rareRoll('chop', 'heartwood', this.pos); }
+    else if (TOOLS.axe.tiers[tier].nofell && !one) toast('Too flimsy to fell it.');
+    else { Snd.timber(); for (let k=0;k<(one?EN.ONE_SWING_WOOD:out);k++) dropNear('wood', this.pos, 1.6); EN.scrollRoll('fell', this.pos);
       if (this.rec){ S.plants.splice(S.plants.indexOf(this.rec),1); } else S.cut[this.key]='gone';
       const pin=/^x(\d+)_/.exec(this.key), pines=pin && ISLES[+pin[1]] && ISLES[+pin[1]].kind==='pines'; if (pines) (S.pinesCut=S.pinesCut||{})[this.key]={ x:+this.pos.x.toFixed(2), z:+this.pos.z.toFixed(2), type:this.type, day:today() };
       rareRoll('fell', 'heartwood', this.pos); woodPlanRoll(0.01, this.pos); const st={ key:this.key, x:this.pos.x, z:this.pos.z }; S.stumps.push(st); new Stump(st); FX.fell(this.obj, this.pos.clone(), this.type); this.remove(true); if (!pines) onFelled(this.pos.clone()); }
@@ -940,7 +946,7 @@ class Stump extends Ent {
   constructor(rec){ super('stump',rec.x,rec.z,0.45); this.rec=rec; this.solid=true; this.reach=1.4; this.attach(buildStump()); }
   label(){ return S.equip==='shovel' ? 'Dig up' : 'Look'; }
   act(){ if (this.label()==='Look') return; if(!useTool('shovel')) return; Snd.dig(); S.stumps.splice(S.stumps.indexOf(this.rec),1);
-    const pos=this.pos.clone(); FX.stumpOut(this.obj, pos); this.remove(true); setTimeout(()=>dropNear('stump', pos, 1.1), 900); rareRoll('stump', 'glimmermoss', pos); S.stats.dug++; track('dig'); save(); }
+    const pos=this.pos.clone(); FX.stumpOut(this.obj, pos); this.remove(true); { const o=EN.output('shovel'); setTimeout(()=>{ for (let k=0;k<o;k++) dropNear('stump', pos, 1.1); }, 900); } rareRoll('stump', 'glimmermoss', pos); S.stats.dug++; track('dig'); save(); }
 }
 if (!S.stumps) S.stumps=[];
 
@@ -955,10 +961,11 @@ class Rock extends Ent {
     if (S.equip!==t) equip(t);
     const used=S.day.rock[this.idx]||0; this.hit=1; Snd.thunk(); puff(this.pos.clone().add(new THREE.Vector3(0,0.6,0)), 0xb8bec4, 5, 0.6, 2, 0.8, 0.5);
     if (used>=4){ toast('The rock is all tapped out for today.'); return; }
-    if (!useTool(t)) return; S.day.rock[this.idx]=used+1;
-    if (TRIP_THEME==='clamstone'){ const left=haulLeft(); if (left<=0){ capNote(); dropNear('stone', this.pos, 1.7); } else { const amt=Math.min(left, [1000,2000,4000,8000][used]); addClams(amt); Snd.coin(); toast('A pouch of '+fmt(amt)+' clams popped out!'); } }   // v1.27
-    else if (this.idx===S.day.lucky){ const amt=[100,200,400,800][used]; addClams(amt); Snd.coin(); toast('A pouch of '+amt+' clams popped out!'); }
-    else { const x=Math.random(), q=this.rich?[0.35,0.6]:[0.6,0.88]; dropNear(x<q[0]?'stone':(x<q[1]?'clay':'iron'), this.pos, 1.7); rareRoll(World.night>0.5?'rockNight':'rock', 'starstone', this.pos); }
+    if (!useTool(t)) return; const hits=t==='shovel'&&EN.oneSwing('shovel') ? 4-used : 1, out=EN.output(t);   // v1.40: One-Swing taps the rock out at once
+    for (let h=0;h<hits;h++){ const u=used+h; S.day.rock[this.idx]=u+1;
+    if (TRIP_THEME==='clamstone'){ const left=haulLeft(); if (left<=0){ capNote(); dropNear('stone', this.pos, 1.7); } else { const amt=Math.min(left, [1000,2000,4000,8000][u]); addClams(amt); Snd.coin(); toast('A pouch of '+fmt(amt)+' clams popped out!'); } }   // v1.27
+    else if (this.idx===S.day.lucky){ const amt=[100,200,400,800][u]; addClams(amt); Snd.coin(); toast('A pouch of '+amt+' clams popped out!'); }
+    else { for (let k=0;k<out;k++){ const x=Math.random(), q=this.rich?[0.35,0.6]:[0.6,0.88]; dropNear(x<q[0]?'stone':(x<q[1]?'clay':'iron'), this.pos, 1.7); } rareRoll(World.night>0.5?'rockNight':'rock', 'starstone', this.pos); } }
     save();
   }
   update(dt){ if(this.hit>0){ this.hit=Math.max(0,this.hit-dt*5); const s=1+Math.sin(this.hit*Math.PI)*0.08; this.obj.scale.set(s,2-s,s); } }
@@ -969,10 +976,11 @@ class DigSpot extends Ent {
   constructor(i,x,z){ super('dig',x,z,0.4); this.i=i; this.reach=1.3; const g=new THREE.Group(); for(const a of [0.6,-0.6]){ const m=mk(G.box(0.7,0.03,0.12), M(0x6a4a30), 0,0.03,0,g); m.rotation.y=a; m.castShadow=false; } this.attach(g); this.hitSphere(0.5,0.2); }
   label(){ return 'Dig'; }
   act(){ if(!needTool('shovel') || !useTool('shovel')) return; Snd.dig(); puff(this.pos.clone().add(new THREE.Vector3(0,0.2,0)), 0xb08a5a, 8, 0.6, 2.5, 1, 0.6); S.day.digs[this.i].dug=true; S.stats.dug++; track('dig'); FX.hole(this.pos.clone(), 0.5, 1.6);
-    const f=tierPick(Math.random, Object.values(ITEMS).filter(i=>i.kind==='fossil' && allowedFind(i)), i=>luckW(i,'dig'), 'dig'); this.remove(); setTimeout(()=>dropNear(f.id, this.pos, 0.3, true), 200);
+    const f=tierPick(Math.random, Object.values(ITEMS).filter(i=>i.kind==='fossil' && allowedFind(i)), i=>luckW(i,'dig'), 'dig'); this.remove(); { const o=EN.output('shovel'), p=this.pos.clone(); setTimeout(()=>{ for (let k=0;k<o;k++) dropNear(f.id, p, k?0.8:0.3, !k); }, 200); }
     if (Math.random()<(potionOn('dig')?0.25:0.12)){ setTimeout(()=>{ const got=grantRandomStyle(); if(got){ Snd.jingle(); toast(`Swatch book: ${got}`); } }, 900); }
     if (!GUEST && Math.random()<rareChance('digPlan','dig')){ const pl=randomPlan(); if (pl){ const p=this.pos.clone(); setTimeout(()=>{ dropNear(pl, p, 0.9); sparkle(p.clone().add(new THREE.Vector3(0,1,0))); Snd.jingle(); toast('Something rolled up in the dirt...', thumb(pl), 'new', 'A rare plan!'); }, 1100); } }
     woodPlanRoll(0.015, this.pos);   // v1.34
+    EN.scrollRoll('dig', this.pos);   // v1.40
     if (!GUEST && Math.random()<0.004){ const tk=randomTicket(), p=this.pos.clone(); setTimeout(()=>{ dropNear(tk, p, 0.9); Snd.jingle(); toast('A boat ticket was buried here!', thumb(tk), 'new'); }, 1100); }   // v1.26
     if (toolTier('shovel')>=2 && Math.random()<0.3){ addClams(300); toast(`Your ${TOOLS.shovel.tiers[toolTier('shovel')].name.toLowerCase()} turned up 300 clams too!`); Snd.coin(); } save(); }
 }
@@ -1010,7 +1018,8 @@ function harvestRec(rec, bulk){ const P=PLANTS[rec.sp], C=CROPS[P.crop], n=C.n[0
   if (C.regrow){ rec.stage=C.regrowTo||1; if (e) e.rebuild(); } else { S.plants.splice(S.plants.indexOf(rec),1); if (e) e.remove(); }
   S.stats.harvested=(S.stats.harvested||0)+n; track('harvest'); return { n, seeds, isNew, dropped }; }
 /* ---------- Planted flowers and shrubs ---------- */
-function waterPlant(rec, pos){ if(!useTool('can')) return; rec.watered=today(); S.stats.watered++; track('water'); Snd.water(); for(let i=0;i<8;i++) puff(pos.clone().add(new THREE.Vector3((Math.random()-0.5)*0.6,0.8,(Math.random()-0.5)*0.6)),0x7fc8f0,1,0.15,-1,0.4,0.5); toast('Watered. It will grow faster tomorrow.'); save(); }
+function waterPlant(rec, pos){ if(!useTool('can')) return; rec.watered=today(); S.stats.watered++; track('water');
+  for (const p of EN.sprayAround(rec, today())){ p.watered=today(); S.stats.watered++; track('water'); puff(new THREE.Vector3(p.x,groundY(p.x,p.z)+0.8,p.z),0x7fc8f0,2,0.2,-1,0.4,0.5); }   // v1.40 Wide Spray Snd.water(); for(let i=0;i<8;i++) puff(pos.clone().add(new THREE.Vector3((Math.random()-0.5)*0.6,0.8,(Math.random()-0.5)*0.6)),0x7fc8f0,1,0.15,-1,0.4,0.5); toast('Watered. It will grow faster tomorrow.'); save(); }
 class Plant extends Ent {
   // Vegetables and herbs: pick a few. Tomatoes and herbs grow back; the rest come up whole.
   // Vegetables, herbs and berries: you get some of the crop and 1 to 4 seeds back. Tomatoes, herbs and berries stay planted and grow back.
@@ -1340,7 +1349,7 @@ class Bug extends Ent {
   update(dt,t){
     this.ph+=dt; const W=this.where;
     const pd=Math.hypot(player.pos.x-this.pos.x, player.pos.z-this.pos.z);
-    if (!this.flee && CatchMeter.bug!==this && pd < (W==='air'?2.6:3.2) && Math.random()<SKITTISH[this.rarity]*dt*(player.speedFrac>0.55 ? 1 : player.targetEnt===this && player.speedFrac>0.05 ? 0.18 : 0)){ this.startFlee(); }
+    if (!this.flee && CatchMeter.bug!==this && pd < (W==='air'?2.6:3.2) && Math.random()<SKITTISH[this.rarity]*EN.sure('net').flee*dt*(player.speedFrac>0.55 ? 1 : player.targetEnt===this && player.speedFrac>0.05 ? 0.18 : 0)){ this.startFlee(); }
     if (this.flee){ this.flee+=dt; const sp=W==='air'||W==='flower'||W==='trunk'?5:3.5; this.pos.x+=Math.cos(this.fleeDir)*sp*dt; this.pos.z+=Math.sin(this.fleeDir)*sp*dt; if(W!=='ground'&&W!=='beach'&&W!=='pond') this.pos.y+=dt*2.5; this.obj.position.copy(this.pos); this.obj.rotation.y=Math.atan2(Math.cos(this.fleeDir),Math.sin(this.fleeDir)); this.flap(t,2); if(this.flee>2.2) this.despawn(); return; }
     if (W==='air'){ const w=this.ph*0.6; const x=this.home.x+Math.sin(w)*2.2+Math.sin(w*2.3)*0.8, z=this.home.z+Math.cos(w*0.8)*2.2; const ang=Math.atan2(x-this.pos.x, z-this.pos.z); this.pos.set(x, groundY(x,z)+this.alt+Math.sin(this.ph*3)*0.25, z); this.obj.rotation.y=ang; this.flap(t,1); }
     else if (W==='flower'){ if (Math.sin(this.ph*0.7)>0.93){ this.pos.y=groundY(this.pos.x,this.pos.z)+0.4+Math.sin(this.ph*8)*0.15; this.flap(t,1); } else { this.pos.y=groundY(this.pos.x,this.pos.z)+0.3; this.flap(t,0.15); } }
@@ -1362,11 +1371,11 @@ class Bug extends Ent {
    Manual swing: a marker sweeps across a bar. Perfect timing is ~97%, a decent swing ~85%, a sloppy one ~55%.
    It's harder at first and pays off once you get the feel for it. */
 const TAP_BASE = { 'Common':0.6, 'Uncommon':0.5, 'Rare':0.42, 'Very rare':0.35, 'Legendary':0.28 };
-const tapChance = b => clamp(TAP_BASE[b.rarity] + toolDef('net').bonus*0.3, 0.2, 0.68);
+const tapChance = b => { const su=EN.sure('net'); return clamp(TAP_BASE[b.rarity] + toolDef('net').bonus*0.3 + su.tap, 0.2, 0.68+su.tap); };
 const SWEEP = { 'Common':1.5, 'Uncommon':1.3, 'Rare':1.1, 'Very rare':0.95, 'Legendary':0.8 };   // seconds per sweep
 const CatchMeter = { bug:null, t:0, el:null };
 function meterZones(b){ const nb=toolDef('net').bonus; const k={ 'Common':1, 'Uncommon':0.9, 'Rare':0.8, 'Very rare':0.7, 'Legendary':0.6 }[b.rarity];
-  return { perfect:(0.05+nb*0.08)*k, great:(0.15+nb*0.12)*k, ok:(0.28+nb*0.1)*k }; }
+  const z=EN.sure('net').zone; return { perfect:(0.05+nb*0.08)*k*z, great:(0.15+nb*0.12)*k*z, ok:Math.min(0.48,(0.28+nb*0.1)*k*z) }; }
 function startCatchMeter(b){
   if (CatchMeter.bug) return; stopMove(); CatchMeter.bug=b; CatchMeter.t=0; player.face=Math.atan2(b.pos.x-player.pos.x, b.pos.z-player.pos.z);
   const z=meterZones(b), el=$('#meter'); CatchMeter.el=el; const pct=v=>(v*100).toFixed(1)+'%';
@@ -1425,7 +1434,7 @@ const Fishing = { state:'idle', pt:null, fish:null, t:0, dip:0 };
 const bobber = (()=>{ const g=new THREE.Group(); mk(G.sph(0.14,12,8,0,TAU,0,Math.PI/2), M(0xe2483d), 0,0,0,g); mk(G.sph(0.14,12,8,0,TAU,Math.PI/2,Math.PI/2), M(0xffffff), 0,0,0,g); g.visible=false; OUT.add(g); return g; })();
 const lineGeo=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(),new THREE.Vector3()]); const fishLine=new THREE.Line(lineGeo,new THREE.LineBasicMaterial({ color:0xffffff, transparent:true, opacity:0.7 })); fishLine.visible=false; OUT.add(fishLine);
 const exclaim=textSprite('!','#e2483d','rgba(255,255,255,.98)',1.1); exclaim.visible=false; scene.add(exclaim);
-function biteWindow(f){ const it=ITEMS[f.id]; const pen={ 'Common':0, 'Uncommon':0.05, 'Rare':0.1, 'Very rare':0.15, 'Legendary':0.2 }[rarityLabel(it.rarity)] + (it.size==='XL'?0.05:0); return 0.9 - pen*0.6 + toolDef('rod').bonus; }
+function biteWindow(f){ const it=ITEMS[f.id], su=EN.sure('rod'); const pen={ 'Common':0, 'Uncommon':0.05, 'Rare':0.1, 'Very rare':0.15, 'Legendary':0.2 }[rarityLabel(it.rarity)] + (it.size==='XL'?0.05:0); return 0.9 - pen*0.6 + toolDef('rod').bonus + su.win; }
 function loseInterest(f){ f.state='swim'; f.home.set(f.m.position.x-Math.sin(f.ph*0.3)*1.8, 0, f.m.position.z-Math.cos(f.ph*0.23)*1.8); f.ignore=Fishing.cast; if (Fishing.fish===f){ Fishing.fish=null; Fishing.t=1; } Snd.plip(); toast(['It lost interest.','It swam off.','Not hungry, that one.'][Math.floor(Math.random()*3)]); }
 function castAt(pt){
   if (!needTool('rod')) return; stopMove(); Fishing.state='cast'; Fishing.cast=(Fishing.cast||0)+1; Fishing.lastLook=0; Fishing.pt=pt.clone(); Fishing.pt.y=0; Fishing.t=0; Fishing.fish=null; Fishing.dip=0;
@@ -1450,7 +1459,7 @@ function updateFishing(dt,t){
       else if(L>0.55){ d.normalize(); f.m.position.addScaledVector(d, dt*(TRIP && S.day.tx && S.day.tx.soak>0 ? 2.2 : 0.75)); f.m.rotation.y=-Math.atan2(d.z,d.x); if (Math.random()<dt*0.2) f.hes=0.4+Math.random()*0.9; }
       else { f.state='nibble'; f.t=0.9+Math.random()*1.4; const rar=ITEMS[f.id].rarity; f.nib=2+Math.floor(Math.random()*(rar<1.5?5:4)); if (TRIP && S.day.tx && S.day.tx.soak>0){ f.nib=0; f.t=0.4; } } }
     else if (f.state==='nibble'){ f.t-=dt; if(f.t<=0){
-        if (f.nib>0 && Math.random()<0.04){ loseInterest(f); continue; }   // sometimes it just swims off
+        if (f.nib>0 && Math.random()<0.04*EN.sure('rod').lose){ loseInterest(f); continue; }   // sometimes it just swims off
         if(f.nib>0){ f.nib--; f.t=0.5+Math.random()*1.6; Snd.plip(); ripple(bobber.position.x,bobber.position.z,0.5); Fishing.dip=0.22; } else { f.state='bite'; Fishing.state='bite'; Fishing.t=0; Fishing.win=biteWindow(f); Snd.splash(); ripple(bobber.position.x,bobber.position.z,1.3); } } }
     else if (f.state==='flee'){ f.t+=dt; f.m.position.x+=dt*5; if(f.t>1.2){ f.m.parent && f.m.parent.remove(f.m); fishes.splice(i,1); } }
   }
@@ -1460,10 +1469,10 @@ function updateFishing(dt,t){
   if (Fishing.state==='cast'){ const k=Math.min(1,Fishing.t/0.5); bobber.position.lerpVectors(hand, Fishing.pt, k); bobber.position.y+=Math.sin(k*Math.PI)*1.5; if(k>=1){ Fishing.state='wait'; Fishing.t=0; Snd.plip(); ripple(Fishing.pt.x,Fishing.pt.z); } }
   else if (Fishing.state==='wait'){ bobber.position.set(Fishing.pt.x, Math.sin(t*2)*0.03-Fishing.dip, Fishing.pt.z); Fishing.dip=Math.max(0,Fishing.dip-dt);
     // Fish only notice a bobber that lands close by, and not every fish is hungry. Landing right on top of one scares it off.
-    if (!Fishing.fish && Fishing.t>0.6 && Fishing.t-(Fishing.lastLook||0)>1.2){ Fishing.lastLook=Fishing.t; let best=null, bd=4.6;
+    if (!Fishing.fish && Fishing.t>0.6 && Fishing.t-(Fishing.lastLook||0)>1.2){ Fishing.lastLook=Fishing.t; const su=EN.sure('rod'); let best=null, bd=4.6*su.notice;
       for(const f of fishes){ if(f.state!=='swim' || f.ignore===Fishing.cast) continue; const d=Math.hypot(f.m.position.x-Fishing.pt.x, f.m.position.z-Fishing.pt.z); if(d<bd){ bd=d; best=f; } }
-      if (best){ const rar=ITEMS[best.id].rarity??5, want=clamp(0.6+rar*0.06,0.65,0.92);
-        if (bd<0.5 && Fishing.t<1.4 && Math.random()<0.3){ best.state='flee'; best.t=0; Snd.splash(); toast('Splash! You scared it off.'); }
+      if (best){ const rar=ITEMS[best.id].rarity??5, want=clamp(0.6+rar*0.06+su.want,0.65,0.98);
+        if (bd<0.5 && Fishing.t<1.4 && Math.random()<0.3*su.scare){ best.state='flee'; best.t=0; Snd.splash(); toast('Splash! You scared it off.'); }
         else if (Math.random()<want){ best.state='approach'; best.hes=0.4+Math.random()*1.0; Fishing.fish=best; }
         else best.ignore=Fishing.cast; } }
     if (Fishing.t>25 && !Fishing.fish){ reel(); toast('Nothing biting.'); } }
@@ -3167,7 +3176,7 @@ if (!S.potions) S.potions={};
 const nowMs = () => Time.now().getTime();
 const potionOn = k => { const p=S.potions, n=nowMs(); return (p[k]||0)>n || (p.all||0)>n; };
 // Luck: rare things (rarity weight under 3) become about 3.5x as likely, common ones a little less likely
-const luckW = (it, k) => { const w=it.rarity ?? 5; return potionOn(k) ? (w<3 ? w*3.5 : w*0.75) : w; };
+const luckW = (it, k) => { const w=it.rarity ?? 5; return (potionOn(k) ? (w<3 ? w*3.5 : w*0.75) : w)*(w<3 ? EN.luck(k) : 1); };   // v1.40: Lucky multiplies rare-or-better
 /* v1.19: very rare and legendary finds get a fixed share of each draw no matter how many common things are around,
    so "very rare" means very rare: the whole very rare group comes up about 0.4% of the time (one fish or bug in
    250) and legendary about 1 in 5,000. A luck potion triples those. Everything else keeps its usual weights. */
@@ -3177,7 +3186,7 @@ function tierPick(r, pool, wf, luckKey){
   const tier=i=>rarityLabel(i.rarity ?? 5), n={}; let base=0;
   for (const i of pool){ const t=tier(i); if (TIER_SHARE[t]) n[t]=(n[t]||0)+1; else base+=wf(i); }
   if (base<=0) return weightedPick(r, pool, wf);
-  const boost = luckKey && potionOn(luckKey) ? 3 : 1;
+  const boost = (luckKey && potionOn(luckKey) ? 3 : 1)*(luckKey ? EN.luck(luckKey) : 1);
   return weightedPick(r, pool, i=>{ const t=tier(i); return TIER_SHARE[t] ? base*TIER_SHARE[t]*boost/n[t] : wf(i); }); }
 
 /* ---------- v1.13 rare finds: showpiece plans and rare ingredients ----------
@@ -3186,12 +3195,12 @@ function tierPick(r, pool, wf, luckKey){
 if (!S.rare) S.rare={ plans:[], made:0 };
 const knowsPlan = fid => S.rare.plans.includes(fid);
 const unfoundPlans = () => RARE_WORK.filter(r=>!knowsPlan(r.id));
-const rareChance = (k, potion) => RARE_ODDS[k]*(potion && potionOn(potion) ? 2 : 1);
+const rareChance = (k, potion) => RARE_ODDS[k]*(potion && potionOn(potion) ? 2 : 1)*EN.rareMult(k);
 function rareRoll(k, id, at, potion){
   if (GUEST || Math.random()>=rareChance(k, potion)) return false;
   const p=at.clone(); setTimeout(()=>{ dropNear(id, p, 1.4); sparkle(p.clone().add(new THREE.Vector3(0,1.4,0))); Snd.jingle(); toast('Rare find!', thumb(id), 'new', `${ITEMS[id].name} ${rarityTag(ITEMS[id])}`); }, 450);
   return true; }
-function learnPlan(planId){ const fid=ITEMS[planId].learns;
+function learnPlan(planId){ if (ITEMS[planId].ench) return EN.learnScroll(planId); const fid=ITEMS[planId].learns;
   if (ITEMS[planId].wood){ if (!learnWood(fid)) return false; Snd.fanfare(); toast(`Woodworking plan: ${ITEMS[fid].name}!`, thumb(fid), 'new', S.craft ? 'It\'s in Woodworking now.' : 'Once Bramble teaches you woodworking, you can make it.'); return true; }
   if (knowsPlan(fid)) return false; S.rare.plans.push(fid); save(); Snd.fanfare();
   toast(`Rare plan found: ${ITEMS[fid].name}!`, thumb(fid), 'new', S.craft ? 'It\'s in Woodworking now. The ingredients are the hard part.' : 'Once Bramble teaches you woodworking, you can make it.');
@@ -3404,6 +3413,7 @@ function talkWizard(){
     ...favorChoices(npcOf('wendell'), ()=>menu()),
     ...isleChoices(()=>menu()),
     { label:'Potions', fn:()=>openPotionShop() },
+    ...EN.teachChoices('wendell', ()=>menu()),   // v1.40
     { label:'Chat', fn:()=>keeperChat(WIZARD, ()=>menu()) },
     { label:'Move a building', fn:()=>{ if (noEdit()) return; if (!moveUnlocked()){ dialog(W.name, v, [W.moveLock], menu); return; } openMoveList(); } },
     { label:'Shape the land', fn:()=>{ if (noEdit()) return; if (!landUnlocked()){ dialog(W.name, v, [W.landLock], menu); return; } startMagic('land'); } },
@@ -4309,7 +4319,8 @@ function rollDay(){
     const plan=randomPlan(rr); if (plan && b<RARE_ODDS.bottlePlan){ const p=beachSpot(rr); if (p) S.ground.push({ id:plan, x:p[0], z:p[1], beach:true, bottle:true }); }
     for (let k=1;k<nRare;k++){ if (rr()<RARE_ODDS.beachPearl){ const p=beachSpot(rr); if (p) S.ground.push({ id:'moonpearl', x:p[0], z:p[1], beach:true }); }
       const pl=randomPlan(rr); if (pl && rr()<RARE_ODDS.bottlePlan){ const p=beachSpot(rr); if (p) S.ground.push({ id:pl, x:p[0], z:p[1], beach:true, bottle:true }); } }
-    if (S.day.peddler && plan && c<RARE_ODDS.peddlerPlan) S.day.pplan=randomPlan(rr); }
+    if (S.day.peddler && plan && c<RARE_ODDS.peddlerPlan) S.day.pplan=randomPlan(rr);
+    { const sc=EN.dailyScroll(rr); if (sc){ const p=beachSpot(rr); if (p) S.ground.push({ id:sc, x:p[0], z:p[1], beach:true, bottle:true }); } } }   // v1.40 a scroll in a bottle
   // v1.38 coral fragments wash up from day one, for everyone: a cheap, ordinary beach find (1 to 3 a day). What they're for only comes out
   // later, when Gill tells you about the reef. A Coral Atoll trip is littered with them; other trips get the odd one.
   if (!VISIT){ const cr=mulberry32(hashStr(key+':coral:'+S.seed)), n = TRIP ? (TRIP_THEME==='coral' ? 15+Math.floor(cr()*6) : Math.floor(cr()*2)) : 1+Math.floor(cr()*3);
@@ -4511,6 +4522,7 @@ function talkTo(res){
   if (mentorMoment(res, end)) return;
   const menu=()=>dialog(res.spec.name, res.spec.voice, [], end, [
     ...favorChoices(npcOf(res.spec.id), ()=>menu()),
+    ...EN.teachChoices(res.spec.id, ()=>menu(), res.spec),   // v1.40 Pippa's charms
     { label:'Chat', fn:()=>{ const first=!S.day.chat[res.spec.id]; let line;
         if(first){ S.day.chat[res.spec.id]=true; S.friend[res.spec.id]=(S.friend[res.spec.id]||0)+1; save();
           const tr=pickTree(res.spec); if (tr && Math.random()<0.5){ runTree(res.spec, tr, menu); return; }   // v1.34 little conversations
@@ -4895,9 +4907,10 @@ function openCraft(start){
   if (!S.craft && !S.cook) return;
   let filter='all', tab = start || (S.craft ? 'wood' : 'cook'); const qty={};
   const render=()=>{
-    const tabsH = S.craft && S.cook ? '<div class="tabs">'+[['wood','Woodworking'],['cook','Cooking']].map(([k,n])=>`<button class="tab${k===tab?' on':''}" data-ct="${k}">${n}</button>`).join('')+'</div>' : '';
+    const tabsH = (S.craft && S.cook) || EN.hasTab() ? '<div class="tabs">'+[...(S.craft?[['wood','Woodworking']]:[]),...(S.cook?[['cook','Cooking']]:[]),...(EN.hasTab()?[['tools','Tools']]:[])].map(([k,n])=>`<button class="tab${k===tab?' on':''}" data-ct="${k}">${n}</button>`).join('')+'</div>' : '';
     const bindTabs=()=>pBody.querySelectorAll('[data-ct]').forEach(b=>b.onclick=()=>{ tab=b.dataset.ct; Snd.click(); render(); pBody.scrollTop=0; });
     if (tab==='cook'){ pTitle.textContent='Cooking'; pBody.innerHTML=cookTab(tabsH); bindTabs(); bindCook(render); return; }
+    if (tab==='tools'){ EN.renderTab(tabsH, bindTabs); return; }   // v1.40
     pTitle.textContent='Woodworking';
     const kd=kindsMade(), left=woodUnknown().length;
     // v1.24: no progress bar or locked plans. New plans just turn up as you make things.
@@ -5050,7 +5063,7 @@ function talkShop(id){
 }
 function talkShopRest(id, k, shop){
   // v1.36: a shopkeeper greets you and asks what you're after, instead of opening the shop straight away
-  const story=m=> id==='garden' ? sprigReefChoices(k, m) : id==='aquarium' ? [...marloReefChoices(k, m), ...lightChoicesMarlo(k, m), ...reefHallMarlo(k, m)] : id==='general' ? forgeChoices(k, m) : [];   // v1.37, v1.38
+  const story=m=> id==='garden' ? sprigReefChoices(k, m) : id==='aquarium' ? [...marloReefChoices(k, m), ...lightChoicesMarlo(k, m), ...reefHallMarlo(k, m)] : id==='general' ? [...forgeChoices(k, m), ...EN.keeperChoices(k, m)] : [];   // v1.37, v1.38
   keeperMenu(k, { first:[{ label:'Let\'s shop', fn:shop }], story, greet:keeperLine(k.id,'greet') });
 }
 /* v1.36 shopkeepers chat too (talk.js KEEPER_CHAT / KEEPER_ASK). The first chat each day is worth a little goodwill. */
@@ -5167,6 +5180,7 @@ function openShop(which, startTab){
       if(S.clams<price) return; if(!canAdd(id)){ toast('Your bag is full.'); return; } S.clams-=price; if(tab==='garden') S.day.gsold[i]=true; else markSold(which,id,i); addTrade(which,price); if (which==='rare') track('peddler'); const r=addItem(id); Snd.coin(); updateHUD(); itemToast(id, r==='new', 'Bought'); render(); });
     pBody.querySelectorAll('[data-tool]').forEach(b=>b.onclick=()=>{ const [t,k]=b.dataset.tool.split(':');
       if (which==='stall' && !VISIT && pitchOnBuy(t,+k)) return;   // v1.26: Pemberton steps in when you reach for the old model
+      const w=EN.replaceWarning(t); if (w){ dialog('Pemberton', KEEPERS.pemberton.voice, [w], null, [{ label:'Buy it anyway', fn:()=>{ if (buyTool(t,+k,which)) openShop(which); } }, { label:'Keep mine', alt:true, fn:()=>openShop(which) }]); return; }   // v1.40
       if (buyTool(t,+k,which)) render(); });
     const bs=pBody.querySelector('#buySled'); if (bs) bs.onclick=()=>{ if (countItem('sled')||S.clams<ITEMS.sled.buy) return; if (!canAdd('sled')){ toast('Your bag is full.'); return; } S.clams-=ITEMS.sled.buy; addTrade(which,ITEMS.sled.buy); addItem('sled'); Snd.coin(); updateHUD(); setSledBtn(); toast('You got a sled! Find a snowy hill.'); save(); render(); };
     const bb=pBody.querySelector('#buyBike'); if(bb) bb.onclick=()=>{ if(S.bike||S.clams<BIKE_COST) return; S.clams-=BIKE_COST; addTrade(which,BIKE_COST); S.bike=true; Snd.fanfare(); updateHUD(); setBikeBtn(); toast('You got a bicycle!'); save(); render(); };
@@ -6673,7 +6687,7 @@ function openMenu(){
     <div class="notice"><b>Testing tools</b><br><span class="muted">The game runs on your real clock. These preview other times and weather.</span>
       <label class="f">Preview time: <span id="mOffT"></span></label><input type="range" id="mOff" min="-23" max="23" step="1" value="${Time.offsetH}">
       <label class="f">Weather <select id="mW"><option value="">Today's weather</option><option>sunny</option><option>cloudy</option><option>rain</option><option>snow</option></select></label>
-      ${DEV?`<div style="margin-top:8px"><b>Shortcuts</b> <span class="muted">(only on this device)</span><br><button class="btn alt" id="dvC">+50,000 clams</button> <button class="btn alt" id="dvT">${S.magic.tower?'Tower is up':'Raise the wizard tower'}</button> ${!GUEST&&!VISIT&&nextIsleKind()?'<button class="btn alt" id="dvI">Raise the next isle</button>':''} <button class="btn alt" id="dvM">${S.devMagic?'Wizard needs requirements again':'Skip wizard requirements'}</button> <button class="btn alt" id="dvF">New favors now</button> <button class="btn alt" id="dvD">Town: skip a day</button> <button class="btn alt" id="dvR">Rare kit</button> <button class="btn alt" id="dvRf">Reef: skip to the rowboat</button> <button class="btn alt" id="dvRg">Reef: grow 12 coral</button> <button class="btn alt" id="dvWs">Workshop: skip ahead</button> <button class="btn alt" id="dvRl">Relics for the next isle</button> <button class="btn alt" id="dvSt">Phase 2: next story</button> <button class="btn alt" id="dvOff">Hide shortcuts</button></div>`:''}
+      ${DEV?`<div style="margin-top:8px"><b>Shortcuts</b> <span class="muted">(only on this device)</span><br><button class="btn alt" id="dvC">+50,000 clams</button> <button class="btn alt" id="dvT">${S.magic.tower?'Tower is up':'Raise the wizard tower'}</button> ${!GUEST&&!VISIT&&nextIsleKind()?'<button class="btn alt" id="dvI">Raise the next isle</button>':''} <button class="btn alt" id="dvM">${S.devMagic?'Wizard needs requirements again':'Skip wizard requirements'}</button> <button class="btn alt" id="dvF">New favors now</button> <button class="btn alt" id="dvD">Town: skip a day</button> <button class="btn alt" id="dvR">Rare kit</button> <button class="btn alt" id="dvRf">Reef: skip to the rowboat</button> <button class="btn alt" id="dvRg">Reef: grow 12 coral</button> <button class="btn alt" id="dvWs">Workshop: skip ahead</button> <button class="btn alt" id="dvRl">Relics for the next isle</button> <button class="btn alt" id="dvSt">Phase 2: next story</button> <button class="btn alt" id="dvEn">Enchanting kit</button> <button class="btn alt" id="dvOff">Hide shortcuts</button></div>`:''}
     </div>
     <button class="btn warn" id="mReset">Start a new island</button>${saveOK?'':'<div class="muted" style="margin-top:8px">Saving isn\'t available in this browser.</div>'}`;
     $('#mParty').onclick=()=>{ closePanel(); setTimeout(()=>PARTY.open(), 50); };
@@ -6699,6 +6713,7 @@ function openMenu(){
     const offT=()=>{ $('#mOffT').textContent = Time.offsetH===0?'now':(Time.offsetH>0?'+':'')+Time.offsetH+'h'; }; offT();
     $('#mOff').oninput=e=>{ Time.offsetH=+e.target.value; offT(); if(rollDay()) spawnDaily(); updateSky(); updateHUD(); };
     if (DEV){ $('#dvC').onclick=()=>{ S.clams+=50000; save(); updateHUD(); Snd.coin(); };
+      $('#dvEn').onclick=()=>{ EN.dev.learnAll(); EN.dev.kit(); for (const t of Object.keys(TOOLS)) if (!S.tools[t]) EN.dev.give(t,1); updateToolBtn(); toast('Enchanting kit: every enchantment, the Twin Charm, 20 of each ingredient and a Sturdy tool of each kind.'); };   // v1.40
       $('#dvR').onclick=()=>{ for (const m of RARE_MATS) for (let k=0;k<5;k++) addItem(m); for (const r of RARE_WORK) if (!knowsPlan(r.id)) S.rare.plans.push(r.id); save(); toast('Rare kit: 5 of each rare ingredient and every rare plan.'); };
       // v1.37 island stories
       $('#dvRf').onclick=()=>{ SY.reef=Object.assign({ since:sday(), told:0 }, SY.reef||{}, { st:'bay', rowboat:true, tankDay:sday()-1 }); for (const k of CORAL_KINDS){ addItem('starter_'+k); addItem('starter_'+k); addItem('starter_'+k); addItem('frag_'+k); addItem('frag_'+k); }
@@ -6760,7 +6775,7 @@ function updateToolBtn(){ const on=S.equip&&hasTool(S.equip); toolBtn.innerHTML 
 function cycleTool(){ const owned=['',...Object.keys(TOOLS).filter(hasTool)]; const i=owned.indexOf(S.equip||''); equip(owned[(i+1)%owned.length]||null); Snd.click(); }
 toolBtn.addEventListener('click', e=>{ e.stopPropagation(); if(toolPop.classList.contains('show')){ toolPop.classList.remove('show'); return; }
   let h=`<button class="tp${!S.equip?' on':''}" data-t="">${HAND_SVG}<span>Hands</span></button>`;
-  for(const t of Object.keys(TOOLS)){ const T=S.tools[t]; if(!T) continue; const d=TOOLS[t].tiers[T.tier]; h+=`<button class="tp${S.equip===t?' on':''}" data-t="${t}"><img src="${toolThumb(t,T.tier)}"><span>${TOOLS[t].name}</span><i style="width:${d.forever?100:Math.max(4,T.uses/d.uses*100)}%"></i></button>`; }
+  for(const t of Object.keys(TOOLS)){ const T=S.tools[t]; if(!T) continue; const d=TOOLS[t].tiers[T.tier]; h+=`<button class="tp${S.equip===t?' on':''}" data-t="${t}"><img src="${toolThumb(t,T.tier)}"><span>${TOOLS[t].name}</span><i style="width:${d.forever?100:Math.max(4,T.uses/EN.maxUses(t)*100)}%"></i></button>`; }
   if (!Object.keys(S.tools).length) h+='<div class="muted" style="padding:6px">No tools yet.</div>';
   h+=`<button class="tp" id="tpMap"><img src="${mapThumb()}"><span>Map</span></button>`;   // v1.26: the map is always on you, like a tool, and takes no bag space
   toolPop.innerHTML=h; toolPop.classList.add('show'); positionToolPop(); Snd.click();
@@ -7581,8 +7596,8 @@ function swing(){
   if (PARTY.trySwing(tg ? { d:Math.hypot((tg.npc||tg.remote).pos.x-player.pos.x, (tg.npc||tg.remote).pos.z-player.pos.z) } : null)) return;   // v1.13: Bonk Ball
   if (tg){ const p=tg.npc ? tg.npc.pos : tg.remote.pos, dx=p.x-player.pos.x, dz=p.z-player.pos.z, L=Math.hypot(dx,dz)||1;
     stopMove(); player.face=Math.atan2(dx,dz); player.obj.rotation.y=player.face; player.act=0.4; bonkCool=0.5; Snd.swoosh();
-    setTimeout(()=>{ if (tg.npc){ const e=tg.npc; if (!e.removed && !e.rag && npcInSpace(e) && Math.hypot(e.pos.x-player.pos.x, e.pos.z-player.pos.z)<3.2) launchRag(e, dx/L, dz/L, tool?1:0.7); }
-      else { const r=tg.remote; Snd.boing(); puff(r.pos.clone().add(new THREE.Vector3(0,1.4,0)), 0xffffff, 10, 0.6, 2.4, 0.8, 0.5); floatText('Bonk!', r.pos); if (BOOT.sendLive) BOOT.sendLive({ t:'bonk', to:r.id, dx:+(dx/L).toFixed(3), dz:+(dz/L).toFixed(3) }); } }, 120);
+    setTimeout(()=>{ if (tg.npc){ const e=tg.npc; if (!e.removed && !e.rag && npcInSpace(e) && Math.hypot(e.pos.x-player.pos.x, e.pos.z-player.pos.z)<3.2) launchRag(e, dx/L, dz/L, (tool?1:0.7)*EN.bonk()); }
+      else { const r=tg.remote; Snd.boing(); puff(r.pos.clone().add(new THREE.Vector3(0,1.4,0)), 0xffffff, 10, 0.6, 2.4, 0.8, 0.5); floatText('Bonk!', r.pos); if (BOOT.sendLive) BOOT.sendLive({ t:'bonk', to:r.id, dx:+(dx/L).toFixed(3), dz:+(dz/L).toFixed(3), p:+EN.bonk().toFixed(3) }); } }, 120);
     return; }
   // something the tool works on, right in front: use it as usual
   if (tool==='rod'){ if (facingWater()){ doAction(); return; } }
@@ -7612,8 +7627,8 @@ function starTex(){ if (_starTex) return _starTex; const cv=document.createEleme
 function starRing(){ const g=new THREE.Group(); for (let i=0;i<3;i++){ const sp=new THREE.Sprite(new THREE.SpriteMaterial({ map:starTex(), transparent:true, depthWrite:false })); sp.scale.setScalar(0.4); sp.userData.a=i/3*TAU; g.add(sp); } scene.add(g); return g; }
 function spinStars(g, at, t){ g.position.copy(at); g.children.forEach(sp=>{ const a=sp.userData.a+t*5; sp.position.set(Math.cos(a)*0.42, Math.sin(t*7+sp.userData.a)*0.08, Math.sin(a)*0.42); }); }
 // a friend hit me (from the live room)
-function bonked(to, from, dx, dz){
-  if (to==='me'){ launchRag(meBody, dx, dz, 1); const r=remotes.get(from); if (r) toast(`${r.name} bonked you!`); }
+function bonked(to, from, dx, dz, p=1){
+  if (to==='me'){ launchRag(meBody, dx, dz, clamp(+p||1, 0.5, 1.5)); const r=remotes.get(from); if (r) toast(`${r.name} bonked you!`); }
   else { const r=remotes.get(to); if (r){ Snd.boing(); puff(r.pos.clone().add(new THREE.Vector3(0,1.4,0)), 0xffffff, 8, 0.6, 2.2, 0.8, 0.5); } } }
 function launchRag(e, dx, dz, power){
   if (e.rag || e.removed || e.talking) return;
@@ -7725,6 +7740,7 @@ const PARTY = createParty({ scene, player, meBody, remotes, groundY, walkable, r
     away:()=>{ r.partyAway={ parent:r.obj.parent, solid:r.solid }; if (r.rag) endRag(r); r.solid=false; if (r.obj.parent) r.obj.parent.remove(r.obj); },
     keep:()=>{ if (r.partyAway && r.obj.parent){ r.partyAway.parent=r.obj.parent; r.obj.parent.remove(r.obj); } },
     back:()=>{ const a=r.partyAway; if (!a) return; delete r.partyAway; r.solid=a.solid; if (a.parent && !r.obj.parent) a.parent.add(r.obj); } })),
+  bonk:()=>EN.bonk(),   // v1.40 Ultrabonk reaches the party bots too
   swingAnim:(face)=>{ stopMove(); player.face=face; player.obj.rotation.y=face; player.act=0.4; bonkCool=0.35; Snd.swoosh(); } });
 /* v1.34 live island sync. online.js merges someone else's island changes into S (keeping ours), then calls this so
    the scene matches without a reload. Furniture, dropped items, plants, stumps, felled trees, fruit and gardens update
@@ -7763,7 +7779,7 @@ function runWorldSync(){
     syncPend.clear();
   }
 }
-window.__game = { v123:{ toolPitch, pitchTool, buyTool, talkShop, get storeVisit(){ return storeVisit; } }, v120:{ track, checkAch, achValue, grantWear, ownsWear, openAchievements, makeFavor, rollFavors, favorChoices, npcOf, clothesStock, wardrobeOwned, get Q(){ return Q; } }, party:PARTY, v119:{ tierPick, openChest, townCap:()=>townCap() }, v13:{ shopStock:w=>shopStock(w), learnPlan, rareRoll, knowsPlan, unfoundPlans, stockWeight, RARE_WORK, GroundItem, ShopItem, Furniture }, v1:{ scene, camera, OUT, updateSky, updateHUD, snowPass, SNOW_U, townNewDay, applyTown, talkHall, openHallPanel, buildPlaza, refreshStoreItems, buildStoreAll, buildShop, buildMuseumAll, spawnExhibits, mentorMoment, teachWoodworking, openCraft, doCook, nearStation, toggleSled, setSled, get sledding(){ return sledding; }, sledV, eatFood, Plant, fullBagCatch, KB, landSeaTap, terraLand, LAMPS:()=>LAMPS, hasUpstairs, ShopItem, Stairs, get exhibits(){ return exhibits; }, onDisplay, museumNeeds, museumExpand, museumFitState, museumTanks, renderer, nearestEnt:()=>nearestEnt(), doAction:()=>doAction(), openTankView, closeTankView, get tankView(){ return tankView; }, KEEPOUT, dayKeyOf, World, startPlacing, checkPlace, get placing(){ return placing; }, FX, homeStock, buyHome, draftUnowned, get homeRack(){ return homeRack; }, openShop, openBuild:(o)=>openBuild(o), closeBuild, get buildMode(){ return buildMode; }, ents, Tree, Stump, Weed, Bug, bugs, player, interact, layoutBar, pickNote, itemToast, reel, Fishing, fishes, spawnFish, WU, relayout, enterRoom:(id)=>enterRoom(id), trees }, get S(){ return S; }, dbg:{ setCine:(c)=>{ cine=c; }, showChoices:(t,c)=>showChoices(t,c), dialog:(...a)=>dialog(...a), setRiding:(v)=>setRiding(v), enterRoom:(id)=>enterRoom(id), openBuild:()=>openBuild(), rooms:()=>Object.keys(ROOMS), get yaw(){ return camYaw; }, set yaw(v){ camYaw=v; }, get riding(){ return riding; }, get snow(){ return SNOW_U.value; }, setWeather:(w)=>{ weatherOverride=w; World.weather=w; snowT=0; }, get dlg(){ return !!dlgState; } }, walkable, blocked, groundY, launchRag, ragdolls, swing, meBody, refreshPortals, portalArches, get portalEnt(){ return portalEnt; }, enterRoom, PLACES, net:{ party:(id,d)=>PARTY.onNet(id,d), trip:(id,name,d)=>onTripNet(id,name,d), bonked, visibleRemotes:()=>[...remotes.values()].filter(r=>r.obj.visible).map(r=>[r.name,+r.pos.x.toFixed(1),+r.pos.z.toFixed(1)]), remoteUpsert, remotePos, remoteLeave, remoteEmote, playerState, setInventory, toast:(m)=>toast(m), updateHUD:()=>updateHUD(), get started(){ return started; } }, ITEMS, itemThumb:(id)=>thumb(id), layoutInfo:()=>({ id:LAYOUT_ID, PLACES, PATHS, LOT, rects:RECTS.map(r=>r.slice(0,4)), lot:lotRect() }), terrainH:(x,z)=>rawHeight(x,z), terrainSlope:(x,z)=>hillSlope(x,z), interact, spawnBug:(id,x,z)=>new Bug(id,x,z), tapOdds:()=>Object.fromEntries(Object.keys(TAP_BASE).map(k=>[k, +tapChance({rarity:k}).toFixed(2)])), placingObj:()=>placing&&placing.m, toScreen:v=>{ const p=v.clone().project(camera); return [(p.x*0.5+0.5)*innerWidth, (-p.y*0.5+0.5)*innerHeight]; }, rebuildHome:()=>{ buildPlayerHouse(); rebuildHomeRoom(); }, openBuild, closeBuild, get buildMode(){ return buildMode; }, talkShop, openDonate, talkCurator, spawnMossby, onFelled, findPath, startPlacing, LOT, RECTS, shopEnts, museumEnt, houseEnt:()=>houseEnt, Time, player, ents, ITEMS, residents, World, ROOMS, goTo, handleTap, doAction, updateSky, rollDay, spawnDaily, castAt, Fishing, fishes, bugs, openBag, openBook, openShop, openBoard, openMenu, openCraft, doCraft, WOODWORK, enterRoom, exitRoom, equip, startLayout, endLayout, trees, applyControls, magic:{ startMagic, endMagic, landTap, magicPlace, castMagic, get mode(){ return magicMode; }, raiseTower, talkWizard, drinkPotion, potionOn, luckW, rollFavors, Q, favorChoices, findTowerSpot, get tower(){ return towerEnt; }, PLACES, TERRA, FALLS } };
+window.__game = { v140:EN.dev, v123:{ toolPitch, pitchTool, buyTool, talkShop, get storeVisit(){ return storeVisit; } }, v120:{ track, checkAch, achValue, grantWear, ownsWear, openAchievements, makeFavor, rollFavors, favorChoices, npcOf, clothesStock, wardrobeOwned, get Q(){ return Q; } }, party:PARTY, v119:{ tierPick, openChest, townCap:()=>townCap() }, v13:{ shopStock:w=>shopStock(w), learnPlan, rareRoll, knowsPlan, unfoundPlans, stockWeight, RARE_WORK, GroundItem, ShopItem, Furniture }, v1:{ scene, camera, OUT, updateSky, updateHUD, snowPass, SNOW_U, townNewDay, applyTown, talkHall, openHallPanel, buildPlaza, refreshStoreItems, buildStoreAll, buildShop, buildMuseumAll, spawnExhibits, mentorMoment, teachWoodworking, openCraft, doCook, nearStation, toggleSled, setSled, get sledding(){ return sledding; }, sledV, eatFood, Plant, fullBagCatch, KB, landSeaTap, terraLand, LAMPS:()=>LAMPS, hasUpstairs, ShopItem, Stairs, get exhibits(){ return exhibits; }, onDisplay, museumNeeds, museumExpand, museumFitState, museumTanks, renderer, nearestEnt:()=>nearestEnt(), doAction:()=>doAction(), openTankView, closeTankView, get tankView(){ return tankView; }, KEEPOUT, dayKeyOf, World, startPlacing, checkPlace, get placing(){ return placing; }, FX, homeStock, buyHome, draftUnowned, get homeRack(){ return homeRack; }, openShop, openBuild:(o)=>openBuild(o), closeBuild, get buildMode(){ return buildMode; }, ents, Tree, Stump, Weed, Bug, bugs, player, interact, layoutBar, pickNote, itemToast, reel, Fishing, fishes, spawnFish, WU, relayout, enterRoom:(id)=>enterRoom(id), trees }, get S(){ return S; }, dbg:{ setCine:(c)=>{ cine=c; }, showChoices:(t,c)=>showChoices(t,c), dialog:(...a)=>dialog(...a), setRiding:(v)=>setRiding(v), enterRoom:(id)=>enterRoom(id), openBuild:()=>openBuild(), rooms:()=>Object.keys(ROOMS), get yaw(){ return camYaw; }, set yaw(v){ camYaw=v; }, get riding(){ return riding; }, get snow(){ return SNOW_U.value; }, setWeather:(w)=>{ weatherOverride=w; World.weather=w; snowT=0; }, get dlg(){ return !!dlgState; } }, walkable, blocked, groundY, launchRag, ragdolls, swing, meBody, refreshPortals, portalArches, get portalEnt(){ return portalEnt; }, enterRoom, PLACES, net:{ party:(id,d)=>PARTY.onNet(id,d), trip:(id,name,d)=>onTripNet(id,name,d), bonked, visibleRemotes:()=>[...remotes.values()].filter(r=>r.obj.visible).map(r=>[r.name,+r.pos.x.toFixed(1),+r.pos.z.toFixed(1)]), remoteUpsert, remotePos, remoteLeave, remoteEmote, playerState, setInventory, toast:(m)=>toast(m), updateHUD:()=>updateHUD(), get started(){ return started; } }, ITEMS, itemThumb:(id)=>thumb(id), layoutInfo:()=>({ id:LAYOUT_ID, PLACES, PATHS, LOT, rects:RECTS.map(r=>r.slice(0,4)), lot:lotRect() }), terrainH:(x,z)=>rawHeight(x,z), terrainSlope:(x,z)=>hillSlope(x,z), interact, spawnBug:(id,x,z)=>new Bug(id,x,z), tapOdds:()=>Object.fromEntries(Object.keys(TAP_BASE).map(k=>[k, +tapChance({rarity:k}).toFixed(2)])), placingObj:()=>placing&&placing.m, toScreen:v=>{ const p=v.clone().project(camera); return [(p.x*0.5+0.5)*innerWidth, (-p.y*0.5+0.5)*innerHeight]; }, rebuildHome:()=>{ buildPlayerHouse(); rebuildHomeRoom(); }, openBuild, closeBuild, get buildMode(){ return buildMode; }, talkShop, openDonate, talkCurator, spawnMossby, onFelled, findPath, startPlacing, LOT, RECTS, shopEnts, museumEnt, houseEnt:()=>houseEnt, Time, player, ents, ITEMS, residents, World, ROOMS, goTo, handleTap, doAction, updateSky, rollDay, spawnDaily, castAt, Fishing, fishes, bugs, openBag, openBook, openShop, openBoard, openMenu, openCraft, doCraft, WOODWORK, enterRoom, exitRoom, equip, startLayout, endLayout, trees, applyControls, magic:{ startMagic, endMagic, landTap, magicPlace, castMagic, get mode(){ return magicMode; }, raiseTower, talkWizard, drinkPotion, potionOn, luckW, rollFavors, Q, favorChoices, findTowerSpot, get tower(){ return towerEnt; }, PLACES, TERRA, FALLS } };
 window.__game.net.applyWorld = applyWorld;   // v1.34 live island sync (online.js)
 // v1.26 test hooks
 window.__game.v126 = { townNewDay, applyTown, findHomeSpot, claimHomeSpot, townCap, incomeNewDay, refreshIncome, talkIncome, incCollect, incOf, INCOME, incEnts, openMap, talkSkipperHome, talkSkipperTrip, tripGoHome, tripRecap, storyWho, askToLeave, canAskToLeave, pitchOnBuy, merchantDay, get peddler(){ return peddler; }, get skipper(){ return skipper; }, newSquares, LOAN_MAX_SQ, TRIP, TRIP_THEME, residents, residentHomes, plotEnts, KEEPOUT, Q, PATHS, camTarget, updateCamera, set camDist(v){ camDist=v; }, get camDist(){ return camDist; }, set camYaw(v){ camYaw=v; } };

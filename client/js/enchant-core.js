@@ -259,3 +259,6 @@ export function luckFor(S, key, equip){ const t = key==='rock'||key==='rockNight
 // size roll for a catch (same shape as main.js rollStats); kind 'fish' uses the rod, 'bug' the net
 export function bigRoll(S, kind, r=Math.random){ const B=bigOf(S, kind==='fish'?'rod':'net'); let f=Math.pow(r(), B.pow); if (r()<B.top) f=0.88+r()*0.12; return f; }
 
+// Wide watering: other dry plants near the one you watered (a watered plant has p.watered === day). One use of the can covers them all.
+export function sprayTargets(S, rec, day){ const R=sprayOf(S); if (!R || !S.plants) return [];
+  return S.plants.filter(p=>p!==rec && p.watered!==day && Math.hypot(p.x-rec.x, p.z-rec.z)<=R); }

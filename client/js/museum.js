@@ -155,21 +155,28 @@ export function buildMuseumHall(L){
   for (const zn of L.zones){ const w=zn.x1-zn.x0, d=zn.z1-zn.z0, cx=(zn.x0+zn.x1)/2, cz=(zn.z0+zn.z1)/2;
     if (zn.floor!=='planks'){ const f=noShadow(mk(G.box(w,0.012,d), new THREE.MeshStandardMaterial({ map:rep(FLOORS[zn.floor](), w/1.6, d/1.6), roughness:0.45 }), cx,0.006,cz,g)); f.receiveShadow=true; }
     if (zn.rug){ const rl=d-1.0; const rug=mk(G.box(2.2,0.025,rl), new THREE.MeshStandardMaterial({ map:rep(rugTex(),1,Math.max(1,Math.round(rl/6))), roughness:0.95 }), 0,0.014,front-0.2-rl/2,g); rug.castShadow=false; } }
-  for (const [w,d,x,z] of [[W,0.4,0,back+0.2],[W,0.4,0,front-0.2],[0.4,D,-W/2+0.2,0],[0.4,D,W/2-0.2,0]]) noShadow(mk(G.box(w,0.014,d), M(0xe8dcc8,{roughness:0.3}), x,0.007,z,g)).receiveShadow=true;
+  // pale border strips round the edge. v1.34: they sit clearly above the hall floors (were 2 mm apart, which flickered)
+  // and the side strips stop short of the front and back ones so no two strips share the same patch of floor.
+  for (const [w,d,x,z] of [[W,0.4,0,back+0.2],[W,0.4,0,front-0.2],[0.4,D-0.8,-W/2+0.2,0],[0.4,D-0.8,W/2-0.2,0]]) noShadow(mk(G.box(w,0.03,d), M(0xe8dcc8,{roughness:0.3}), x,0.02,z,g)).receiveShadow=true;
   const cutWalls=[];
   // walls: dark wainscot panels, a painted upper wall, chair rail and crown molding. Each wall is one group so it can drop.
-  const wall=(len, color, x, z, ry, nx, nz, door)=>{
+  // v1.34: the side walls (side=true) fit between the front and back walls instead of running through them, and
+  // their trim stops where the back and front trim begins. Before, the corners had two copies of every molding in
+  // the same spot, and the crown molding's top sat exactly level with the wall's top, so edges shimmered.
+  const wall=(len, color, x, z, ry, nx, nz, door, side)=>{
     const grp=new THREE.Group(); grp.position.set(x,0,z); grp.rotation.y=ry; g.add(grp); const hide=[];
     const pieces = door ? [[-(len/2+1.3)/2, (len/2-1.3)], [(len/2+1.3)/2, (len/2-1.3)]] : [[0,len]];
+    const tin = side ? 0.24 : 0;   // trim inset at each end of a side wall
     for (const [cx,l] of pieces){ if (l<=0.01) continue;
-      mk(G.box(l,1.05,0.24), new THREE.MeshStandardMaterial({ map:rep(panelTex(), l/1.8, 1), roughness:0.6 }), cx,0.525,0.02,grp);
+      mk(G.box(side?l-0.08:l,1.05,0.24), new THREE.MeshStandardMaterial({ map:rep(panelTex(), l/1.8, 1), roughness:0.6 }), cx,0.525,0.02,grp);
       mk(G.box(l,H-1.05,0.2), new THREE.MeshStandardMaterial({ map:rep(wallTex(color), l/1.4, (H-1.05)/1.4), roughness:0.9 }), cx,1.05+(H-1.05)/2,0,grp);
-      mk(G.box(l,0.08,0.3), trimWood(), cx,1.08,0.04,grp); mk(G.box(l,0.2,0.32), M(0xf0e4cc), cx,H-0.1,0.05,grp); mk(G.box(l,0.12,0.28), trimWood(), cx,0.06,0.04,grp); }
+      const tl = side ? l-2*tin : l+0.04;   // front/back trim pokes just past the wall's ends so their end faces never coincide
+      mk(G.box(tl,0.08,0.3), trimWood(), cx,1.085,0.04,grp); mk(G.box(tl,0.2,0.32), M(0xf0e4cc), cx,H-0.08,0.05,grp); mk(G.box(tl,0.12,0.28), trimWood(), cx,0.07,0.04,grp); }
     if (door){ mk(G.box(2.6,H-2.55,0.22), new THREE.MeshStandardMaterial({ map:rep(wallTex(color), 2, 1), roughness:0.9 }), 0,2.55+(H-2.55)/2,0,grp);
       for (const s of [-1,1]) mk(G.box(0.18,2.6,0.34), trimWood(), s*1.3,1.3,0.04,grp); mk(G.box(2.96,0.22,0.36), trimWood(), 0,2.62,0.04,grp); }
     cutWalls.push({ meshes:[grp], hide, nx, nz }); return { grp, hide }; };
   const small=!L.wings.fish && !L.wings.bug && !L.fd;
-  const WL={ L:wall(D+0.4, L.wings.fish?WALL_C.left:WALL_C.small, -W/2-0.1, 0, Math.PI/2, -1, 0), R:wall(D+0.4, L.wings.bug?WALL_C.right:WALL_C.small, W/2+0.1, 0, -Math.PI/2, 1, 0),
+  const WL={ L:wall(D, L.wings.fish?WALL_C.left:WALL_C.small, -W/2-0.1, 0, Math.PI/2, -1, 0, false, true), R:wall(D, L.wings.bug?WALL_C.right:WALL_C.small, W/2+0.1, 0, -Math.PI/2, 1, 0, false, true),
     B:wall(W+0.4, L.fd?WALL_C.back:WALL_C.small, 0, back-0.1, 0, 0, -1) };
   wall(W+0.4, WALL_C.front, 0, front+0.1, Math.PI, 0, 1, true);
   const along=(w, at)=> w==='L' ? -at : w==='R' ? at : at;   // wall-local x for a room coordinate along that wall

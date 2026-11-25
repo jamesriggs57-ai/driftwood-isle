@@ -5,7 +5,7 @@
 import { api, signUpScreen } from './boot.js';
 
 const SAVE_KEY = 'driftwood-isle-save-v1';
-const PLAYER_KEYS = ['player','clams','inv','seen','rec','friend','pack','tools','toolEver','toolOffer','equip','stats','craft','craftHint','caught','settings','quests','potions','bike','cook','fed','rare','wardrobe','ach','look','contacts','letters'];
+const PLAYER_KEYS = ['player','clams','inv','seen','rec','friend','pack','tools','toolEver','toolOffer','equip','stats','craft','craftHint','caught','settings','quests','potions','bike','cook','fed','rare','wardrobe','ach','look','contacts','letters','talk','woodLater'];
 const WORLD_KEYS = ['island','seed','placed','ground','plants','cut','home','shops','museum','nativeFruit','layout','house','fund','gen','terra','magic','fruitPicked','refLamps','stumps','town','mentor','gardens'];
 const EMOTES = [['wave','Hi!'],['happy','Yay!'],['laugh','Haha!'],['heart','Love it!'],['surprised','Whoa!'],['sad','Aww...'],['thinking','Hmm...'],['sleepy','Zzz'],['thanks','Thanks!'],['bye','Bye!']];
 const $ = s => document.querySelector(s);
@@ -58,6 +58,7 @@ const own = () => B.mode === 'visit' ? B.own : null;
 export function setup(boot) {
   B = boot; B.flush = flush;   // the wizard's spells save and reload the island
   B.sendLive = m => send(m);   // main.js sends bonks through the live room
+  B.livePeers = () => [...peers.values()].map(p => ({ id: p.id, name: p.name }));   // v1.34: who's here, for group trips
   ownVer = (B.mode === 'visit' || B.mode === 'trip') ? B.ownVersion : (B.version || 0); hostVer = B.hostVersion || 0;
   // v1.26 boat trips: your bag and clams save to your own island's save; the trip island lives in this tab only
   if (B.mode === 'trip') B.onSave = S => { try { sessionStorage.setItem('dw-trip-world', JSON.stringify({ ground: S.ground, cut: S.cut, stumps: S.stumps, plants: S.plants, day: S.day, placed: S.placed })); } catch {} queue(); };
@@ -158,10 +159,12 @@ function conflict(why) {
 /* ---------- live room ---------- */
 let ws = null, wsTries = 0, lastPos = '', posTimer = null, peers = new Map(), trade = null;
 const liveOwner = () => B.mode === 'visit' ? B.host.id : B.mode === 'account' ? B.user.id : null;
+// v1.34: friends on a boat trip together share a room named after the trip
+const tripRoom = () => B.mode === 'trip' && B.trip && /^[a-f0-9]{24}$/.test(B.trip.room || '') ? B.trip.room : null;
 function connect() {
-  const owner = liveOwner(); if (!owner) return;
+  const owner = liveOwner(), room = tripRoom(); if (!owner && !room) return;
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  ws = new WebSocket(`${proto}//${location.host}/api/live/${owner}` + (B.mode === 'visit' ? `?pass=${encodeURIComponent(B.pass)}` : ''));
+  ws = new WebSocket(room ? `${proto}//${location.host}/api/live/trip/${room}` : `${proto}//${location.host}/api/live/${owner}` + (B.mode === 'visit' ? `?pass=${encodeURIComponent(B.pass)}` : ''));
   ws.onopen = () => { wsTries = 0; lastPos = ''; };
   ws.onmessage = ev => { let m; try { m = JSON.parse(ev.data); } catch { return; } onLive(m); };
   ws.onclose = ev => { for (const id of peers.keys()) G().net.remoteLeave(id); peers.clear(); renderHere(); ws = null;
@@ -177,7 +180,7 @@ function onLive(m) {
     case 'leave': { const p = peers.get(m.id); peers.delete(m.id); net.remoteLeave(m.id); if (p) net.toast(`${p.name} left.`); if (trade && trade.with === m.id) trade = null; renderHere(); break; }
     case 'pos': { const p = peers.get(m.id); if (p) { p.st = m; net.remoteUpsert(m.id, p.name, m); } break; }
     case 'emote': net.remoteEmote(m.id === myId ? 'me' : m.id, m.e); break;
-    case 'game': if (m.id !== myId && m.d) net.party(m.id, m.d); break;   // party games (v1.14)
+    case 'game': if (m.id !== myId && m.d) { if (m.d.trip) { if (net.trip) net.trip(m.id, peers.get(m.id)?.name || 'A friend', m.d); } else net.party(m.id, m.d); } break;   // party games (v1.14), group trips (v1.34)
     case 'bonk': if (m.id === myId) break; if (m.to === myId) net.bonked('me', m.id, +m.dx || 0, +m.dz || 0); else if (peers.has(m.to)) net.bonked(m.to, m.id, +m.dx || 0, +m.dz || 0); break;
     case 'world': pullWorld(); break;   // v1.34: someone changed the island: fetch and show it live
     case 'gift': openMail(true, m.name); break;
@@ -368,7 +371,7 @@ export function afterGame() {
     letter: async (to, letter, slot) => { await flush(); const S = G().S, it = slot !== null && slot !== undefined ? S.inv[slot] : null;
       const r = await api('/api/mail', { method: 'POST', body: { to, letter, ...(it ? { slot, id: it.id } : {}), baseVersion: ownVer } });
       if (r.ok) applyServerBag(r); return r; } };
-  if (online()) {
+  if (online() || tripRoom()) {
     api('/api/me').then(r => { if (r.ok) { myId = r.user.id; B.myId = myId; } });
     connect(); posTimer = setInterval(tickPos, 200);
     // mail check

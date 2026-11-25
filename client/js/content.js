@@ -768,6 +768,30 @@ for (const r of RECIPES){
 def('sled', { name:'Wooden Sled', kind:'gear', price:500, buy:3000, stack:1, model:{t:'furn', b:'sled'} });
 // a campfire is now something you can build yourself
 WOODWORK.push({ id:'campfire', mats:{ stone:4, wood:3, softwood:2 }, unlock:2 });
+/* v1.34 woodworking pace. You start knowing 4 plans. Making 10 things in all teaches 6 more (10 known).
+   After that plans come three ways: a new batch of 4 or 5 at each crafting milestone (WOOD_MILESTONES, total things
+   made), plans you find or buy (one Woodworking Plan item per piece, WOOD_PLAN_PRICE), and studying a piece you
+   own (from a shop or found) at the workbench, once a day. WOOD_ORDER is the order milestone batches come in. */
+WOODWORK.push(
+  { id:'sidetable',    mats:{ wood:4, softwood:2 } },
+  { id:'birdfeeder',   mats:{ wood:3, softwood:2 } },
+  { id:'mailbox',      mats:{ wood:3, iron:1 } },
+  { id:'rocker',       mats:{ wood:8, softwood:4 } },
+  { id:'easel',        mats:{ softwood:6, wood:2 } },
+  { id:'pottingbench', mats:{ wood:8, clay:2 } },
+  { id:'hammock',      mats:{ softwood:4, wood:4, weed:6 } },
+  { id:'bed',          mats:{ wood:10, softwood:4 } },
+  { id:'rodrack',      mats:{ wood:5, softwood:2 } },
+  { id:'porchswing',   mats:{ wood:10, iron:2 } },
+  { id:'flowercart',   mats:{ wood:8, iron:1, clay:1 } },
+  { id:'grandfather',  mats:{ wood:12, iron:3 } } );
+export const WOOD_START = ['stool','fence','logpile','stumpstool'];
+export const WOOD_TEN = ['signpost','birdhouse','crate','bench','workbench','campfire'];
+export const WOOD_ORDER = ['planterbox','stumptable','table','sidetable','driftchair','stumpbench','chest','birdfeeder','mailbox','bookshelf','desk','stumpplanter',
+  'rodrack','dresser','arbor','rocker','easel','stumplamp','pottingbench','hammock','bed','porchswing','flowercart','grandfather'];
+export const WOOD_MILESTONES = [25, 50, 100, 150, 250, 400, 600, 850, 1150];
+export const WOOD_PLAN_PRICE = id => Math.round((1200 + ITEMS[id].price*3)/100)*100;
+// (the Woodworking Plan items are made at the end of this file, once every furniture piece exists)
 ITEMS.campfire.shop='rare';
 // who loves a good meal
 for (const R of RESIDENTS){ if (['lazy','caring'].includes(R.personality)) R.loves.push('food'); else R.likes.push('food'); }
@@ -1061,3 +1085,7 @@ export const LETTER_IDS = Object.keys(LETTERS);
 furn('beaconlamp','Lighthouse Lantern',8000,0.4,{ b:'lantern', shop:'trip', rarity:FR.r, glow:true });
 // A torn page in a bottle (opened where you find it, never kept in the bag)
 def('bottle_note', { name:'Message in a Bottle', kind:'note', price:0, stack:1, model:{ t:'ticket', c:0xc8a060 } });
+
+// v1.34: one Woodworking Plan item per piece that isn't a starting plan
+for (const r of WOODWORK){ if (WOOD_START.includes(r.id) || WOOD_TEN.includes(r.id) || !ITEMS[r.id]) continue;
+  def('wplan_'+r.id, { name:'Woodworking Plan: '+ITEMS[r.id].name, kind:'plan', learns:r.id, wood:true, price:Math.round(ITEMS[r.id].price*0.6/10)*10+100, rarity:FR.r, stack:1, model:{t:'plan', of:r.id} }); }

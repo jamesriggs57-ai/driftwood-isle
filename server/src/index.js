@@ -347,6 +347,15 @@ async function api(req, env, url) {
     return json({ version: s.version + 1, inv: s.data.inv, seen: s.data.seen, item });
   }
 
+  // v1.34: a live room for friends on a boat trip together. The room id is a long random token the trip's leader made
+  // and only sent to friends standing on their island (through that island's own live room), so nobody else can find it.
+  // Positions, emotes and bonks only; nothing here changes a save except trades, which check both saves as usual.
+  if ((m = p.match(/^\/api\/live\/trip\/([a-f0-9]{24})$/))) {
+    if (req.headers.get('upgrade') !== 'websocket') return err(426, 'WebSocket only');
+    const stub = env.ROOMS.get(env.ROOMS.idFromName('trip:' + m[1]));
+    const h = new Headers(req.headers); h.set('x-user', me.id); h.set('x-name', encodeURIComponent(me.displayName)); h.set('x-role', 'trip'); h.set('x-owner', 'trip:' + m[1]);
+    return stub.fetch(new Request(req.url, { headers: h }));
+  }
   // Live room (WebSocket). The owner joins with their session; friends join with a visit pass.
   if ((m = p.match(/^\/api\/live\/([a-f0-9]+)$/))) {
     if (req.headers.get('upgrade') !== 'websocket') return err(426, 'WebSocket only');

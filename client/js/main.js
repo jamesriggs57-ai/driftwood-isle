@@ -4,6 +4,7 @@
    ===================================================================== */
 import * as THREE from 'three';
 import { TAU, clamp, lerp, smooth, mulberry32, hashStr, hash2, vnoise, fbm, weightedPick, inHours, inMonths, fmt, polyDist, segDist, Time, seasonOf } from './util.js';
+import { WOOD_START, WOOD_TEN, WOOD_ORDER, WOOD_MILESTONES, WOOD_PLAN_PRICE } from './content.js';
 import { ITEMS, NATIVE_FRUITS, PLANTS, TOOLS, WOODWORK, BACKPACKS, BASE_SLOTS, HOUSE_LEVELS, RESIDENTS, DIALOGUE, PEDDLER, EVENTS, rarityLabel, RARITY_COLORS, SHOPS, INVEST, KEEPERS, MUSEUM, BUILD,
   FOREIGN_FRUIT_PRICE, FRUIT_REGROW_DAYS, POTIONS, WIZARD, MAGIC, STORY, FAVOR_ASKS, CROPS, RECIPES, ARRIVE, MENTOR, islandSeedPool, ISLAND_SEED_BUY, islandFlowerPool, WILDFLOWER_SEEDS, GARDEN_FENCES, GARDEN_DECOR, FR, RARE_WORK, RARE_ODDS, PLAN_PRICE,
   WEAR_IDS, FAVOR_THEMES, DO_TASKS, ORIGINAL_RESIDENTS, LETTERS, LETTER_IDS } from './content.js';
@@ -13,6 +14,7 @@ import { CELL, buildSoil, buildFences, buildStake, buildGardenSign, buildScarecr
 import { Snd } from './audio.js';
 import { LAYOUTS, DEFAULT_SHAPE, islandRadius, generateLayout, bluffD, generateTrip, TRIP_THEMES } from './layouts.js';
 import * as VY from './voyage.js';
+import * as TALK from './talk.js';
 import { buildBike, MODEL, M, mk, G, outline, windowMat, glowMats, glowMat, glowSprites, addGlow, textSprite, PALETTE, buildItemModel, thumb, toolThumb, FURN_BUILDERS, MF,
   buildTree, buildStump, buildShrub, buildFlower, buildWildFlower, buildTool, buildAnimal, buildPlayer, buildHouse, buildStall, buildBoard, buildPlankDeck, buildRoom, buildBird, buildGull, buildDuck, buildWeedClump } from './models.js';
 import './furn.js';
@@ -848,7 +850,7 @@ class Tree extends Ent {
     else if (TOOLS.axe.tiers[tier].nofell) toast('Too flimsy to fell it.');
     else { Snd.timber(); dropNear('wood', this.pos, 1.6);
       if (this.rec){ S.plants.splice(S.plants.indexOf(this.rec),1); } else S.cut[this.key]='gone';
-      rareRoll('fell', 'heartwood', this.pos); const st={ key:this.key, x:this.pos.x, z:this.pos.z }; S.stumps.push(st); new Stump(st); FX.fell(this.obj, this.pos.clone(), this.type); this.remove(true); onFelled(this.pos.clone()); }
+      rareRoll('fell', 'heartwood', this.pos); woodPlanRoll(0.01, this.pos); const st={ key:this.key, x:this.pos.x, z:this.pos.z }; S.stumps.push(st); new Stump(st); FX.fell(this.obj, this.pos.clone(), this.type); this.remove(true); onFelled(this.pos.clone()); }
     save();
   }
   update(dt,t){ const top=this.obj.userData.top; if(!top) return; top.rotation.z=Math.sin(t*0.9+this.pos.x)*0.012+Math.sin(t*38)*0.07*this.shake; top.rotation.x=Math.cos(t*0.7+this.pos.z)*0.01; if(this.shake>0) this.shake=Math.max(0,this.shake-dt*1.6); }
@@ -889,6 +891,7 @@ class DigSpot extends Ent {
     const f=tierPick(Math.random, Object.values(ITEMS).filter(i=>i.kind==='fossil' && allowedFind(i)), i=>luckW(i,'dig'), 'dig'); this.remove(); setTimeout(()=>dropNear(f.id, this.pos, 0.3, true), 200);
     if (Math.random()<(potionOn('dig')?0.25:0.12)){ setTimeout(()=>{ const got=grantRandomStyle(); if(got){ Snd.jingle(); toast(`Swatch book: ${got}`); } }, 900); }
     if (!GUEST && Math.random()<rareChance('digPlan','dig')){ const pl=randomPlan(); if (pl){ const p=this.pos.clone(); setTimeout(()=>{ dropNear(pl, p, 0.9); sparkle(p.clone().add(new THREE.Vector3(0,1,0))); Snd.jingle(); toast('Something rolled up in the dirt...', thumb(pl), 'new', 'A rare plan!'); }, 1100); } }
+    woodPlanRoll(0.015, this.pos);   // v1.34
     if (!GUEST && Math.random()<0.004){ const tk=randomTicket(), p=this.pos.clone(); setTimeout(()=>{ dropNear(tk, p, 0.9); Snd.jingle(); toast('A boat ticket was buried here!', thumb(tk), 'new'); }, 1100); }   // v1.26
     if (toolTier('shovel')>=2 && Math.random()<0.3){ addClams(300); toast(`Your ${TOOLS.shovel.tiers[toolTier('shovel')].name.toLowerCase()} turned up 300 clams too!`); Snd.coin(); } save(); }
 }
@@ -2130,9 +2133,15 @@ function rareRoll(k, id, at, potion){
   if (GUEST || Math.random()>=rareChance(k, potion)) return false;
   const p=at.clone(); setTimeout(()=>{ dropNear(id, p, 1.4); sparkle(p.clone().add(new THREE.Vector3(0,1.4,0))); Snd.jingle(); toast('Rare find!', thumb(id), 'new', `${ITEMS[id].name} ${rarityTag(ITEMS[id])}`); }, 450);
   return true; }
-function learnPlan(planId){ const fid=ITEMS[planId].learns; if (knowsPlan(fid)) return false; S.rare.plans.push(fid); save(); Snd.fanfare();
+function learnPlan(planId){ const fid=ITEMS[planId].learns;
+  if (ITEMS[planId].wood){ if (!learnWood(fid)) return false; Snd.fanfare(); toast(`Woodworking plan: ${ITEMS[fid].name}!`, thumb(fid), 'new', S.craft ? 'It\'s in Woodworking now.' : 'Once Bramble teaches you woodworking, you can make it.'); return true; }
+  if (knowsPlan(fid)) return false; S.rare.plans.push(fid); save(); Snd.fanfare();
   toast(`Rare plan found: ${ITEMS[fid].name}!`, thumb(fid), 'new', S.craft ? 'It\'s in Woodworking now. The ingredients are the hard part.' : 'Once Bramble teaches you woodworking, you can make it.');
   return true; }
+// v1.34: a Woodworking Plan for something you don't know yet (not the starting ones)
+const randomWoodPlan = (r=Math.random) => { const u=woodUnknown().filter(id=>ITEMS['wplan_'+id]); return u.length ? 'wplan_'+u[Math.floor(r()*u.length)] : null; };
+function woodPlanRoll(chance, at){ if (!S.craft || Math.random()>=chance) return false; const pl=randomWoodPlan(); if (!pl) return false; const p=at.clone();
+  setTimeout(()=>{ dropNear(pl, p, 1.2); sparkle(p.clone().add(new THREE.Vector3(0,1,0))); Snd.jingle(); toast('A rolled-up woodworking plan!', thumb(ITEMS[pl].learns), 'new', ITEMS[ITEMS[pl].learns].name); }, 1000); return true; }
 const randomPlan = (r=Math.random) => { const u=unfoundPlans(); return u.length ? u[Math.floor(r()*u.length)].plan : null; };
 function beachSpot(r){ for(let k=0;k<40;k++){ const a=r()*TAU, d=(40+r()*16)*SC; const x=Math.cos(a)*d, z=Math.sin(a)*d; if(isBeach(x,z) && !onDock(x,z)) return [x,z]; } return null; }
 // v1.13: daily stock is rolled by rarity. Investing in a shop makes rare and very rare pieces more likely.
@@ -3141,11 +3150,12 @@ function updateSnow(dt){
 }
 
 function bugPool(){ const h=Time.hour(), m=Time.month(); return Object.values(ITEMS).filter(i=>i.kind==='bug' && inMonths(m,i.months) && inHours(h,i.hours) && (!i.weather || i.weather===World.weather) && !(World.weather==='rain' && !i.weather && i.where==='air' && i.hours && i.hours[0]<12)); }
-let bugT=0;
+let bugT=0; const BUG_CAP=3, BUG_ROLL=0.28;
 function updateBugs(dt){
   if (World.inside) return; bugT-=dt; if(bugT>0) return; bugT=2.5;
   const pool=bugPool(); for(const b of bugs.slice()){ const far=b.pos.distanceTo(player.pos)>38; if(far && (!pool.includes(b.it) || Math.random()<0.15)) b.despawn(); }
-  if (bugs.length>=8 || !pool.length || Math.random()<0.3) return;
+  // v1.34: 60% fewer bugs (was up to 8 at once with a 70% chance per roll)
+  if (bugs.length>=BUG_CAP || !pool.length || Math.random()>=BUG_ROLL) return;
   const okPool=pool.filter(allowedFind); if(!okPool.length) return; const sp=tierPick(Math.random,okPool,i=>luckW(i,'bug'),'bug'); const near=[player.pos.x,player.pos.z,22]; let p=null, extra={};
   switch(sp.where){
     case 'air': case 'ground': p=randLand(Math.random,SAND_H+0.1,9,0.5,30,near); break;
@@ -3259,9 +3269,12 @@ function talkTo(res){
   const menu=()=>dialog(res.spec.name, res.spec.voice, [], end, [
     ...favorChoices(npcOf(res.spec.id), ()=>menu()),
     { label:'Chat', fn:()=>{ const first=!S.day.chat[res.spec.id]; let line;
-        if(first){ S.day.chat[res.spec.id]=true; S.friend[res.spec.id]=(S.friend[res.spec.id]||0)+1; save(); line=fill(P.chat[Math.floor(Math.random()*P.chat.length)],c); }
-        else line=fill(P.again[Math.floor(Math.random()*P.again.length)],c);
+        if(first){ S.day.chat[res.spec.id]=true; S.friend[res.spec.id]=(S.friend[res.spec.id]||0)+1; save();
+          const tr=pickTree(res.spec); if (tr && Math.random()<0.5){ runTree(res.spec, tr, menu); return; }   // v1.34 little conversations
+          line=chatLine(res.spec, P, c); }
+        else line = Math.random()<0.6 ? chatLine(res.spec, P, c) : fill(P.again[Math.floor(Math.random()*P.again.length)],c);
         dialog(res.spec.name, res.spec.voice, [line], menu); } },
+    { label:'Ask about...', fn:()=>askAbout(res.spec, menu) },
     { label:'Give a gift', fn:()=>{ if(S.day.gift[res.spec.id]){ dialog(res.spec.name,res.spec.voice,[fill('You already gave me something today, {c}! Save it for tomorrow.',c)],menu); return; }
         openBag('give', i=>{ panelClose=null; closePanel(); giveGift(res,i,menu); }, ()=>menu()); } },
     ...(canAskToLeave(res.spec.id) ? [{ label:'Ever think about moving?', fn:()=>askToLeave(res, menu) }] : []),
@@ -3269,6 +3282,40 @@ function talkTo(res){
   if (!VISIT){ const tk=(S.day.talked=S.day.talked||{}); if (!tk[res.spec.id]){ tk[res.spec.id]=1; track('talk'); } }
   dialog(res.spec.name, res.spec.voice, [greetingFor(res)], menu);
 }
+/* ---------- v1.34 more to say: each islander's own lines, questions, and little branching conversations (talk.js) ---------- */
+const SEASON_WORD = { spring:'spring', summer:'summer', fall:'autumn', autumn:'autumn', winter:'winter' };
+function tfill(line, R, extra={}){
+  const resName = id => (RESIDENTS.find(x=>x.id===id)||{}).name || id;
+  let s=String(line).replace(/\[([a-z]+)\]/g, (_,id)=>resName(id)).replace(/\{season\}/g, SEASON_WORD[World.season]||'this season')
+    .replace(/\{fruit\}/g, (ITEMS[S.nativeFruit]?ITEMS[S.nativeFruit].name:'fruit').toLowerCase()).replace(/\{n\}/g, extra.n||'them');
+  return fill(s, { c:R.catch, ...extra }); }
+// a line that names a neighbor only makes sense if that neighbor lives here
+const linesOk = (L, R) => (L||[]).filter(l=>{ const ids=[...String(l).matchAll(/\[([a-z]+)\]/g)].map(m=>m[1]); return ids.every(id=>id!==R.id && livesHere(id)); });
+function chatLine(R, P, c){ const own=linesOk(TALK.CHAT[R.id], R), gen=P.chat||[];
+  if (own.length && (Math.random()<0.8 || !gen.length)){ const seen=(S.day.said=S.day.said||{}), fresh=own.filter(l=>!(seen[R.id]||[]).includes(own.indexOf(l)));
+    const pool=fresh.length?fresh:own, l=pool[Math.floor(Math.random()*pool.length)]; (seen[R.id]=seen[R.id]||[]).push(own.indexOf(l)); return tfill(l, R); }
+  return fill(gen[Math.floor(Math.random()*gen.length)], c); }
+const TREE_GAP = 21;   // days before the same conversation can come up again
+function pickTree(R){ const T=(S.talk=S.talk||{ done:{} }), now=dayNum(today());
+  const list=[...(TALK.TREES[R.id]||[]), ...(TALK.TREES[R.id] ? [] : (TALK.TREES_ANY[R.personality]||[]))];
+  const ok=list.filter(t=>(!t.need || T.done[t.need]) && !(T.done[t.id] && now-dayNum(T.done[t.id])<TREE_GAP));
+  if (!ok.length) return null; const fresh=ok.filter(t=>!T.done[t.id]); const pool=fresh.length?fresh:ok; return pool[Math.floor(Math.random()*pool.length)]; }
+function runTree(R, tree, back){ const T=(S.talk=S.talk||{ done:{} }); T.done[tree.id]=today(); save();   // a tree comes up at most once every TREE_GAP days, so its answers all count
+  const step=node=>dialog(R.name, R.voice, (node.say||[]).map(l=>tfill(l,R)), node.ask?null:back, node.ask ? node.ask.map(a=>({ label:tfill(a.label,R), fn:()=>{
+      if (a.f){ S.friend[R.id]=(S.friend[R.id]||0)+a.f; save(); if (a.f>=3) sparkleAt(R.id); }
+      if (a.to) step(a.to); else dialog(R.name, R.voice, (a.say||[]).map(l=>tfill(l,R)), back); } })) : undefined);
+  step(tree); }
+function sparkleAt(id){ try { const r=residents.find(x=>x.spec.id===id); if (r) sparkle(r.pos.clone().add(new THREE.Vector3(0,2,0))); Snd.jingle(); } catch(e){} }
+function askAbout(R, back){ const P=DIALOGUE[R.personality], others=S.town.res.filter(id=>id!==R.id).map(id=>RESIDENTS.find(x=>x.id===id)).filter(Boolean);
+  const say=(lines)=>dialog(R.name, R.voice, lines.map(l=>tfill(l,R)), ()=>askAbout(R, back));
+  const someone=()=>{ const pick=others.slice().sort((a,b)=>((TALK.THINK[R.id]||{})[b.id]?1:0)-((TALK.THINK[R.id]||{})[a.id]?1:0)).slice(0,5);
+    dialog(R.name, R.voice, [tfill('Who do you want to know about, {c}?', R)], null, [ ...pick.map(O=>({ label:O.name, fn:()=>{ const own=(TALK.THINK[R.id]||{})[O.id], any=TALK.THINK_ANY[R.personality]||TALK.THINK_ANY.cheerful;
+        say([own || any[Math.floor(Math.random()*any.length)]].map(l=>l.replace(/\{n\}/g, O.name))); } })), { label:'Never mind', alt:true, fn:()=>askAbout(R, back) } ]); };
+  dialog(R.name, R.voice, [tfill('Ask away, {c}.', R)], null, [
+    { label:'Tell me about yourself', fn:()=>say(TALK.SELF[R.id] || [P.chat[0]]) },
+    { label:'What do you think of the island?', fn:()=>say(TALK.ISLE[R.id] || [P.chat[1]||P.chat[0]]) },
+    ...(others.length ? [{ label:'What do you think of...', fn:someone }] : []),
+    { label:'That\'s all', alt:true, fn:back } ]); }
 /* v1.26: ask an islander to move away. They pack up overnight. At least MIN_RES islanders always stay. */
 const canAskToLeave = id => !VISIT && !GUEST && livesHere(id) && S.town.res.length>MIN_RES && !S.town.leaving;
 const LEAVE_LINES = {
@@ -3304,10 +3351,11 @@ const scrim=$('#scrim'), pTitle=$('#pTitle'), pBody=$('#pBody'), pFoot=$('#pFoot
 let panelClose=null;
 function openPanel(title, onClose){ pTitle.textContent=title; pBody.innerHTML=''; setFoot(''); scrim.classList.add('show'); panelClose=onClose||null; Snd.click(); pBody.scrollTop=0; }
 function setFoot(html){ pFoot.innerHTML=html; pFoot.style.display=html?'':'none'; }
-function closePanel(){ const f=panelClose; panelClose=null; scrim.classList.remove('show'); if(f) f(); }
+function closePanel(){ const f=panelClose; panelClose=null; scrim.classList.remove('show'); coolPopup(); if(f) f(); }
 $('#pClose').onclick=()=>closePanel();
 scrim.addEventListener('pointerdown', e=>{ if(e.target===scrim) closePanel(); });
-function toast(msg, img, cls, sub){ const t=document.createElement('div'); t.className='toast'+(cls?' '+cls:''); if(img){ const i=new Image(); i.src=img; t.appendChild(i); } const d=document.createElement('div'); d.textContent=msg; if(sub){ const s=document.createElement('div'); s.className='sub'; s.innerHTML=sub; d.appendChild(s); } t.appendChild(d); $('#toasts').appendChild(t); setTimeout(()=>{ t.style.transition='opacity .4s'; t.style.opacity=0; setTimeout(()=>t.remove(),400); }, sub?3800:2600); while($('#toasts').children.length>3) $('#toasts').firstChild.remove(); }
+function dropToast(t){ if (t.dataset.gone) return; t.dataset.gone='1'; t.style.transition='opacity .25s'; t.style.opacity=0; setTimeout(()=>t.remove(),260); }
+function toast(msg, img, cls, sub){ const t=document.createElement('div'); t.className='toast'+(cls?' '+cls:'')+(cls==='new'||sub?' card':''); t.onpointerdown=e=>{ e.stopPropagation(); e.preventDefault(); dropToast(t); if (t.classList.contains('card')) coolPopup(); }; if(img){ const i=new Image(); i.src=img; t.appendChild(i); } const d=document.createElement('div'); d.textContent=msg; if(sub){ const s=document.createElement('div'); s.className='sub'; s.innerHTML=sub; d.appendChild(s); } t.appendChild(d); $('#toasts').appendChild(t); setTimeout(()=>{ if (t.dataset.gone) return; t.style.transition='opacity .4s'; t.style.opacity=0; setTimeout(()=>{ t.dataset.gone='1'; t.remove(); },400); }, sub?4800:(cls==='new'?3800:2600)); while($('#toasts').children.length>3) $('#toasts').firstChild.remove(); }
 function itemToast(id, isNew, verb){ const n=ITEMS[id].name; if (!isNew && PICK_VERBS.has(verb)){ pickNote(id, verb); return; } toast((isNew?'New! ':'')+`${verb}: ${n}`, thumb(id), isNew?'new':''); if(isNew) Snd.fanfare(); }
 /* Everyday pickups show as a small note under the clock. The same thing picked up again bumps the count instead of stacking notes. */
 const PICK_VERBS=new Set(['Picked up','Pulled','Picked','Bought']); const picksEl=$('#picks'), pickMap=new Map();
@@ -3357,7 +3405,7 @@ function openBag(mode='view', onPick, onCancel){
       if(a==='eat'){ eatFood(sel); if(!S.inv[sel]) sel=-1; render(); return; }
       if(a==='sled'){ panelClose=null; closePanel(); toggleSled(); return; }
       if(a==='place'){ panelClose=null; closePanel(); startPlacing(s.id,'furn'); }
-      if(a==='plant'){ panelClose=null; closePanel(); if (ITEMS[s.id].kind==='seed') openPlantPanel(s.id); else startPlacing(s.id,'plant'); }
+      if(a==='plant'){ panelClose=null; closePanel(); if (ITEMS[s.id].kind==='seed') openPlantPanel(s.id); else if (orchardOk(s.id) && countItem(s.id)>1) openOrchardPanel(s.id); else startPlacing(s.id,'plant'); }
       if(a==='drop'){ const it=ITEMS[s.id]; const m=s.m; removeAt(sel,1); if(it.kind==='fish'||it.kind==='bug'){ toast(`You let the ${it.name} go.`); Snd.swoosh(); } else dropNear(s.id, player.pos, 1.2, false, m); if(!S.inv[sel]) sel=-1; render(); } });
   };
   openPanel(mode==='give'?'Give a gift':mode==='swap'?'Make room':'Your Bag', onCancel); render();
@@ -3386,7 +3434,7 @@ function teachWoodworking(res, end){
     'Fine. FINE. Take my old workbench. I was going to build a new one anyway. This isn\'t a favor.',
     fill('The plans are in there. Start with a stool. Don\'t make it wobbly. If it\'s wobbly, don\'t tell me, {c}.', c),
   ], ()=>{
-    S.craft={ made:0, kinds:[] }; S.friend.bramble=(S.friend.bramble||0)+2;
+    S.craft={ made:0, kinds:[], known:[...WOOD_START], ms:0 }; woodInit(); S.friend.bramble=(S.friend.bramble||0)+2;
     const r=addItem('workbench'); if(!r) dropNear('workbench', player.pos);
     save(); updateCraftBtn(); Snd.fanfare();
     toast('You learned woodworking!', thumb('workbench'), 'new');
@@ -3443,7 +3491,33 @@ function eatFood(slot){ const s=S.inv[slot]; if (!s || ITEMS[s.id].kind!=='food'
 const wellFed = () => (S.fed||0)>nowMs();
 const recipeOut = r => r.out||1;
 const kindsMade = () => S.craft ? (S.craft.kinds||[]).length : 0;
-const recipeOpen = r => r.plan ? !!S.craft && knowsPlan(r.id) : !!S.craft && kindsMade()>=r.unlock;
+/* v1.34 woodworking pace (see WOOD_* in content.js). S.craft.known = plans you know, S.craft.ms = milestones passed,
+   S.craft.studied = the day you last studied a piece. Plans learned before woodworking wait in S.woodLater. */
+function woodInit(){ const C=S.craft; if (!C) return; C.kinds=C.kinds||[];
+  if (!C.known){   // islands from before v1.34 keep every plan they have actually made, plus the starting ones
+    C.known=[...new Set([...WOOD_START, ...(C.made>=10?WOOD_TEN:[]), ...C.kinds])].filter(id=>WOODWORK.some(r=>r.id===id));
+    C.ms=WOOD_MILESTONES.filter(m=>m<=C.made).length; }
+  if (S.woodLater && S.woodLater.length){ for (const id of S.woodLater) if (!C.known.includes(id)) C.known.push(id); S.woodLater=[]; }
+  C.ms=C.ms||0; }
+woodInit();
+const knowsWood = id => !!S.craft && (S.craft.known||[]).includes(id);
+const recipeOpen = r => r.plan ? !!S.craft && knowsPlan(r.id) : knowsWood(r.id);
+function learnWood(id, how){ if (!S.craft){ S.woodLater=S.woodLater||[]; if (S.woodLater.includes(id)) return false; S.woodLater.push(id); save(); return true; }
+  if (!S.craft.known) woodInit(); if (knowsWood(id)) return false; S.craft.known.push(id); save(); return true; }
+// what's still to learn, in the order milestone batches hand it out
+const woodUnknown = () => [...WOOD_START, ...WOOD_TEN, ...WOOD_ORDER].filter(id=>!knowsWood(id) && !(S.woodLater||[]).includes(id));
+// After crafting: the 10-made batch, and a batch of 4 or 5 at each milestone
+function woodProgress(){ const C=S.craft, got=[];
+  if (C.made>=10) for (const id of WOOD_TEN) if (learnWood(id)) got.push(id);
+  while (C.ms<WOOD_MILESTONES.length && C.made>=WOOD_MILESTONES[C.ms]){ const n=C.ms%2?5:4; C.ms++;
+    for (const id of woodUnknown().slice(0,n)) if (learnWood(id)) got.push(id); }
+  save(); return got; }
+// Studying a piece you own teaches its plan. One a day. The piece stays yours.
+const studyToday = () => !!S.craft && S.craft.studied===today();
+function studyable(){ const have=new Set([...S.inv.map(s=>s.id), ...(S.placed||[]).map(p=>p.id)]);
+  return WOODWORK.filter(r=>!r.plan && have.has(r.id) && !knowsWood(r.id)); }
+function studyPiece(id){ if (!S.craft || studyToday() || knowsWood(id)) return false; S.craft.studied=today(); learnWood(id); Snd.fanfare();
+  toast(`You worked out how the ${ITEMS[id].name} is put together!`, thumb(id), 'new', 'It\'s in Woodworking now.'); return true; }
 function craftFits(r, k){
   // Simulate the bag: take the materials out, put the results in. Never lose materials to a full bag.
   const inv=S.inv.map(x=>({...x})), max=slotsMax();
@@ -3468,8 +3542,8 @@ function doCraft(r, k){
   if(!S.craft.kinds.includes(r.id)) S.craft.kinds.push(r.id); save();
   Snd.chop(); setTimeout(()=>Snd.jingle(),140);
   toast(`${isNew?'New! ':''}You made ${n>1?n+' ':''}${n>1?ITEMS[r.id].name+(ITEMS[r.id].name.endsWith('s')?'':'s'):article(ITEMS[r.id].name)+' '+ITEMS[r.id].name}!`, thumb(r.id), isNew?'new':'');
-  const fresh=WOODWORK.filter(x=>x.unlock>before && x.unlock<=kindsMade());
-  if (fresh.length) setTimeout(()=>{ Snd.fanfare(); toast('New woodworking plans!', thumb(fresh[0].id), 'new', fresh.map(x=>ITEMS[x.id].name).join(', ')); }, 900);
+  const fresh=woodProgress();
+  if (fresh.length) setTimeout(()=>{ Snd.fanfare(); toast('New woodworking plans!', thumb(fresh[0]), 'new', fresh.map(x=>ITEMS[x].name).join(', ')); }, 900);
   return true;
 }
 // v1.13: rare plans sit at the top of Woodworking. Unfound ones show as silhouettes.
@@ -3492,12 +3566,17 @@ function openCraft(start){
     const bindTabs=()=>pBody.querySelectorAll('[data-ct]').forEach(b=>b.onclick=()=>{ tab=b.dataset.ct; Snd.click(); render(); pBody.scrollTop=0; });
     if (tab==='cook'){ pTitle.textContent='Cooking'; pBody.innerHTML=cookTab(tabsH); bindTabs(); bindCook(render); return; }
     pTitle.textContent='Woodworking';
-    const kd=kindsMade(), next=WOODWORK.map(r=>r.unlock).filter(u=>u>kd).sort((a,b)=>a-b)[0];
+    const kd=kindsMade(), left=woodUnknown().length;
     // v1.24: no progress bar or locked plans. New plans just turn up as you make things.
-    let h=tabsH+`<div class="notice"><b>Woodworking</b> <span class="muted">· ${kd} different things made · ${fmt(S.craft.made)} crafted</span>`;
-    h+= next!==undefined ? '' : `<br><span class="muted">You know every plan. Bramble would be proud.</span>`;
+    let h=tabsH+`<div class="notice"><b>Woodworking</b> <span class="muted">· ${(S.craft.known||[]).length} plans known · ${fmt(S.craft.made)} crafted</span>`;
+    h+= left ? '' : `<br><span class="muted">You know every plan. Bramble would be proud.</span>`;
     h+=`<div class="muted" style="margin-top:6px">Your materials: ${Object.keys(MAT_NAMES).map(m=>`${MAT_NAMES[m]} ${countItem(m)}`).join(' · ')}</div></div>`;
     h+=rareCraftSection();
+    // v1.34: study a piece you own to work out its plan
+    const st=studyable();
+    if (st.length){ h+=`<div class="notice"><b>Study a piece</b> <span class="muted">· ${studyToday()?'You\'ve studied something today. Try again tomorrow.':'Take a close look at something you own to learn how it\'s made. One a day.'}</span>`;
+      for (const r of st.slice(0,6)) h+=`<div class="row" style="margin:8px 0 0"><img src="${thumb(r.id)}"><div class="grow"><div class="nm">${ITEMS[r.id].name}</div></div><button class="btn alt" data-study="${r.id}" ${studyToday()?'disabled':''}>Study</button></div>`;
+      h+='</div>'; }
     h+='<div class="tabs">'+[['all','All plans'],['now','Can make now']].map(([k,n])=>`<button class="tab${k===filter?' on':''}" data-f="${k}">${n}</button>`).join('')+'</div>';
     let shown=0;
     WOODWORK.forEach((r,i)=>{ const it=ITEMS[r.id], open=recipeOpen(r), mx=open?craftMax(r):0;
@@ -3515,6 +3594,7 @@ function openCraft(start){
     pBody.innerHTML=h; bindTabs();
     pBody.querySelectorAll('[data-f]').forEach(b=>b.onclick=()=>{ filter=b.dataset.f; Snd.click(); render(); });
     pBody.querySelectorAll('[data-q]').forEach(b=>b.onclick=()=>{ const [i,d]=b.dataset.q.split(':'); const r=WOODWORK[+i], mx=craftMax(r); qty[i]= d==='max'?mx:Math.max(1,Math.min(mx,(qty[i]||1)+(+d))); Snd.click(); render(); });
+    pBody.querySelectorAll('[data-study]').forEach(b=>b.onclick=()=>{ if (studyPiece(b.dataset.study)){ const st=pBody.scrollTop; render(); pBody.scrollTop=st; } });
     pBody.querySelectorAll('[data-rc]').forEach(b=>b.onclick=()=>{ const r=RARE_WORK[+b.dataset.rc]; if (doCraft(r,1)){ const st=pBody.scrollTop; render(); pBody.scrollTop=st; } });
     pBody.querySelectorAll('[data-c]').forEach(b=>b.onclick=()=>{ const i=+b.dataset.c, r=WOODWORK[i]; const k=Math.max(1,Math.min(qty[i]||1, craftMax(r))); if(doCraft(r,k)){ qty[i]=1; const st=pBody.scrollTop; render(); pBody.scrollTop=st; } });
   };
@@ -3657,6 +3737,8 @@ function doInvest(id){ if (noEdit()) return false;
   const k=KEEPERS[SHOPS[id].keeper]; closePanel(); dialog(k.name, k.voice, [k.invest[st.tier-1]]); toast(`${SHOPS[id].tiers[st.tier]}!`, null, 'new', SHOPS[id].perks[st.tier]);
   return true;
 }
+// v1.34: Pemberton has one woodworking plan a day once you know woodworking (picked from the day, so it's the same all day)
+function storeWoodPlan(){ if (!S.craft || GUEST) return null; if (S.day.wplan===undefined){ S.day.wplan=randomWoodPlan(mulberry32(hashStr(today()+':wplan:'+(S.seed||0)))); save(); } return S.day.wplan && ITEMS[S.day.wplan] ? S.day.wplan : null; }
 function openShop(which, startTab){
   let tab=startTab||'buy', sel=-1; const sid=shopKey(which);
   const tabs = which==='rare' ? [['buy','Rare finds'],['sell','Sell']] : which==='stall' ? [['buy','Furniture'],['clothes','Clothes'],['home','Home goods'],['garden','Garden'],['tools','Tools'],['packs','Bags & bike'],['sell','Sell'],['invest','Invest']] : [['buy','Shop'],['sell','Sell'],['invest','Invest']];
@@ -3670,6 +3752,8 @@ function openShop(which, startTab){
     if (tab==='buy'){ list=shopStock(which);
       const intro = which==='rare'?'Rare finds, today only.' : which==='stall'?'New furniture every day. At night, leave clams in the jar.' : which==='aquarium'?'Marlo\'s salty stock changes every day.' : 'Sprig\'s plants and bug gear change every day.';
       h+=`<div class="muted" style="margin-bottom:8px">${intro}</div>`; if (sid==='garden') h+=islandRows();
+      if (which==='stall'){ const wp=storeWoodPlan(); if (wp){ const fid=ITEMS[wp].learns, pr=WOOD_PLAN_PRICE(fid), got=knowsWood(fid);
+        h+=`<div class="notice" style="margin-bottom:10px"><b>Woodworking plan</b> <span class="muted">· one a day</span><div class="row" style="margin:8px 0 0"><img src="${thumb(fid)}"><div class="grow"><div class="nm">${ITEMS[fid].name}</div><div class="sub">${fmt(pr)} clams · teaches you to make it</div></div><button class="btn" id="buyWPlan" ${got||S.clams<pr?'disabled':''}>${got?'Known':'Buy'}</button></div></div>`; } }
       if (which==='rare' && S.day.pplan && ITEMS[S.day.pplan]){ const pl=ITEMS[S.day.pplan], known=knowsPlan(pl.learns);
         h+=`<div class="notice" style="margin-bottom:10px"><b>Something special</b> <span class="muted">· a plan, wrapped in oilcloth</span><div class="row" style="margin:8px 0 0"><img src="${thumb(pl.learns)}"><div class="grow"><div class="nm">${pl.name} ${rarityTag(pl)}</div><div class="sub">${fmt(PLAN_PRICE)} clams · teaches you to make it. You still need the rare ingredients.</div></div><button class="btn" id="buyPlan" ${known||S.clams<PLAN_PRICE?'disabled':''}>${known?'Known':'Buy'}</button></div></div>`; } list.forEach((id,i)=>h+=buyRow(id,i,isSold(which,id,i),buyPrice(which,ITEMS[id]),ITEMS[id].buy)); }
     if (tab==='garden'){ list=S.day.garden; h+=islandRows()+'<div class="muted" style="margin-bottom:8px">Other seeds and plants change daily.</div>'; list.forEach((id,i)=>h+=buyRow(id,i,S.day.gsold[i],buyPrice(which,ITEMS[id]),ITEMS[id].buy)); }
@@ -3714,6 +3798,7 @@ function openShop(which, startTab){
     pBody.innerHTML=h;
     pBody.querySelectorAll('[data-cw]').forEach(b=>b.onclick=()=>{ const id=b.dataset.cw, it=ITEMS[id], price=buyPrice(which,it); if (ownsWear(id) || S.clams<price) return; S.clams-=price; addTrade(which,price); Snd.coin(); updateHUD(); grantWear(id); save(); render(); });
     pBody.querySelectorAll('[data-hb]').forEach(b=>b.onclick=()=>{ if (buyHome(homeStock()[+b.dataset.hb])) render(); });
+    const bw=pBody.querySelector('#buyWPlan'); if (bw) bw.onclick=()=>{ const wp=storeWoodPlan(); if (!wp) return; const fid=ITEMS[wp].learns, pr=WOOD_PLAN_PRICE(fid); if (knowsWood(fid) || S.clams<pr) return; S.clams-=pr; addTrade(which,pr); updateHUD(); Snd.coin(); learnPlan(wp); save(); render(); };
     const bp=pBody.querySelector('#buyPlan'); if (bp) bp.onclick=()=>{ const pl=S.day.pplan; if (!pl || knowsPlan(ITEMS[pl].learns) || S.clams<PLAN_PRICE) return; S.clams-=PLAN_PRICE; updateHUD(); Snd.coin(); learnPlan(pl); save(); render(); };
     pBody.querySelectorAll('[data-ht]').forEach(b=>b.onclick=()=>{ const it=homeStock()[+b.dataset.ht];
       if (VISIT){ toast('You can try styles on your own house when you\'re home.'); return; }
@@ -3866,16 +3951,23 @@ const invCounts = () => { const c={}; for (const s of S.inv) c[s.id]=(c[s.id]||0
 function talkSkipperHome(){
   const v=SKIPPER.voice, nm=SKIPPER.name, tickets=S.inv.filter(s=>ITEMS[s.id] && ITEMS[s.id].kind==='ticket');
   if (!BOOT.flush && BOOT.mode!=='account'){ dialog(nm, v, ['Trips need an account, I\'m afraid.']); return; }
-  const go=(theme, ticket)=>{
+  // v1.34: friends on the island with you can come along. Ask who's going first.
+  const go=(theme, ticket, crew)=>{
     if (noEdit()) return;
     if (!ticket && S.clams<TRIP_FEE){ dialog(nm, v, [`It's ${fmt(TRIP_FEE)} clams for a trip. Come back when you've got it.`]); return; }
+    const here=(BOOT.livePeers ? BOOT.livePeers() : []).filter(p=>p && p.id);
+    if (!crew && here.length){ pickCrew(here, ids=>go(theme, ticket, ids)); return; }
+    crew=(crew||[]).filter(id=>here.some(p=>p.id===id));
     let th=theme || VY.rollTrip();   // v1.27 odds: see voyage.js
     const seed=(Math.random()*1e9)|0, plan=VY.tripPlan(th, seed), fruits=NATIVE_FRUITS.filter(f=>f!==S.nativeFruit), T=TRIP_THEMES[th], name=plan.name||T.name, blurb=plan.blurb||T.blurb;
     const trip={ seed, theme:th, name, fruit:fruits[Math.floor(Math.random()*fruits.length)], start:invCounts(), seen:Object.keys(S.seen||{}), from:S.island };
+    if (crew.length){ trip.room=[...crypto.getRandomValues(new Uint8Array(12))].map(b=>b.toString(16).padStart(2,'0')).join('');
+      BOOT.sendLive({ t:'game', d:{ trip:'ask', to:crew, room:trip.room, isle:{ seed, theme:th, name, fruit:trip.fruit }, lead:S.player||'' } }); }
     if (ticket) removeItem(ticket,1); else S.clams-=TRIP_FEE;
     updateHUD(); save();
     const sp=VY.SPECIAL[th], say = sp ? [sp.tier==='legendary' ? 'Wait... the wind\'s pulling us somewhere strange. I\'ve only ever heard sailors\' stories about this.' : 'Well, would you look at that. The current\'s taking us somewhere special today.', `Next stop: ${name}. ${blurb}`]
       : th==='plain' && plan.style==='normal' ? ['All aboard! Let\'s see where the wind takes us.'] : [`All aboard for ${name}! ${blurb}`];
+    if (crew.length) say.push(`I've sent word to ${crewNames(crew, here)}. They'll catch the next boat right behind us.`);
     dialog(nm, v, say, async ()=>{
       try { sessionStorage.setItem('dw-trip', JSON.stringify(trip)); sessionStorage.removeItem('dw-trip-world'); } catch(e){}
       document.documentElement.classList.add('magicret'); Snd.swoosh();
@@ -3887,6 +3979,40 @@ function talkSkipperHome(){
     ...[...new Set(tickets.map(t=>t.id))].map(id=>({ label:`Use ${ITEMS[id].name.replace('Ticket to ','ticket: ')}`, fn:()=>go(ITEMS[id].theme, id) })),
     { label:'Not today', alt:true, fn:()=>{} } ]);
 }
+// v1.34 group trips. The leader picks who's coming; each friend gets asked and follows on their own boat to the
+// same island (same seed and theme). Everyone has their own copy of what's on it, like visiting, and you see each
+// other through a live room just for that trip. Only the leader pays.
+function crewNames(ids, here){ const n=ids.map(id=>(here.find(p=>p.id===id)||{}).name||'your friend'); return n.length>1 ? n.slice(0,-1).join(', ')+' and '+n[n.length-1] : n[0]; }
+function pickCrew(here, done){ const v=SKIPPER.voice, nm=SKIPPER.name;
+  const custom=()=>{ const pick=new Set(here.map(p=>p.id));
+    const render=()=>{ pBody.innerHTML=`<div class="muted" style="margin-bottom:8px">Who's coming along? You're going either way. The fare covers everyone.</div>`+here.map(p=>`<div class="row"><div class="grow"><div class="nm">${esc(p.name)}</div></div><button class="btn ${pick.has(p.id)?'':'alt'}" data-cp="${p.id}">${pick.has(p.id)?'Coming':'Staying'}</button></div>`).join('');
+      setFoot(`<button class="btn" id="cpGo">Set sail${pick.size?` with ${pick.size}`:' alone'}</button>`);
+      pBody.querySelectorAll('[data-cp]').forEach(b=>b.onclick=()=>{ const id=b.dataset.cp; if (pick.has(id)) pick.delete(id); else pick.add(id); Snd.click(); render(); });
+      $('#cpGo').onclick=()=>{ panelClose=null; closePanel(); done([...pick]); }; };
+    openPanel('Who\'s coming?'); render(); };
+  const opts=[{ label:'Just me', fn:()=>done([]) }];
+  if (here.length===1) opts.unshift({ label:`Both of us (with ${here[0].name})`, fn:()=>done([here[0].id]) });
+  else { opts.unshift({ label:`All of us (${here.length+1})`, fn:()=>done(here.map(p=>p.id)) }); opts.push({ label:'Let me pick', fn:custom }); }
+  opts.push({ label:'Never mind', alt:true, fn:()=>{} });
+  dialog(nm, v, [here.length===1 ? `Is it just you, or is ${here[0].name} coming too?` : `Who's coming? I've room for everyone on the island.`], null, opts); }
+let tripAsk=null;
+function onTripNet(fromId, fromName, d){
+  if (d.trip!=='ask' || TRIP || !Array.isArray(d.to) || !d.to.includes(BOOT.myId) || !d.isle || !/^[a-f0-9]{24}$/.test(d.room||'')) return;
+  if (!VY.SPECIAL[d.isle.theme] && !TRIP_THEMES[d.isle.theme]) return;
+  tripAsk={ from:fromName, room:d.room, isle:d.isle, t:performance.now() };
+  const show=()=>{ if (!tripAsk || performance.now()-tripAsk.t>180000) return; if (dlgState || placing || buildMode || magicMode || scrim.classList.contains('show')){ setTimeout(show, 700); return; }
+    const A=tripAsk; Snd.jingle();
+    dialog(SKIPPER.name, SKIPPER.voice, [`${A.from} is setting sail for ${A.isle.name||'a little island'}, and they want you along! I've got a boat waiting.`], null, [
+      { label:'Come along', fn:()=>joinTrip(A) },
+      { label:'No thanks', alt:true, fn:()=>{ tripAsk=null; } } ]); };
+  show(); }
+async function joinTrip(A){ tripAsk=null;
+  const I=A.isle, trip={ seed:I.seed|0, theme:I.theme, name:String(I.name||'a little island').slice(0,60), fruit:NATIVE_FRUITS.includes(I.fruit)?I.fruit:undefined, room:A.room, leader:A.from,
+    start:invCounts(), seen:Object.keys(S.seen||{}), from:VISIT?(BOOT.host&&BOOT.host.name)||'':S.island, back: VISIT && BOOT.host ? { visit:BOOT.host.id } : null };
+  try { sessionStorage.setItem('dw-trip', JSON.stringify(trip)); sessionStorage.removeItem('dw-trip-world'); } catch(e){}
+  document.documentElement.classList.add('magicret'); Snd.swoosh();
+  try { if (BOOT.flush) await BOOT.flush(); } catch(e){}
+  setTimeout(()=>{ location.href=location.pathname+location.search; }, 600); }
 function talkSkipperTrip(){
   const v=SKIPPER.voice, nm=SKIPPER.name;
   dialog(nm, v, ['Ready to head home? Once we leave, I can never find the same island twice.'], null, [
@@ -3899,6 +4025,7 @@ async function tripGoHome(){
   const fresh=Object.keys(S.seen||{}).filter(id=>!(t.seen||[]).includes(id));
   try { sessionStorage.setItem('dw-trip-recap', JSON.stringify({ name:t.name, got, fresh, invite:S.tripInvite||null })); sessionStorage.removeItem('dw-trip'); sessionStorage.removeItem('dw-trip-world'); } catch(e){}
   delete S.tripInvite; save();
+  if (t.back && t.back.visit) try { sessionStorage.setItem('dw-visit', t.back.visit); } catch(e){}   // v1.34: back to the friend's island you sailed from
   document.documentElement.classList.add('magicret'); Snd.swoosh();
   try { if (BOOT.flush) await BOOT.flush(); } catch(e){}
   setTimeout(()=>{ location.href=location.pathname+location.search; }, 600);
@@ -5351,20 +5478,25 @@ function snapFence(){ const p=placing.m.position, a=fenceAxis(placing.rot); let 
       for (const sg of [-1,1]){ const cx=ex-a[0]*0.5*sg, cz=ez-a[1]*0.5*sg; if (Math.hypot(cx-e.pos.x,cz-e.pos.z)<0.3) continue; const d=Math.hypot(cx-p.x,cz-p.z); if (d<bd){ bd=d; best=[cx,cz]; } } } }
   if (best){ p.set(best[0], World.inside?0:groundY(best[0],best[1]), best[1]); } }
 function blockedFence(x,z,self){ if (inRects(x,z,0.3)) return true; for (const e of ents){ if (!e.solid||e.removed||e===self) continue; if (e instanceof Furniture && isFence(e.rec.id)){ if (Math.hypot(x-e.pos.x,z-e.pos.z)<0.3) return true; continue; } if (Math.hypot(x-e.pos.x,z-e.pos.z)<e.r+0.3) return true; } return false; }
+// v1.34: one place that decides whether a tree, shrub or flower can go in the ground here (single planting and orchards)
+function plantSpotOk(x,z,it,skip){ const P=PLANTS[it.plant], h=rawHeight(x,z); if (!walkable(x,z) || onDock(x,z) || onBridge(x,z) || x>=500) return false;
+  if (!(P.sand ? (h>0.15&&h<SAND_H) : h>SAND_H+0.05) || blocked(x,z,P.ptype==='flower'||P.ptype==='crop'?0.3:0.8)) return false;
+  const gap = P.ptype==='flower'||P.ptype==='crop'?0.55:1.6;
+  return !S.plants.some(q=>Math.hypot(q.x-x,q.z-z)<gap) && !trees.some(t=>!t.removed&&Math.hypot(t.pos.x-x,t.pos.z-z)<(P.ptype==='tree'?2.2:1.0)) && !(skip||[]).some(q=>Math.hypot(q[0]-x,q[1]-z)<gap); }
 function checkPlace(){
   if (placing.mode==='grid') return checkGrid();
+  if (placing.mode==='orchard') return checkOrchard();
   if (placing.mode==='furn' && isFence(placing.id)) snapFence();
   const p=placing.m.position, it=ITEMS[placing.id]; let ok=walkable(p.x,p.z) && Math.hypot(p.x-player.pos.x,p.z-player.pos.z)>0.6 && !onDock(p.x,p.z) && !onBridge(p.x,p.z);
   if (placing.mode==='furn') ok = ok && (isFence(placing.id) ? !blockedFence(p.x,p.z,placing.moving) : !blocked(p.x,p.z,it.r));
-  else { const P=PLANTS[it.plant], h=rawHeight(p.x,p.z); ok = ok && p.x<500 && (P.sand ? (h>0.15&&h<SAND_H) : h>SAND_H+0.05) && !blocked(p.x,p.z,P.ptype==='flower'||P.ptype==='crop'?0.3:0.8);
-    const gap = P.ptype==='flower'||P.ptype==='crop'?0.55:1.6; ok = ok && !S.plants.some(q=>Math.hypot(q.x-p.x,q.z-p.z)<gap) && !trees.some(t=>!t.removed&&Math.hypot(t.pos.x-p.x,t.pos.z-p.z)<(P.ptype==='tree'?2.2:1.0)); }
+  else ok = ok && plantSpotOk(p.x,p.z,it);
   placing.ok=ok; placing.m.traverse(c=>{ for(const mt of (Array.isArray(c.material)?c.material:[c.material])) if(mt&&mt.emissive&&!c.userData.outline) mt.emissive.setHex(ok?0x000000:0x882020); }); if(placing.ring) placing.ring.material.color.setHex(ok?0xffffff:0xe2604d); $('#pOk').disabled=!ok; return ok;
 }
 function endPlacing(){ const mv=placing.moving; if (mv && !placing.done){ mv.obj.visible=true; mv.solid=!ITEMS[mv.rec.id].flat; } scene.remove(placing.m); placing=null; $('#placeBar').classList.remove('show'); }
-const turnBy = a => { if(!placing) return; if (placing.mode==='grid'){ placing.orient^=1; Snd.click(); checkGrid(); return; } if (isFence(placing.id)) a=Math.sign(a)*Math.PI/4; placing.rot=((placing.rot+a)%TAU+TAU)%TAU; placing.m.rotation.y=placing.rot; Snd.click(); checkPlace(); };
+const turnBy = a => { if(!placing) return; if (placing.mode==='orchard'){ placing.orient^=1; Snd.click(); checkOrchard(); return; } if (placing.mode==='grid'){ placing.orient^=1; Snd.click(); checkGrid(); return; } if (isFence(placing.id)) a=Math.sign(a)*Math.PI/4; placing.rot=((placing.rot+a)%TAU+TAU)%TAU; placing.m.rotation.y=placing.rot; Snd.click(); checkPlace(); };
 $('#pRotL').onclick=()=>turnBy(Math.PI/12); $('#pRotR').onclick=()=>turnBy(-Math.PI/12);
 $('#pNo').onclick=()=>{ endPlacing(); Snd.click(); };
-$('#pOk').onclick=()=>{ if (placing && placing.mode==='grid'){ plantGrid(); return; } if(!checkPlace()) return; const p=placing.m.position, id=placing.id, it=ITEMS[id];
+$('#pOk').onclick=()=>{ if (placing && placing.mode==='grid'){ plantGrid(); return; } if (placing && placing.mode==='orchard'){ plantOrchard(); return; } if(!checkPlace()) return; const p=placing.m.position, id=placing.id, it=ITEMS[id];
   if (placing.moving){ const e=placing.moving, rec=e.rec; rec.x=p.x; rec.z=p.z; rec.rot=placing.rot; e.pos.set(p.x, World.inside?0:groundY(p.x,p.z), p.z); e.obj.position.copy(e.pos); e.model.rotation.y=rec.rot; e.obj.visible=true; e.solid=!it.flat; placing.done=true; }
   else if (placing.mode==='furn'){ const rec={ id, x:p.x, z:p.z, rot:placing.rot }; removeItem(id,1); S.placed.push(rec); new Furniture(rec); track('place');
     if (isFence(id) && countItem(id)>0){ const a=fenceAxis(placing.rot), nx=p.x+a[0], nz=p.z+a[1], rot=placing.rot;   // the next fence waits at the end of the line
@@ -5435,6 +5567,60 @@ function plantGrid(){ const P=placing; if (!checkGrid()) return; const id=P.id, 
   Snd.dig(); toast(`Planted ${n} ${it.name.replace(/ (Seeds|Starts)$/,'').toLowerCase()}${PL.ptype==='crop'?`. Ready in about ${PL.days} days`:''}.`, thumb(id));
   save(); endPlacing(); }
 
+/* =====================================================================
+   v1.34 PLANTING AN ORCHARD. Trees and bushes go in a whole block at once: pick how many, how long each row is
+   and how far apart, then drag the block where you want it. Spots that can't take a tree are skipped (shown red).
+   Each tree still uses the shovel once, so a worn shovel can run out partway.
+   ===================================================================== */
+const orchardOk = id => { const it=ITEMS[id], P=it&&it.plant&&PLANTS[it.plant]; return !!P && (P.ptype==='tree'||P.ptype==='shrub'); };
+const ORCH_GAP = { tight:2.4, roomy:3.2, wide:4.2 };
+function openOrchardPanel(id){ if (noEdit()) return; const it=ITEMS[id], have=countItem(id); if (!have) return;
+  const P=PLANTS[it.plant], word=P.ptype==='tree'?'tree':'bush';
+  let n=Math.min(have, 25), w=Math.min(5, Math.max(1, Math.ceil(Math.sqrt(n)))), gap=S.settings.orchGap||'roomy';
+  openPanel('Plant '+it.name);
+  pBody.innerHTML=`<div class="row"><img src="${thumb(id)}"><div class="grow"><div class="nm">${it.name}</div><div class="sub">You have ${have}${P.ptype==='tree'?' · each one uses your shovel once':''}</div></div></div>
+    <label class="f">How many: <b id="orN"></b></label><input type="range" id="orNr" min="1" max="${Math.min(have,25)}" value="${n}">
+    <label class="f">${word==='tree'?'Trees':'Bushes'} per row: <b id="orW"></b></label><input type="range" id="orWr" min="1" max="5" value="${w}">
+    <label class="f">Spacing</label><div style="display:flex;gap:6px" id="orG">${Object.keys(ORCH_GAP).map(k=>`<button class="btn ${k===gap?'':'alt'}" data-g="${k}">${k[0].toUpperCase()+k.slice(1)}</button>`).join('')}</div>
+    <div id="orGrid" style="display:grid;margin:12px auto 4px;width:max-content"></div>`;
+  setFoot(`<button class="btn alt" id="orOne">Just one</button><button class="btn" id="orGo">Choose a spot</button>`);
+  const draw=()=>{ const max=Math.min(have, w*5, 25); if (n>max) n=max; const nr=$('#orNr'); nr.max=Math.min(have, w*5, 25); nr.value=n; const rows=Math.ceil(n/w);
+    $('#orN').textContent=n; $('#orW').textContent=`${w} · ${rows} row${rows>1?'s':''}`;
+    const gd=$('#orGrid'), px={ tight:6, roomy:10, wide:15 }[gap]; gd.style.gap=px+'px'; gd.style.gridTemplateColumns=`repeat(${w}, 18px)`;
+    gd.innerHTML=Array.from({length:rows*w},(_,k)=>`<i style="display:block;width:18px;height:18px;border-radius:50%;background:${k<n?'#5f9a45':'#eadfca'}"></i>`).join('');
+    pBody.querySelectorAll('[data-g]').forEach(b=>{ b.className='btn'+(b.dataset.g===gap?'':' alt'); }); };
+  $('#orNr').oninput=e=>{ n=+e.target.value; draw(); }; $('#orWr').oninput=e=>{ w=+e.target.value; draw(); };
+  pBody.querySelectorAll('[data-g]').forEach(b=>b.onclick=()=>{ gap=b.dataset.g; S.settings.orchGap=gap; Snd.click(); draw(); }); draw();
+  $('#orOne').onclick=()=>{ panelClose=null; closePanel(); startPlacing(id,'plant'); };
+  $('#orGo').onclick=()=>{ panelClose=null; closePanel(); startOrchardPlacing(id, n, w, ORCH_GAP[gap]); }; }
+function startOrchardPlacing(id, n, w, gap){ if (noEdit()) return; if (placing) endPlacing();
+  const grp=new THREE.Group(), ghosts=[]; scene.add(grp);
+  for (let k=0;k<n;k++){ const m=placementModel(id,'plant'); m.traverse(c=>{ if(c.material && !c.userData.outline){ const mm=(Array.isArray(c.material)?c.material:[c.material]).map(x=>{ const y=x.clone(); y.transparent=true; y.opacity=0.6; return y; }); c.material=Array.isArray(c.material)?mm:mm[0]; } });
+    const ring=new THREE.Mesh(new THREE.RingGeometry(0.62,0.8,28).rotateX(-Math.PI/2), new THREE.MeshBasicMaterial({ color:0xffffff, transparent:true, opacity:0.8, depthWrite:false })); ring.position.y=0.05; m.add(ring); m.userData.ring=ring; grp.add(m); ghosts.push(m); }
+  const f=player.face, rows=Math.ceil(n/w), orient = Math.abs(Math.sin(f))>Math.abs(Math.cos(f)) ? 1 : 0, reach=rows*gap/2+1.6;
+  grp.position.set(player.pos.x+Math.sin(f)*reach, 0, player.pos.z+Math.cos(f)*reach);
+  placing={ id, mode:'orchard', m:grp, ghosts, n, w, gap, orient, rot:0, spots:[] }; $('#placeBar').classList.add('show'); $('#pNo').textContent='Cancel';
+  checkOrchard(); }
+function checkOrchard(){ const P=placing, m=P.m, it=ITEMS[P.id], rows=Math.ceil(P.n/P.w), cx=m.position.x, cz=m.position.z; m.position.y=0;
+  const ok=[]; P.ghosts.forEach((g,k)=>{ const r=Math.floor(k/P.w), c=k%P.w, a=(c-(P.w-1)/2)*P.gap, b=(r-(rows-1)/2)*P.gap;
+    const x=cx+(P.orient?b:a), z=cz+(P.orient?a:b), good=Math.hypot(x-player.pos.x,z-player.pos.z)>0.6 && visPathDist(x,z)>=1.0 && !LAMPS.some(([lx,lz])=>Math.hypot(lx-x,lz-z)<1.4) && plantSpotOk(x,z,it,ok);   // orchards stay off paths and away from lamps
+    g.position.set(x-cx, groundY(x,z), z-cz); g.userData.ring.material.color.setHex(good?0x9ae08a:0xe2604d); g.visible=true; g.traverse(o=>{ if (o.material && o!==g.userData.ring) for (const mt of (Array.isArray(o.material)?o.material:[o.material])) mt.opacity=good?0.6:0.22; });
+    if (good) ok.push([x,z]); });
+  P.spots=ok; P.ok=ok.length>0; $('#pOk').disabled=!P.ok; $('#pOk').textContent=ok.length?`Plant ${ok.length}`:'No room'; return P.ok; }
+function plantOrchard(){ const P=placing; if (!checkOrchard()) return; const id=P.id, it=ITEMS[id], PL=PLANTS[it.plant], isTree=PL.ptype==='tree';
+  if (isTree && !needTool('shovel')) return;
+  let n=0; const made=[];
+  for (const [x,z] of P.spots){ if (countItem(id)<1) break; if (isTree && !hasTool('shovel')) break;
+    const rec={ id:'p'+Date.now().toString(36)+n.toString(36)+Math.floor(Math.random()*1e4), sp:it.plant, x, z, stage:0, rot:Math.random()*TAU, color:(PL.colors&&PL.colors.length)?PL.colors[Math.floor(Math.random()*PL.colors.length)]:undefined, lastGrow:today() };
+    if (it.kind==='fruit') rec.fruit=id; removeItem(id,1); S.plants.push(rec); track('plant'); if (isTree){ useTool('shovel'); onReplant(new THREE.Vector3(x,0,z)); }
+    const pe=isTree ? new Tree(rec.id,rec.x,rec.z,rec.sp,rec.fruit||(rec.sp==='palm'?'coconut':null),rec) : new Plant(rec); plantEnts.push(pe); made.push(pe); pe.obj.scale.setScalar(0.001); n++; }
+  let t=0; FX.add(dt=>{ t+=dt; let busy=false; made.forEach((pe,k)=>{ if (pe.removed) return; const q=Math.max(0,(t-k*0.08)/0.35); if (q<1) busy=true; pe.obj.scale.setScalar(q>=1?1:Math.max(0.001,easeOut(q)*(1+Math.sin(q*Math.PI)*0.25))); }); return busy; });
+  if (made[0]) FX.sprout(made[0]);
+  Snd.dig(); const left=P.spots.length-n;
+  const word = it.kind==='fruit' ? it.name.toLowerCase().replace(/ies$/,'y').replace(/s$/,'')+' tree' : it.name.toLowerCase().replace(/s$/,'');
+  toast(`Planted ${n} ${word}${n>1?'s':''}.${isTree?' Trees take a few days to grow.':''}`, thumb(id), null, left>0 ? (isTree&&!hasTool('shovel')?'Your shovel gave out before the rest.':'You ran out before the rest.') : '');
+  save(); endPlacing(); }
+
 /* ---------- The garden menu (tap the garden's stake or sign) ---------- */
 function openGarden(g){
   const render=()=>{ if (!S.gardens.includes(g)){ closePanel(); return; }
@@ -5482,12 +5668,29 @@ addEventListener('keydown', e=>{ if(e.target.tagName==='INPUT'||e.target.tagName
   if (dlgState){ if (!e.repeat && dialogKey(k)) e.preventDefault(); return; }
   if (tankView || tankZoom){ if (tankView && !e.repeat && (k==='escape'||k===KB().bag||k===KB().act||k==='enter'||k===' ')){ e.preventDefault(); closeTankView(); } return; }
   if (keyCapture){ e.preventDefault(); keyCapture(k); return; }
+  if (popupKey(k, e)) return;
   keys[k]=true; if (e.repeat) return; const kb=KB();
   if (k===(kb.swing||' ')){ e.preventDefault(); swing(); return; }
-  if (k===kb.act||k==='enter'){ e.preventDefault(); doAction(); return; }
+  if (k===kb.act||k==='enter'){ e.preventDefault(); if (performance.now()>popupCool) doAction(); return; }
   if (scrim.classList.contains('show')){ if (k===kb.bag && !menuOpen) closePanel(); return; }
   if (k===kb.tool) cycleTool(); else if (k===kb.bike) toggleBike(); else if (k===kb.sled) toggleSled(); else if (k===kb.bag && !buildMode && !placing) openBag(); });
 let keyCapture=null;   // set while Menu > Controls waits for you to press a new key
+/* v1.34: while a pop-up is up (a panel, the Friends panel, the tool or More menu, or a big announcement card),
+   Enter, Space, E and Escape go to the pop-up and close it. They never reach the island behind it, and for a
+   moment after a pop-up closes the action key does nothing, so the same press can't start talking to someone. */
+let popupCool=0;
+const coolPopup = (ms=450) => { popupCool=performance.now()+ms; try { document.activeElement && document.activeElement.blur && document.activeElement.blur(); } catch(e){} };
+const cardsUp = () => [...$('#toasts').children].filter(t=>t.classList.contains('card') && !t.dataset.gone);
+function dismissCards(){ const cs=cardsUp(); if (!cs.length) return false; for (const t of cs) dropToast(t); coolPopup(); return true; }
+function popupKey(k, e){ const kb=KB(), closeKeys = k==='escape'||k==='enter'||k===' '||k===kb.act||k===(kb.swing||' ');
+  if (!closeKeys) return false;
+  const net=document.getElementById('netPanel');
+  if (net && net.classList.contains('show')){ e.preventDefault(); if (!e.repeat){ const x=document.getElementById('netX'); if (x) x.click(); else net.classList.remove('show'); coolPopup(); } return true; }
+  if (scrim.classList.contains('show')){ e.preventDefault(); if (!e.repeat) closePanel(); return true; }
+  if (toolPop.classList.contains('show') || morePop.classList.contains('show')){ e.preventDefault(); if (!e.repeat){ toolPop.classList.remove('show'); closeMore(); coolPopup(); } return true; }
+  if (cardsUp().length){ e.preventDefault(); if (!e.repeat) dismissCards(); return true; }
+  if (performance.now()<popupCool && (k==='enter'||k===kb.act)){ e.preventDefault(); return true; }
+  return false; }
 addEventListener('keyup', e=>{ keys[e.key.toLowerCase()]=false; });
 const ray=new THREE.Raycaster(), ndc=new THREE.Vector2(), plane0=new THREE.Plane(new THREE.Vector3(0,1,0),0);
 function entVisible(e){ if (World.inside){ const R=ROOMS[World.inside]; return e.pos.x>500 && roomAt(e.pos.x,e.pos.z)===R; } return e.pos.x<500 && e.obj.parent===OUT; }
@@ -5565,7 +5768,7 @@ function farClickHint(){}
 function interact(e, mode='tap'){ if(!ents.includes(e)) return; if (e.rag) return; player.face=Math.atan2(e.pos.x-player.pos.x, e.pos.z-player.pos.z); if(!(e instanceof Bug)) player.act=0.35; hideHint(); e.act(mode); }
 function nearestEnt(){ let best=null, bd=1e9; for(const e of ents){ if(e.removed||!e.label()) continue; const d=Math.hypot(e.pos.x-player.pos.x,e.pos.z-player.pos.z); if(d<e.reach+0.3 && d<bd && entVisible(e)){ bd=d; best=e; } } return best; }
 function facingWater(){ if(World.inside) return null; for(const d of [2.5,3.5,4.5]){ const x=player.pos.x+Math.sin(player.face)*d, z=player.pos.z+Math.cos(player.face)*d; if(isFishWater(x,z)) return new THREE.Vector3(x,0,z); } return null; }
-function doAction(){ if(cine||dlgState||scrim.classList.contains('show')||placing||layoutMode||buildMode||magicMode) return; if(riding) setRiding(false); if (sledding){ setSled(false); return; } if(CatchMeter.bug){ resolveSwing(); return; } if(Fishing.state!=='idle'){ reel(); return; } if (knockedDown()) return; const e=nearestEnt(); if(e){ stopMove(); interact(e,'manual'); return; } const w=facingWater(); if(w){ castAt(w); hideHint(); } }
+function doAction(){ if(performance.now()<popupCool || cardsUp().length) { dismissCards(); return; } if(cine||dlgState||scrim.classList.contains('show')||placing||layoutMode||buildMode||magicMode) return; if(riding) setRiding(false); if (sledding){ setSled(false); return; } if(CatchMeter.bug){ resolveSwing(); return; } if(Fishing.state!=='idle'){ reel(); return; } if (knockedDown()) return; const e=nearestEnt(); if(e){ stopMove(); interact(e,'manual'); return; } const w=facingWater(); if(w){ castAt(w); hideHint(); } }
 $('#act').addEventListener('click', e=>{ e.stopPropagation(); if(layoutMode) return; doAction(); });
 let hintHidden=false; function hideHint(){ if(hintHidden) return; hintHidden=true; $('#hint').style.opacity=0; }
 
@@ -5602,7 +5805,7 @@ joyZone.addEventListener('pointerdown', e=>{ e.preventDefault(); e.stopPropagati
   moveJoy(e); });
 joyZone.addEventListener('pointermove', e=>{ if(drag&&drag.el==='joy'){ const c=CT(); c.jx=clamp(e.clientX/innerWidth,0.05,0.95); c.jy=clamp(e.clientY/innerHeight,0.15,0.97); applyControls(); return; } if(joy.active && e.pointerId===joy.id) moveJoy(e); });
 function endJoy(e){ if(drag){ drag=null; save(); return; } if(!joy.active || e.pointerId!==joy.id) return; const quick = performance.now()-joy.t<280 && Math.hypot(e.clientX-joy.sx,e.clientY-joy.sy)<12;
-  joy.active=false; joy.x=joy.y=0; centerBase(); if(CT().floating) joyBase.style.opacity=0; if (quick && CT().floating && !dlgState && !scrim.classList.contains('show')) handleTap(e.clientX, e.clientY); }
+  joy.active=false; joy.x=joy.y=0; centerBase(); if(CT().floating) joyBase.style.opacity=0; if (quick && CT().floating){ if (dlgState){ if (!dlgChoices.children.length) advanceDialog(); } else if (!dismissCards() && !scrim.classList.contains('show')) handleTap(e.clientX, e.clientY); } }
 joyZone.addEventListener('pointerup', endJoy); joyZone.addEventListener('pointercancel', endJoy);
 actBtn.addEventListener('pointerdown', e=>{ if(!layoutMode) return; e.preventDefault(); actBtn.setPointerCapture(e.pointerId); drag={ el:'act' }; });
 actBtn.addEventListener('pointermove', e=>{ if(!drag||drag.el!=='act') return; const c=CT(); c.ax=clamp(e.clientX/innerWidth,0.08,0.92); c.ay=clamp(e.clientY/innerHeight,0.2,0.95); applyControls(); });
@@ -5656,7 +5859,10 @@ canvas.addEventListener('pointermove', e=>{ const p=ptrs.get(e.pointerId); if(!p
   if (e.pointerType==='mouse' && ptrs.size===1 && !(placing && placing.drag) && Math.hypot(p.x-p.sx,p.y-p.sy)>5){ camYaw-=(e.clientX-px)*0.008; lookDragT=performance.now(); p.held=true; return; }   // computer: drag to look around
   if (placing && placing.drag && placing.drag.id===e.pointerId && Math.hypot(p.x-p.sx,p.y-p.sy)>4){ const g=groundAtScreen(e.clientX,e.clientY); if(g){ const x=g.x+placing.drag.ox, z=g.z+placing.drag.oz; placing.m.position.set(x, World.inside?0:groundY(x,z), z); placing.dragged=true; p.held=true; checkPlace(); } } });
 function endPtr(e){ const p=ptrs.get(e.pointerId); if(!p) return; ptrs.delete(e.pointerId); const moved=Math.hypot(p.x-p.sx,p.y-p.sy), dt=performance.now()-p.t;
-  if(ptrs.size===0 && !p.held && moved<14 && dt<450 && !dlgState && !scrim.classList.contains('show') && !layoutMode) handleTap(e.clientX,e.clientY);
+  const tap = ptrs.size===0 && !p.held && moved<14 && dt<450 && !layoutMode;
+  if (tap && dlgState){ if (!dlgChoices.children.length) advanceDialog(); }
+  else if (tap && dismissCards()){}
+  else if (tap && !scrim.classList.contains('show') && performance.now()>popupCool) handleTap(e.clientX,e.clientY);
   if (buildMode && ptrs.size<2){ buildMode.mid=null; if (ptrs.size===0) buildMode.stroke=null; }
   if(p.held && !placing && !buildMode) stopMove(); if(placing && placing.drag && placing.drag.id===e.pointerId){ placing.drag=null; setTimeout(()=>{ if(placing) placing.dragged=false; },0); } }
 canvas.addEventListener('pointerup', endPtr); canvas.addEventListener('pointercancel', endPtr);
@@ -5678,6 +5884,7 @@ function updateHold(dt){ if(CT().move!=='tap') return; holdAcc+=dt; if(holdAcc<0
 function movePlayer(dt,t){
   const u=player.obj.userData; let mv=null; if(riding && (World.inside||buildMode)) setRiding(false); if (sledding && (World.inside||buildMode||!snowyEnough())) setSled(false); const speed=(riding?10.2:5.4)*(wellFed()?1.15:1); let spd=1;
   const kx=(keys['d']||keys['arrowright']?1:0)-(keys['a']||keys['arrowleft']?1:0), kz=(keys['s']||keys['arrowdown']?1:0)-(keys['w']||keys['arrowup']?1:0);
+  if (dlgState && player.target) stopMove();   // v1.34: you stand still while someone is talking to you
   const jm=Math.hypot(joy.x,joy.y), busy=dlgState||placing||layoutMode||buildMode||CatchMeter.bug||magicMode||cine||knockedDown();
   if (joy.active && jm>0.15 && !busy){ stopMove(); if(Fishing.state!=='idle') reel(); mv=new THREE.Vector3(joy.x*Math.cos(camYaw)+joy.y*Math.sin(camYaw),0,-joy.x*Math.sin(camYaw)+joy.y*Math.cos(camYaw)).normalize(); spd=clamp((jm-0.15)/0.7,0.25,1); hideHint(); }
   else if ((kx||kz) && !busy){ stopMove(); if(Fishing.state!=='idle') reel(); mv=new THREE.Vector3(kx*Math.cos(camYaw)+kz*Math.sin(camYaw),0,-kx*Math.sin(camYaw)+kz*Math.cos(camYaw)).normalize(); if(keys['shift']) spd=0.4; hideHint(); }
@@ -6175,7 +6382,7 @@ function runWorldSync(){
     syncPend.clear();
   }
 }
-window.__game = { v123:{ toolPitch, pitchTool, buyTool, talkShop, get storeVisit(){ return storeVisit; } }, v120:{ track, checkAch, achValue, grantWear, ownsWear, openAchievements, makeFavor, rollFavors, favorChoices, npcOf, clothesStock, wardrobeOwned, get Q(){ return Q; } }, party:PARTY, v119:{ tierPick, openChest, townCap:()=>townCap() }, v13:{ shopStock:w=>shopStock(w), learnPlan, rareRoll, knowsPlan, unfoundPlans, stockWeight, RARE_WORK, GroundItem, ShopItem, Furniture }, v1:{ scene, camera, OUT, updateSky, updateHUD, snowPass, SNOW_U, townNewDay, applyTown, talkHall, openHallPanel, buildPlaza, refreshStoreItems, buildStoreAll, buildShop, buildMuseumAll, spawnExhibits, mentorMoment, teachWoodworking, openCraft, doCook, nearStation, toggleSled, setSled, get sledding(){ return sledding; }, sledV, eatFood, Plant, fullBagCatch, KB, landSeaTap, terraLand, LAMPS:()=>LAMPS, hasUpstairs, ShopItem, Stairs, get exhibits(){ return exhibits; }, onDisplay, museumNeeds, museumExpand, museumFitState, museumTanks, renderer, nearestEnt:()=>nearestEnt(), doAction:()=>doAction(), openTankView, closeTankView, get tankView(){ return tankView; }, KEEPOUT, dayKeyOf, World, startPlacing, checkPlace, get placing(){ return placing; }, FX, homeStock, buyHome, draftUnowned, get homeRack(){ return homeRack; }, openShop, openBuild:(o)=>openBuild(o), closeBuild, get buildMode(){ return buildMode; }, ents, Tree, Stump, Weed, Bug, bugs, player, interact, layoutBar, pickNote, itemToast, reel, Fishing, fishes, spawnFish, WU, relayout, enterRoom:(id)=>enterRoom(id), trees }, get S(){ return S; }, dbg:{ setCine:(c)=>{ cine=c; }, showChoices:(t,c)=>showChoices(t,c), dialog:(...a)=>dialog(...a), setRiding:(v)=>setRiding(v), enterRoom:(id)=>enterRoom(id), openBuild:()=>openBuild(), rooms:()=>Object.keys(ROOMS), get yaw(){ return camYaw; }, set yaw(v){ camYaw=v; }, get riding(){ return riding; }, get snow(){ return SNOW_U.value; }, setWeather:(w)=>{ weatherOverride=w; World.weather=w; snowT=0; }, get dlg(){ return !!dlgState; } }, walkable, blocked, groundY, launchRag, ragdolls, swing, meBody, refreshPortals, portalArches, get portalEnt(){ return portalEnt; }, enterRoom, PLACES, net:{ party:(id,d)=>PARTY.onNet(id,d), bonked, visibleRemotes:()=>[...remotes.values()].filter(r=>r.obj.visible).map(r=>[r.name,+r.pos.x.toFixed(1),+r.pos.z.toFixed(1)]), remoteUpsert, remotePos, remoteLeave, remoteEmote, playerState, setInventory, toast:(m)=>toast(m), updateHUD:()=>updateHUD(), get started(){ return started; } }, ITEMS, itemThumb:(id)=>thumb(id), layoutInfo:()=>({ id:LAYOUT_ID, PLACES, PATHS, LOT, rects:RECTS.map(r=>r.slice(0,4)), lot:lotRect() }), terrainH:(x,z)=>rawHeight(x,z), terrainSlope:(x,z)=>hillSlope(x,z), interact, spawnBug:(id,x,z)=>new Bug(id,x,z), tapOdds:()=>Object.fromEntries(Object.keys(TAP_BASE).map(k=>[k, +tapChance({rarity:k}).toFixed(2)])), placingObj:()=>placing&&placing.m, toScreen:v=>{ const p=v.clone().project(camera); return [(p.x*0.5+0.5)*innerWidth, (-p.y*0.5+0.5)*innerHeight]; }, rebuildHome:()=>{ buildPlayerHouse(); rebuildHomeRoom(); }, openBuild, closeBuild, get buildMode(){ return buildMode; }, talkShop, openDonate, talkCurator, spawnMossby, onFelled, findPath, startPlacing, LOT, RECTS, shopEnts, museumEnt, houseEnt:()=>houseEnt, Time, player, ents, ITEMS, residents, World, ROOMS, goTo, handleTap, doAction, updateSky, rollDay, spawnDaily, castAt, Fishing, fishes, bugs, openBag, openBook, openShop, openBoard, openMenu, openCraft, doCraft, WOODWORK, enterRoom, exitRoom, equip, startLayout, endLayout, trees, applyControls, magic:{ startMagic, endMagic, landTap, magicPlace, castMagic, get mode(){ return magicMode; }, raiseTower, talkWizard, drinkPotion, potionOn, luckW, rollFavors, Q, favorChoices, findTowerSpot, get tower(){ return towerEnt; }, PLACES, TERRA, FALLS } };
+window.__game = { v123:{ toolPitch, pitchTool, buyTool, talkShop, get storeVisit(){ return storeVisit; } }, v120:{ track, checkAch, achValue, grantWear, ownsWear, openAchievements, makeFavor, rollFavors, favorChoices, npcOf, clothesStock, wardrobeOwned, get Q(){ return Q; } }, party:PARTY, v119:{ tierPick, openChest, townCap:()=>townCap() }, v13:{ shopStock:w=>shopStock(w), learnPlan, rareRoll, knowsPlan, unfoundPlans, stockWeight, RARE_WORK, GroundItem, ShopItem, Furniture }, v1:{ scene, camera, OUT, updateSky, updateHUD, snowPass, SNOW_U, townNewDay, applyTown, talkHall, openHallPanel, buildPlaza, refreshStoreItems, buildStoreAll, buildShop, buildMuseumAll, spawnExhibits, mentorMoment, teachWoodworking, openCraft, doCook, nearStation, toggleSled, setSled, get sledding(){ return sledding; }, sledV, eatFood, Plant, fullBagCatch, KB, landSeaTap, terraLand, LAMPS:()=>LAMPS, hasUpstairs, ShopItem, Stairs, get exhibits(){ return exhibits; }, onDisplay, museumNeeds, museumExpand, museumFitState, museumTanks, renderer, nearestEnt:()=>nearestEnt(), doAction:()=>doAction(), openTankView, closeTankView, get tankView(){ return tankView; }, KEEPOUT, dayKeyOf, World, startPlacing, checkPlace, get placing(){ return placing; }, FX, homeStock, buyHome, draftUnowned, get homeRack(){ return homeRack; }, openShop, openBuild:(o)=>openBuild(o), closeBuild, get buildMode(){ return buildMode; }, ents, Tree, Stump, Weed, Bug, bugs, player, interact, layoutBar, pickNote, itemToast, reel, Fishing, fishes, spawnFish, WU, relayout, enterRoom:(id)=>enterRoom(id), trees }, get S(){ return S; }, dbg:{ setCine:(c)=>{ cine=c; }, showChoices:(t,c)=>showChoices(t,c), dialog:(...a)=>dialog(...a), setRiding:(v)=>setRiding(v), enterRoom:(id)=>enterRoom(id), openBuild:()=>openBuild(), rooms:()=>Object.keys(ROOMS), get yaw(){ return camYaw; }, set yaw(v){ camYaw=v; }, get riding(){ return riding; }, get snow(){ return SNOW_U.value; }, setWeather:(w)=>{ weatherOverride=w; World.weather=w; snowT=0; }, get dlg(){ return !!dlgState; } }, walkable, blocked, groundY, launchRag, ragdolls, swing, meBody, refreshPortals, portalArches, get portalEnt(){ return portalEnt; }, enterRoom, PLACES, net:{ party:(id,d)=>PARTY.onNet(id,d), trip:(id,name,d)=>onTripNet(id,name,d), bonked, visibleRemotes:()=>[...remotes.values()].filter(r=>r.obj.visible).map(r=>[r.name,+r.pos.x.toFixed(1),+r.pos.z.toFixed(1)]), remoteUpsert, remotePos, remoteLeave, remoteEmote, playerState, setInventory, toast:(m)=>toast(m), updateHUD:()=>updateHUD(), get started(){ return started; } }, ITEMS, itemThumb:(id)=>thumb(id), layoutInfo:()=>({ id:LAYOUT_ID, PLACES, PATHS, LOT, rects:RECTS.map(r=>r.slice(0,4)), lot:lotRect() }), terrainH:(x,z)=>rawHeight(x,z), terrainSlope:(x,z)=>hillSlope(x,z), interact, spawnBug:(id,x,z)=>new Bug(id,x,z), tapOdds:()=>Object.fromEntries(Object.keys(TAP_BASE).map(k=>[k, +tapChance({rarity:k}).toFixed(2)])), placingObj:()=>placing&&placing.m, toScreen:v=>{ const p=v.clone().project(camera); return [(p.x*0.5+0.5)*innerWidth, (-p.y*0.5+0.5)*innerHeight]; }, rebuildHome:()=>{ buildPlayerHouse(); rebuildHomeRoom(); }, openBuild, closeBuild, get buildMode(){ return buildMode; }, talkShop, openDonate, talkCurator, spawnMossby, onFelled, findPath, startPlacing, LOT, RECTS, shopEnts, museumEnt, houseEnt:()=>houseEnt, Time, player, ents, ITEMS, residents, World, ROOMS, goTo, handleTap, doAction, updateSky, rollDay, spawnDaily, castAt, Fishing, fishes, bugs, openBag, openBook, openShop, openBoard, openMenu, openCraft, doCraft, WOODWORK, enterRoom, exitRoom, equip, startLayout, endLayout, trees, applyControls, magic:{ startMagic, endMagic, landTap, magicPlace, castMagic, get mode(){ return magicMode; }, raiseTower, talkWizard, drinkPotion, potionOn, luckW, rollFavors, Q, favorChoices, findTowerSpot, get tower(){ return towerEnt; }, PLACES, TERRA, FALLS } };
 window.__game.net.applyWorld = applyWorld;   // v1.34 live island sync (online.js)
 // v1.26 test hooks
 window.__game.v126 = { townNewDay, applyTown, findHomeSpot, claimHomeSpot, townCap, incomeNewDay, refreshIncome, talkIncome, incCollect, incOf, INCOME, incEnts, openMap, talkSkipperHome, talkSkipperTrip, tripGoHome, tripRecap, storyWho, askToLeave, canAskToLeave, pitchOnBuy, merchantDay, get peddler(){ return peddler; }, get skipper(){ return skipper; }, newSquares, LOAN_MAX_SQ, TRIP, TRIP_THEME, residents, residentHomes, plotEnts, KEEPOUT, Q, PATHS, camTarget, updateCamera, set camDist(v){ camDist=v; }, get camDist(){ return camDist; }, set camYaw(v){ camYaw=v; } };
@@ -6184,3 +6391,4 @@ window.__game.v127 = { roleMenu, folkMenu, smugglerShop, openNoticeBoard, shellG
 // v1.25 test hooks for the house builder
 window.__game.house = { LT, previewBuild:(w)=>previewBuild(w), renderBuild:(k)=>renderBuild(k), homeBlocked, planIssue, setBuildView:(v)=>setBuildView(v), mossPaintAt, buildMossLayer, roofHit, houseFrame, rebuildFloor, HOME_IDS, get houseEnt(){ return houseEnt; }, edgeTap, stairsTap, landProblem, closeBuild };
 window.__game.farm = { openPlantPanel, startGridPlacing, plantGrid, checkGrid, openGarden, rebuildGardens, gardenAtXZ, islandSeeds, islandFlowers, harvestRec, perimeter, get fenceSegs(){ return FENCE_SEGS; }, fenceHit, get placing(){ return placing; }, plantEnts, gardenEnts, CELL };
+window.__game.v134 = { TALK, plantSpotOk, orchardOk, openOrchardPanel, startOrchardPlacing, checkOrchard, plantOrchard, woodProgress, woodUnknown, studyable, studyPiece, learnWood, knowsWood, storeWoodPlan, randomWoodPlan, pickTree, runTree, askAbout, chatLine, talkTo, onTripNet, pickCrew, dismissCards, cardsUp, toast, closePanel, openPanel, get popupCool(){ return popupCool; }, BUG_CAP, BUG_ROLL, get dlg(){ return dlgState; }, advanceDialog, movePlayer };

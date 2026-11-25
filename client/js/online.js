@@ -290,7 +290,7 @@ function renderHere() {
       <b>Tap your items to offer (up to 8)</b><div class="grid">${S.inv.map((e, i) => `<div class="slot${mine.has(i) ? ' on' : ''}" data-s="${i}"><img src="${G().itemThumb(e.id)}"><span>${esc(ITEMS[e.id]?.name || e.id)}${e.n > 1 ? ' x' + e.n : ''}</span></div>`).join('')}</div>
       <div style="margin-top:10px"><button class="btn" id="tOk" ${trade.ok[myId] ? 'disabled' : ''}>${trade.ok[myId] ? 'Ready, waiting...' : 'Ready'}</button> <button class="btn alt" id="tNo">Cancel</button> ${trade.ok[trade.with] ? '<span class="muted">' + esc(other) + ' is ready</span>' : ''}</div>`;
     body.querySelectorAll('[data-s]').forEach(el => el.onclick = () => { const i = +el.dataset.s; const cur = (trade.offer[myId] || []).filter(x => x.slot !== i);
-      if (cur.length === (trade.offer[myId] || []).length) { if (cur.length >= 8) return; cur.push({ slot: i, id: S.inv[i].id }); }
+      if (cur.length === (trade.offer[myId] || []).length) { if (cur.length >= 8) return; if (ITEMS[S.inv[i].id]?.noGift) { G().net.toast('That one stays with you.'); return; } cur.push({ slot: i, id: S.inv[i].id }); }
       send({ t: 'trade-offer', trade: trade.id, items: cur }); });
     $('#tOk').onclick = async () => { await flush(); send({ t: 'trade-ok', trade: trade.id, version: ownVer }); };
     $('#tNo').onclick = () => { send({ t: 'trade-cancel', trade: trade.id }); };
@@ -318,6 +318,7 @@ function pickGift(toId, toName, direct) {
   $('#gBack').onclick = () => renderPanel();
   body.querySelectorAll('[data-s]').forEach(el => el.onclick = async () => {
     const i = +el.dataset.s, it = S.inv[i]; if (!it) return;
+    if (ITEMS[it.id]?.noGift) { G().net.toast('That one stays with you.'); return; }   // v1.38 relics and story parts
     await flush();
     const r = await api('/api/mail', { method: 'POST', body: { to: toId, slot: i, id: it.id, direct, baseVersion: ownVer } });
     if (!r.ok) { G().net.toast(r.error === 'conflict' ? 'Your bag changed. Try again.' : (r.error || 'Could not send.')); return; }

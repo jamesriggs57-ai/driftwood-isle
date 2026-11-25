@@ -40,11 +40,24 @@ def('weed',     {name:'Clump of Weeds', kind:'material', price:10,  model:{t:'we
 def('stump',    {name:'Tree Stump',     kind:'material', price:180, stack:10, model:{t:'stump'}});   // dug up with a shovel; woodworkers turn it into stump furniture
 // v1.37 island stories: planks from Bramble's workshop, coral for the reef in Cay Bay (models in reef.js)
 def('plank',    {name:'Plank',          kind:'material', price:300, model:{t:'plank'}, desc:'Sawn pine from Bramble\'s workshop. Boats, bridges and big builds need them.'});
-def('fitting',  {name:'Iron Fitting',   kind:'material', price:900, model:{t:'fitting'}, desc:'Forged iron hinges and brackets. Big boats need them. Nobody on the island can make them yet.'});
+def('fitting',  {name:'Iron Fitting',   kind:'material', price:900, model:{t:'fitting'}, desc:'Forged iron hinges and brackets. Big boats need them. Pemberton\'s forge on Hollow Crags makes them from iron.'});
+/* ---------- v1.38 story things ----------
+   Relics: old things from the sunken land, found on trip islands once Wendell has asked for them. They can't be sold, gifted,
+   mailed or traded (so they can't be farmed through friends), but a storage chest holds them fine. */
+const relic = (id, name, s, desc) => def(id, { name, kind:'relic', price:0, stack:5, noSell:true, noGift:true, model:{t:'relic', s}, desc });
+relic('relic_acorn',     'Heartwood Acorn',    'acorn',     'An acorn as big as a plum, warm in your hand. Something in it is still growing, very slowly.');
+relic('relic_leystone',  'Sunken Ley Stone',   'leystone',  'A sea-smoothed stone with a rune that glows when you face the old land.');
+relic('relic_frostpine', 'Frostpine Cone',     'frostpine', 'A pine cone covered in frost that never melts. It smells like a forest in January.');
+relic('relic_amber',     'Amber Sliver',       'amber',     'A shard of old amber with a fern frond caught inside, from before the island had a name.');
+relic('relic_moonsap',   'Moonsap Vial',       'moonsap',   'Silvery sap from a tree that only grows by moonlight. It glows a little brighter at night.');
+relic('relic_coralcrown','Living Coral Crown', 'coralcrown','A ring of every coral on the reef, grown together around a pearl. Still alive.');
+def('lampframe', {name:'Lamp Frame',     kind:'material', price:0, stack:1, noSell:true, noGift:true, model:{t:'lampframe'}, desc:'An iron and brass frame for the lighthouse lamp, made at the workshop.'});
+def('cutting',   {name:'Coral Cutting',  kind:'coral', price:0, stack:20, noSell:true, noGift:true, model:{t:'cutting'}, desc:'A cutting from a full-grown coral in Cay Bay, for Thistle\'s Reef Hall.'});
+def('teacake',   {name:'Honey Tea Cake', kind:'food', price:650, stack:10, model:{t:'teacake'}, desc:'One of Mabel\'s tea cakes, sticky with honey from Hollis\'s hives.'});
 export const CORAL_KINDS = ['brain','staghorn','fan','table'];
 export const CORAL_NAMES = { brain:'Brain', staghorn:'Staghorn', fan:'Sea Fan', table:'Table' };
 for (const k of CORAL_KINDS){
-  def('frag_'+k,    { name:`${CORAL_NAMES[k]} Coral Fragment`, kind:'coral', price:40, model:{t:'coralfrag', k}, desc:'A broken piece of coral, washed up on the beach. Sprig might be able to grow it.' });
+  def('frag_'+k,    { name:`${CORAL_NAMES[k]} Coral Fragment`, kind:'coral', price:40, model:{t:'coralfrag', k}, desc:'A broken piece of coral, washed up on the beach. Pretty, but brittle. Worth a few clams.' });
   def('starter_'+k, { name:`${CORAL_NAMES[k]} Coral Starter`,  kind:'coral', price:150, stack:20, model:{t:'coralstarter', k}, desc:'A young coral on a little clay plug, ready to go back to the reef. Row out to the cays and drop it on the old rubble.' }); }
 
 /* ---------- Beach finds ---------- */
@@ -105,6 +118,10 @@ fish('parrotfish','Reef Parrotfish',2200,'bay','M',ALL,[5,19],3,[30,60],0.016,{c
 fish('grouper','Coral Grouper',6000,'bay','L',ALL,null,1.6,[50,100],0.018,{c:0xd8463a,c2:0xf2a070,l:1.3});
 fish('goldseahorse','Gilded Seahorse',30000,'bay','S',ALL,null,0.9,[8,18],0.004,{c:0xf8c830,c2:0xfff0a0,l:0.6,s:'horse'});
 export const CORAL_FISH = { brain:['wrasse','grouper'], staghorn:['goby','bannerfin'], fan:['blenny','velvetray'], table:['parrotfish','goldseahorse'] };
+// v1.38 night-only bay fish: they come out once the lighthouse on Lantern Bluff is lit again and the reef is Schooling or better
+fish('cardinal','Moonlight Cardinalfish',900,'bay','S',ALL,[19,5],4,[6,12],0.012,{c:0xe8503a,c2:0xffc8a8,l:0.6});
+fish('flashlight','Flashlight Fish',4200,'bay','S',ALL,[20,4],1.4,[8,14],0.01,{c:0x1a1e2e,c2:0x4a5068,l:0.65});
+export const NIGHT_BAY = ['cardinal','flashlight'];
 // River
 fish('dace','River Dace',140,'river','S',ALL,null,6,[8,18],0.011,{c:0xa8b4a0,c2:0xeef0e0,l:0.7});
 fish('loach','Pebble Loach',200,'river','S',ALL,null,5,[8,16],0.007,{c:0x9a8a6a,c2:0xd8ccb0,l:0.8,s:'eel'});
@@ -262,6 +279,14 @@ furn('tiffany','Stained Glass Lamp',7200,0.4,{glow:true,...R});
 furn('crystalball','Crystal Ball',26000,0.45,{glow:true,...V});
 furn('harp','Gilded Harp',34000,0.55,V);
 furn('beaconlamp','Lighthouse Lamp',29000,0.5,{glow:true,...V});
+// v1.38 story furniture: workshop commissions, forge ironwork and the Reef Hall's little tank (shop:'story' keeps them out of every shop's stock)
+furn('fourposter','Four-Poster Bed',14000,1.15,{shop:'story',stack:1});
+furn('boatshelf','Boat Bookcase',9000,0.8,{shop:'story',stack:1});
+furn('longtable','Long Table',8000,1.5,{shop:'story',stack:1});
+furn('reeftank','Reef Tank',22000,0.75,{shop:'story',glow:true,stack:1});
+furn('ironlantern','Iron Lantern',4800,0.4,{shop:'story',glow:true});
+furn('irongate','Iron Gate',6000,1.3,{shop:'story'});
+furn('weathervane','Weathervane',5200,0.4,{shop:'story'});
 // Fennick's cart
 furn('umbrella','Beach Umbrella',2200,0.5,{shop:'rare',...R});
 furn('campfire','Cozy Campfire',2800,0.8,{shop:'rare',glow:true,...R});

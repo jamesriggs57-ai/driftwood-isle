@@ -13,7 +13,7 @@ const GROUPS0 = {
     { id:'pond',  name:'Pond & Marsh',      theme:'pond',  ids:['tadpole','bluegill','crayfish','killifish','goldfish','turtle','mooncarp','koi'] },
     { id:'river', name:'River Run',         theme:'river', ids:['dace','loach','carp','smelt','trout','darter','catfish','salmon','pike','char'] },
     { id:'coast', name:'Coastal Shallows',  theme:'coast', ids:['minnow','silverbream','sardine','mackerel','flounder','snapper','cod'] },
-    { id:'bay',   name:'Cay Bay Reef',      theme:'ocean', ids:['wrasse','goby','blenny','bannerfin','velvetray','parrotfish','grouper','goldseahorse'] },
+    { id:'bay',   name:'Cay Bay Reef',      theme:'ocean', ids:['wrasse','goby','blenny','bannerfin','velvetray','parrotfish','grouper','goldseahorse','cardinal','flashlight'] },
     { id:'ocean', name:'Reef & Open Ocean', theme:'ocean', ids:['coraldart','puffer','seahorse','octopus','squid','eel','lanternfish','barrel','ray','sunfish','shark'] } ],
   bug:[
     { id:'butterfly', name:'Butterfly Garden',    theme:'meadow', ids:['sunwing','ember','bluebell','peacock','swallowtail','wanderer','leafdancer','rainwing'] },

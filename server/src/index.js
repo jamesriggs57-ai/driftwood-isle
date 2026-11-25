@@ -9,6 +9,7 @@
    ===================================================================== */
 import { ITEMS, BACKPACKS, BASE_SLOTS, LETTERS } from '../../client/js/content.js';
 
+const KEEP_IDS = /^(relic_|lampframe$|cutting$)/;   // v1.38 items that can't be mailed or traded
 const DAY = 86400e3;
 const SESSION_DAYS = 30;
 const GUEST = { clams: 10000, minRarity: 3 };
@@ -315,6 +316,7 @@ async function api(req, env, url) {
     const letter = b.letter === undefined ? null : String(b.letter);
     if (letter !== null && !LETTERS[letter]) return err(400, 'Unknown letter.');
     let item = null;
+    if (KEEP_IDS.test(String(b.id || ''))) return err(400, 'That one stays with you.');   // v1.38 relics and story parts
     if (b.id || letter === null) { item = takeAt(s.data, b.slot | 0, String(b.id || '')); if (!item) return err(400, 'That item is not in your bag anymore.'); }
     const payload = letter !== null ? { ...(item || {}), letter, fromName: me.displayName, isle: cleanText(s.data.island || '', 40) } : item;
     const ok = await tx(env, [
@@ -425,7 +427,7 @@ export class IslandRoom {
         this.sendTo(to, { t: 'trade-ask', trade: id, from: me.id, name: me.name }); this.sendTo(me.id, { t: 'trade-open', trade: id, with: to }); break; }
       case 'trade-accept': { const tr = this.trades.get(m.trade); if (!tr || tr.b !== me.id) return; tr.open = true; this.sendTo(tr.a, { t: 'trade-open', trade: tr.id, with: tr.b }); this.sendTo(tr.b, { t: 'trade-open', trade: tr.id, with: tr.a }); break; }
       case 'trade-offer': { const tr = this.trades.get(m.trade); if (!tr || !tr.open || (tr.a !== me.id && tr.b !== me.id)) return;
-        tr.offer[me.id] = (Array.isArray(m.items) ? m.items : []).slice(0, 8).map(i => ({ slot: i.slot | 0, id: String(i.id) })); tr.ok = {};
+        tr.offer[me.id] = (Array.isArray(m.items) ? m.items : []).slice(0, 8).map(i => ({ slot: i.slot | 0, id: String(i.id) })).filter(i => !KEEP_IDS.test(i.id)); tr.ok = {};
         this.sendTo(tr.a, { t: 'trade-state', trade: tr.id, offer: tr.offer, ok: tr.ok }); this.sendTo(tr.b, { t: 'trade-state', trade: tr.id, offer: tr.offer, ok: tr.ok }); break; }
       case 'trade-ok': { const tr = this.trades.get(m.trade); if (!tr || !tr.open || (tr.a !== me.id && tr.b !== me.id)) return;
         tr.ok[me.id] = true; tr.ver[me.id] = m.version | 0;

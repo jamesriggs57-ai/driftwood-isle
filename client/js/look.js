@@ -51,6 +51,8 @@ const FISH_LOOK = {
   wrasse:{ pat:'rainbow', iri:0.7 }, goby:{ pat:'spots', mark:0x2a9ae0, n:26 }, blenny:{ pat:'bands', bands:[0.3,0.6], band:0xf2c040, edge:0x2a1a5a },
   bannerfin:{ pat:'bands', bands:[0.18,0.55], band:0x1a1a1a, edge:0x1a1a1a, fin:0xf6dc50 }, velvetray:{ pat:'spots', mark:0xf4f4ff, n:70 },
   parrotfish:{ pat:'scales', big:true, iri:0.8 }, grouper:{ pat:'spots', mark:0x2a8ae0, n:80 }, goldseahorse:{ pat:'rings', mark:0xc88010 },
+  // v1.38 night bay fish
+  cardinal:{ pat:'bands', bands:[0.42,0.62], band:0x3a1a1a, edge:0x3a1a1a, iri:0.4 }, flashlight:{ pat:'photo', mark:0xd8f8ff, glow:true, iri:0.3 },
 };
 export const fishLook = id => FISH_LOOK[id] || { pat:'scales' };
 export function fishSkin(id, d){ return once('fish:'+id, ()=>{

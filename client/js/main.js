@@ -2378,7 +2378,7 @@ function sprigReefChoices(k, menu){
   if (VISIT || GUEST || !SY.reef) return []; const R=SY.reef, v=k.voice, nm=k.name;
   if (R.st==='open') return [{ label:'Can you grow coral?', fn:()=>{ R.st='frags'; save();
     dialog(nm, v, ['Coral? For Gill? Oh, I\'d love to try!','It\'s an animal, technically. But it grows like a plant. I\'d need a piece to start from, and somewhere to keep it wet.','Bits of broken coral wash up on the beach sometimes. Bring me three?'], menu); } }];
-  if (R.st==='frags'){ if (fragCount()<3) return [{ label:'About the coral...', fn:()=>dialog(nm, v, ['Three bits of coral from the beach, and I can get started. They\'ve been washing up lately!'], menu) }];
+  if (R.st==='frags'){ if (fragCount()<3) return [{ label:'About the coral...', fn:()=>dialog(nm, v, ['Three bits of coral from the beach, and I can get started. They wash up all the time!'], menu) }];
     return [{ label:'I found some coral!', fn:()=>{ let left=3; for (const id of FRAG_IDS.slice().sort((a,b)=>countItem(b)-countItem(a))){ const n=Math.min(left,countItem(id)); if (n){ removeItem(id,n); left-=n; } if (!left) break; }
       R.st='tank'; save(); Snd.jingle(); dialog(nm, v, ['Look at these! Still a little alive, I think. Just barely.','I\'ll need a proper saltwater tank to grow them in, though. A long one, with a bubbler.','Marlo knows saltwater. Ask him about a tank?'], menu); } }]; }
   if (R.st==='tank' || R.st==='building') return [{ label:'About the coral...', fn:()=>dialog(nm, v, [R.st==='tank' ? 'Did you ask Marlo about a tank? I can\'t grow coral in a bucket. Well. Not for long.' : 'Marlo\'s building the tank right now! I can hear him whistling from here.'], menu) }];
@@ -3807,8 +3807,8 @@ function isleDaily(I){
   const shellPool=Object.values(ITEMS).filter(i=>i.kind==='shell' && allowedFind(i));
   for (let i=0;i<nS;i++){ for (let k=0;k<40;k++){ const a=r()*TAU, d=I.r*(0.6+r()*0.45), x=I.cx+Math.cos(a)*d, z=I.cz+Math.sin(a)*d; if (!isBeach(x,z) || onBridge(x,z)) continue;
       const rec={ id:tierPick(r,shellPool,i=>i.rarity).id, x, z, beach:true }; S.ground.push(rec); new GroundItem(rec); break; } }
-  // v1.37 coral fragments wash up on the dunes too, once Sprig is growing coral
-  if (I.kind==='dunes' && SY.reef && !VISIT) for (let i=0;i<3;i++){ for (let k=0;k<40;k++){ const a=r()*TAU, d=I.r*(0.6+r()*0.45), x=I.cx+Math.cos(a)*d, z=I.cz+Math.sin(a)*d; if (!isBeach(x,z) || onBridge(x,z)) continue;
+  // coral fragments wash up on the dunes too (v1.38: from day one, like the main beach)
+  if (I.kind==='dunes' && !VISIT) for (let i=0;i<3;i++){ for (let k=0;k<40;k++){ const a=r()*TAU, d=I.r*(0.6+r()*0.45), x=I.cx+Math.cos(a)*d, z=I.cz+Math.sin(a)*d; if (!isBeach(x,z) || onBridge(x,z)) continue;
       const rec={ id:'frag_'+coralKind(r), x, z, beach:true }; S.ground.push(rec); new GroundItem(rec); break; } }
   save(); }
 function isleShown(I, on){ I.shown=on; if (I.full) I.full.visible=on; if (I.lod) I.lod.visible=!on || !I.ready;
@@ -3909,10 +3909,10 @@ function rollDay(){
     for (let k=1;k<nRare;k++){ if (rr()<RARE_ODDS.beachPearl){ const p=beachSpot(rr); if (p) S.ground.push({ id:'moonpearl', x:p[0], z:p[1], beach:true }); }
       const pl=randomPlan(rr); if (pl && rr()<RARE_ODDS.bottlePlan){ const p=beachSpot(rr); if (p) S.ground.push({ id:pl, x:p[0], z:p[1], beach:true, bottle:true }); } }
     if (S.day.peddler && plan && c<RARE_ODDS.peddlerPlan) S.day.pplan=randomPlan(rr); }
-  // v1.37 coral fragments: 2 to 4 a day once Sprig is growing coral; a Coral Atoll trip is littered with them
-  { const reefOn = TRIP ? !!(BOOT.own && BOOT.own.story && BOOT.own.story.reef) : !!(SY.reef && !VISIT && !GUEST);
-    if (reefOn && (!TRIP || TRIP_THEME==='coral')){ const cr=mulberry32(hashStr(key+':coral:'+S.seed)), n = TRIP ? 15+Math.floor(cr()*6) : 2+Math.floor(cr()*3);
-      for (let i=0;i<n;i++){ const p=beachSpot(cr); if (p) S.ground.push({ id:'frag_'+coralKind(cr), x:p[0], z:p[1], beach:true }); } } }
+  // v1.38 coral fragments wash up from day one, for everyone: a cheap, ordinary beach find (1 to 3 a day). What they're for only comes out
+  // later, when Gill tells you about the reef. A Coral Atoll trip is littered with them; other trips get the odd one.
+  if (!VISIT){ const cr=mulberry32(hashStr(key+':coral:'+S.seed)), n = TRIP ? (TRIP_THEME==='coral' ? 15+Math.floor(cr()*6) : Math.floor(cr()*2)) : 1+Math.floor(cr()*3);
+    for (let i=0;i<n;i++){ const p=beachSpot(cr); if (p) S.ground.push({ id:'frag_'+coralKind(cr), x:p[0], z:p[1], beach:true }); } }
   townNewDay(key); save(); return true;
 }
 function spawnDaily(){
@@ -4324,7 +4324,7 @@ function openBag(mode='view', onPick, onCancel){
     pBody.innerHTML = (mode==='give'?'<div class="muted" style="margin-bottom:8px">Pick something to give.</div>':mode==='swap'?'<div class="muted" style="margin-bottom:8px">Pick something to make room. Fish and bugs are released; anything else (the whole stack) is set down on the ground next to you, so you can pick it up later.</div>':'') + invGrid(sel) + `<div class="muted" style="margin-top:10px">${S.inv.length}/${slotsMax()} slots${S.pack>=0?' ('+BACKPACKS[S.pack].name+')':''}</div>`;
     const s=S.inv[sel];
     if (s){ const it=ITEMS[s.id]; let b='';
-      if (mode==='give') b+=`<button class="btn" data-a="give">Give</button>`;
+      if (mode==='give') b+= it.noGift ? '<span class="muted">This one stays with you.</span>' : `<button class="btn" data-a="give">Give</button>`;   // v1.38 relics and story parts
       else if (mode==='swap') b+=`<button class="btn" data-a="give">${it.kind==='fish'||it.kind==='bug'?'Release this':'Set this down'}</button>`;
       else { if (it.kind==='potion') b+=`<button class="btn" data-a="drink">Drink</button>`; if (it.kind==='food') b+=`<button class="btn" data-a="eat">Eat</button>`; if (s.id==='sled') b+=`<button class="btn" data-a="sled">Ride</button>`; if (it.kind==='furniture') b+=`<button class="btn" data-a="place">Place</button>`; if (canPlant(it) && !World.inside) b+=`<button class="btn" data-a="plant">Plant</button>`; b+=`<button class="btn alt" data-a="drop">${it.kind==='fish'||it.kind==='bug'?'Release':'Drop'}</button>`; }
       setFoot(`<div class="detail">${itemDetail(s)}<div class="acts">${b}</div></div>`);
@@ -4617,6 +4617,7 @@ const shopKey = which => which==='stall' ? 'general' : which;
 const PLURAL = { fish:'fish', bug:'bugs', flower:'flowers' }; const buysText = sh => sh.buys.map(k=>PLURAL[k]||k+'s').join(' and ');
 // what a shop pays for one bag entry, or null if it won't buy it
 function sellPrice(s, which){
+  if (ITEMS[s.id].noSell) return null;   // v1.38 relics and story parts
   const id=shopKey(which), base=entryPrice(s); if (which==='rare') return base;
   const sh=SHOPS[id]; if (!sh) return base; const t=shopTier(id);
   if (sh.buys && !sh.buys.includes(ITEMS[s.id].kind)) return null;

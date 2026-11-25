@@ -24,23 +24,23 @@ export const ISLE_INFO = {
 };
 // What Wendell asks for each one. need: [item id or item kind, how many]. days: days since the last one rose.
 export const ISLE_QUESTS = [
-  { kind:'meadow', clams:60000,  need:[['wood',30],['stone',15],['flower',10]], days:0,
+  { kind:'meadow', clams:60000,  need:[['wood',30],['stone',15],['flower',10]], days:0, relics:['relic_acorn'],
     ask:['Hmm. Hmm hmm. The sea out west has been humming at me all week.','There\'s land down there, you know. Old land. It sank long before anyone named this island.','I could bring a piece of it up. A meadow, I think. It wants to be a meadow.',
       'It takes a lot out of a wizard, though. Bring me 30 wood and 15 stone for the footings, 10 flowers so it remembers how to grow, and 60,000 clams for my trouble.'],
     done:['Wood, stone, flowers... and the clams. Yes. Yes! Stand back. No, further back. Further.'] },
-  { kind:'dunes', clams:120000, need:[['shell',10],['softwood',20],['coconut',6]], days:3,
+  { kind:'dunes', clams:120000, need:[['shell',10],['softwood',20],['coconut',6]], days:3, relics:['relic_leystone'],
     ask:['The meadow took. Good. The sea is jealous now, and it\'s offering more.','There\'s a sandbank down there that used to be dunes. Shipwrecks too, I think. Lovely for beachcombing.',
       'Bring me 10 beach finds, 20 branches and 6 coconuts. It wants to know what a beach is supposed to feel like. And 120,000 clams.'],
     done:['Shells, branches, coconuts. Just so. Now, a little hum, a little wiggle...'] },
-  { kind:'pines', clams:180000, need:[['wood',60],['stone',20]], days:3,
+  { kind:'pines', clams:180000, need:[['wood',60],['stone',20]], days:3, relics:['relic_frostpine','relic_amber','relic_acorn'],
     ask:['{who}\'s workshop. Yes, I heard. Half the island has heard about it.','There is an old pine forest sunk off the east shore. The trees there were planted by people long gone, and their roots still remember.',
       'Raised, they would grow back as fast as you cut them. Bring me 60 wood so the roots know what they are for, 20 stone for the footings, and 180,000 clams.'],
     done:['Wood and stone, and the clams. The old forest is listening. Stand back, and mind the pine cones.'] },
-  { kind:'bluff', clams:220000, need:[['stone',40],['iron',8],['clay',10]], days:3,
+  { kind:'bluff', clams:220000, need:[['plank',30],['iron',8],['clay',10]], days:3, relics:['relic_moonsap'],
     ask:['This one is bigger. Taller. There\'s a bluff out north, all stone, sitting on the seabed sulking.','It would need a trestle bridge up to the top. And somewhere up there an old lighthouse is waiting to be lit again.',
-      'Bring me 40 stone, 8 iron nuggets and 10 clay. And 220,000 clams. Bluffs are heavy.'],
-    done:['That\'s a lot of rock. Excellent. Hold onto your hat. Actually, hold onto mine too.'] },
-  { kind:'crags', clams:350000, need:[['iron',15],['stone',30],['fossil',2]], days:3,
+      'Bring me 30 planks from the workshop for the trestle, 8 iron nuggets and 10 clay. And 220,000 clams. Bluffs are heavy.'],
+    done:['Planks, iron, clay. Excellent. Hold onto your hat. Actually, hold onto mine too.'] },
+  { kind:'crags', clams:350000, need:[['iron',15],['stone',30],['fossil',2]], days:3, relics:['relic_amber','relic_coralcrown'],
     ask:['Out past the bluff there are crags. Old, mossy, a bit grumpy. They used to be part of the bluff before the sea cut them off.','I can lift them, but there\'s no way to reach them from here. You\'d have to cross from the cliff on a rope bridge.',
       'Bring me 15 iron nuggets, 30 stone and 2 fossils. The crags like old things. And 350,000 clams. This is the big one.'],
     done:['Iron, stone, fossils. The crags will be pleased. Well. Less grumpy.'] },
@@ -201,14 +201,17 @@ export function buildLandmark(kind, seed){
     mk(G.cyl(2.2,2.5,0.8,14), stone2, 0,0.4,0,g);
     for (let i=0;i<5;i++) mk(G.cyl(1.55-i*0.13, 1.68-i*0.13, 1.5, 14), i%2?red:white, 0, 1.55+i*1.5, 0, g);
     mk(G.cyl(1.35,1.35,0.18,14), dark, 0,8.4,0,g);
-    const lamp=mk(G.cyl(0.8,0.8,1.2,12), glowMat(0xfff0c0), 0,9.1,0,g); lamp.castShadow=false; addGlow(g, 9.1, 5, 0xfff0c0);
+    // v1.38: the lamp room stands dark until Skipper Wick's lamp is fitted (main.js calls setLit)
+    const litM=glowMat(0xfff0c0), darkM=M(0x5a6670,{ roughness:0.25, metalness:0.3, transparent:true, opacity:0.7 });
+    const lamp=mk(G.cyl(0.8,0.8,1.2,12), darkM, 0,9.1,0,g); lamp.castShadow=false; const halo=addGlow(g, 9.1, 5, 0xfff0c0); halo.visible=false;
     for (let i=0;i<8;i++){ const a=i/8*TAU; mk(G.box(0.06,1.2,0.06), dark, Math.cos(a)*0.85, 9.1, Math.sin(a)*0.85, g); }
     mk(G.cone(1.15,1.0,12), red, 0,10.2,0,g); mk(G.sph(0.14,8,6), M(0xf3c35a,{metalness:0.5,roughness:0.3}), 0,10.8,0,g);
     const beam=new THREE.Group(); beam.position.y=9.1; g.add(beam);
     const bm=new THREE.Mesh(new THREE.ConeGeometry(2.2, 16, 16, 1, true), new THREE.MeshBasicMaterial({ color:0xfff4c8, transparent:true, opacity:0.0, depthWrite:false, side:THREE.DoubleSide, blending:THREE.AdditiveBlending }));
     bm.rotation.z=Math.PI/2; bm.position.x=8; beam.add(bm); g.userData.beam=beam; g.userData.beamMat=bm.material;
     mk(G.box(0.9,1.6,0.1), dark, 0,1.6,1.62,g);
-    g.userData.desc='The old lighthouse on the bluff. Wendell says the lamp lights itself now. "It\'s been waiting a long time," he says. "It doesn\'t want to miss anything."';
+    g.userData.lit=false; g.userData.setLit=on=>{ g.userData.lit=!!on; lamp.material=on?litM:darkM; halo.visible=!!on; beam.visible=!!on; }; beam.visible=false;
+    g.userData.desc='The old lighthouse on the bluff. The lamp room is empty and the glass is cracked. It would take a whole new lamp to light it again.';
     g.userData.rects=[[-2.5,-2.5,2.5,2.5]]; }
   if (kind==='crags'){ // a ruined stone arch and broken columns, mossy
     for (const sx of [-1,1]){ for (let k=0;k<5;k++){ const b=mk(G.box(0.9,0.62,0.9), k%2?stone:stone2, sx*1.7+(r()-0.5)*0.08, 0.31+k*0.62, (r()-0.5)*0.08, g); b.rotation.y=(r()-0.5)*0.2; }

@@ -294,3 +294,8 @@ Code: `frame()`, `menuCovering`, `applySaver` and `pixelRatio` in `main.js`.
 - Bug: building or remodeling the house sent any furniture that no longer fit the new walls back to the bag. A storage chest went to the bag as an empty chest, so everything inside it was deleted. On load, outdoor furniture in a bad spot was also bagged, and simply deleted if the bag was full.
 - Now furniture slides to the nearest free floor in the same room (outdoors: nearest free ground). Only plain furniture can still go to the bag, never a chest with something in it. If there's no room anywhere, it's put by the front door (indoors) or left where it was (outdoors), never deleted.
 - Tested locally: 25 filled chests across the tent, then the base house built. Old code: 5 chests bagged, 70 items gone. New code: all 25 chests and all 400 items kept, also after a reload.
+
+## v1.33: trips and visits keep saving when your island changes at home
+- Bug: on a boat trip (or visiting a friend), if a resident changed your island, your save's version moved on and the trip's next save was refused. The game showed "Your island was changed somewhere else" and stopped saving, so everything gathered after that was lost. The "What you brought home" card still listed it, because the card is worked out on the device.
+- Now the trip/visit fetches your island's newer copy and saves your bag on top of it (up to 3 tries), the same way playing at home already did. The resident's island changes are kept too.
+- Tested locally: trip, another session saves the owner's island, 120 wood + 25 lemons + a trilobite gathered, sail home. Old code: bag empty on the server. New code: all of it saved, and the other session's island change kept.

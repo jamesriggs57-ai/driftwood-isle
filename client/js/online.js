@@ -69,16 +69,25 @@ async function doFlush() {
       conflict('Your island keeps changing somewhere else.'); return false;
     }
     if (B.mode === 'trip') {
-      const mine = { ...B.own, ...pick(S, PLAYER_KEYS) };
-      const r = await api('/api/save', { method: 'PUT', body: { data: mine, baseVersion: ownVer } });
-      if (r.ok) { ownVer = r.version; B.own = mine; return true; }
-      if (r.status === 409) conflict('Your island was changed somewhere else.'); return false;
+      // v1.33: a resident (or you on another device) changing your island while you're away used to stop all saving here,
+      // and everything gathered on the trip after that was lost. Now: fetch the newer island and save your bag on top of it.
+      for (let tries = 0; tries < 3; tries++) {
+        const mine = { ...B.own, ...pick(S, PLAYER_KEYS) };
+        const r = await api('/api/save', { method: 'PUT', body: { data: mine, baseVersion: ownVer } });
+        if (r.ok) { ownVer = r.version; B.own = mine; return true; }
+        if (r.status !== 409 || !(await refreshOwn())) return false;
+      }
+      conflict('Your island keeps changing somewhere else.'); return false;
     }
     // visiting: your bag/clams go to your own save; island changes (residents only) go to the host
-    const mine = { ...B.own, ...pick(S, PLAYER_KEYS) }; mine.visits = { ...(B.own.visits || {}), [B.host.id]: { day: S.day } };
-    let ok = true;
-    const r = await api('/api/save', { method: 'PUT', body: { data: mine, baseVersion: ownVer } });
-    if (r.ok) { ownVer = r.version; B.own = mine; } else { ok = false; if (r.status === 409) conflict('Your own island was changed somewhere else.'); }
+    let ok = false;
+    for (let tries = 0; tries < 3; tries++) {   // v1.33: same retry as trips (your own island may change while you visit)
+      const mine = { ...B.own, ...pick(S, PLAYER_KEYS) }; mine.visits = { ...(B.own.visits || {}), [B.host.id]: { day: S.day } };
+      const r = await api('/api/save', { method: 'PUT', body: { data: mine, baseVersion: ownVer } });
+      if (r.ok) { ownVer = r.version; B.own = mine; ok = true; break; }
+      if (r.status !== 409 || !(await refreshOwn())) break;
+      if (tries === 2) conflict('Your own island keeps changing somewhere else.');
+    }
     if (B.role === 'resident') {
       for (let tries = 0; tries < 3; tries++) {
         const w = worldForPush(S), ws = JSON.stringify(w);
@@ -92,6 +101,12 @@ async function doFlush() {
     }
     return ok;
   }
+}
+// v1.33: while away (trip or visit), reload your own save's island part from the server. Your bag and other player
+// things always come from this device, so nothing you gathered is lost; the island part is whatever the server has now.
+async function refreshOwn() {
+  const cur = await api('/api/save'); if (!cur.ok || !cur.data) return false;
+  B.own = cur.data; ownVer = cur.version; return true;
 }
 function conflict(why) {
   blocked = true; clearTimeout(timer);

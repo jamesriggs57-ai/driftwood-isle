@@ -109,9 +109,10 @@ export function setTrophies(tc, n){ const P=tc.userData.prizes; while (P.childre
     else if (i%3===1){ mk(G.cyl(0.07,0.07,0.03,12), M(WOODD), 0,0.015,0,g); const m=mk(G.cyl(0.09,0.09,0.02,16), M(c,{metalness:0.7,roughness:0.3}), 0,0.13,0,g); m.rotation.x=Math.PI/2; mk(G.box(0.02,0.1,0.02), M(0x4a7ad8), 0,0.06,0,g); }
     else { mk(G.box(0.12,0.04,0.08), M(WOODD), 0,0.02,0,g); mk(G.ico(0.08,0), M(c,{metalness:0.4,roughness:0.2}), 0,0.12,0,g); } } }
 // a chandelier for the Grand Town Hall
-function chandelier(){ const g=new THREE.Group(), brass=M(GOLD,{metalness:0.65,roughness:0.3}); mk(G.cyl(0.02,0.02,0.6,6), brass, 0,0.3,0,g); mk(G.cyl(0.6,0.6,0.04,24), brass, 0,0,0,g);
-  for (let i=0;i<8;i++){ const a=i/8*TAU, c=new THREE.Group(); c.position.set(Math.cos(a)*0.58,0,Math.sin(a)*0.58); g.add(c); mk(G.cyl(0.04,0.04,0.05,8), brass, 0,0.04,0,c); mk(G.cyl(0.025,0.025,0.16,8), M(0xfff8ea), 0,0.14,0,c); mk(G.sph(0.03,8,6), glowMat(0xffd080), 0,0.25,0,c); }
-  addGlow(g, 0.2, 2.2, 0xffd08a); return g; }
+// (kept small and up by the ceiling: the camera looks down into the room, so anything hanging low hides the floor)
+function chandelier(){ const g=new THREE.Group(), brass=M(GOLD,{metalness:0.65,roughness:0.3}); mk(G.cyl(0.015,0.015,0.3,6), brass, 0,0.15,0,g); const ring=mk(G.tor(0.34,0.025,6,24), brass, 0,0,0,g); ring.rotation.x=Math.PI/2;
+  for (let i=0;i<6;i++){ const a=i/6*TAU, c=new THREE.Group(); c.position.set(Math.cos(a)*0.34,0,Math.sin(a)*0.34); g.add(c); mk(G.cyl(0.018,0.018,0.1,8), M(0xfff8ea), 0,0.06,0,c); mk(G.sph(0.022,8,6), glowMat(0xffd080), 0,0.13,0,c); }
+  addGlow(g, 0.1, 1.0, 0xffd08a); return g; }
 function column(h){ const g=new THREE.Group(); mk(G.box(0.62,0.18,0.62), M(0xe8e0d0), 0,0.09,0,g); mk(G.cyl(0.22,0.24,h-0.36,16), M(0xf4efe4), 0,h/2,0,g); mk(G.box(0.6,0.18,0.6), M(0xe8e0d0), 0,h-0.09,0,g); return g; }
 function runner(len){ const g=new THREE.Group(); mk(G.box(1.5,0.02,len), M(0xb04a4a), 0,0.012,0,g).castShadow=false; for (const s of [-1,1]) mk(G.box(0.08,0.022,len), M(GOLD), s*0.68,0.013,0,g).castShadow=false; return g; }
 
@@ -146,7 +147,7 @@ export function buildHallRoom(tier, island){
   if (big){
     add(runner(D-3.2), 0, 0, 1.0);
     for (const sx of [-1,1]) for (const z of [-D/2+3.4, D/2-1.2]){ add(column(3.2), sx*(W/2-2.0), 0, z); box(sx*(W/2-2.0), z, 0.62, 0.62); }
-    add(chandelier(), 0, 2.6, mapAt[1]);
+    for (const cz of [-D/2+3.4, D/2-1.2]) add(chandelier(), 0, 2.95, cz);
     const gf=new THREE.Group(); FURN_BUILDERS.grandfather(gf); add(gf, -W/2+0.55, 0, 2.2, Math.PI/2); box(-W/2+0.55, 2.2, 0.7, 0.8);
     trophies=trophyCase(); add(trophies, W/2-0.5, 0, 2.4, -Math.PI/2); box(W/2-0.5, 2.4, 0.7, 1.9);
     const gl=new THREE.Group(); FURN_BUILDERS.globe(gl); add(gl, -2.0, 0, deskZ+0.1); box(-2.0, deskZ+0.1, 0.6, 0.6);

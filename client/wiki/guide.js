@@ -355,9 +355,9 @@ ${tip('Your saved designs are kept, so making a matching set of chairs is quick:
 <li><b>Start from</b> stripes, a check, a border or a diamond in your two colours, then paint over it.</li>
 <li>On clothes, the middle half of the painting is the front; the outer quarters wrap round the back.</li></ul>
 <h3>Rugs</h3>
-<p>Choose the shape, width and length (0.6 to 3 m), edge, pile and edge colour. A rug costs weeds by its size (plush pile and tassels or pom-poms take a few more). It goes in your bag; place it like any furniture, and other pieces can stand on it.</p>
+<p>Choose the shape, width and length (0.6 to 3 m), edge, pile and edge colour. A rug costs weeds by its size (plush pile and tassels or pom-poms take a few more). It goes in your bag; place it like any furniture.</p>
 <ul><li>Copies sell for their materials plus 15%.</li>
-<li>The first time you sell a rug you designed, you get an art bonus for the work: more colours, a finer grid and fancier shapes and edges pay more (usually a few hundred to about 2,000 clams). Up to 2 new rugs a day get the bonus.</li></ul>
+<li>The first time you sell a rug you designed, you get an art bonus for the work: more colours, a finer grid and fancier shapes and edges pay more (from a few hundred for a simple two-colour rug to about 3,000 for a big, detailed one). Up to 2 new rugs a day get the bonus.</li></ul>
 <h3>Clothes</h3>
 <p>Choose a garment (shirt, dress, coat, overalls, robe), sleeves, length and, for dresses and robes, how full the skirt is. Then add alterations. Clothes take weeds, plus a little extra for some alterations (iron for studs, branches for a leaf mantle, clay for toadstools, glimmer moss for glowing trim, a starstone for orbiting stars, heartwood for wings).</p>
 <p>Finished clothes go in your <b>closet</b> in the Sewing tab. Press <b>Wear</b> to put one on, <b>Take off</b> to go back to your usual outfit. Friends see what you're wearing, painting and all. Picking a different outfit in Menu &gt; Change my look takes sewn clothes off.</p>

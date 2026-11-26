@@ -10,17 +10,25 @@ const _h=(x,y,z,s)=>{ let h=(x*374761393+y*668265263+z*1442695041+s*144665)|0; h
 const _c=new THREE.Color(), _d=new THREE.Color();
 const TOP=0.1;
 
+// distance from 0,0 to a polygon's edge along each direction (the polygon must be star shaped around 0,0)
+function polyR(poly){ const N=512, T=new Float32Array(N);
+  for (let i=0;i<N;i++){ const a=i/N*TAU, dx=Math.cos(a), dz=Math.sin(a); let best=1e9;
+    for (let j=0;j<poly.length;j++){ const [ax,az]=poly[j], [bx,bz]=poly[(j+1)%poly.length], ex=bx-ax, ez=bz-az, den=dx*ez-dz*ex; if (Math.abs(den)<1e-12) continue;
+      const t=(ax*ez-az*ex)/den, u=(ax*dz-az*dx)/den; if (t>0 && u>=-1e-6 && u<=1+1e-6) best=Math.min(best,t); }
+    T[i]=best; }
+  return a=>{ const f=(((a/TAU)%1)+1)%1*N, i=Math.floor(f)%N, k=f-Math.floor(f); return T[i]*(1-k)+T[(i+1)%N]*k; }; }
 // stone slab (lighter copy of the one in critters.js: fewer segments so 80 of them build quickly)
-function stone(parent, W, D, h, seed, relief=null, tint=0xd7c6a2, seg=60){
+function stone(parent, W, D, h, seed, relief=null, tint=0xd7c6a2, seg=60, shape=null){
   const segX=seg, segZ=Math.max(8,Math.round(seg*D/W)), g=new THREE.PlaneGeometry(W, D, segX, segZ); g.rotateX(-Math.PI/2);
   const base=col(tint), dark=base.clone().offsetHSL(0.01,0.05,-0.2), light=base.clone().offsetHSL(0,-0.03,0.07), fos=new THREE.Color();
-  const edge=(x,z)=>{ const a=Math.atan2(z/D,x/W), wob=1+fbm(Math.cos(a)*1.6,Math.sin(a)*1.6,seed,seed)*0.18; return Math.hypot(x/(W/2),z/(D/2))/wob; };
+  const pr=shape&&shape.poly? polyR(shape.poly) : null, flat=!!pr;   // v1.63: a polygon outline gives a cut, flat-topped tablet
+  const edge=pr? (x,z)=>Math.hypot(x,z)/pr(Math.atan2(z,x)) : (x,z)=>{ const a=Math.atan2(z/D,x/W), wob=1+fbm(Math.cos(a)*1.6,Math.sin(a)*1.6,seed,seed)*0.18; return Math.hypot(x/(W/2),z/(D/2))/wob; };
   const p=g.attributes.position, cArr=new Float32Array(p.count*3), c=new THREE.Color();
   for (let i=0;i<p.count;i++){ let x=p.getX(i), z=p.getZ(i), e=edge(x,z);
     if (e>1){ x/=e; z/=e; p.setX(i,x); p.setZ(i,z); e=1; }
-    const dome=Math.sqrt(Math.max(0,1-e**3)), rimDrop=Math.pow(Math.max(0,1-e**6),0.35);
+    const dome=flat? Math.sqrt(Math.max(0,1-e**24)) : Math.sqrt(Math.max(0,1-e**3)), rimDrop=flat? Math.pow(Math.max(0,1-e**24),0.25) : Math.pow(Math.max(0,1-e**6),0.35);
     const rock=fbm(x*4,z*4,seed,seed)*0.025 + fbm(x*14,z*14,seed+3,seed)*0.006;
-    let y=h*rimDrop*(0.55+0.45*dome)+rock*dome;
+    let y=flat? h*rimDrop+rock*0.4*dome : h*rimDrop*(0.55+0.45*dome)+rock*dome;
     const strata=(Math.sin((y*38+fbm(x*2,z*2,seed,7)*3))*0.5+0.5)*dome;
     c.copy(base).lerp(dark, (1-dome)*0.55+Math.max(0,-rock*14)*0.3).lerp(light, strata*0.2*dome);
     const spk=_h(Math.floor(x*180),Math.floor(z*180),seed,2); if (spk>0.93) c.offsetHSL(0,0,-0.08); else if (spk<0.04) c.offsetHSL(0,0,0.06);
@@ -169,10 +177,6 @@ B.opalclam=(g,seed)=>{ base(g,seed,0xcfc3a8);
   const m=mesh(geo, vcPhys({ roughness:0.12, clearcoat:1, clearcoatRoughness:0.05, iridescence:1, iridescenceIOR:1.6 }), 0.0, TOP+0.06, 0, g); m.rotation.y=-0.5; };
 
 /* ---- sea life ---- */
-B.brittlestar=(g,seed)=>{ const K=kit(0x4e3e30);
-  K.ell(0,0,0.06,0.06,0,0.02,0x3a2c20); for (let i=0;i<5;i++){ const a0=i*TAU/5+0.4, pts=[]; for (let j=0;j<=20;j++){ const t=j/20, r=0.05+0.3*t, a=a0+Math.sin(t*5+i)*0.35*t; pts.push([Math.cos(a)*r, Math.sin(a)*r]); }
-    K.line(pts,0.018,0.005,0.016,0x3a2c20,{ band:120 }); K.ell(Math.cos(a0+0.63)*0.035, Math.sin(a0+0.63)*0.035, 0.012,0.008,a0+0.63,0.017,0x3e3024); }
-  stone(g,0.88,0.7,0.1,seed,(x,z)=>K.eval(x,z),0xd8ccb2); };
 B.blastoid=(g,seed)=>{ base(g,seed,0xc6b89a);
   const prof=[[0.001,0],[0.03,0.01],[0.06,0.05],[0.085,0.11],[0.08,0.16],[0.05,0.2],[0.02,0.215],[0.001,0.218]].map(([r,y])=>new THREE.Vector2(r,y));
   const geo=welded(new THREE.LatheGeometry(prof.length>2?new THREE.SplineCurve(prof).getPoints(40):prof, 60)); displace(geo,v=>{ const a=Math.atan2(v.z,v.x), up=v.y/0.218; const pet=Math.pow(Math.max(0,Math.cos(a*5)),6)*smooth(0.35,0.75,up); const r=Math.hypot(v.x,v.z); const k=1+0.08*pet+0.02*pet*Math.max(0,Math.sin(v.y*260))-0.03*(1-pet)*smooth(0.4,0.8,up); v.x*=k; v.z*=k; });
@@ -195,53 +199,11 @@ B.honeycomb=(g,seed)=>{ base(g,seed,0xbcb4a2,0.8,0.62,0.06);
     const k=1-0.012*smooth(0.0016,0.004,c.wall)*up/Math.max(0.1,v.length()/0.24); v.multiplyScalar(k); });
   setColors(geo,(v,n,o)=>{ const c=hexCell(v.x,v.z,S); const up=smooth(0.02,0.1,v.y); o.set(0xd8c8a6).lerp(_c.set(0x7a5a3a), smooth(0.002,0.006,c.wall)*up*0.85); if (up<0.5){ o.set(0xc8b48e); if (Math.sin(Math.atan2(v.z,v.x)*90)>0.3) o.offsetHSL(0,0,-0.08); } o.offsetHSL(0,0,fbm(v.x*30,v.y*30,v.z*30,2)*0.04); });
   mesh(geo, vcPhys({ roughness:0.7, clearcoat:0.15 }), 0, TOP-0.04, 0, g); };
-B.chaincoral=(g,seed)=>{ const K=kit(0x6a4e34);
-  const chains=[[[-0.36,-0.18],[-0.2,-0.08],[-0.05,-0.14],[0.1,-0.05],[0.3,-0.12]],[[-0.32,0.06],[-0.15,0.1],[0.0,0.02],[0.14,0.12],[0.34,0.08]],[[-0.25,0.24],[-0.1,0.18],[0.05,0.24],[0.2,0.2]],[[-0.05,-0.14],[-0.02,-0.04],[0.0,0.02]],[[0.14,0.12],[0.16,0.18],[0.2,0.2]]];
-  for (const c of chains){ const P=path2(c,72); for (let i=0;i<P.length-1;i+=3){ const [ax,az]=P[i], [bx,bz]=P[i+1]; K.ell((ax+bx)/2,(az+bz)/2,0.017,0.01,Math.atan2(bz-az,bx-ax),0.016,0x4a3220,{ ring:0.4 }); } }
-  stone(g,0.86,0.66,0.12,seed,(x,z)=>{ const r=K.eval(x,z); if (r) return r; return { h:0, c:0x9a8a74, m:0.25 }; },0xc4b8a2); };
 B.vasesponge=(g,seed)=>{ base(g,seed,0xc8ba9c);
   const prof=[]; for (let i=0;i<=20;i++){ const t=i/20; prof.push(new THREE.Vector2(0.025+0.12*Math.pow(t,1.4), t*0.32)); } prof.push(new THREE.Vector2(0.135,0.322)); for (let i=20;i>=2;i--){ const t=i/20; prof.push(new THREE.Vector2(0.025+0.12*Math.pow(t,1.4)-0.016, t*0.32)); }
   const geo=new THREE.LatheGeometry(prof, 72); displace(geo,v=>{ const a=Math.atan2(v.z,v.x), k=1+0.04*Math.cos(a*14)*smooth(0.05,0.3,v.y)+fbm(v.x*12,v.y*12,v.z*12,5)*0.05; v.x*=k; v.z*=k; });
   setColors(geo,(v,n,o)=>{ const a=Math.atan2(v.z,v.x); o.set(0xd8b070).lerp(_c.set(0x8a6a3a), clamp(-n.y*0.5+0.2,0,1)*0.5); const pa=Math.floor(a*20), py=Math.floor(v.y*90); if (_h(pa,py,3,seed)>0.72 && Math.abs(Math.sin(a*20*Math.PI/Math.PI))>-1) o.lerp(_c.set(0x4a3420),0.6); if (Math.hypot(v.x,v.z)<0.11 && v.y>0.25 && n.y>0) o.offsetHSL(0,0,-0.12); });
   const m=mesh(geo, vcPhys({ roughness:0.8, side:THREE.DoubleSide }), 0.02, TOP-0.01, 0, g); m.rotation.z=-0.12; };
-B.jellyfish=(g,seed)=>{ const K=kit(0x8a7a64);
-  K.ell(0.04,0,0.19,0.19,0,0.006,0x8a7a64,{ ring:0.08 }); K.ell(0.04,0,0.12,0.12,0,0.004,0x9a8a72,{ ring:0.06 });
-  for (let i=0;i<16;i++){ const a=i*TAU/16; K.cap(0.04+Math.cos(a)*0.03,Math.sin(a)*0.03,0.04+Math.cos(a)*0.17,Math.sin(a)*0.17,0.004,0.004,0x7a6a56); }
-  for (let i=0;i<4;i++){ const a=i*TAU/4+0.4; K.ell(0.04+Math.cos(a)*0.06,Math.sin(a)*0.06,0.03,0.018,a,0.006,0x6a5a46,{ ring:0.4 }); }
-  for (let i=0;i<5;i++){ const z0=-0.12+i*0.06; K.line(path2([[-0.14,z0],[-0.22,z0+0.03],[-0.3,z0-0.02],[-0.38,z0+0.02]],10),0.004,0.002,0.003,0xa09078); }
-  stone(g,0.9,0.66,0.1,seed,(x,z)=>K.eval(x,z),0xe4dac4); };
-B.lacecoral=(g,seed)=>{ const ox=-0.3, oz=0.02;
-  stone(g,0.86,0.66,0.1,seed,(x,z)=>{ const dx=x-ox, dz=z-oz, r=Math.hypot(dx,dz), a=Math.atan2(dz,dx); if (r<0.03||r>0.6||Math.abs(a)>0.72+0.05*Math.sin(r*30)) return null;
-    if (r<0.08) return Math.abs(a)<0.18? { h:0.01, c:0x6a4a30, m:0.9 } : null;
-    const n=Math.floor(8+r*34), sp=1.44/n, br=Math.abs(((a+0.72)%sp)-sp/2)*r<0.005, bar=(r%0.028)<0.0055;
-    return (br||bar)? { h:0.01, c:0x5a3a22, m:0.95 } : { h:-0.003, c:0x8a8070, m:0.5 }; },0xbfb6a4); };
-B.graptolite=(g,seed)=>{ const K=kit(0xe4dfd2); const lines=[];
-  const add=(pts,side)=>{ lines.push({ P:path2(pts,30), side }); K.line(path2(pts,30),0.0035,0.003,0.004,0xe4dfd2); };
-  add([[-0.05,-0.05],[-0.2,-0.12],[-0.36,-0.15]],1); add([[-0.05,-0.05],[0.1,-0.14],[0.3,-0.2]],-1);
-  add([[-0.3,0.18],[-0.1,0.12],[0.12,0.1],[0.34,0.16]],1); add([[0.0,0.25],[0.15,0.22],[0.3,0.25]],-1); add([[-0.33,0.0],[-0.22,0.06],[-0.1,0.05]],1);
-  stone(g,0.9,0.66,0.1,seed,(x,z)=>{ const r=K.eval(x,z); if (r) return r;
-    for (const L of lines){ const P=L.P; for (let i=0;i<P.length-1;i++){ const [ax,az]=P[i],[bx,bz]=P[i+1], dx=bx-ax, dz=bz-az, l=Math.hypot(dx,dz), u=((x-ax)*dx+(z-az)*dz)/(l*l); if (u<0||u>1) continue;
-      const px=-dz/l*L.side, pz=dx/l*L.side, off=(x-ax)*px+(z-az)*pz; if (off<0.002||off>0.016) continue; const s=((i+u)*l*1000/12)%1; if (s<off/0.016) return { h:0.003, c:0xd0cabb, m:0.95 }; } }
-    return null; },0x34363a); };
-B.eurypterid=(g,seed)=>{ const K=kit(0x3a2818);
-  K.ell(0.24,0,0.07,0.075,0,0.024,0x3a2818,{ flat:true }); K.ell(0.27,0.04,0.012,0.008,0,0.026,0x2a1e14); K.ell(0.27,-0.04,0.012,0.008,0,0.026,0x2a1e14);
-  for (let i=0;i<12;i++){ const x=0.16-i*0.034, w=0.075*(1-i/14)**1.2; K.ell(x,0,0.021,w,0,0.022-i*0.0005,i%2?0x3a2818:0x4e3a26,{ flat:true }); }
-  K.cap(-0.24,0,-0.38,0,0.012,0.016,0x3a2a1e,0.002);
-  for (const s of [1,-1]){ K.line(path2([[0.2,s*0.06],[0.16,s*0.14],[0.08,s*0.19]],10),0.014,0.006,0.012); K.ell(0.07,s*0.2,0.05,0.028,s*0.3,0.014,0x4a3828);
-    for (let j=0;j<3;j++) K.line([[0.26-j*0.03,s*0.05],[0.3-j*0.03,s*(0.1+j*0.01)],[0.34-j*0.04,s*(0.12+j*0.03)]],0.005,0.003,0.009); }
-  stone(g,0.92,0.62,0.1,seed,(x,z)=>K.eval(x,z),0xb8ae98); };
-B.stonecrab=(g,seed)=>{ const crab=(sgn)=>{ const K=kit(sgn>0?0x4a3626:0x6a5440); const h=0.016*sgn;
-    K.ell(0,0,0.07,0.09,0,h,undefined,{ flat:false }); for (const s of [1,-1]){ K.line(path2([[0.04,s*0.07],[0.09,s*0.11],[0.13,s*0.09]],8),0.016,0.012,h*0.9); K.ell(0.14,s*0.08,0.03,0.018,s*0.5,h); for (let j=0;j<4;j++) K.line([[0.02-j*0.03,s*0.08],[0.0-j*0.04,s*0.13],[-0.04-j*0.04,s*0.15]],0.006,0.004,h*0.7); }
-    return (x,z)=>{ const r=K.eval(x,z); if (r && sgn<0) r.shade=-0.08; if (r && Math.sin(x*200)*Math.sin(z*200)>0.6) r.shade=(r.shade||0)+0.03; return r; }; };
-  const a=new THREE.Group(); stone(a,0.4,0.34,0.07,seed,crab(1),0x8c7a62,48); a.position.set(-0.19,0,0); a.rotation.y=0.15;
-  const b=new THREE.Group(); stone(b,0.4,0.34,0.07,seed+5,crab(-1),0x8c7a62,48); b.position.set(0.2,0,0.02); b.rotation.set(0,-0.2,0.06); g.add(a,b); };
-B.fossilshrimp=(g,seed)=>{ const K=kit(0x6a3a16);
-  const body=path2([[0.2,0.02],[0.08,0.06],[-0.04,0.04],[-0.13,-0.02],[-0.16,-0.1]],24);
-  K.ell(0.16,0.04,0.08,0.045,-0.25,0.018,0x6a3a16); for (let i=0;i<6;i++){ const p=body[8+i*2]||body[body.length-1]; K.ell(p[0],p[1],0.024,0.034-i*0.002,-0.3-i*0.25,0.016,i%2?0x6a3a16:0x7a4a20); }
-  for (const s of [0.4,0,-0.4]) K.ell(-0.17+s*0.02,-0.15,0.016,0.03,s,0.008,0x8a5a2a);
-  K.line(path2([[0.23,0.03],[0.32,0.1],[0.38,0.22]],12),0.003,0.0015,0.004); K.line(path2([[0.23,0.05],[0.3,0.0],[0.38,-0.12]],12),0.003,0.0015,0.004);
-  for (let i=0;i<5;i++) K.line([[0.18-i*0.035,0.06+i*0.004],[0.16-i*0.035,0.12],[0.13-i*0.035,0.15]],0.003,0.002,0.006);
-  stone(g,0.86,0.64,0.1,seed,(x,z)=>K.eval(x,z),0xe4cf98); };
 B.rolledtrilo=(g,seed)=>{ base(g,seed,0xb6ab96);
   const R=0.085, W=0.085, T=0.04;
   const geo=surf(90,40,(u,v)=>{ const ph=0.35+u*(TAU-0.5), a=v*TAU, end=Math.min(smooth(0,0.07,u),smooth(1,0.9,u)); const head=smooth(0.7,0.85,u);
@@ -263,16 +225,6 @@ B.spinytrilo=(g,seed)=>{ base(g,seed,0xa9a39a,0.84,0.62);
 
 
 /* ---- fish and sea reptiles ---- */
-function fishSkel(K, cx, cz, len, rot, c=0x2e1e12){ K.at(cx,cz,rot,len/0.24);
-  K.ell(0,0,0.12,0.04,0,0.003,0x8a7a62,{ flat:true });                                  // faint body outline
-  K.ell(0.085,0,0.035,0.03,0,0.012,c); K.ell(0.09,0.008,0.008,0.008,0,0.016,0x1e140c,{ ring:0.5 });
-  K.line([[0.06,0],[0,0.002],[-0.06,0],[-0.1,-0.002]],0.0035,0.0025,0.01,c);
-  for (let i=0;i<14;i++){ const x=0.05-i*0.011, L=0.03*(1-i/18); K.cap(x,0,x-0.006,L,0.0014,0.007,c); K.cap(x,0,x-0.006,-L*0.7,0.0014,0.007,c); }
-  for (const s of [1,-1]) for (let j=0;j<5;j++) K.cap(-0.1,0,-0.135,s*(0.012+j*0.007),0.0015,0.007,c);
-  for (let j=0;j<6;j++) K.cap(0.0-j*0.008,0.03,-0.01-j*0.009,0.048,0.0012,0.006,c);
-  return K.reset(); }
-B.herring=(g,seed)=>{ const K=kit(0x3e2c1e); fishSkel(K,0.06,-0.13,0.4,0.15); fishSkel(K,-0.12,0.08,0.34,-0.25); fishSkel(K,0.24,0.17,0.22,0.4);
-  stone(g,0.9,0.66,0.1,seed,(x,z)=>K.eval(x,z),0xe6dcc4); };
 B.armorfish=(g,seed)=>{ base(g,seed,0x8e877a,0.86,0.66);
   const mat=vcPhys({ roughness:0.45, clearcoat:0.45 }), C=tone(0x5e554a,0x2a241e,6,0.6,14);
   const head=welded(new THREE.SphereGeometry(0.2,72,48)); displace(head,v=>{ v.x*=1.35; v.y*=0.72; v.z*=0.95; if (v.y<0) v.y*=0.45; if (v.x>0.12) v.y-=smooth(0.12,0.27,v.x)*0.05*(v.y>0?1:0); v.multiplyScalar(1+fbm(v.x*10,v.y*10,v.z*10,3)*0.025); });
@@ -293,14 +245,6 @@ B.sharkvert=(g,seed)=>{ base(g,seed,0xbfb39a,0.86,0.56);
   const mat=vcPhys({ roughness:0.5, clearcoat:0.35 });
   for (let i=0;i<4;i++){ const m=mesh(geo, mat, -0.2+i*0.075, TOP+0.075, 0.02*i, g); m.rotation.set(0.15*i,0,Math.PI/2+0.08*(i-1.5)); m.scale.setScalar(1-i*0.06); }
   const m=mesh(geo, mat, 0.2, TOP+0.025, 0.1, g); m.rotation.set(0.2,0,0.1); };
-B.ichthyosaur=(g,seed)=>{ const K=kit(0x3e2a1a), c=0x3e2a1a;
-  K.line([[0.52,0.0],[0.42,0.004],[0.36,0.008]],0.006,0.014,0.012,c); K.ell(0.29,0.01,0.07,0.045,0,0.012,c); K.ell(0.3,0.012,0.032,0.032,0,0.016,0x2a1c10,{ ring:0.35 });
-  const sp=path2([[0.22,0.01],[0.05,0.03],[-0.15,0.0],[-0.32,-0.04],[-0.42,-0.1]],40); K.line(sp,0.009,0.005,0.012,c,{ band:400 });
-  for (let i=2;i<22;i++){ const [x,z]=sp[i]; const L=0.09*Math.sin(Math.PI*(i-1)/22); for (const s of [1,-1]) K.line(path2([[x,z],[x-0.01,z+s*L*0.6],[x-0.03,z+s*L]],6),0.003,0.002,0.008,c); }
-  const pad=(x,z,a,L,W)=>{ for (let r=0;r<6;r++) for (let q=0;q<4;q++){ const u=r/6, w=(q-1.5)/3*W*(1-u*0.5); K.ell(x+Math.cos(a)*u*L-Math.sin(a)*w, z+Math.sin(a)*u*L+Math.cos(a)*w, 0.009, 0.008, a, 0.01, c); } };
-  pad(0.14,0.08,2.2,0.12,0.06); pad(0.14,-0.07,-2.2,0.12,0.06); pad(-0.16,0.05,2.4,0.08,0.04); pad(-0.16,-0.06,-2.4,0.08,0.04);
-  K.line(path2([[-0.42,-0.1],[-0.48,-0.02],[-0.5,0.08]],10),0.004,0.002,0.004,0x6a5a4a); K.line(path2([[-0.42,-0.1],[-0.5,-0.18],[-0.52,-0.24]],10),0.004,0.002,0.004,0x6a5a4a);
-  stone(g,1.12,0.6,0.1,seed,(x,z)=>K.eval(x,z),0x8e8a82,80); };
 B.plesioflipper=(g,seed)=>{ base(g,seed,0xc4b59a,0.86,0.64);
   const mat=boneMat(), C=tone(0x9a7a52,0x4a3420,5,0.6);
   addBone(g, mat, [-0.34,TOP+0.035,0.0], [-0.1,TOP+0.035,0.0], 0.034, 0.06, C, 0.7);
@@ -325,17 +269,6 @@ B.seaturtle=(g,seed)=>{ base(g,seed,0xc6b896,0.86,0.66);
   const hd=welded(new THREE.SphereGeometry(0.045,24,16)); setColors(hd,C); mesh(hd, mat, 0.27, TOP+0.02, 0, g).scale.set(1.4,0.7,1); };
 
 /* ---- plants ---- */
-B.ginkgo=(g,seed)=>{ const leaf=(x,z,ox,oz,rot,S)=>{ const c=Math.cos(-rot), s=Math.sin(-rot), lx=((x-ox)*c-(z-oz)*s)/S, lz=((x-ox)*s+(z-oz)*c)/S; if (lx<-0.13||lx>0.2||Math.abs(lz)>0.2) return null;
-    if (lx<0 && Math.abs(lz)<0.006) return { h:0.008, c:0x4a3018, m:0.95 };
-    const r=Math.hypot(lx,lz), a=Math.atan2(lz,lx); if (Math.abs(a)>1.05) return null; const R=0.17*(1-0.35*Math.exp(-((a/0.12)**2)))*(1+0.04*Math.sin(a*14)); if (r>R) return null;
-    const vein=Math.abs(Math.sin(a*34+r*8))<0.25; return { h:0.005+(vein?0.003:0)+0.002*(r/R), c:vein?0x3e2814:0x6a4826, m:0.9 }; };
-  stone(g,0.86,0.66,0.1,seed,(x,z)=>leaf(x,z,-0.16,-0.04,0.25,1.1)||leaf(x,z,0.06,0.12,-0.6,0.8),0xd8cba8); };
-B.palmfrond=(g,seed)=>{ const ox=-0.36, oz=0.04;
-  stone(g,0.96,0.68,0.1,seed,(x,z)=>{ const dx=x-ox, dz=z-oz, r=Math.hypot(dx,dz), a=Math.atan2(dz,dx);
-    if (a<-0.12 && a>-0.4 && r<0.16 && Math.abs(Math.sin(a)*r+0.035)<0.01) return { h:0.01, c:0x4a3820, m:0.9 };
-    if (r<0.08||r>0.62||Math.abs(a)>1.25) return null; const edge=0.55-0.06*Math.cos(a*3)+0.03*Math.sin(a*29); if (r>edge) return null;
-    const pl=Math.cos(a*34), split=r>edge-0.08 && pl<-0.85; if (split) return null;
-    return { h:0.004+0.005*pl, c:pl>0.6?0x3a2c18:0x5e4a2e, m:0.85 }; },0xd4c6a2,72); };
 B.horsetail=(g,seed)=>{ const K=kit(0x4a3e2e); for (const [cx,cz] of [[0.2,0.18],[-0.22,-0.17]]){ for (let i=0;i<14;i++){ const a=i/14*TAU; K.cap(cx,cz,cx+Math.cos(a)*0.06,cz+Math.sin(a)*0.06,0.008,0.006,0x4a3e2e,0.003); } }
   stone(g,0.86,0.64,0.1,seed,(x,z)=>K.eval(x,z),0xbdb3a0);
   const mat=vcPhys({ roughness:0.6, clearcoat:0.2 });
@@ -343,9 +276,6 @@ B.horsetail=(g,seed)=>{ const K=kit(0x4a3e2e); for (const [cx,cz] of [[0.2,0.18]
     setColors(geo,(v,n,o)=>{ const t=(v.x+L/2)/L, a=Math.atan2(v.y,v.z), odd=Math.floor(t*L/0.11)%2; o.set(0x6e5c48).lerp(_c.set(0xb4a284), clamp(n.y*0.5+0.4,0,1)*0.5); if (Math.cos(a*12+(odd?Math.PI:0))<-0.7) o.offsetHSL(0,0,-0.1); if (Math.abs(((t*L)/0.11)%1-0.5)>0.46) o.lerp(_c.set(0x3a2e22),0.6); });
     const m=mesh(geo, mat, x, TOP+R*0.8, z, g); m.rotation.y=ry; };
   one(0.5,0.05,0.0,0.0,0.3); one(0.2,0.035,0.05,0.2,-0.9); };
-B.scalebark=(g,seed)=>{ stone(g,0.92,0.56,0.12,seed,(x,z)=>{ const u=x/0.055+z/0.034, v=x/0.055-z/0.034, fu=u-Math.floor(u), fv=v-Math.floor(v);
-    const e=Math.max(Math.abs(fu-0.5),Math.abs(fv-0.5))*2; if (e>0.86) return { h:-0.004, c:0x2e241a, m:0.9 };
-    const scar=Math.hypot(fu-0.5,fv-0.42)<0.08; return { h:0.012*(1-e*e)+0.004, c:scar?0x2a2016:0x5a4a36, m:0.9, shade:(fu>0.5?0.03:-0.02) }; },0x8a7a62,72); };
 B.petrifiedwood=(g,seed)=>{ base(g,seed,0xbfae90,0.8,0.62,0.06);
   const R=0.2, H=0.16, grp=new THREE.Group();
   const side=welded(new THREE.CylinderGeometry(R,R*1.04,H,72,8,true)); displace(side,v=>{ const k=1+fbm(v.x*10,v.y*10,v.z*10,4)*0.06+0.02*Math.sin(Math.atan2(v.z,v.x)*40); v.x*=k; v.z*=k; });
@@ -363,18 +293,6 @@ B.cycadcone=(g,seed)=>{ base(g,seed,0xc4b494);
   displace(geo,v=>{ const [p,q]=cell(v); const b=(1-Math.abs(p-0.5)*2)*(1-Math.abs(q-0.5)*2); const k=1+0.12*Math.sqrt(b); v.x*=k; v.z*=k; });
   setColors(geo,(v,n,o)=>{ const [p,q]=cell(v); const b=(1-Math.abs(p-0.5)*2)*(1-Math.abs(q-0.5)*2); o.set(0x3e2a1a).lerp(_c.set(0xa07850), smooth(0.0,0.4,b)); if (b>0.75) o.offsetHSL(0,0,-0.08); });
   const m=mesh(geo, vcPhys({ roughness:0.55, clearcoat:0.3 }), -0.15, TOP+0.09, 0, g); m.rotation.set(0.1,0.3,-Math.PI/2+0.1); };
-B.mapleleaf=(g,seed)=>{ const bx=-0.2, bz=0.02;
-  stone(g,0.86,0.66,0.1,seed,(x,z)=>{ const dx=x-bx, dz=z-bz, r=Math.hypot(dx,dz), a=Math.atan2(dz,dx);
-    if (a>2.6||a<-2.6){ if (Math.abs(dz)<0.006 && dx>-0.12) return { h:0.008, c:0x5a2a14, m:0.95 }; return null; }
-    const lobes=[0,0.75,-0.75,1.55,-1.55], L=[0.4,0.32,0.32,0.2,0.2]; let R=0.06;
-    for (let i=0;i<5;i++){ const d=a-lobes[i]; R=Math.max(R, L[i]*Math.exp(-((d/0.2)**2))*(1+0.06*Math.sin(r*90))); }
-    if (r>R) return null; let vein=false; for (const l of lobes) if (Math.abs(Math.sin(a-l))*r<0.004 && Math.cos(a-l)>0) vein=true; const sec=Math.abs(Math.sin((a)*20+r*40))<0.08;
-    return { h:0.005+(vein?0.004:0), c:vein?0x4a2010:(sec?0x6a3218:0x8a4422), m:0.9 }; },0xddd2b8); };
-B.fossilflower=(g,seed)=>{ const K=kit(0x5a3a28), cx=0.08, cz=-0.02;
-  for (let i=0;i<5;i++){ const a=i/5*TAU+0.3; K.ell(cx+Math.cos(a)*0.06,cz+Math.sin(a)*0.06,0.055,0.034,a,0.01,0x6a4430); K.cap(cx,cz,cx+Math.cos(a)*0.1,cz+Math.sin(a)*0.1,0.002,0.013,0x3a2418); }
-  K.ell(cx,cz,0.025,0.025,0,0.016,0x3a2418); for (let i=0;i<10;i++){ const a=i/10*TAU; K.ell(cx+Math.cos(a)*0.036,cz+Math.sin(a)*0.036,0.006,0.006,0,0.018,0x2a180e); }
-  K.line(path2([[cx-0.06,cz+0.04],[-0.12,0.1],[-0.3,0.12],[-0.38,0.2]],20),0.006,0.004,0.009,0x4a3020); K.ell(-0.2,0.18,0.06,0.022,-0.6,0.008,0x5a3a26); K.ell(-0.3,0.05,0.025,0.035,0.4,0.01,0x5a3a26);
-  stone(g,0.86,0.66,0.1,seed,(x,z)=>K.eval(x,z),0xe2d6bc); };
 B.stromatolite=(g,seed)=>{ base(g,seed,0xb8a68a,0.8,0.62,0.06);
   const rx=0.26, ry=0.24, rz=0.16, grp=new THREE.Group();
   const dome=welded(new THREE.SphereGeometry(1,64,40,0,Math.PI,0,Math.PI/2)); displace(dome,v=>{ const k=1+fbm(v.x*5,v.y*5,v.z*5,8)*0.12+0.06*Math.max(0,Math.sin(v.x*14)*Math.sin(v.z*14)); v.set(v.x*rx*k, v.y*ry*k, v.z*rz*k); });
@@ -405,21 +323,6 @@ B.amberlizard=(g,seed)=>{ base(g,seed,0xcdbf9e,0.86,0.56);
     for (let k=-1;k<=1;k++) mesh(tube([V3(x+0.025*Math.sign(x),-0.008,s*0.05),V3(x+0.035*Math.sign(x)+k*0.006,-0.008,s*0.06)],t=>0.0015,3), dk, 0,0,0, inner, false); }
   const ag=loft(40,t=>({ x:-0.29+0.56*t, w:0.1*Math.pow(Math.sin(Math.PI*t),0.35), h:0.065*Math.pow(Math.sin(Math.PI*t),0.35), p:3 }),32); displace(ag,v=>{ v.multiplyScalar(1+fbm(v.x*6,v.y*6,v.z*6,3)*0.05); });
   mesh(ag, amberMat(0xe08a20,0.5), 0, TOP+0.05, 0, g); inner.rotation.y=0; };
-B.fossilspider=(g,seed)=>{ const K=kit(0x3e2a1c);
-  K.ell(-0.05,0,0.07,0.055,0,0.016); K.ell(0.06,0,0.045,0.04,0,0.014); K.ell(0.105,0.012,0.008,0.008,0,0.018,0x1a100a); K.ell(0.105,-0.012,0.008,0.008,0,0.018,0x1a100a);
-  for (const s of [1,-1]) for (let i=0;i<4;i++){ const a=0.5+i*0.32, kx=0.06+Math.cos(a)*0.12-0.02*i, kz=s*(0.04+Math.sin(a)*0.1+0.03); K.line([[0.06-i*0.012,s*0.03],[kx,kz],[kx+0.06*(i<2?1:-1),kz+s*0.08]],0.006,0.0025,0.01); }
-  for (const s of [1,-1]) K.line([[0.1,s*0.02],[0.14,s*0.035],[0.16,s*0.02]],0.004,0.003,0.01);
-  stone(g,0.86,0.66,0.1,seed,(x,z)=>K.eval(x,z),0xd6c6a4); };
-B.roachfossil=(g,seed)=>{ const K=kit(0x5a4030), C=0x5a4030;
-  K.ell(0.17,0,0.06,0.08,0,0.014,0x4a3426,{ flat:true }); for (const s of [1,-1]){ K.ell(-0.04,s*0.05,0.2,0.055,s*0.08,0.008,0x6a4c34); for (let i=0;i<5;i++) K.line(path2([[0.13,s*(0.02+i*0.012)],[0.0,s*(0.03+i*0.016)],[-0.22,s*(0.03+i*0.012)]],12),0.0018,0.0012,0.012,C); }
-  for (let i=0;i<20;i++){ const x=0.1-i*0.016; K.cap(x,-0.1,x,0.1,0.001,0.010,0x4a3426); }
-  for (const s of [1,-1]) K.line(path2([[0.22,s*0.02],[0.3,s*0.06],[0.38,s*0.2]],14),0.0025,0.0015,0.006,C);
-  stone(g,0.88,0.64,0.1,seed,(x,z)=>{ const r=K.eval(x,z); if (r && r.h>0.009 && r.c===0x4a3426 && Math.abs(z)>0.09) return null; return r; },0xd2c4a6); };
-B.arthropleura=(g,seed)=>{ const K=kit(0x3a2e24); const P=path2([[0.44,0.06],[0.25,-0.02],[0.05,0.04],[-0.15,-0.04],[-0.32,0.02],[-0.44,-0.04]],60);
-  for (let i=0;i<28;i++){ const k=Math.min(P.length-2, Math.round(i/27*(P.length-2))), [x,z]=P[k], [x2,z2]=P[k+1], a=Math.atan2(z2-z,x2-x); const w=0.07*(i<2?0.8:1)*(i>24?(28-i)/4:1);
-    K.ell(x,z,0.012,w,a,0.016,i%2?0x3a2e24:0x4a3a2c,{ flat:true }); for (const s of [1,-1]){ const nx=-Math.sin(a)*s, nz=Math.cos(a)*s; K.cap(x+nx*w,z+nz*w,x+nx*(w+0.03)-Math.cos(a)*0.01,z+nz*(w+0.03)-Math.sin(a)*0.01,0.0025,0.008,0x2e241c); } }
-  K.line([[0.44,0.06],[0.5,0.1],[0.52,0.16]],0.003,0.002,0.006); K.line([[0.44,0.06],[0.5,0.02],[0.53,-0.02]],0.003,0.002,0.006);
-  stone(g,1.12,0.5,0.1,seed,(x,z)=>K.eval(x,z),0xaaa294,80); };
 
 
 /* ---- dinosaurs and other reptiles ---- */
@@ -511,41 +414,10 @@ B.femur=(g,seed)=>{ base(g,seed,0xbcae92,0.94,0.6);
   const sp=(r,x,y,z,sx=1,sy=1,sz=1)=>{ const s=welded(new THREE.SphereGeometry(r,24,16)); displace(s,v=>v.multiplyScalar(1+fbm(v.x*30,v.y*30,v.z*30,5)*0.04)); setColors(s,C); mesh(s, mat, x,y,z, grp).scale.set(sx,sy,sz); };
   sp(0.055,-0.3,0.01,0.065); sp(0.045,-0.29,0.0,-0.035,1,1.2,1); sp(0.05,0.3,-0.005,0.045,1.1,0.9,1); sp(0.05,0.3,-0.005,-0.045,1.1,0.9,1); sp(0.02,-0.06,0.0,0.045,1.8,0.8,1);
   grp.position.set(0,TOP+0.05,0); grp.rotation.y=0.3; g.add(grp); };
-B.dinoprint=(g,seed)=>{ const K=kit(0x5a3e2a), R=kit(0x8a6a4a), d=-0.03;
-  K.ell(-0.12,0,0.08,0.075,0,d,0x5a3e2a,{ flat:true }); for (const [ex,ez] of [[0.24,0],[0.14,0.16],[0.14,-0.16]]){ K.cap(-0.1,0,ex,ez,0.045,d,0x5a3e2a,0.03,{ flat:true }); K.cap(ex,ez,ex+(ex+0.1)*0.18,ez*1.18,0.014,d*1.2,0x4a3020); }
-  R.ell(-0.0,0,0.36,0.29,0,0.008,0x8a6a4a,{ ring:0.14 });
-  const cracks=[path2([[-0.44,0.3],[-0.3,0.2],[-0.36,0.05]],8),path2([[0.44,-0.3],[0.3,-0.25],[0.32,-0.08]],8)];
-  stone(g,0.96,0.74,0.1,seed,(x,z)=>{ const a=K.eval(x,z); if (a) return a; for (const c of cracks){ for (let i=0;i<c.length-1;i++){ const dx=c[i+1][0]-c[i][0], dz=c[i+1][1]-c[i][1], l=Math.hypot(dx,dz), u=clamp(((x-c[i][0])*dx+(z-c[i][1])*dz)/(l*l),0,1); if (Math.hypot(x-c[i][0]-dx*u,z-c[i][1]-dz*u)<0.004) return { h:-0.006, c:0x3a2a1a, m:0.9 }; } } return R.eval(x,z); },0x9a7a5a,72); };
-B.firstbird=(g,seed)=>{ const K=kit(0x5a3a1e), c=0x5a3a1e, fc=0x8a6a42;
-  K.ell(0.15,0.21,0.04,0.022,-1.0,0.012,c); K.ell(0.15,0.215,0.01,0.01,0,0.014,0x2a1a0e,{ ring:0.5 });
-  K.line(path2([[0.13,0.18],[0.17,0.1],[0.1,0.06],[0.05,0.03]],14),0.006,0.007,0.01,c,{ band:200 });
-  K.line([[0.05,0.03],[-0.13,-0.02]],0.008,0.007,0.011,c,{ band:250 }); for (let i=0;i<6;i++){ const x=0.02-i*0.025; K.cap(x,0.02,x-0.02,-0.04,0.0025,0.008,c); }
-  const tail=path2([[-0.13,-0.02],[-0.28,-0.04],[-0.46,-0.07]],20); K.line(tail,0.006,0.003,0.01,c,{ band:300 }); for (let i=1;i<tail.length;i++){ const [x,z]=tail[i]; for (const s of [1,-1]) K.ell(x-0.03,z+s*0.025,0.04,0.008,-s*0.6,0.004,fc); }
-  const wing=(s)=>{ K.line([[0.03,s*0.04],[-0.03,s*0.17],[0.08,s*0.27],[0.19,s*0.31]],0.006,0.004,0.011,c); K.line([[0.19,s*0.31],[0.23,s*0.29]],0.003,0.001,0.01,c);
-    for (let i=0;i<11;i++){ const t=i/10, bx=-0.03+0.22*t, bz=s*(0.17+0.14*t); const a=Math.atan2(s*0.9,-0.6+t*1.4); const L=0.17-0.04*t; K.ell(bx+Math.cos(a)*L*0.5, bz+Math.sin(a)*L*0.5, L*0.5, 0.012, a, 0.005, fc); K.cap(bx,bz,bx+Math.cos(a)*L,bz+Math.sin(a)*L,0.002,0.007,c); } };
-  wing(1); wing(-1);
-  for (const s of [1,-1]) K.line([[-0.1,s*0.01],[-0.04,s*0.11],[-0.12,s*0.18],[-0.06,s*0.22]],0.006,0.003,0.011,c);
-  stone(g,1.04,0.76,0.1,seed,(x,z)=>K.eval(x,z),0xe3d3a2,80); };
 B.sailspine=(g,seed)=>{ base(g,seed,0xa86a4a,0.86,0.56);
   const mat=boneMat(), C=tone(0x8a5a3a,0x3e2416,7,0.6,14);
   for (let i=0;i<6;i++){ const x=-0.19+i*0.075; const v=loft(10,t=>({ x:-0.03+0.06*t, w:0.026+0.01*Math.abs(t-0.5)*2, h:0.024+0.01*Math.abs(t-0.5)*2 }),16); setColors(v,C); mesh(v, mat, x, TOP+0.03, 0, g);
     const H=(0.16+0.16*Math.sin(Math.PI*(i+0.5)/6))*(i===4?0.6:1); const sp=tube(curve([[0,0,0],[-0.01,H*0.5,0],[-0.03,H,0]],16), t=>0.011*(1-t*0.6), 10, { ring:(t,a)=>1+0.15*Math.max(0,Math.sin(t*H*120))**4 }); setColors(sp,C); mesh(sp, mat, x, TOP+0.05, 0, g); } };
-B.fossilsnake=(g,seed)=>{ const K=kit(0x3a2a1e), c=0x3a2a1e; const P=[]; for (let i=0;i<=160;i++){ const t=i/160, a=t*TAU*1.75, r=0.05+0.22*t; P.push([0.02+Math.cos(a)*r, Math.sin(a)*r*0.82]); }
-  K.line(P,0.004,0.008,0.008,c); for (let i=4;i<P.length-2;i+=2){ const [x,z]=P[i],[x2,z2]=P[i+1], a=Math.atan2(z2-z,x2-x), t=i/160, L=0.012+0.02*Math.min(1,t*3); K.ell(x,z,0.005,0.007,a,0.011,c); for (const s of [1,-1]) K.cap(x,z,x-Math.sin(a)*s*L,z+Math.cos(a)*s*L,0.0016,0.007,c); }
-  const [hx,hz]=P[P.length-1]; K.ell(hx+0.02,hz+0.02,0.035,0.018,0.9,0.013,c); K.line([[hx,hz],[hx+0.05,hz+0.05]],0.003,0.002,0.009,c);
-  stone(g,0.88,0.7,0.1,seed,(x,z)=>K.eval(x,z),0x9a9080); };
-B.fossilfrog=(g,seed)=>{ const K=kit(0x4a3626), c=0x4a3626;
-  K.ell(0.15,0,0.05,0.075,0,0.012,c,{ flat:true }); for (const s of [1,-1]) K.ell(0.155,s*0.035,0.025,0.022,0,-0.006,0x2a1c10);
-  for (let i=0;i<8;i++){ const x=0.09-i*0.014; K.ell(x,0,0.006,0.008,0,0.012,c); K.cap(x,-0.02*(1-i/10),x,0.02*(1-i/10),0.002,0.008,c); }
-  K.cap(-0.02,0,-0.12,0,0.004,0.01,c); for (const s of [1,-1]){ K.cap(-0.0,s*0.025,-0.12,s*0.012,0.004,0.01,c);
-    K.line([[-0.11,s*0.02],[-0.03,s*0.13],[-0.15,s*0.19],[-0.21,s*0.12]],0.006,0.004,0.011,c); for (let k=0;k<5;k++) K.cap(-0.21,s*0.12,-0.28+k*0.015,s*(0.06+k*0.02),0.0025,0.008,c);
-    K.line([[0.08,s*0.05],[0.04,s*0.12],[0.11,s*0.16]],0.005,0.004,0.01,c); for (let k=0;k<4;k++) K.cap(0.11,s*0.16,0.15+k*0.006,s*(0.15+k*0.02),0.002,0.008,c); }
-  stone(g,0.84,0.66,0.1,seed,(x,z)=>K.eval(x,z),0xd8ccb4); };
-B.fossilfeather=(g,seed)=>{ const P=path2([[-0.27,-0.1],[-0.05,-0.02],[0.12,0.04],[0.29,0.12]],60);
-  stone(g,0.84,0.6,0.1,seed,(x,z)=>{ let best=1e9, bt=0, sd=0; for (let i=0;i<P.length-1;i++){ const [ax,az]=P[i],[bx,bz]=P[i+1], dx=bx-ax, dz=bz-az, l2=dx*dx+dz*dz, u=clamp(((x-ax)*dx+(z-az)*dz)/l2,0,1), d=Math.hypot(x-ax-dx*u,z-az-dz*u); if (d<best){ best=d; bt=(i+u)/(P.length-1); sd=Math.sign(dx*(z-az)-dz*(x-ax)); } }
-    if (best<0.0045*(1-bt*0.5)) return { h:0.008, c:0x3a2a1c, m:0.95 }; if (bt<0.08||bt>0.995) return null;
-    const W=(sd>0?0.075:0.035)*Math.sin(Math.PI*Math.min(1,(bt-0.08)/0.92))**0.5; if (best>W) return null; const s=bt*0.6-best*0.9; const barb=((s/0.011)%1+1)%1<0.45;
-    return { h:barb?0.006:0.002, c:barb?0x3a2414:0x8a7050, m:0.95*(1-best/W*0.3) }; },0xe0d4b6); };
 
 /* ---- mammals ---- */
 B.sabertooth=(g,seed)=>{ base(g,seed,0x8a7a62,0.86,0.62);
@@ -574,13 +446,6 @@ B.cavebear=(g,seed)=>{ base(g,seed,0xb4a68a,0.9,0.62);
   const tm=glossMat(); for (const s of [1,-1]){ addHorn(sk, tm, [0.15,-0.035,s*0.035], 0.06, 0.012, [Math.PI,0,0], toothC, 0.25); }
   const jaw=new THREE.Group(); mesh(skullPart(0.38,0,t=>({ y:0, w:0.06-0.02*t, h:0.026, p:2 }),[],C), mat, 0,0,0, jaw); for (const s of [1,-1]) addHorn(jaw, tm, [0.34,0.02,s*0.03], 0.05, 0.011, [0,0,0], toothC, 0.25); jaw.position.set(-0.18,-0.075,0); jaw.rotation.z=-0.08; sk.add(jaw);
   sk.position.set(0.02,TOP+0.12,0); sk.rotation.y=0.4; g.add(sk); };
-B.dawnhorse=(g,seed)=>{ const K=kit(0x241810), c=0x241810;
-  K.ell(0.0,0.0,0.28,0.12,0,0.003,0x6a5c4c,{ flat:true }); K.ell(0.32,0.07,0.075,0.028,0.4,0.012,c); K.ell(0.29,0.08,0.012,0.012,0,0.014,0x1a120c,{ ring:0.5 });
-  K.line(path2([[0.26,0.05],[0.2,0.05],[0.13,0.02]],10),0.007,0.008,0.01,c,{ band:200 }); const sp=path2([[0.13,0.02],[0.0,0.06],[-0.17,0.03]],24); K.line(sp,0.008,0.007,0.011,c,{ band:300 });
-  for (let i=1;i<14;i++){ const [x,z]=sp[i]; K.line(path2([[x,z],[x-0.01,z-0.06],[x-0.0,z-0.11*Math.sin(Math.PI*i/15)-0.03]],6),0.0028,0.002,0.008,c); }
-  K.ell(-0.17,0.0,0.035,0.025,0.3,0.012,c); K.line([[-0.2,0.02],[-0.3,-0.01]],0.004,0.002,0.009,c,{ band:200 });
-  for (const [o,cc] of [[0,c],[0.025,0x4a3c2e]]){ K.line([[0.12-o,0.0],[0.15-o,-0.1],[0.13-o,-0.2],[0.16-o,-0.27]],0.006,0.004,0.011,cc); K.line([[-0.15-o,-0.01],[-0.08-o,-0.1],[-0.15-o,-0.2],[-0.12-o,-0.27]],0.007,0.004,0.011,cc); }
-  stone(g,0.98,0.72,0.1,seed,(x,z)=>{ const r=K.eval(x,z); if (r && r.c===c) r.h*=1.5; return r; },0xa49a88,72); };
 B.glyptodon=(g,seed)=>{ base(g,seed,0xc4b698,0.86,0.64,0.06);
   const geo=welded(new THREE.BoxGeometry(0.5,0.05,0.38,80,3,60)); const S=0.03;
   displace(geo,v=>{ const top=v.y>0; v.x*=1+fbm(v.z*8,0,0,3)*0.08; v.z*=1+fbm(v.x*8,0,0,5)*0.08; v.y+=0.09*(1-(v.x/0.25)**2*0.6-(v.z/0.19)**2*0.6);
@@ -595,11 +460,240 @@ B.coprolite=(g,seed)=>{ base(g,seed,0xc6b898);
     setColors(geo,(v,n,o)=>{ const b=Math.sin(v.x*60+fbm(v.x*10,v.y*10,v.z*10,sd)*4); o.set(0x6a4a2a).lerp(_c.set(0xc07a3a), smooth(0.2,0.9,b)*0.7).lerp(_c.set(0x6a7a8a), smooth(0.4,0.9,fbm(v.x*12,v.y*12,v.z*12,sd+3))*0.6); });
     const m=mesh(geo, vcPhys({ roughness:0.12, clearcoat:1, clearcoatRoughness:0.05 }), x, TOP+R*0.8, z, g); m.rotation.y=ry; };
   one(0.36,0.065,0.02,-0.04,0.3,1); one(0.16,0.04,-0.12,0.16,-0.9,2); };
+
+/* ================= v1.63: the reworked slab fossils =================
+   These used to share one look: a round stone with a dark picture pressed into it. Each one now has its own shape:
+   the find stands up off the rock in 3D, and the rock itself is cut, split, stacked or framed in its own way. */
+
+// a tablet: a stone with a polygon outline (star shaped around 0,0), a flat top and a bottom, so it can be tilted or stood up
+function tablet(parent, poly, h, seed, relief=null, tint=0xd7c6a2, seg=56){
+  let W=0, D=0; for (const [x,z] of poly){ W=Math.max(W,Math.abs(x)); D=Math.max(D,Math.abs(z)); }
+  const top=stone(parent, W*2+0.01, D*2+0.01, h, seed, relief, tint, seg, { poly });
+  const sh=new THREE.Shape(poly.map(([x,z])=>new THREE.Vector2(x,z))), bot=new THREE.ShapeGeometry(sh); bot.rotateX(Math.PI/2);
+  mesh(bot, plainMat(col(tint).offsetHSL(0,0,-0.12).getHex(), { roughness:0.95, clearcoat:0 }), 0, 0, 0, parent, false);
+  return top; }
+// a jittered ring of points, for round-ish tablets
+const ring=(rx,rz,n,seed,j=0.08)=>{ const P=[]; for (let i=0;i<n;i++){ const a=i/n*TAU, k=1-j+_h(i,n,seed,3)*j*2; P.push([Math.cos(a)*rx*k, Math.sin(a)*rz*k]); } return P; };
+// a squashed sphere, coloured
+function ell3(parent, mat, C, r, sx, sy, sz, x, y, z, rot=[0,0,0], ws=24, hs=16, d=null){
+  const s=welded(new THREE.SphereGeometry(r,ws,hs)); displace(s,v=>{ v.x*=sx; v.y*=sy; v.z*=sz; if (d) d(v); }); setColors(s,C);
+  const m=mesh(s, mat, x, y, z, parent, false); m.rotation.set(rot[0],rot[1],rot[2]); return m; }
+// a thin tapering tube through some points: legs, ribs, antennae, stalks
+function limb(parent, mat, C, pts, r0, r1=r0*0.5, seg=6, n=0){ const P=curve(pts, n||Math.max(6,pts.length*4)); const geo=tube(P, t=>r0+(r1-r0)*t, seg); setColors(geo,C); return mesh(geo, mat, 0,0,0, parent, false); }
+// a thin sheet spread out from 0,0 over an angle range: leaves, petals, fans. R(a) is the edge, lift(u,a) bends it
+function fanSheet(R, a0, a1, lift, C, nu=20, nv=64){ const geo=surf(nu, nv, (u,v)=>{ const a=a0+(a1-a0)*v, r=R(a)*u; return [Math.cos(a)*r, lift(u,a), Math.sin(a)*r]; }); setColors(geo,C); return geo; }
+const sheetMat=(o={})=>vcPhys(Object.assign({ roughness:0.5, clearcoat:0.35, side:THREE.DoubleSide }, o));
+
+/* ---- sea life ---- */
+B.brittlestar=(g,seed)=>{ tablet(g,[[-0.34,-0.12],[-0.18,-0.3],[0.16,-0.31],[0.36,-0.08],[0.3,0.22],[0.04,0.32],[-0.28,0.24]],0.05,seed,null,0x9aa0a6,48);
+  const mat=vcPhys({ roughness:0.45, clearcoat:0.4 }), C=tone(0xc4703a,0x5a2410,4,0.55,22), y=0.05;
+  ell3(g,mat,(v,n,o)=>{ C(v,n,o); if (v.y>0.006 && Math.cos(Math.atan2(v.z,v.x)*5-1.5)>0.55) o.offsetHSL(0,0,0.07); },0.068,1,0.38,1,0,y+0.012,0,[0,0,0],40,20,v=>{ const k=1+0.12*Math.cos(Math.atan2(v.z,v.x)*5-1.5); v.x*=k; v.z*=k; });
+  for (let i=0;i<5;i++){ const a0=i*TAU/5+0.3, P=[]; for (let j=0;j<=30;j++){ const t=j/30, r=0.055+0.25*t, a=a0+Math.sin(t*4+i*1.7)*0.55*t; P.push(V3(Math.cos(a)*r, y+0.012+0.04*Math.sin(t*Math.PI)*((i%2)?1:0.4)-0.004*t, Math.sin(a)*r)); }
+    const arm=tube(P,t=>0.02*(1-t*0.8)+0.003,10,{ squash:0.7, ring:(t,a)=>1+0.16*Math.max(0,Math.sin(t*120))**2 }); setColors(arm,C); mesh(arm,mat,0,0,0,g,false); } };
+B.chaincoral=(g,seed)=>{ base(g,seed,0xb4aa96,0.74,0.58,0.05);
+  const chains=[[[-0.36,-0.18],[-0.2,-0.08],[-0.05,-0.14],[0.1,-0.05],[0.3,-0.12]],[[-0.32,0.06],[-0.15,0.1],[0.0,0.02],[0.14,0.12],[0.34,0.08]],[[-0.25,0.24],[-0.1,0.18],[0.05,0.24],[0.2,0.2]],[[-0.05,-0.14],[-0.02,-0.04],[0.0,0.02]],[[0.14,0.12],[0.16,0.18],[0.2,0.2]]];
+  const links=[]; for (const c of chains){ const P=path2(c.map(([x,z])=>[x*0.58,z*0.58]),64); for (let i=0;i<P.length-2;i+=3){ const [ax,az]=P[i],[bx,bz]=P[i+2], a=Math.atan2(bz-az,bx-ax); links.push([(ax+bx)/2,(az+bz)/2,Math.cos(a),Math.sin(a)]); } }
+  const wall=(x,z)=>{ let w=-1; for (const [cx,cz,co,si] of links){ const dx=x-cx, dz=z-cz; if (Math.abs(dx)>0.016||Math.abs(dz)>0.016) continue; const e=Math.hypot((dx*co+dz*si)/0.0125,(-dx*si+dz*co)/0.0085); if (e<1.2) w=Math.max(w, e<0.6?0:1-Math.abs(e-0.9)/0.3); } return w; };
+  const geo=welded(new THREE.BoxGeometry(0.46,0.15,0.34,96,12,72));
+  displace(geo,v=>{ const top=v.y>0.074, ex=Math.abs(v.x)/0.23, ez=Math.abs(v.z)/0.17, k=1+fbm(v.x*6,v.y*6,v.z*6,3)*0.08-0.06*Math.max(ex,ez)**6*(v.y>0?1:0); v.x*=k; v.z*=k;
+    if (v.y>0) v.y+=0.03*(1-ex*ex)*(1-ez*ez)-0.025*Math.max(ex,ez)**5; if (top){ const w=wall(v.x,v.z); v.y+= w>0? 0.011*w : (w===0? -0.009:0); } });
+  setColors(geo,(v,n,o)=>{ if (n.y>0.55){ const w=wall(v.x,v.z); o.set(0x9a7450); if (w>0) o.lerp(_c.set(0xf0e6d0), 0.35+0.65*w); else if (w===0) o.set(0x4a2e1c); o.offsetHSL(0,0,fbm(v.x*30,0,v.z*30,5)*0.04); }
+    else { o.set(0xa88c6a).offsetHSL(0,0,fbm(v.x*20,v.y*20,v.z*20,4)*0.07); if (Math.abs(Math.sin((v.x+v.z)*190))<0.12) o.offsetHSL(0,0,0.06); if (Math.abs(Math.sin(v.y*110))<0.08) o.offsetHSL(0,0,-0.07); } });
+  const m=mesh(geo, vcPhys({ roughness:0.75, clearcoat:0.12 }), 0, 0.108, 0, g); m.rotation.set(0.05,0.4,-0.04); };
+B.jellyfish=(g,seed)=>{ tablet(g,[[-0.42,-0.26],[0.4,-0.3],[0.44,0.24],[-0.38,0.3]],0.05,seed,null,0xc2a88c,48);
+  const R=0.2, geo=welded(new THREE.SphereGeometry(R,96,28,0,TAU,0,Math.PI/2)), gro=a=>Math.pow(Math.max(0,Math.cos(a*16)),10);
+  displace(geo,v=>{ const a=Math.atan2(v.z,v.x), r=Math.hypot(v.x,v.z)/R, k=1+0.06*Math.cos(a*16)*smooth(0.75,1,r); v.x*=k; v.z*=k; v.y*=0.32;
+    v.y-=0.011*gro(a)*smooth(0.35,0.85,r); v.y+=0.004*Math.sin(r*44)*smooth(0.4,0.7,r);
+    for (let i=0;i<4;i++){ const ga=i*TAU/4+0.4, d=Math.hypot(v.x-Math.cos(ga)*0.07, v.z-Math.sin(ga)*0.07); v.y-=0.01*Math.exp(-(((d-0.03)/0.008)**2)); } });
+  setColors(geo,(v,n,o)=>{ const a=Math.atan2(v.z,v.x), r=Math.hypot(v.x,v.z)/R; o.set(0xe0c0a6).lerp(_c.set(0x8a5a4a), gro(a)*smooth(0.35,0.85,r)*0.85).lerp(_c.set(0x9a6a58), smooth(0.85,1,r)*0.5);
+    for (let i=0;i<4;i++){ const ga=i*TAU/4+0.4, d=Math.hypot(v.x-Math.cos(ga)*0.07, v.z-Math.sin(ga)*0.07); if (Math.abs(d-0.03)<0.008) o.lerp(_c.set(0x7a4a3a),0.6); } o.offsetHSL(0,0,fbm(v.x*30,v.y*30,v.z*30,6)*0.05); });
+  mesh(geo, vcPhys({ roughness:0.7, clearcoat:0.15 }), 0.08, 0.046, 0, g);
+  const tm=vcPhys({ roughness:0.7 }), TC=tone(0xc8a088,0x7a5444,3,0.5); for (let i=0;i<5;i++){ const z0=-0.12+i*0.06; limb(g,tm,TC,[[-0.1,0.054,z0],[-0.19,0.056,z0+0.03],[-0.28,0.054,z0-0.02],[-0.37,0.053,z0+0.02]],0.009,0.003,6,20); } };
+B.lacecoral=(g,seed)=>{ tablet(g,[[-0.3,-0.18],[0.02,-0.28],[0.3,-0.14],[0.28,0.2],[-0.06,0.27],[-0.3,0.12]],0.05,seed,null,0xb8b0a0,44);
+  const mat=vcPhys({ roughness:0.6, clearcoat:0.25 }), C=tone(0xd6b482,0x6a4a2a,5,0.5,24), F=(u,v)=>{ const a=v*1.05, R=0.3*u; return [Math.sin(a)*R, 0.06+0.3*u, -0.06+(1-Math.cos(a))*R*0.9-0.05*u]; };
+  limb(g,mat,C,[[0,0.05,-0.06],[0,0.07,-0.062],F(0.1,0)],0.016,0.01,8);
+  for (let k=0;k<=14;k++){ const v=-1+2*k/14, u0=0.08+0.22*((k%4)/3), P=[]; for (let i=0;i<=16;i++){ const u=u0+(1-u0)*i/16; P.push(F(u,v)); } limb(g,mat,C,P,0.0075,0.005,5,24); }
+  for (let j=1;j<=9;j++){ const u=0.18+0.82*j/9, P=[]; for (let i=0;i<=20;i++) P.push(F(u,-1+2*i/20)); limb(g,mat,C,P,0.0045,0.0045,5,40); } };
+function graptoRelief(lines){ const K=kit(0xeae6da); const L=lines.map(([pts,side])=>{ const P=path2(pts,30); K.line(P,0.004,0.0035,0.007,0xeae6da); return { P, side }; });
+  return (x,z)=>{ const r=K.eval(x,z); if (r) return r;
+    for (const {P,side} of L){ for (let i=0;i<P.length-1;i++){ const [ax,az]=P[i],[bx,bz]=P[i+1], dx=bx-ax, dz=bz-az, l=Math.hypot(dx,dz), u=((x-ax)*dx+(z-az)*dz)/(l*l); if (u<0||u>1) continue;
+      const px=-dz/l*side, pz=dx/l*side, off=(x-ax)*px+(z-az)*pz; if (off<0.002||off>0.018) continue; const s=((i+u)*l*1000/12)%1; if (s<off/0.018) return { h:0.005, c:0xe2ddd0, m:0.95 }; } }
+    return null; }; }
+B.graptolite=(g,seed)=>{
+  const a=new THREE.Group(); tablet(a,[[-0.38,-0.1],[-0.1,-0.28],[0.36,-0.2],[0.3,0.12],[-0.2,0.2]],0.035,seed,graptoRelief([[[[-0.05,-0.05],[-0.2,-0.1],[-0.33,-0.11]],1],[[[-0.05,-0.05],[0.1,-0.13],[0.28,-0.16]],-1],[[[-0.18,0.1],[0.0,0.06],[0.22,0.06]],1]]),0x2c2e32,60); g.add(a);
+  const b=new THREE.Group(); tablet(b,[[-0.22,-0.1],[0.14,-0.17],[0.22,0.1],[-0.12,0.15]],0.03,seed+3,graptoRelief([[[[-0.16,0.04],[0.0,-0.02],[0.16,-0.04]],1],[[[-0.1,0.1],[0.04,0.06],[0.16,0.07]],-1]]),0x3a3c42,48);
+  b.position.set(0.06,0.034,0.1); b.rotation.set(0.1,0.45,0.05); g.add(b); };
+B.eurypterid=(g,seed)=>{ tablet(g,[[-0.46,-0.16],[-0.2,-0.3],[0.3,-0.28],[0.46,0.0],[0.3,0.28],[-0.24,0.3]],0.05,seed,null,0x8e8c84,56);
+  const mat=vcPhys({ roughness:0.3, clearcoat:0.75 }), C=tone(0x6e4c30,0x24160c,5,0.6,18), y=0.05;
+  const body=loft(48,t=>({ x:0.21-0.46*t, w:(0.085*Math.pow(1-t,0.9)+0.014)*(t<0.04?0.7+t*7:1), h:0.024*(1-t*0.5)+0.005, p:2.6, bot:0.3 }),20,(t,a)=>1+0.07*Math.pow(Math.max(0,Math.sin(t*12*Math.PI)),3));
+  setColors(body,(v,n,o)=>{ C(v,n,o); if (Math.sin((0.21-v.x)/0.46*12*Math.PI)<-0.85) o.offsetHSL(0,0,-0.1); }); mesh(body,mat,0,y+0.006,0,g,false);
+  ell3(g,mat,C,0.08,1,0.32,1.05,0.27,y+0.008,0,[0,0,0],32,16);
+  const eye=plainMat(0x140c08,{ roughness:0.15, clearcoat:1 }); for (const s of [1,-1]) mesh(new THREE.SphereGeometry(0.013,12,8), eye, 0.29, y+0.031, s*0.042, g, false);
+  limb(g,mat,C,[[-0.24,y+0.012,0],[-0.34,y+0.012,0.005],[-0.45,y+0.008,0.0]],0.013,0.002,8);
+  for (const s of [1,-1]){ limb(g,mat,C,[[0.22,y+0.01,s*0.06],[0.17,y+0.016,s*0.13],[0.1,y+0.012,s*0.17]],0.012,0.009);
+    ell3(g,mat,C,0.055,1,0.16,0.5,0.06,y+0.012,s*0.2,[0,s*0.5,0],24,12);
+    for (let j=0;j<3;j++) limb(g,mat,C,[[0.27-j*0.03,y+0.01,s*0.05],[0.31-j*0.03,y+0.03,s*(0.1+j*0.01)],[0.37-j*0.04,y+0.005,s*(0.12+j*0.03)]],0.006,0.003); } };
+B.stonecrab=(g,seed)=>{ const R=0.19, el=ring(R*0.985,R*0.84*0.985,36,seed,0);
+  const half=(sd,relief)=>{ const grp=new THREE.Group(); const n=welded(new THREE.SphereGeometry(R,48,20,0,TAU,Math.PI/2,Math.PI/2));
+    displace(n,v=>{ v.z*=0.84; v.y*=0.5; v.multiplyScalar(1+fbm(v.x*8,v.y*8,v.z*8,sd)*0.06*smooth(-0.005,-0.04,v.y)); });
+    setColors(n,tone(0xa8642c,0x5a3014,sd,0.6,10)); mesh(n,vcPhys({ roughness:0.85 }),0,0,0,grp);
+    stone(grp,R*2,R*2*0.84,0.006,sd,relief,0x96764e,52,{ poly:el }); return grp; };
+  const K=kit(0x6a4a30), h=-0.014; K.ell(0,0,0.07,0.09,0,h,undefined); for (const s of [1,-1]){ K.line(path2([[0.04,s*0.07],[0.09,s*0.11],[0.13,s*0.09]],8),0.016,0.012,h*0.9); K.ell(0.14,s*0.08,0.03,0.018,s*0.5,h); for (let j=0;j<4;j++) K.line([[0.02-j*0.03,s*0.08],[0.0-j*0.04,s*0.13],[-0.04-j*0.04,s*0.15]],0.006,0.004,h*0.7); }
+  const A=half(seed,null); A.position.set(-0.2,0.095,-0.02); A.rotation.y=0.15; g.add(A);
+  const Bh=half(seed+5,(x,z)=>{ const r=K.eval(-x,z); if (r){ r.shade=-0.05; r.m=0.55; } return r; }); Bh.position.set(0.2,0.11,0.04); Bh.rotation.set(0.32,-0.25,0.05); g.add(Bh);
+  const mat=vcPhys({ roughness:0.35, clearcoat:0.6 }), CC=tone(0x7a4424,0x2a140a,7,0.6,20), cr=new THREE.Group();
+  ell3(cr,mat,CC,0.075,1,0.32,1.2,0,0.014,0,[0,0,0],32,16,v=>{ v.y+=0.004*Math.sin(v.x*90)*Math.sin(v.z*90)*(v.y>0?1:0); });
+  for (const s of [1,-1]){ limb(cr,mat,CC,[[0.05,0.01,s*0.07],[0.1,0.02,s*0.1],[0.13,0.014,s*0.085]],0.014,0.011);
+    ell3(cr,mat,CC,0.03,1.25,0.5,0.7,0.155,0.014,s*0.075,[0,s*0.5,0],18,12); limb(cr,mat,CC,[[0.17,0.014,s*0.06],[0.2,0.014,s*0.05],[0.215,0.012,s*0.06]],0.006,0.002);
+    for (let j=0;j<4;j++) limb(cr,mat,CC,[[0.02-j*0.03,0.008,s*0.08],[0.0-j*0.04,0.022,s*0.13],[-0.04-j*0.04,0.004,s*0.155]],0.006,0.003); }
+  A.add(cr); };
+B.fossilshrimp=(g,seed)=>{ tablet(g,[[-0.33,-0.22],[0.34,-0.23],[0.33,0.22],[-0.34,0.23]],0.04,seed,null,0xeadcb6,48);
+  const mat=vcPhys({ roughness:0.35, clearcoat:0.6 }), C=tone(0xd88c52,0x7a3412,3,0.55,22), y=0.04;
+  const P=curve([[0.17,y+0.03,0.0],[0.07,y+0.034,0.05],[-0.04,y+0.03,0.04],[-0.12,y+0.024,-0.02],[-0.15,y+0.018,-0.1]],44);
+  const body=tube(P,t=>(t<0.32?0.04:0.04*(1-(t-0.32)*0.9))+0.004,16,{ squash:0.62, ring:(t,a)=>1+(t>0.32?0.12*Math.pow(Math.max(0,Math.sin((t-0.32)/0.68*6*Math.PI)),2):0.03*Math.sin(t*40)) });
+  setColors(body,(v,n,o)=>{ C(v,n,o); if (n.y>0.7) o.offsetHSL(0,0,0.05); }); mesh(body,mat,0,0,0,g,false);
+  const e=P[P.length-1]; for (const [dx,dz,ry] of [[-0.01,-0.04,0],[-0.03,-0.035,0.6],[0.01,-0.035,-0.6]]) ell3(g,mat,C,0.03,0.55,0.15,1,e.x+dx,y+0.016,e.z+dz,[0,ry,0],16,10);
+  for (let i=0;i<5;i++){ const p=P[3+i*3]; limb(g,mat,C,[[p.x,p.y-0.01,p.z+0.02],[p.x+0.005,y+0.016,p.z+0.06],[p.x-0.015,y+0.004,p.z+0.085]],0.004,0.002); }
+  for (const [tz,ty] of [[0.22,0.09],[-0.14,0.06]]) limb(g,mat,C,[[0.19,y+0.034,0.01],[0.28,y+ty,tz*0.4],[0.33,y+ty*0.6,tz]],0.0045,0.0015,5,24);
+  mesh(new THREE.SphereGeometry(0.012,12,8), plainMat(0x1a100a,{ roughness:0.15, clearcoat:1 }), 0.185, y+0.05, 0.03, g, false); };
+function fish3(parent, mat, x, z, L, ry){ const grp=new THREE.Group();
+  const geo=loft(40,t=>{ const s=Math.sin(Math.PI*Math.min(1,t*1.08)); return { x:-L/2+L*t, w:L*0.15*Math.pow(s,0.7)+0.002, h:L*0.028*Math.pow(s,0.8)+0.0015, p:2.2 }; },18);
+  setColors(geo,(v,n,o)=>{ const t=(v.x+L/2)/L; o.set(0x4a3626).lerp(_c.set(0x9a7a52), clamp(n.y,0,1)*0.3); if (t>0.25 && t<0.8 && Math.abs(Math.sin(t*L*Math.PI/0.011))<0.25 && n.y>0.5) o.lerp(_c.set(0x24160c),0.55);
+    if (Math.abs(v.z)<0.003 && t<0.85) o.set(0x24160c); const e=Math.hypot(v.x-L*0.36,v.z-L*0.01); if (e<L*0.03 && e>L*0.017) o.set(0x1a100a); if (t>0.82) o.lerp(_c.set(0x6a5030),0.4); });
+  mesh(geo, mat, 0,0,0, grp, false);
+  const tail=fanSheet(a=>L*0.2*(1-0.4*Math.exp(-((a/0.15)**2))), -0.6, 0.6, (u)=>0, tone(0x5a4430,0x2a1a10,4,0.5,30), 8, 24); const tm=mesh(tail, sheetMat(), -L/2+0.004, 0, 0, grp, false); tm.rotation.y=Math.PI;
+  const dor=fanSheet(a=>L*0.12, -0.5, 0.5, ()=>0, tone(0x5a4430,0x2a1a10,4,0.5,30), 6, 16); const dm=mesh(dor, sheetMat(), -L*0.04, 0, L*0.1, grp, false); dm.rotation.y=-Math.PI/2+0.3;
+  grp.position.set(x,0,z); grp.rotation.y=ry; parent.add(grp); return grp; }
+B.herring=(g,seed)=>{ tablet(g,[[-0.45,-0.3],[0.46,-0.31],[0.45,0.3],[-0.46,0.31]],0.05,seed,(x,z)=>({ h:0, c:0xcab48a, m:Math.abs(Math.sin(z*30+x*4))<0.05?0.35:0 }),0xdcc8a0,64);
+  const mat=vcPhys({ roughness:0.4, clearcoat:0.5 }), y=0.05+0.006;
+  for (const [x,z,L,ry] of [[0.06,-0.12,0.42,-0.15],[-0.12,0.1,0.34,0.25],[0.25,0.16,0.22,-0.4]]) fish3(g,mat,x,z,L,ry).position.y=y; };
+B.ichthyosaur=(g,seed)=>{ const K=kit(0x34322e); K.ell(-0.02,-0.01,0.42,0.12,0.05,0.003,0x34322e,{ flat:true }); K.ell(0.3,0.0,0.24,0.05,0,0.003,0x34322e,{ flat:true });
+  tablet(g,[[-0.56,-0.25],[0.55,-0.27],[0.56,0.25],[-0.55,0.27]],0.05,seed,(x,z)=>K.eval(x,z),0x66645e,84);
+  const mat=boneMat(), C=tone(0xc09868,0x5a3e24,2,0.5,14), y=0.052;
+  const sk=loft(30,t=>({ x:0.2+0.34*t, w:0.045*Math.pow(1-t,0.9)+0.005, h:0.026*Math.pow(1-t,0.9)+0.004, p:2.4 }),16); setColors(sk,(v,n,o)=>{ C(v,n,o); if (Math.abs(v.z)<0.002) o.offsetHSL(0,0,-0.1); }); mesh(sk,mat,0,y+0.014,0.005,g,false);
+  const eyr=new THREE.TorusGeometry(0.022,0.006,8,24); eyr.rotateX(Math.PI/2); setColors(eyr,C); mesh(eyr,mat,0.27,y+0.03,0.012,g,false);
+  const sp=curve([[0.21,y+0.012,0.01],[0.05,y+0.012,0.03],[-0.15,y+0.012,0.0],[-0.32,y+0.01,-0.04],[-0.5,y+0.008,-0.12]],120);
+  const spine=tube(sp,t=>0.012*(1-t*0.6),10,{ ring:(t,a)=>1+0.25*Math.pow(Math.max(0,Math.sin(t*120*Math.PI)),2) }); setColors(spine,C); mesh(spine,mat,0,0,0,g,false);
+  for (let i=4;i<56;i+=2){ const p=sp[i], q=sp[i+1], a=Math.atan2(q.z-p.z,q.x-p.x), L=0.1*Math.sin(Math.PI*(i-2)/58)+0.01; for (const s of [1,-1]){ const nx=-Math.sin(a)*s, nz=Math.cos(a)*s;
+    limb(g,mat,C,[[p.x,p.y,p.z],[p.x+nx*L*0.6-0.012,p.y+0.006,p.z+nz*L*0.6],[p.x+nx*L-0.03,y+0.004,p.z+nz*L]],0.0035,0.002,5,8); } }
+  const pad=(x,z,a,L,W)=>{ for (let r=0;r<5;r++) for (let q=0;q<4;q++){ const u=(r+0.5)/5, w=(q-1.5)/3*W*(1-u*0.5); ell3(g,mat,C,0.011,1,0.5,0.9, x+Math.cos(a)*u*L-Math.sin(a)*w, y+0.008, z+Math.sin(a)*u*L+Math.cos(a)*w, [0,-a,0],10,6); } };
+  pad(0.13,0.1,2.1,0.13,0.06); pad(0.13,-0.08,-2.1,0.13,0.06); pad(-0.2,0.04,2.4,0.09,0.04); pad(-0.2,-0.08,-2.4,0.09,0.04); };
+
+/* ---- plants ---- */
+B.ginkgo=(g,seed)=>{ tablet(g,[[-0.36,-0.14],[-0.14,-0.3],[0.26,-0.28],[0.38,0.02],[0.2,0.28],[-0.24,0.26]],0.045,seed,null,0x55534e,56);
+  const mat=sheetMat({ roughness:0.55 }), C=(v,n,o)=>{ const a=Math.atan2(v.z,v.x), r=Math.hypot(v.x,v.z); o.set(0xd8a23a).lerp(_c.set(0x9a6414), smooth(0.08,0.2,r)*0.5); if (Math.abs(Math.sin(a*34+r*8))<0.22) o.lerp(_c.set(0x7a4a10),0.6); };
+  const R=a=>0.17*(1-0.38*Math.exp(-((a/0.1)**2)))*(1+0.04*Math.sin(a*14)), y=0.048;
+  for (const [x,z,ry,s,lift] of [[-0.06,-0.06,0.2,1.05,0.02],[0.1,0.1,-2.2,0.85,0.012],[0.16,-0.12,1.2,0.7,0.016]]){ const geo=fanSheet(R,-1.05,1.05,(u,a)=>lift*u*u+0.006*Math.sin(a*3)*u,C,16,64);
+    const m=mesh(geo,mat,x,y+0.004,z,g,false); m.rotation.y=ry; m.scale.setScalar(s); limb(g,sheetMat(),tone(0x9a6414,0x5a3a0a,2),[[x,y+0.004,z],[x-Math.cos(-ry)*0.06*s,y+0.003,z-Math.sin(-ry)*0.06*s],[x-Math.cos(-ry)*0.13*s,y+0.002,z-Math.sin(-ry)*0.13*s+0.01]],0.004,0.003,5,10); } };
+B.palmfrond=(g,seed)=>{ tablet(g,[[-0.48,-0.2],[-0.2,-0.33],[0.3,-0.32],[0.48,-0.05],[0.4,0.3],[-0.1,0.34],[-0.46,0.18]],0.05,seed,null,0xd8caa6,64);
+  const mat=sheetMat({ roughness:0.6 }), C=(v,n,o)=>{ o.set(0x5a5228).lerp(_c.set(0x2e2a14), clamp(0.5-n.y*0.5,0,1)); if (Math.abs(v.z)<0.002) o.set(0x2a2410); }, y=0.05, hx=-0.34, hz=0.02;
+  for (let i=0;i<19;i++){ const a=-1.25+2.5*i/18, L=0.56*(1-0.42*Math.abs(Math.sin(a)))+0.02*Math.sin(a*7);
+    const geo=loft(30,t=>({ x:L*t, w:0.028*Math.pow(Math.sin(Math.PI*Math.min(1,t*1.3+0.05)),0.4)*(1-t*0.55)+0.002, h:0.002 }),8,null,false); displace(geo,v=>{ v.y+=0.006*(1-Math.min(1,Math.abs(v.z)/0.02)); }); setColors(geo,C);
+    const m=mesh(geo,mat,hx,y+0.006,hz,g,false); m.rotation.y=-a; }
+  limb(g,vcPhys({ roughness:0.6 }),tone(0x5a4a28,0x2a2010,3),[[-0.47,y+0.008,-0.03],[-0.41,y+0.012,0.0],[hx,y+0.012,hz]],0.016,0.012,8);
+  ell3(g,vcPhys({ roughness:0.6 }),tone(0x5a4a28,0x2a2010,3),0.035,1,0.4,1,hx,y+0.01,hz); };
+B.scalebark=(g,seed)=>{ const L=0.62, R=0.15, geo=welded(new THREE.CylinderGeometry(R,R*1.06,L,120,44,false));
+  const sc=v=>{ const a=Math.atan2(v.z,v.x)*R, u=v.y/0.05+a/0.032, w=v.y/0.05-a/0.032; return [u-Math.floor(u), w-Math.floor(w)]; }, cap=v=>Math.hypot(v.x,v.z)<R*0.985 && Math.abs(v.y)>L/2-0.001;
+  displace(geo,v=>{ if (cap(v)){ v.y+=Math.sign(v.y)*(fbm(v.x*14,0,v.z*14,seed)*0.05-0.01); return; } const [fu,fv]=sc(v), e=Math.max(Math.abs(fu-0.5),Math.abs(fv-0.5))*2, k=(1+(e>0.84?-0.035:0.05*(1-e*e)))*(1+fbm(0,v.y*4,0,2)*0.04); v.x*=k; v.z*=k; });
+  setColors(geo,(v,n,o)=>{ const r=Math.hypot(v.x,v.z); if (r<R*0.93 && Math.abs(n.y)>0.5){ const w=r/R+fbm(v.x*10,0,v.z*10,3)*0.08; o.set(0x7a5e40).lerp(_c.set(0x4a3626), Math.sin(w*40)*0.5+0.5); if (r<0.02) o.set(0x2e2016); return; }
+    const [fu,fv]=sc(v), e=Math.max(Math.abs(fu-0.5),Math.abs(fv-0.5))*2; o.set(0x7a6a52).lerp(_c.set(0xa89878), (1-e)*0.4); if (e>0.84) o.set(0x2a2018); if (Math.hypot(fu-0.5,fv-0.42)<0.09) o.set(0x3a2c20); o.offsetHSL(0,0,fbm(v.x*30,v.y*30,v.z*30,4)*0.05); });
+  const m=mesh(geo, vcPhys({ roughness:0.8, clearcoat:0.1 }), 0, R-0.005, 0, g); m.rotation.set(0,0.35,Math.PI/2); };
+B.mapleleaf=(g,seed)=>{ tablet(g,[[-0.34,-0.2],[-0.06,-0.3],[0.34,-0.24],[0.38,0.12],[0.12,0.3],[-0.3,0.26],[-0.4,0.02]],0.045,seed,null,0xb8b0a2,60);
+  const lobes=[0,0.8,-0.8,1.62,-1.62], Ls=[0.3,0.27,0.27,0.17,0.17];
+  const R=a=>{ let r=0.12*smooth(2.6,1.9,Math.abs(a))+0.04; for (let i=0;i<5;i++){ const d=Math.abs(a-lobes[i]); r=Math.max(r, Ls[i]*(d<0.1?1:Math.exp(-(((d-0.1)/0.3)**2)))); } return r*(1+0.06*Math.max(0,Math.sin(a*40))); };
+  const C=(v,n,o)=>{ const a=Math.atan2(v.z,v.x), r=Math.hypot(v.x,v.z); o.set(0xc8641e).lerp(_c.set(0x8a2e10), smooth(0.05,0.25,r)*0.6+fbm(v.x*12,0,v.z*12,4)*0.4); for (const l of lobes) if (Math.abs(Math.sin(a-l))*r<0.004 && Math.cos(a-l)>0) o.set(0x5a1e0a); };
+  const geo=fanSheet(R,-2.55,2.55,(u,a)=>0.03*u*u*u+0.008*Math.sin(u*5)*u+0.01*Math.abs(Math.sin(a))*u*u,C,22,180); const m=mesh(geo,sheetMat(),0.04,0.052,0.01,g,false); m.rotation.y=0.35; m.scale.setScalar(1.15);
+  limb(g,sheetMat(),tone(0x8a3410,0x4a1a08,2),[[0.02,0.052,0.01],[-0.06,0.051,-0.02],[-0.16,0.05,-0.035]],0.005,0.003,5,10); };
+B.fossilflower=(g,seed)=>{ const P0=[[-0.34,-0.18],[0.0,-0.27],[0.34,-0.2],[0.38,0.1],[0.1,0.26],[-0.3,0.22]];
+  [[0xc6b088,1,0,0,0],[0xd4c09c,0.86,0.03,-0.02,0.25],[0xe2d2b0,0.7,-0.02,0.03,-0.2]].forEach(([t,s,x,z,r],i)=>{ const L=new THREE.Group(); tablet(L,P0.map(([a,b],k)=>[a*s*(0.94+_h(k,i,seed,5)*0.12),b*s*(0.94+_h(k,i,seed,6)*0.12)]),0.022,seed+i,null,t,40); L.position.set(x,i*0.023,z); L.rotation.y=r; g.add(L); });
+  const y=0.072, mat=sheetMat({ roughness:0.5, clearcoat:0.3 }), C=(v,n,o)=>{ const r=Math.hypot(v.x,v.z); o.set(0x5a2618).lerp(_c.set(0xc08050), smooth(0.04,0.1,r)*0.8); if (Math.abs(Math.sin(Math.atan2(v.z,v.x)*40))<0.15) o.offsetHSL(0,0,-0.06); };
+  const fl=new THREE.Group(); fl.position.set(0.04,y,-0.02); fl.scale.setScalar(1.45); g.add(fl);
+  for (let i=0;i<5;i++){ const geo=fanSheet(a=>0.11*Math.pow(Math.cos(a*1.6),0.6), -0.95, 0.95, (u,a)=>0.03*u*u+0.004*Math.cos(a*3), C, 14, 30); const m=mesh(geo,mat,0,0.006,0,fl,false); m.rotation.y=i/5*TAU+0.3; }
+  const cm=vcPhys({ roughness:0.4, clearcoat:0.5 }), CC=tone(0x3a1c10,0x1a0c06,4); ell3(fl,cm,CC,0.026,1,0.6,1,0,0.016,0,[0,0,0],20,12); for (let i=0;i<10;i++){ const a=i/10*TAU; ell3(fl,cm,CC,0.007,1,1,1,Math.cos(a)*0.035,0.024,Math.sin(a)*0.035,[0,0,0],8,6); }
+  limb(g,mat,tone(0x5a3a20,0x2a1a0c,3),[[-0.02,y+0.003,0.02],[-0.12,y+0.003,0.08],[-0.26,y+0.002,0.1]],0.006,0.004,5,12);
+  const lf=fanSheet(a=>0.07*Math.pow(Math.cos(a*1.4),0.8), -1.1, 1.1, (u)=>0.006*u, C, 8, 20); const lm=mesh(lf,mat,-0.16,y+0.004,0.09,g,false); lm.rotation.y=-2.4; };
+
+/* ---- insects ---- */
+B.fossilspider=(g,seed)=>{ tablet(g,ring(0.27,0.23,11,seed),0.05,seed,null,0xe8e2d2,48);
+  const mat=vcPhys({ roughness:0.3, clearcoat:0.7 }), C=tone(0x3e2c1e,0x120c08,5,0.6,26), y=0.05;
+  ell3(g,mat,C,0.06,1.1,0.55,0.85,-0.06,y+0.03,0,[0,0,0],24,16); ell3(g,mat,C,0.04,1.05,0.5,0.95,0.04,y+0.024,0,[0,0,0],20,14);
+  const eye=plainMat(0x0a0604,{ roughness:0.1, clearcoat:1 }); for (const s of [1,-1]) mesh(new THREE.SphereGeometry(0.008,10,8), eye, 0.08, y+0.036, s*0.012, g, false);
+  for (const s of [1,-1]) for (let i=0;i<4;i++){ const d=i<2?1:-1, a=[0.35,0.95,1.75,2.4][i], bx=0.04-i*0.012, bz=s*0.03;
+    limb(g,mat,C,[[bx,y+0.024,bz],[bx+Math.cos(a)*0.08,y+0.08,s*(0.04+Math.sin(a)*0.07)],[bx+Math.cos(a)*0.15,y+0.05,s*(0.05+Math.sin(a)*0.13)],[bx+Math.cos(a)*0.2,y+0.004,s*(0.06+Math.sin(a)*0.16)]],0.0075,0.003,6,20); }
+  for (const s of [1,-1]) limb(g,mat,C,[[0.07,y+0.02,s*0.015],[0.1,y+0.03,s*0.03],[0.12,y+0.006,s*0.035]],0.005,0.003); };
+B.roachfossil=(g,seed)=>{ tablet(g,[[-0.36,-0.2],[-0.1,-0.3],[0.34,-0.26],[0.38,0.08],[0.2,0.28],[-0.24,0.26],[-0.4,0.04]],0.11,seed,(x,z)=>({ h:0, c:0x4a4846, m:Math.sin(x*70+z*25)>0.93?0.6:0 }),0x2a2826,56);
+  const mat=vcPhys({ roughness:0.22, clearcoat:0.9 }), C=tone(0x8e5a28,0x3a1c0a,8,0.55,20), y=0.11;
+  ell3(g,mat,(v,n,o)=>{ C(v,n,o); if (v.x<0.08 && Math.abs(Math.sin(v.z*95+v.x*20))<0.16) o.offsetHSL(0,0,-0.08); if (Math.abs(v.z)<0.0035) o.set(0x2a140a); },0.12,1.15,0.22,0.62,-0.03,y+0.012,0,[0,0,0],40,20);
+  ell3(g,mat,(v,n,o)=>{ C(v,n,o); if (Math.hypot(v.x/0.048,v.z/0.066)>0.82) o.offsetHSL(0,-0.1,0.1); },0.06,0.8,0.3,1.1,0.12,y+0.016,0,[0,0,0],24,14);
+  ell3(g,mat,C,0.026,1,0.6,1,0.17,y+0.01,0,[0,0,0],14,10);
+  for (const s of [1,-1]){ limb(g,mat,C,[[0.18,y+0.012,s*0.015],[0.28,y+0.03,s*0.08],[0.38,y+0.012,s*0.17]],0.003,0.0015,5,16);
+    for (let j=0;j<3;j++){ const x=0.07-j*0.06; limb(g,mat,C,[[x,y+0.008,s*0.05],[x-0.01+j*0.0,y+0.03,s*0.12],[x-0.04,y+0.004,s*(0.17+j*0.01)]],0.0055,0.003); }
+    limb(g,mat,C,[[-0.16,y+0.01,s*0.02],[-0.21,y+0.012,s*0.04]],0.004,0.0015); } };
+B.arthropleura=(g,seed)=>{ tablet(g,[[-0.56,-0.14],[-0.3,-0.24],[0.3,-0.22],[0.56,-0.06],[0.54,0.16],[0.2,0.24],[-0.36,0.22],[-0.56,0.08]],0.05,seed,null,0x58544c,72);
+  const P=path2([[0.44,0.06],[0.25,-0.02],[0.05,0.04],[-0.15,-0.04],[-0.32,0.02],[-0.46,-0.04]],60), mat=vcPhys({ roughness:0.35, clearcoat:0.6 }), C1=tone(0x8a6038,0x2e1c10,4,0.6,20), C2=tone(0x6e4a2c,0x241408,4,0.6,20), y=0.05;
+  for (let i=0;i<28;i++){ const k=Math.min(P.length-2, Math.round(i/27*(P.length-2))), [x,z]=P[k], [x2,z2]=P[k+1], a=Math.atan2(z2-z,x2-x), w=0.068*(i<2?0.8:1)*(i>24?(28-i)/4*0.6+0.4:1);
+    ell3(g,mat,i%2?C1:C2,1,0.021,0.017,w,x,y+0.012,z,[0,-a,0],16,10,v=>{ v.y+=0.004*(1-Math.abs(v.z)/w); });
+    for (const s of [1,-1]){ const nx=-Math.sin(a)*s, nz=Math.cos(a)*s; limb(g,mat,C2,[[x+nx*w*0.85,y+0.01,z+nz*w*0.85],[x+nx*(w+0.022),y+0.014,z+nz*(w+0.022)],[x+nx*(w+0.038)-Math.cos(a)*0.012,y+0.003,z+nz*(w+0.038)-Math.sin(a)*0.012]],0.0035,0.002,5,8); } }
+  for (const s of [1,-1]) limb(g,mat,C2,[[0.45,y+0.014,0.06],[0.5,y+0.03,0.06+s*0.05],[0.54,y+0.008,0.06+s*0.11]],0.0035,0.0015); };
+
+/* ---- dinosaurs, birds and reptiles ---- */
+B.dinoprint=(g,seed)=>{ const K=kit(0x5a2a18), d=-0.05; K.ell(-0.12,0,0.09,0.085,0,d,0x6a3420,{ flat:true });
+  for (const [ex,ez] of [[0.26,0],[0.15,0.18],[0.15,-0.18]]){ K.cap(-0.1,0,ex,ez,0.05,d,0x6a3420,0.034,{ flat:true }); K.cap(ex,ez,ex+(ex+0.1)*0.18,ez*1.18,0.016,d*1.2,0x3a1a0c); }
+  const R=kit(0xc8805a); for (const c of [[[-0.44,0.3],[-0.3,0.2],[-0.36,0.05],[-0.46,-0.04]],[[0.42,-0.32],[0.3,-0.25],[0.32,-0.08],[0.44,0.02]],[[-0.3,0.2],[-0.12,0.28],[0.05,0.33]],[[0.3,-0.25],[0.1,-0.3],[-0.1,-0.34]]]) R.line(path2(c,12),0.008,0.008,0.01,0xc8805a);
+  tablet(g,[[-0.46,-0.3],[0.3,-0.38],[0.48,-0.04],[0.4,0.34],[-0.36,0.36],[-0.5,0.08]],0.16,seed,(x,z)=>K.eval(x,z)||R.eval(x,z),0xa85a38,88); };
+B.firstbird=(g,seed)=>{ const K=kit(0x5a3a1e), c=0x5a3a1e, fc=0x8a6a42;
+  K.ell(0.15,0.21,0.04,0.022,-1.0,0.012,c); K.ell(0.15,0.215,0.01,0.01,0,0.014,0x2a1a0e,{ ring:0.5 });
+  K.line(path2([[0.13,0.18],[0.17,0.1],[0.1,0.06],[0.05,0.03]],14),0.006,0.007,0.01,c,{ band:200 });
+  K.line([[0.05,0.03],[-0.13,-0.02]],0.008,0.007,0.011,c,{ band:250 }); for (let i=0;i<6;i++){ const x=0.02-i*0.025; K.cap(x,0.02,x-0.02,-0.04,0.0025,0.008,c); }
+  const tail=path2([[-0.13,-0.02],[-0.28,-0.04],[-0.42,-0.07]],20); K.line(tail,0.006,0.003,0.01,c,{ band:300 }); for (let i=1;i<tail.length;i++){ const [x,z]=tail[i]; for (const s of [1,-1]) K.ell(x-0.03,z+s*0.025,0.04,0.008,-s*0.6,0.006,fc); }
+  const wing=(s)=>{ K.line([[0.03,s*0.04],[-0.03,s*0.17],[0.08,s*0.25],[0.17,s*0.28]],0.006,0.004,0.011,c); K.line([[0.17,s*0.28],[0.21,s*0.26]],0.003,0.001,0.01,c);
+    for (let i=0;i<11;i++){ const t=i/10, bx=-0.03+0.2*t, bz=s*(0.17+0.11*t), a=Math.atan2(s*0.9,-0.6+t*1.4), L=0.15-0.04*t; K.ell(bx+Math.cos(a)*L*0.5, bz+Math.sin(a)*L*0.5, L*0.5, 0.012, a, 0.007, fc); K.cap(bx,bz,bx+Math.cos(a)*L,bz+Math.sin(a)*L,0.002,0.009,c); } };
+  wing(1); wing(-1);
+  for (const s of [1,-1]) K.line([[-0.1,s*0.01],[-0.04,s*0.11],[-0.12,s*0.18],[-0.06,s*0.22]],0.006,0.003,0.011,c);
+  const plate=new THREE.Group(), th=1.12; tablet(plate,[[-0.44,-0.33],[0.44,-0.34],[0.45,0.33],[-0.43,0.34]],0.045,seed,(x,z)=>{ const r=K.eval(x,-z); if (r) r.h*=2.4; return r; },0xe8d8a8,150);
+  plate.rotation.x=th; plate.position.set(0,0.035+0.34*Math.sin(th),-0.02); g.add(plate);
+  const wood=plainMat(0x6a4228,{ roughness:0.6, clearcoat:0.3 });
+  mesh(new THREE.BoxGeometry(0.98,0.035,0.34), wood, 0, 0.0175, 0.04, g); mesh(new THREE.BoxGeometry(0.98,0.03,0.03), wood, 0, 0.05, 0.19, g);
+  const st=mesh(new THREE.BoxGeometry(0.06,0.5,0.03), wood, 0, 0.25, -0.2, g); st.rotation.x=-0.45; };
+B.fossilsnake=(g,seed)=>{ tablet(g,ring(0.38,0.32,9,seed,0.1),0.05,seed,null,0x8a9280,60);
+  const mat=boneMat(), C=tone(0x7a5a3c,0x2e1e10,3,0.55,30), y=0.05, P=[]; for (let i=0;i<=360;i++){ const t=i/360, a=t*TAU*1.75, r=0.05+0.22*t; P.push(V3(0.02+Math.cos(a)*r, y+0.012, Math.sin(a)*r*0.82)); }
+  const sp=tube(P,t=>0.005+0.007*Math.min(1,t*3),8,{ ring:(t,a)=>1+0.28*Math.pow(Math.max(0,Math.sin(t*150*Math.PI)),2) }); setColors(sp,C); mesh(sp,mat,0,0,0,g,false);
+  for (let i=12;i<P.length-6;i+=6){ const p=P[i], q=P[i+1], a=Math.atan2(q.z-p.z,q.x-p.x), t=i/360, L=0.014+0.022*Math.min(1,t*3); for (const s of [1,-1]){ const nx=-Math.sin(a)*s, nz=Math.cos(a)*s;
+    limb(g,mat,C,[[p.x,p.y,p.z],[p.x+nx*L*0.6,p.y+0.006,p.z+nz*L*0.6],[p.x+nx*L-Math.cos(a)*0.006,y+0.003,p.z+nz*L-Math.sin(a)*0.006]],0.0026,0.0016,4,6); } }
+  const h=P[P.length-1], hq=P[P.length-2], ha=Math.atan2(h.z-hq.z,h.x-hq.x); ell3(g,mat,C,0.04,1.2,0.42,0.75,h.x+Math.cos(ha)*0.03,y+0.016,h.z+Math.sin(ha)*0.03,[0,-ha,0],20,12); };
+B.fossilfrog=(g,seed)=>{ tablet(g,[[-0.38,-0.26],[0.34,-0.3],[0.4,0.22],[-0.34,0.3]],0.05,seed,null,0x5e5c56,56);
+  const mat=boneMat(), C=tone(0xe4d4ac,0x8a7450,3,0.45,22), y=0.05;
+  ell3(g,mat,(v,n,o)=>{ C(v,n,o); if (Math.hypot((v.x-0.005)/0.024,(Math.abs(v.z)-0.032)/0.024)<1) o.set(0x3a3630); },0.07,0.75,0.3,1.05,0.15,y+0.01,0,[0,0,0],28,14);
+  for (let i=0;i<8;i++){ const x=0.09-i*0.014; ell3(g,mat,C,0.01,1.2,0.9,1.6,x,y+0.01,0,[0,0,0],10,8); limb(g,mat,C,[[x,y+0.008,-0.024*(1-i/10)],[x,y+0.01,0],[x,y+0.008,0.024*(1-i/10)]],0.003,0.003,4,6); }
+  limb(g,mat,C,[[-0.02,y+0.01,0],[-0.07,y+0.01,0],[-0.12,y+0.008,0]],0.006,0.003);
+  for (const s of [1,-1]){ limb(g,mat,C,[[-0.0,y+0.01,s*0.025],[-0.06,y+0.01,s*0.02],[-0.12,y+0.008,s*0.013]],0.005,0.004);
+    limb(g,mat,C,[[-0.11,y+0.008,s*0.02],[-0.06,y+0.012,s*0.1],[-0.03,y+0.012,s*0.13],[-0.1,y+0.01,s*0.17],[-0.15,y+0.01,s*0.19],[-0.21,y+0.008,s*0.12]],0.0085,0.006,6,24);
+    for (let k=0;k<5;k++) limb(g,mat,C,[[-0.21,y+0.008,s*0.12],[-0.25+k*0.008,y+0.007,s*(0.09+k*0.012)],[-0.29+k*0.016,y+0.005,s*(0.06+k*0.022)]],0.003,0.0018,4,6);
+    limb(g,mat,C,[[0.08,y+0.01,s*0.05],[0.04,y+0.012,s*0.12],[0.11,y+0.01,s*0.16]],0.006,0.005); for (let k=0;k<4;k++) limb(g,mat,C,[[0.11,y+0.01,s*0.16],[0.14+k*0.006,y+0.008,s*(0.16+k*0.012)],[0.16+k*0.006,y+0.006,s*(0.15+k*0.024)]],0.0026,0.0016,4,6); } };
+B.fossilfeather=(g,seed)=>{ tablet(g,[[-0.42,-0.1],[-0.2,-0.16],[0.3,-0.12],[0.42,0.02],[0.3,0.14],[-0.1,0.16],[-0.4,0.06]],0.045,seed,null,0xd4c8ac,56);
+  const y=0.046, cv=new THREE.CatmullRomCurve3([[-0.4,y+0.006,-0.06],[-0.1,y+0.012,-0.01],[0.14,y+0.03,0.03],[0.34,y+0.08,0.07],[0.44,y+0.15,0.09]].map(p=>V3(...p))), up=V3(0,1,0);
+  const rq=tube(cv.getPoints(60),t=>0.007*(1-t*0.8)+0.0015,8); setColors(rq,tone(0x2a1e14,0x140c08,3)); mesh(rq,vcPhys({ roughness:0.4, clearcoat:0.5 }),0,0,0,g,false);
+  const vane=surf(70,24,(u,v)=>{ const t=0.14+0.85*u, p=cv.getPoint(t), tg=cv.getTangent(t), sd=V3().crossVectors(up,tg).normalize(), s=v*2-1, W=(s>0?0.11:0.055)*Math.pow(Math.sin(Math.PI*Math.min(1,u*1.02)),0.5);
+    return [p.x+sd.x*s*W-tg.x*Math.abs(s)*W*0.35, p.y+0.014*s*s*W/0.11-0.002, p.z+sd.z*s*W-tg.z*Math.abs(s)*W*0.35]; });
+  setColors(vane,(v,n,o)=>{ const b=Math.sin(v.x*150-v.z*90); o.set(0x9a7a56).lerp(_c.set(0x3e2a18), b>0.1?0.75:0); o.offsetHSL(0,0,fbm(v.x*20,v.y*20,v.z*20,3)*0.06); });
+  mesh(vane, sheetMat({ roughness:0.7, clearcoat:0.1 }), 0,0,0, g, false); };
+B.dawnhorse=(g,seed)=>{ const K=kit(0xb08a5c), c=0xb08a5c;
+  K.ell(0.0,0.0,0.28,0.12,0,0.003,0x2a2420,{ flat:true }); K.ell(0.32,0.07,0.075,0.028,0.4,0.018,c); K.ell(0.29,0.08,0.012,0.012,0,0.02,0x1a120c,{ ring:0.5 });
+  K.line(path2([[0.26,0.05],[0.2,0.05],[0.13,0.02]],10),0.007,0.008,0.016,c,{ band:200 }); const sp=path2([[0.13,0.02],[0.0,0.06],[-0.17,0.03]],24); K.line(sp,0.008,0.007,0.018,c,{ band:300 });
+  for (let i=1;i<14;i++){ const [x,z]=sp[i]; K.line(path2([[x,z],[x-0.01,z-0.06],[x-0.0,z-0.11*Math.sin(Math.PI*i/15)-0.03]],6),0.0032,0.0022,0.012,c); }
+  K.ell(-0.17,0.0,0.035,0.025,0.3,0.018,c); K.line([[-0.2,0.02],[-0.3,-0.01]],0.004,0.002,0.012,c,{ band:200 });
+  for (const [o,cc] of [[0,c],[0.025,0x8a6a48]]){ K.line([[0.12-o,0.0],[0.15-o,-0.1],[0.13-o,-0.2],[0.16-o,-0.27]],0.007,0.004,0.016,cc); K.line([[-0.15-o,-0.01],[-0.08-o,-0.1],[-0.15-o,-0.2],[-0.12-o,-0.27]],0.008,0.004,0.016,cc); }
+  tablet(g,[[-0.43,-0.31],[0.43,-0.31],[0.43,0.31],[-0.43,0.31]],0.05,seed,(x,z)=>K.eval(x,z),0x3c3832,88);
+  const wood=plainMat(0x7a4e2c,{ roughness:0.55, clearcoat:0.35 });
+  for (const s of [1,-1]){ mesh(new THREE.BoxGeometry(0.98,0.075,0.05), wood, 0, 0.0375, s*0.335, g); mesh(new THREE.BoxGeometry(0.05,0.075,0.72), wood, s*0.465, 0.0375, 0, g); }
+  mesh(new THREE.BoxGeometry(0.16,0.006,0.03), plainMat(0xc8a050,{ metalness:0.7, roughness:0.3 }), 0, 0.078, 0.335, g, false); };
+
+/* ---- traces ---- */
 B.ripplerock=(g,seed)=>{ const trail=path2([[-0.36,-0.2],[-0.2,-0.1],[-0.24,0.05],[-0.06,0.1],[0.04,0.24]],40);
-  stone(g,0.96,0.68,0.1,seed,(x,z)=>{ let best=1e9; for (let i=0;i<trail.length-1;i++){ const [ax,az]=trail[i],[bx,bz]=trail[i+1], dx=bx-ax, dz=bz-az, l2=dx*dx+dz*dz, u=clamp(((x-ax)*dx+(z-az)*dz)/l2,0,1); best=Math.min(best,Math.hypot(x-ax-dx*u,z-az-dz*u)); }
-    if (best<0.012) return { h:-0.006*(1-best/0.012), c:0x6a5438, m:0.6 };
-    const w=x*55+Math.sin(z*9)*0.8+fbm(x*3,z*3,0,4)*1.5, f=((w/TAU)%1+1)%1, r=f<0.7? f/0.7 : (1-f)/0.3; const pit=_h(Math.floor(x*40),Math.floor(z*40),9,1)>0.985;
-    return { h:0.012*r-0.006+(pit?-0.004:0), c:r>0.8?0xe0c89a:0xa88a60, m:0.45, shade:pit?-0.1:0 }; },0xcdb48a,80); };
+  tablet(g,[[-0.46,-0.18],[-0.2,-0.34],[0.32,-0.3],[0.48,0.02],[0.36,0.3],[-0.12,0.34],[-0.44,0.16]],0.12,seed,(x,z)=>{ let best=1e9; for (let i=0;i<trail.length-1;i++){ const [ax,az]=trail[i],[bx,bz]=trail[i+1], dx=bx-ax, dz=bz-az, l2=dx*dx+dz*dz, u=clamp(((x-ax)*dx+(z-az)*dz)/l2,0,1); best=Math.min(best,Math.hypot(x-ax-dx*u,z-az-dz*u)); }
+    if (best<0.014) return { h:-0.01*(1-best/0.014), c:0x5a2a14, m:0.7 };
+    const w=x*48+Math.sin(z*9)*0.9+fbm(x*3,z*3,0,4)*1.5, f=((w/TAU)%1+1)%1, r=f<0.7? f/0.7 : (1-f)/0.3, pit=_h(Math.floor(x*40),Math.floor(z*40),9,1)>0.985;
+    return { h:0.03*Math.pow(r,1.6)-0.012+(pit?-0.004:0), c:r>0.75?0xe8b07a:0x8a4a2a, m:0.6, shade:pit?-0.1:0 }; },0xb06a44,96); };
 
 /* ================= export ================= */
 export const FOSSIL2_IDS = Object.keys(B);

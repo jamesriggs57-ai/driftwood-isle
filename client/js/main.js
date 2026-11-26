@@ -9,6 +9,7 @@ import { ITEMS, NATIVE_FRUITS, PLANTS, TOOLS, WOODWORK, BACKPACKS, BASE_SLOTS, H
   FOREIGN_FRUIT_PRICE, FRUIT_REGROW_DAYS, POTIONS, WIZARD, MAGIC, STORY, FAVOR_ASKS, CROPS, RECIPES, ARRIVE, MENTOR, islandSeedPool, ISLAND_SEED_BUY, islandFlowerPool, WILDFLOWER_SEEDS, GARDEN_FENCES, GARDEN_DECOR, FR, RARE_WORK, RARE_ODDS, PLAN_PRICE,
   WEAR_IDS, FAVOR_THEMES, DO_TASKS, ORIGINAL_RESIDENTS, LETTERS, LETTER_IDS, CORAL_KINDS, CORAL_NAMES, CORAL_FISH, NIGHT_BAY } from './content.js';
 import * as S2 from './story2.js';   // v1.38 phase 2 buildings and furniture
+import * as S3 from './story3.js';   // v1.39 phase 3 buildings and furniture
 import { ACHIEVEMENTS, ACH_GROUPS } from './achieve.js';
 import { BY_SLOT, SLOT_NAMES } from './wardrobe-data.js';
 import { CELL, buildSoil, buildFences, buildStake, buildGardenSign, buildScarecrow, buildLanternPost, buildFlowerArch } from './farm.js';
@@ -948,8 +949,8 @@ class Tree extends Ent {
 }
 class Stump extends Ent {
   constructor(rec){ super('stump',rec.x,rec.z,0.45); this.rec=rec; this.solid=true; this.reach=1.4; this.attach(buildStump()); }
-  label(){ return S.equip==='shovel' ? 'Dig up' : 'Look'; }
-  act(){ if (this.label()==='Look') return; if(!useTool('shovel')) return; Snd.dig(); S.stumps.splice(S.stumps.indexOf(this.rec),1);
+  label(){ return S.equip==='shovel' ? 'Dig up' : (typeof gladeStump==='function' && !VISIT && !GUEST && !TRIP && gladeStump(this.rec)) ? 'Knock' : 'Look'; }   // v1.39 Mossby looks over stumps by Lumi's glade
+  act(){ const lab=this.label(); if (lab==='Knock') return gladeKnock(this); if (lab==='Look') return; if(!useTool('shovel')) return; Snd.dig(); gladeStumpDug(this.rec); S.stumps.splice(S.stumps.indexOf(this.rec),1);
     const pos=this.pos.clone(); FX.stumpOut(this.obj, pos); this.remove(true); { const o=EN.output('shovel'); setTimeout(()=>{ for (let k=0;k<o;k++) dropNear('stump', pos, 1.1); }, 900); } rareRoll('stump', 'glimmermoss', pos); S.stats.dug++; track('dig'); save(); }
 }
 if (!S.stumps) S.stumps=[];
@@ -1323,7 +1324,7 @@ const bugs=[];
 const CATCH_BASE = { 'Common':0.85, 'Uncommon':0.72, 'Rare':0.58, 'Very rare':0.48, 'Legendary':0.4 };
 const SKITTISH = { 'Common':0.7, 'Uncommon':1.1, 'Rare':1.6, 'Very rare':2.2, 'Legendary':3 };
 class Bug extends Ent {
-  constructor(id, x, z, extra={}){ super('bug',x,z,0.3); this.id=id; this.it=ITEMS[id]; this.where=this.it.where; this.reach=1.5;
+  constructor(id, x, z, extra={}){ super('bug',x,z,0.3); this.id=id; this.it=ITEMS[id]; this.where=this.it.where==='glade'?'air':this.it.where; this.reach=1.5;   // v1.39 glade bugs fly like the rest
     const m=buildItemModel(id); m.scale.setScalar(this.where==='air'?1.1:0.9); const g=new THREE.Group(); g.add(m); this.m=m; this.attach(g); this.hitSphere(0.8,0.5);
     this.home=new THREE.Vector3(x,0,z); this.ph=Math.random()*10; this.alt= this.where==='air' ? 0.8+Math.random()*1.4 : (this.where==='trunk'?1.1+Math.random()*0.6:0.05); this.flee=0; this.hop=0; this.trunk=extra.trunk||null;
     // trunk bugs sit on the side of the tree that faces the camera, so you can see them before you walk up
@@ -1974,7 +1975,7 @@ function applyTown(){
   refreshSmoke();
   const T=S.town;
   if (T.arrived){ const R=RESIDENTS.find(x=>x.id===T.arrived); T.arrived=null; if (R) setTimeout(()=>toast(`${R.name} moved in today!`, null, 'new'), 2400); }
-  refreshIncome(); refreshNurseryTank(); spawnRowboat(); refreshWorkshop(); pinesRegrow(); refreshStory2(); if (!VISIT && !GUEST){ story2News(); wendellLetter(); }   // v1.38
+  refreshIncome(); refreshNurseryTank(); spawnRowboat(); refreshWorkshop(); pinesRegrow(); refreshStory2(); refreshStory3(); if (!VISIT && !GUEST){ story2News(); story3News(); wendellLetter(); }   // v1.38
   if (SY.reef && SY.reef.tankNews){ SY.reef.tankNews=false; setTimeout(()=>{ Snd.fanfare(); toast('Marlo finished the coral tank!', null, 'new', 'It\'s set up beside Sprig\'s shop. She can start growing coral now.'); }, 3400); }
   if (SY.shop && SY.shop.news){ SY.shop.news=false; setTimeout(()=>{ Snd.fanfare(); toast(`${npcName(SY.shop.owner)}'s Workshop is open!`, null, 'new', 'Out on Old Pinewood. Bring wood, take planks.'); }, 3600); }
   if (T.departed){ const R=RESIDENTS.find(x=>x.id===T.departed); T.departed=null; if (R) setTimeout(()=>toast(`${R.name} moved away.`, null, '', 'Their plot is empty now. Someone new may take it.'), 2600); }
@@ -1998,6 +1999,7 @@ function talkHall(){
   const menu=()=>dialog(k.name, v, [], null, [
     ...favorChoices(npcOf('clementine'), ()=>menu()),
     { label:'Town projects', fn:()=>openHallPanel() },
+    ...gladeLamp(k, ()=>menu()),   // v1.39
     ...(VISIT||GUEST?[]:[{ label:'Pen pals and letters', fn:()=>openContacts() }]),
     ...(VISIT?[]:[{ label: !S.home.built ? 'A house?' : loanOpen() ? 'Pay my loan' : 'Home loan', fn:()=>talkLoan(menu) }]),
     { label:'New neighbors?', fn:()=>{ const nxt=T.next && RESIDENTS.find(R=>R.id===T.next.id), cap=townCap();
@@ -2021,8 +2023,8 @@ function openHallPanel(){
         <div style="margin-top:8px"><b>${fmt(fund)}</b> of ${fmt(cost)} clams raised</div><div class="bar" style="margin:6px 0"><div style="width:${Math.min(100,fund/cost*100)}%"></div></div>
         ${left>0?`<div style="display:flex;gap:6px;flex-wrap:wrap">${[1000,10000].map(n=>`<button class="btn alt" data-fund="${n}" ${S.clams<Math.min(n,left)?'disabled':''}>Chip in ${fmt(Math.min(n,left))}</button>`).join('')}<button class="btn" data-fund="${left}" ${S.clams<1?'disabled':''}>Chip in ${fmt(Math.min(left,S.clams))}</button></div>`
           : `<button class="btn" id="hallGo" ${ok?'':'disabled'}>${ok?'Start building':'Fully funded. Clementine says the island isn\'t quite ready for it yet.'}</button>`}</div>`; }
-    h+=shopProjectHTML()+teaProjectHTML();   // v1.37 the workshop on Old Pinewood, v1.38 the tea room
-    pBody.innerHTML=h; bindShopProject(render); bindTeaProject(render);
+    h+=shopProjectHTML()+teaProjectHTML()+proj3HTML();   // v1.37 the workshop on Old Pinewood, v1.38 the tea room
+    pBody.innerHTML=h; bindShopProject(render); bindTeaProject(render); bindProj3(render);
     pBody.querySelectorAll('[data-fund]').forEach(b=>b.onclick=()=>{ if (noEdit()) return; const left=HALL_COST[S.town.hall+1]-(S.town.fund||0), n=Math.min(+b.dataset.fund, left, S.clams); if (n<=0) return; S.clams-=n; S.town.fund=(S.town.fund||0)+n; Snd.coin(); updateHUD(); save(); render(); });
     const go=pBody.querySelector('#hallGo'); if (go) go.onclick=()=>{ if (noEdit()) return; S.town.hallPend=true; save(); Snd.fanfare(); toast('The builders start tonight!', null, 'new', `The ${HALL_NAMES[S.town.hall+1]} will be ready tomorrow.`); render(); };
   };
@@ -2241,6 +2243,7 @@ function storyNewDay(){
   // helpers: a week of help is worth a little friendship
   for (const [proj,h] of Object.entries(SY.helpers||{})){ if (!h || !livesHere(h.id)){ delete SY.helpers[proj]; continue; } if ((now-h.since)>0 && (now-h.since)%7===0 && h.paid!==now){ h.paid=now; S.friend[h.id]=(S.friend[h.id]||0)+1; } }
   storyNewDay2(now);   // v1.38
+  storyNewDay3(now);   // v1.39
   stakeNewDay(now);
 }
 // a keeper who moves away sells their business to whoever takes their place
@@ -2296,7 +2299,7 @@ const GOSSIP = {
 function storyGossip(R){ if (VISIT || !R || GUEST) return null; const out=[];
   if (SY.reef && reefAt('bay')){ const st=reefStage(); if (st>=1 && R.id!=='gill') out.push(...GOSSIP.reef[st]); }
   if (SY.shop && !isFor('shop', R.id)){ const g=GOSSIP.shop[SY.shop.st==='dream1'?'wizard':SY.shop.st==='building'?'project':SY.shop.st]; if (g) out.push(...g); }
-  const o2=storyGossip2(R);   // v1.38
+  const o2=[...storyGossip2(R), ...storyGossip3(R)];   // v1.38, v1.39
   if (o2.length && (!out.length || Math.random()<0.5)) return o2[Math.floor(Math.random()*o2.length)];
   return out.length ? out[Math.floor(Math.random()*out.length)].replace(/Bramble/g, holderName('shop')) : null; }
 
@@ -2314,7 +2317,7 @@ function storiesHTML(){
     else if (S0.st==='project') L.push(`Clementine is raising clams for ${nm}'s workshop on Old Pinewood.`);
     else if (S0.st==='building') L.push('Builders are hammering away out on Old Pinewood.');
     else if (S0.st==='open') L.push(`${npcName(S0.owner||dreamHolder('shop'))}'s Workshop is open on Old Pinewood.`); }
-  L.push(...storiesHTML2());   // v1.38
+  L.push(...storiesHTML2(), ...storiesHTML3());   // v1.38, v1.39
   for (const [p,h] of Object.entries(SY.helpers||{})) if (h) L.push(`${npcName(h.id)} is helping out at ${p==='nursery'?'the coral nursery':'the workshop'}.`);
   return L.length ? `<div class="notice"><b>Island stories</b><br>${L.map(l=>`<div style="margin-top:4px">${l}</div>`).join('')}</div>` : ''; }
 
@@ -2856,7 +2859,7 @@ function storySpot(tag, near, dmin, dmax, rad, zoff=0){
     if (Object.entries(PLACES).some(([k,p])=>p && Math.hypot(x-p[0],cz-p[1])<rad+(k==='plaza'?5:k==='board'?1.5:4))) continue;
     if (RESIDENTS.some(R=>R.home && Math.hypot(x-R.home[0],cz-R.home[1])<rad+4)) continue;
     if (INC_IDS.some(k=>S.income[k] && S.income[k].at && Math.hypot(x-S.income[k].at[0],cz-S.income[k].at[1])<rad+3.5)) continue;
-    if ([SY.tea,SY.reefhall].some(o=>o && o.at && Math.hypot(x-o.at[0],cz-o.at[1])<rad+6)) continue;
+    if ([SY.tea,SY.reefhall,SY.post,SY.bath,SY.glade,SY.antiq].some(o=>o && o.at && Math.hypot(x-o.at[0],cz-o.at[1])<rad+6)) continue;
     let fine=ok(x,cz), lo=99, hi=-99;
     for (let i=0;i<16 && fine;i++){ const aa=i/16*TAU; for (const rr of [rad, rad*0.55]){ const px=x+Math.cos(aa)*rr, pz=cz+Math.sin(aa)*rr; if (!ok(px,pz)){ fine=false; break; } const h=rawHeight(px,pz); lo=Math.min(lo,h); hi=Math.max(hi,h); } }
     if (!fine || hi-lo>0.8) continue;
@@ -2879,7 +2882,7 @@ const BEATS2 = { tea:{
   dreamg:['Mabel always talked about opening a little tea room. Cakes, jam, a window seat.','There\'s honey on the island now, and fruit. I\'ve half a mind to do it myself. I wonder if Clementine would help with the room.'],
   open:['The tea room is open! Come and sit on the terrace any time.','Bring me fruit, honey, anything from the garden. I\'ll pay you more than the shops do. Cakes don\'t bake themselves.'] } };
 const teaOpen = () => !!(SY.tea && SY.tea.st==='open');
-function teaPrice(s){ const it=ITEMS[s.id]; if (!it || !(TEA_KINDS.includes(it.kind) || s.id==='honey')) return null; return Math.round(entryPrice(s)*TEA_RATE); }
+function teaPrice(s){ const it=ITEMS[s.id]; if (!it || !(TEA_KINDS.includes(it.kind) || s.id==='honey' || s.id==='flour')) return null; return Math.round(entryPrice(s)*TEA_RATE); }
 function refreshTea(){
   const D=SY.tea, key = !D ? '' : D.st==='open' ? 'open' : ['project','building'].includes(D.st) ? 'site' : '';
   if (key===S2B.teaKey) return; S2B.teaKey=key; if (S2B.tea){ S2B.tea.remove(); setRects('tearoom',[]); S2B.tea=null; } if (!key) return;
@@ -2912,21 +2915,24 @@ function bindTeaProject(render){
   const m=pBody.querySelector('#tfMat'); if (m) m.onclick=()=>{ if (noEdit() || !TEA_PROJECT.need.every(x=>haveNeed(x))) return; takeFor(TEA_PROJECT.need); SY.tea.mats=true; save(); Snd.thunk(); render(); };
   const g=pBody.querySelector('#tfGo'); if (g) g.onclick=()=>{ if (noEdit()) return; SY.tea.st='building'; SY.tea.bday=sday2(); save(); Snd.fanfare(); toast('The builders start tonight!', null, 'new', `${holderName('tea')}'s Tea Room will open tomorrow.`); refreshTea(); render(); }; }
 // islanders take tea on the terrace: each chair goes to whoever the day's roll picks, in 40-minute sittings, 10 to 6
-function teaSeatOf(res){ if (!teaOpen() || !S2B.tea || !SY.tea.at) return null; const h=Time.hour(); if (h<10 || h>=18) return null;
+function teaSeatOf(res){ { const b=bathSeatOf(res); if (b!==null) return b; }   // v1.39 an evening soak at Tobin's
+  if (!teaOpen() || !S2B.tea || !SY.tea.at) return null; const h=Time.hour(); if (h<10 || h>=18) return null;
   const pool=S.town.res, slot=Math.floor(h*60/40);
   for (let k=0;k<S2.TEA_SEATS.length;k++){ const pick=pool[Math.floor(mulberry32(hashStr(today()+':tea:'+k+':'+slot+':'+S.seed))()*pool.length*1.7)]; if (pick===res.spec.id) return k; }
   return null; }
 function teaUnsit(res){ if (res.teaK===undefined) return; res.teaK=undefined; const u=res.obj.userData; (u.legs||[]).forEach(l=>l.rotation.x=0); res.pos.y=groundY(res.pos.x,res.pos.z); res.obj.position.copy(res.pos); }
 function teaSit(res, dt, t){
   if (res.loc!=='out'){ teaUnsit(res); return false; } const k=teaSeatOf(res); if (k===null){ teaUnsit(res); return false; }
-  const [sx,sz,ry]=S2.TEA_SEATS[k], [cx,cz]=SY.tea.at, x=cx+sx, z=cz+sz;
+  const [x,z,ry,dy]=seatXZ(k), bath=typeof k==='string';
   if (res.teaK!==k){ teaUnsit(res); const d=Math.hypot(x-res.pos.x, z-res.pos.z);
     if (d>0.3){ if (d>45 || !res.moveToward(new THREE.Vector3(x,0,z), dt, 1.7, t)){ if (d>45 || (res.stuckT=(res.stuckT||0)+dt)>5){ res.pos.set(x,groundY(x,z),z); res.obj.position.copy(res.pos); res.stuckT=0; } } res.applyFace(dt); return true; }
     res.teaK=k; }
-  res.pos.set(x, groundY(x,z), z); res.obj.position.set(x, res.pos.y+0.3, z); res.face=ry; res.obj.rotation.y=ry; const u=res.obj.userData; (u.legs||[]).forEach(l=>l.rotation.x=-1.4); if (u.body) u.body.position.y=0; return true; }
+  res.pos.set(x, groundY(x,z), z); res.obj.position.set(x, res.pos.y+dy, z); res.face=ry; res.obj.rotation.y=ry; const u=res.obj.userData; (u.legs||[]).forEach(l=>l.rotation.x=bath?0:-1.4); if (u.body) u.body.position.y=0; return true; }
+function seatXZ(k){ if (typeof k==='string'){ const [sx,sz,ry]=S3.BATH_SEATS[+k.slice(1)], [cx,cz]=SY.bath.at; return [cx+sx, cz+1.2+sz, ry, -0.32]; }
+  const [sx,sz,ry]=S2.TEA_SEATS[k], [cx,cz]=SY.tea.at; return [cx+sx, cz+sz, ry, 0.3]; }
 // a pot of tea with someone on the terrace: a little friendship, once a day each
 const TEA_CHAT=['Sit, sit! Mabel\'s scones are still warm.','Best seat on the island, this. You can see the boats come in.','I come here for the jam. I stay for the gossip.','One lump or two? I\'ll pretend I didn\'t see that.','Have you tried the honey cake? Hollis\'s bees and Russet\'s apples. Heaven.'];
-function teaChoices(res, menu){ if (VISIT || GUEST || res.teaK===undefined) return []; const id=res.spec.id, T=(S.day.tea=S.day.tea||{});
+function teaChoices(res, menu){ if (VISIT || GUEST || typeof res.teaK!=='number') return []; const id=res.spec.id, T=(S.day.tea=S.day.tea||{});
   return [{ label:'Share a pot of tea', fn:()=>{ const first=!T[id]; if (first){ T[id]=1; S.friend[id]=(S.friend[id]||0)+1; save(); }
     dialog(res.spec.name, res.spec.voice, [fill(TEA_CHAT[Math.floor(Math.random()*TEA_CHAT.length)], { c:res.spec.catch })], menu); } }]; }
 
@@ -3142,6 +3148,572 @@ function dev138(what){
     else if (!reefHallOpen()){ SY.reefhall.st='open'; msg.push('Reef Hall open.'); }
     else msg.push('Every phase 2 story is open.'); }
   save(); applyTown(); toast(msg.join(' ') || 'Nothing to do.'); }
+
+/* =====================================================================
+   v1.39 ISLAND STORIES PHASE 3 (design: claude/driftwood-isle-quests.md, section 6f and 7).
+   - Barley's mill: new sails from the workshop (planks and sailcloth), a millstone from Thistle's storeroom (traded for
+     fossils the museum doesn't have), then wheat into flour overnight. Wendell's stream and water wheel doubles it.
+   - Wren's trade routes: a post office near the plaza (Clementine's project). Each trip town where you have a good pen
+     pal becomes a route. Pack a crate once a week, Skipper Wick sails it overnight, the town writes back with seeds
+     and keepsakes as the route grows.
+   - Tobin's bathhouse: Wendell's divining finds five steaming vents; one is real. Marlo pipes it, Clementine raises the
+     bathhouse, Sprig mixes bath salts, then a steam room and rock pools. A soak leaves you Well rested for the day.
+   - Lumi's firefly glade: one spot, four conditions (dark, still water, night flowers, old logs Mossby approves).
+     The glade grows overnight from a faint glow to swarms to rare glowing bugs.
+   - Hazel's wreck: a diving bell (Marlo's glass, iron fittings, a workshop frame), then the wreck in four parts,
+     each opened with something new, each with salvage and pages of the Saltwren's logbook. Then an antiques shop.
+   Old saves load as they were: nothing here starts until its trigger is met.
+   ===================================================================== */
+const SAILCLOTH_ODDS=0.34;
+Object.assign(DREAM_FOR, { mill:'barley', post:'wren', bath:'tobin', glade:'lumi', wreck:'hazel' });
+const pendingDue = (key, now) => now+1+(hashStr(key+':'+S.seed)%3);
+const needText3 = need => andList(need.map(([id,n])=>`${n} ${ITEMS[id] ? (MASS[id] || (n>1 && !/s$/.test(ITEMS[id].name) ? ITEMS[id].name+'s' : ITEMS[id].name).toLowerCase()) : isleNeedName(id,n)}`));
+function giveItem(id, n=1, verb='Received'){ let got=0; for (let i=0;i<n;i++){ const r=addItem(id); if (r) got++; else dropNear(id, player.pos, 1.2); } itemToast(id, false, n>1?`${verb} ${n}`:verb); save(); return got; }
+var S3B = { post:null, postKey:'', bath:null, bathKey:'', vents:[], glade:null, gladeKey:'', flies:null, antiq:null, antiqKey:'', bell:null };
+for (const [D,rad] of [[SY.post,4.4],[SY.bath,6.2],[SY.glade,3.0],[SY.antiq,3.8]]) if (D && D.at && (D!==SY.bath || ['found','pipes','pool','building','open'].includes(D.st))) KEEPOUT.push([D.at[0], D.at[1], rad]);
+function refreshStory3(){ if (TRIP || GUEST) return; for (const f of [refreshPost, refreshBath, refreshGlade, refreshAntiq]){ try { f(); } catch(e){ console.warn('v1.39', e); } } }
+function storySmoke3(add){ for (const e of [S3B.post, S3B.bath, S3B.antiq]) if (e && !e.removed) add(e); }
+
+/* ---------- landmarks on the isles: the windmill and the wreck ---------- */
+function landmark3(kind, lm){
+  if (kind==='meadow' && lm.userData.setMill){ const M0=SY.mill; lm.userData.setMill({ sails:!!(M0 && M0.sails), wheel:!!(M0 && M0.wheel) }); }
+  if (kind==='dunes' && SY.wreck && SY.wreck.bell) addBell(lm); }
+function addBell(lm){ if (lm.userData.bell3) return; const b=S3.buildDivingBell(); b.position.set(3.6,0,4.3); b.rotation.y=-0.5; lm.add(b); lm.userData.bell3=b; }
+const meadowLM = () => { const I=ISLES.find(I=>I.kind==='meadow'); return I && I.lmObj; };
+const dunesLM = () => { const I=ISLES.find(I=>I.kind==='dunes'); return I && I.lmObj; };
+
+/* =====================================================================
+   BARLEY'S MILL
+   ===================================================================== */
+const MILL_GRIND=2, millCap = () => SY.mill && SY.mill.wheel ? 20 : 10, WHEEL_COST=15000;
+const millOpen = () => !!(SY.mill && SY.mill.st==='grain');
+const millName = () => `${npcName(SY.mill.owner||dreamHolder('mill'))}'s Mill`;
+STAKES.mill={ unit:'flour', place:'in the mill', tiers:[{ name:'A share', cost:25000, per:800, extra:2 }, { name:'Partner', cost:120000, per:2000, extra:3 }, { name:'Co-owner', cost:400000, per:4500, extra:5 }],
+  due:()=>!!(SY.mill && SY.mill.wheel),
+  offer:['Half this flour\'s yours by rights. You found the sails and the stone and the water.','Put some clams in and you get a cut of what the mill brings in, and a sack of flour or two besides. Come by the mill.'] };
+COMMISSIONS.push({ id:'millsails', need:[['plank',15],['sailcloth',3]], clams:0, days:1, gate:()=>!!(SY.mill && SY.mill.st==='sails') && !countItem('millsails') && !(SY.shop.comm && SY.shop.comm.id==='millsails') });
+function millAct(lm){
+  const nm=ISL.ISLE_INFO.meadow.name, M0=SY.mill;
+  if (!M0 || VISIT || GUEST || M0.st==='pending') return dialog(nm, 420, [lm.userData.desc]);
+  if (M0.st==='sails'){
+    if (countItem('millsails')) return dialog(nm, 420, [lm.userData.desc, 'Barley\'s new sails are rolled up in your bag.'], null, [
+      { label:'Fit the sails', fn:()=>{ if (noEdit() || !countItem('millsails')) return; removeItem('millsails',1); M0.sails=true; M0.st='stone'; save(); if (lm.userData.setMill) lm.userData.setMill({ sails:true }); Snd.fanfare();
+          const p=lm.getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(0,5,0)); for (let i=0;i<4;i++) setTimeout(()=>sparkle(p.clone().add(new THREE.Vector3((Math.random()-0.5)*3,Math.random()*2,(Math.random()-0.5)*3))), i*180);
+          dialog(nm, 420, ['Up go the sails, one at a time. The wind catches them and the whole mill groans, then turns.', `The millstones are another story. ${holderName('mill')} will want to see this.`]); } },
+      { label:'Not yet', alt:true, fn:()=>{} } ]);
+    return dialog(nm, 420, [lm.userData.desc]); }
+  if (M0.st==='stone') return dialog(nm, 420, [lm.userData.desc, M0.stone===1 ? 'There\'s a cart track in the grass. Something heavy is on its way.' : 'Inside, the old millstone lies in two pieces. Nothing grinds on that.']);
+  openMill(); }
+function openMill(){
+  const M0=SY.mill, nm=millName();
+  if (VISIT){ dialog(nm, 420, ['The sails turn, and there\'s flour dust on everything.']); return; }
+  const render=()=>{ const cap=millCap(), ord=M0.order, ready=M0.ready||0;
+    let h=`<div class="notice"><b>${nm}</b><br><span class="muted">${MILL_GRIND} wheat make 1 flour. Leave wheat today and the flour is ready tomorrow, up to ${cap} a day${M0.wheel?' with the water wheel turning':''}. ${fmt(M0.made||0)} ground so far.</span></div>`;
+    if (ready) h+=`<div class="notice"><b>${ready} flour ready</b><br><button class="btn" id="mlTake" style="margin-top:6px">Take it</button></div>`;
+    if (ord) h+=`<div class="notice">Grinding tonight: ${ord.n} flour.</div>`;
+    else { const w=countItem('wheat'), mx=Math.min(cap, Math.floor(w/MILL_GRIND));
+      h+=`<div class="notice"><b>Grind wheat</b> <span class="muted">· you have ${w} wheat</span><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">${[5].filter(n=>n<mx).map(n=>`<button class="btn alt" data-ml="${n}">${n} flour (${n*MILL_GRIND} wheat)</button>`).join('')}<button class="btn" data-ml="${mx}" ${mx<1?'disabled':''}>${mx||0} flour (${(mx||0)*MILL_GRIND} wheat)</button></div></div>`; }
+    h+=stakeHTML('mill'); pBody.innerHTML=h; bindStake('mill', render);
+    pBody.querySelectorAll('[data-ml]').forEach(b=>b.onclick=()=>{ if (noEdit()) return; const n=+b.dataset.ml; if (n<1 || M0.order || countItem('wheat')<n*MILL_GRIND) return; removeItem('wheat', n*MILL_GRIND); M0.order={ n, day:sday2() }; save(); Snd.thunk(); render(); });
+    const tk=pBody.querySelector('#mlTake'); if (tk) tk.onclick=()=>{ let got=0; while ((M0.ready||0)>0 && canAdd('flour')){ addItem('flour'); M0.ready--; got++; } M0.made=(M0.made||0)+got; save(); if (got){ Snd.coin(); itemToast('flour', false, 'Picked up'); } else toast('Your bag is full.'); render(); }; };
+  openPanel(nm); render(); }
+// Thistle's millstone: three fossils the museum doesn't have (or three rare bugs or fish once the fossils are all in)
+function millstoneOffer(){ const ids=[...new Set(S.inv.map(s=>s.id))], fresh=k=>ids.filter(id=>ITEMS[id].kind===k && !S.museum.items[id]);
+  const fossilsDone=MUSEUM_IDS.fossil.every(id=>S.museum.items[id]);
+  return fossilsDone ? { kind:'rare', list:[...fresh('bug'), ...fresh('fish')].filter(id=>(ITEMS[id].rarity??5)<3) } : { kind:'fossil', list:fresh('fossil') }; }
+function millThistle(k, menu){
+  if (VISIT || GUEST || !SY.mill || SY.mill.st!=='stone' || SY.mill.stone) return []; const v=k.voice, nm=k.name;
+  return [{ label:'A millstone for the windmill?', fn:()=>{ const o=millstoneOffer(), want=o.kind==='fossil' ? 'three fossils the museum doesn\'t have yet' : 'three rare bugs or fish the museum doesn\'t have yet';
+    const lines=['A millstone! As it happens, there is one in the storeroom. Granite, French burr, older than this building.',`It's no use to me down there. But a museum must be paid in kind. Bring me ${want}, and it's Barley's.`.replace('Barley', holderName('mill'))];
+    if (o.list.length<3){ dialog(nm, v, lines, menu); return; }
+    dialog(nm, v, [...lines.slice(0,1), `You have ${o.kind==='fossil'?'fossils':'specimens'} I haven't seen! Three of those, and the stone goes to the mill tonight.`], null, [
+      { label:'Trade three', fn:()=>{ if (noEdit()) return; const L=millstoneOffer().list.slice(0,3); if (L.length<3) return menu();
+          for (const id of L){ const i=S.inv.findIndex(s=>s.id===id); if (i>=0) donate(i); } spawnExhibits(); checkMuseumGifts(); museumGrowCheck();
+          SY.mill.stone=1; SY.mill.stoneDay=sday2(); save(); Snd.fanfare(); dialog(nm, v, [`${andList(L.map(id=>ITEMS[id].name))}! Marvelous. They go on display at once.`, 'The carters will take the stone out to the meadow tonight.'], menu); } },
+      { label:'Not yet', alt:true, fn:menu } ]); } }]; }
+// Wendell's stream: a short race of water off the meadow spring, and a wheel to go with it
+function millWendell(menu){
+  if (VISIT || GUEST || !millOpen() || SY.mill.wheel || SY.mill.wheelDay) return []; const W=WIZARD, v=W.voice;
+  return [{ label:'A stream for the mill?', fn:()=>dialog(W.name, v, ['A stream beside the old mill? There was one, before the land slept. I can feel where it ran.',`I'll wake it. The usual rate for shaping water: ${fmt(WHEEL_COST)} clams. ${holderName('mill')} can build a wheel to sit in it.`], null, [
+    { label:`Wake the stream (${fmt(WHEEL_COST)})`, fn:()=>{ if (noEdit()) return; if (S.clams<WHEEL_COST){ dialog(W.name, v, ['Water is patient. So am I. Come back with the clams.'], menu); return; }
+        S.clams-=WHEEL_COST; SY.mill.wheelDay=sday2(); updateHUD(); save(); Snd.magic(); dialog(W.name, v, ['Done. By morning it will be running past the mill. Listen for it.'], menu); } },
+    { label:'Not yet', alt:true, fn:menu } ]) }]; }
+
+/* =====================================================================
+   WREN'S TRADE ROUTES (the post office)
+   ===================================================================== */
+const POST_PROJECT={ clams:80000, need:[['plank',30],['stone',10]] }, ROUTE_MAX=5, ROUTE_WAIT=7;
+const TOWN_OF = from => { const s=String(from||''); return / Hamlet$/.test(s)?'hamlet': / Abbey$/.test(s)?'monastery': / Circus Camp$/.test(s)?'circus': / Point$/.test(s)?'lighthouse': / Cove$/.test(s)?'smugglers': / Village$/.test(s)?'board': null; };
+const ROUTE_GIFT = { hamlet:['corn_seeds','dryingrack'], monastery:['chili_seeds','abbeybell'], circus:['melon_seeds','circusdrum'], lighthouse:['corn_seeds','minilight'], smugglers:['chili_seeds','smugglerlamp'], board:['melon_seeds','noticeboard'] };
+const saltsOK = () => !!(SY.bath && SY.bath.salts);
+// what a town wants in its crate, by the route's level (0 before the first delivery)
+function routeWant(kind, L){ return kind==='hamlet' ? ['plank', 5+5*L] : kind==='monastery' ? ['honey', 3+2*L] : kind==='circus' ? ['fruit', 10+5*L] : kind==='lighthouse' ? ['fitting', 2+L]
+  : kind==='smugglers' ? (saltsOK() ? ['bathsalts', 3+L] : ['iron', 6+3*L]) : ['letters', Math.min(3+L, Math.max(2, S.town.res.length))]; }
+const lettersToday = () => Object.keys(S.day.chat||{}).filter(id=>livesHere(id)).length;
+const routeHave = ([id,n]) => id==='letters' ? lettersToday()>=n : haveNeed([id,n]);
+const routeWantText = ([id,n]) => id==='letters' ? `letters from ${n} of your islanders (Wren writes them up for whoever you've chatted with today)` : needText3([[id,n]]);
+const postOpen = () => !!(SY.post && SY.post.st==='open');
+// every town where a pen pal is a good friend: one route each, kept by the best friend there
+function routeTowns(){ const out={};
+  for (const [id,C] of Object.entries(S.contacts||{})){ if (C.kind!=='trip' || !C.penpal || (S.friend[id]||0)<5) continue; const kind=TOWN_OF(C.from); if (!kind) continue;
+    const o=out[C.from]; if (!o || (S.friend[id]||0)>(S.friend[o.pal]||0)) out[C.from]={ town:C.from, kind, pal:id }; }
+  return out; }
+function postRoutes(){ const P=SY.post, R=(P.routes=P.routes||{}), T=routeTowns();
+  for (const [town,o] of Object.entries(T)){ if (!R[town]) R[town]={ kind:o.kind, lvl:0, pal:o.pal }; else if (!S.contacts[R[town].pal]) R[town].pal=o.pal; }
+  return Object.entries(R).filter(([town,r])=>S.contacts[r.pal]); }
+STAKES.post={ unit:'melon_seeds', place:'in the post office', extraWord:t=>`now and then a packet of foreign seeds`,
+  tiers:[{ name:'A share', cost:25000, per:800, extra:0.5 }, { name:'Partner', cost:120000, per:2000, extra:1 }, { name:'Co-owner', cost:400000, per:4500, extra:1.5 }],
+  due:()=>!!(SY.post && Object.values(SY.post.routes||{}).filter(r=>r.lvl>=2).length>=3),
+  offer:['Postage adds up. Let me share it.','Put some clams in and you get a cut of every stamp, and seeds from the far towns now and then. Come by the post office.'] };
+function refreshPost(){
+  const D=SY.post, key=!D?'': D.st==='open'?'open': ['project','building'].includes(D.st)?'site':'';
+  if (key===S3B.postKey) return; S3B.postKey=key; if (S3B.post){ S3B.post.remove(); setRects('postoffice',[]); S3B.post=null; } if (!key) return;
+  if (!D.at){ if (VISIT) return; const p=storySpot('post', PLACES.plaza||[0,0], 10, 30, 4.2, 0); if (!p){ S3B.postKey=''; return; } D.at=p; claimSpot(p, 4.4); save(); }
+  const [x,z]=D.at, model = key==='open' ? S3.buildPostOffice() : S2.buildSite(5.0, 4.4, holderName('post')+'\'s', 'Post Office', 'stone');
+  S3B.post=placeBuilding('postoffice', x, z, model, key==='open'?'Post office':'Look', ()=> key==='open' ? openPost() : dialog('Building site', 420, [D.st==='building' ? 'The builders are at it tonight. It\'ll open in the morning.' : `${holderName('post')}'s post office will go here, once the town has raised the money. Clementine at the town hall is running the project.`]));
+  refreshSmoke(); }
+function openPost(){
+  const P=SY.post, own=npcName(P.owner||dreamHolder('post'));
+  if (VISIT){ dialog(`${own}'s Post Office`, 420, ['Pigeonholes to the ceiling, a brass scale, and a sack of letters by the door.']); return; }
+  const render=()=>{ const now=sday2(), list=postRoutes();
+    let h=`<div class="notice"><b>${own}'s Post Office</b><br><span class="muted">Every town where you have a good pen pal is a route. Pack a crate of what the town needs and Skipper Wick sails it overnight, once a week a route. Every delivery makes the route stronger, and the town writes back.</span></div>`;
+    if (!list.length) h+=`<div class="notice"><span class="muted">No routes yet. Make a good friend and pen pal in one of the little towns out on the trip islands.</span></div>`;
+    for (const [town,r] of list){ const C=S.contacts[r.pal], w=routeWant(r.kind, r.lvl), wait=ROUTE_WAIT-(now-(r.last??-99));
+      h+=`<div class="notice"><b>${esc(town)}</b> <span class="muted">· ${esc(C.name)} · route level ${r.lvl} of ${ROUTE_MAX}</span><br>`;
+      if (r.crate) h+='Packed. Wick sails it tonight.';
+      else if (wait>0) h+=`<span class="muted">The next crate can go in ${wait} day${wait>1?'s':''}.</span>`;
+      else h+=`They're asking for ${routeWantText(w)}.<br><button class="btn ${routeHave(w)?'':'alt'}" data-rt="${esc(town)}" style="margin-top:6px" ${routeHave(w)?'':'disabled'}>Pack the crate</button>`;
+      h+='</div>'; }
+    h+=stakeHTML('post'); pBody.innerHTML=h; bindStake('post', render);
+    pBody.querySelectorAll('[data-rt]').forEach(b=>b.onclick=()=>{ if (noEdit()) return; const r=(P.routes||{})[b.dataset.rt]; if (!r || r.crate) return; const w=routeWant(r.kind, r.lvl); if (!routeHave(w)) return;
+      if (w[0]!=='letters') takeFor([w]); r.crate=true; r.last=sday2(); save(); Snd.thunk(); toast('Crate packed!', null, '', `Skipper Wick sails for ${b.dataset.rt} tonight.`); render(); }); };
+  openPanel(`${own}'s Post Office`); render(); }
+// overnight: Wick sails every packed crate, and the towns write back
+function postNewDay(now){ const P=SY.post; if (!postOpen()) return;
+  for (const [town,r] of Object.entries(P.routes||{})){ if (!r.crate) continue; r.crate=false; r.lvl=Math.min(ROUTE_MAX, r.lvl+1); r.sent=(r.sent||0)+1; const C=S.contacts[r.pal]; if (!C) continue;
+    const [seed,furn]=ROUTE_GIFT[r.kind]||ROUTE_GIFT.board, big=r.lvl===3 || r.lvl===ROUTE_MAX && !r.top;
+    if (r.lvl===ROUTE_MAX) r.top=true;
+    const gift = big ? { id:furn } : { id:seed, n:3 }, thanks = { hamlet:'The planks went straight into the new jetty.', monastery:'The brothers say your honey is the best they\'ve had in years.', circus:'The elephants ate half the fruit before we could stop them.',
+      lighthouse:'The new fittings stopped the lamp rattling. I can sleep now.', smugglers:'Your parcel was very well received. By people who don\'t give their names.', board:'The letters from your islanders are pinned up on the board. Everyone reads them.' }[r.kind];
+    S.letters.inbox.unshift({ id:'L'+Date.now().toString(36)+'r'+(r.sent), from:r.pal, name:C.name, lines:[`Dear ${S.player||'friend'},`, `Skipper Wick's crate came in this morning. ${thanks}`, big ? 'We all chipped in and sent you something of ours. Something to remember us by.' : `I've tucked some seeds in for you. Nobody grows them on your side of the sea.`, C.name], gift, at:today(), read:false });
+    P.mail=(P.mail||0)+1; } }
+
+/* =====================================================================
+   TOBIN'S BATHHOUSE
+   ===================================================================== */
+const BATH_PROJECT={ clams:100000, need:[['plank',60],['stone',20]] }, PIPE={ clams:15000, need:[['fitting',6]] }, LOUNGE_SALTS=10;
+const BATH_UP=[{ key:'steam', clams:40000, need:[['stone',20],['plank',10]], name:'a steam room' }, { key:'rock', clams:80000, need:[['stone',30]], name:'rock pools looking out to sea' }];
+const bathOpen = () => !!(SY.bath && SY.bath.st==='open');
+const bathStage = () => !SY.bath ? 0 : SY.bath.st==='open' ? (SY.bath.rock===2 ? 4 : SY.bath.steam===2 ? 3 : 2) : ['pool','building'].includes(SY.bath.st) ? 1 : 0;
+STAKES.bath={ unit:'bathsalts', place:'in the bathhouse', tiers:[{ name:'A share', cost:25000, per:800, extra:1 }, { name:'Partner', cost:120000, per:2000, extra:2 }, { name:'Co-owner', cost:400000, per:4500, extra:3 }],
+  due:()=>!!(SY.bath && SY.bath.steam===2),
+  offer:['You dug the spring. You should get a cut of every soak.','Visitors pay at the door now, merchants and friends from off the island. Put some clams in and a share of that is yours, with bath salts besides. Come by the bathhouse.'] };
+// Wendell's divining: three elixirs, five vents, one of them real
+function bathWendell(menu){
+  if (VISIT || GUEST || !SY.bath || SY.bath.st!=='dream') return []; const W=WIZARD, v=W.voice;
+  return [{ label:'Warm water under the island?', fn:()=>{
+    const n=countItem('potion_dig');
+    if (n<3){ dialog(W.name, v, ['Tobin\'s grandmother was right. There is heat down there. I can feel it in my knees.','But finding the exact spot is divining work. Three of my Diviner\'s Elixirs poured on the ground should do it.', n?`You have ${n}. Three, mind.`:'You can buy them from me, of course.'], menu); return; }
+    dialog(W.name, v, ['Three elixirs. Good. Stand back.'], null, [
+      { label:'Pour them out', fn:()=>{ if (noEdit() || countItem('potion_dig')<3) return; removeItem('potion_dig',3); if (!placeVents()){ dialog(W.name, v, ['Hmm. The ground is too crowded to read. Clear a little space and try again.'], menu); addItem('potion_dig',3); return; }
+          SY.bath.st='vents'; save(); Snd.magic(); refreshBath(); dialog(W.name, v, ['There. Five places the ground is breathing steam. Only one goes all the way down.','Dig them and see. Tell Tobin to bring a towel.'], menu); } },
+      { label:'Not yet', alt:true, fn:menu } ]); } }]; }
+function placeVents(){ const B=SY.bath; if (B.at && B.vents) return true; const p=storySpot('bath', PLACES.plaza||[0,0], 14, 52, 6.2, 0); if (!p) return false;
+  const vents=[{ x:p[0], z:+(p[1]+1.2).toFixed(1), real:true }];
+  for (let i=0;i<12 && vents.length<5;i++){ const q=storySpot('vent'+i, PLACES.plaza||[0,0], 10, 58, 1.4, 0); if (q && vents.every(o=>Math.hypot(o.x-q[0],o.z-q[1])>12)) vents.push({ x:q[0], z:q[1] }); }
+  // the real one isn't always the first you'd come to: shuffle the order they're listed in
+  const r=mulberry32(hashStr('vents:'+S.seed)); for (let i=vents.length-1;i>0;i--){ const j=Math.floor(r()*(i+1)); [vents[i],vents[j]]=[vents[j],vents[i]]; }
+  B.at=p; B.vents=vents; return true; }
+function digVent(V, th){
+  if (!useTool('shovel')) return; Snd.dig(); V.dug=true; puff(th.pos.clone().add(new THREE.Vector3(0,0.2,0)), 0xb08a5a, 8, 0.6, 2.5, 1, 0.6);
+  if (V.real){ const B=SY.bath; B.st='found'; save(); claimSpot(B.at, 6.2); Snd.splash(); for (let i=0;i<14;i++) setTimeout(()=>puff(th.pos.clone().add(new THREE.Vector3((Math.random()-0.5)*1.4,0.2,(Math.random()-0.5)*1.4)), 0xffffff, 2, 0.5, 3, 1.6, 1.4), i*60);
+    toast('Hot water!', null, 'new', `It bubbles up warm and smelling of minerals. ${holderName('bath')} is going to be so happy.`); refreshBath(); return; }
+  save(); toast('Just a wisp of steam.', null, '', 'It fades as soon as you dig. Not this one.'); th.remove(); S3B.vents=S3B.vents.filter(t=>t!==th); }
+function bathMarlo(k, menu){
+  if (VISIT || GUEST || !SY.bath || !['found','pipes'].includes(SY.bath.st)) return []; const v=k.voice, nm=k.name, P=PIPE;
+  if (SY.bath.st==='pipes') return [{ label:'About the hot spring...', fn:()=>dialog(nm, v, ['Pipes are cut and the pool\'s lined. It\'ll be full and steaming by morning.'], menu) }];
+  return [{ label:'Pipe a hot spring?', fn:()=>dialog(nm, v, ['A hot spring! Water I know. Hot water, mate, I know better than anyone.',`I'll line a pool and pipe it in. ${fmt(P.clams)} clams and ${needText(P.need)} for the joints. Hot water eats cheap ones.`], null, [
+    { label:`Pipe it (${fmt(P.clams)})`, fn:()=>{ if (noEdit()) return; if (S.clams<P.clams || !P.need.every(x=>haveNeed(x))){ dialog(nm, v, [P.need.some(x=>!haveNeed(x)) ? 'It needs iron fittings. Pemberton\'s forge makes them.' : 'Bit short on clams, mate. I\'ll be here.'], menu); return; }
+        takeFor(P.need); S.clams-=P.clams; SY.bath.st='pipes'; SY.bath.pipeDay=sday2(); updateHUD(); save(); Snd.fanfare(); dialog(nm, v, ['Right! Tell Tobin to dig out his swimming trunks.'], menu); } },
+    { label:'Not yet', alt:true, fn:menu } ]) }]; }
+// Sprig mixes bath salts: two flowers and a clump of weeds a jar
+function bathSprig(k, menu){
+  if (VISIT || GUEST || !bathOpen()) return []; const v=k.voice, nm=k.name, mix=()=>{ const f=S.inv.filter(s=>ITEMS[s.id].kind==='flower').reduce((a,s)=>a+s.n,0); return Math.min(Math.floor(f/2), countItem('weed')); };
+  if (!SY.bath.salts) return [{ label:'Bath salts for Tobin?', fn:()=>{ SY.bath.salts=true; save(); dialog(nm, v, ['Bath salts! Sea salt, dried petals, a few garden herbs. Weeds too, the right ones. Nobody believes me about the weeds.','Bring me two flowers and a clump of weeds and I\'ll mix you a jar. As many as you like.'], menu); } }];
+  return [{ label:'Mix bath salts', fn:()=>{ const n=mix();
+    if (!n){ dialog(nm, v, ['Two flowers and a clump of weeds a jar. You don\'t have quite enough.'], menu); return; }
+    dialog(nm, v, [`I can make ${n} jar${n>1?'s':''} from what you have.`], null, [
+      { label:`Mix ${n}`, fn:()=>{ if (noEdit()) return; const m=Math.min(mix(), n); if (!m || !canAdd('bathsalts')) return menu(); takeFor([['flower', m*2], ['weed', m]]); for (let i=0;i<m;i++) if (!addItem('bathsalts')) dropNear('bathsalts', player.pos, 1.2); save(); Snd.jingle(); itemToast('bathsalts', false, `Mixed ${m}`); menu(); } },
+      { label:'Not now', alt:true, fn:menu } ]); } }]; }
+function refreshBath(){
+  const B=SY.bath, st=B && B.st, key=!B?'': st==='vents'?'vents': ['found','pipes'].includes(st)?'found': st==='open'?'h'+bathStage()+(B.lounge?'l':''): ['pool','building'].includes(st)?'pool':'';
+  if (key===S3B.bathKey) return; S3B.bathKey=key;
+  if (S3B.bath){ S3B.bath.remove(); setRects('bathhouse',[]); S3B.bath=null; } for (const v of S3B.vents) v.remove(); S3B.vents=[]; if (!key || !B.at) return;
+  if (key==='vents'){ for (const V of B.vents||[]){ if (V.dug) continue; const m=S3.buildVent(hashStr(V.x+':'+V.z)); m.position.y=groundY(V.x,V.z)+0.02;
+      const th=new Thing('vent', V.x, V.z, 0.6, m, ()=>S.equip==='shovel'?'Dig':'Look', th=>{ if (S.equip==='shovel') return digVent(V, th); dialog('Steaming ground', 420, ['A crack in the ground, breathing warm steam. Wendell said to dig.']); },
+        { solid:false, update:(t2,dt)=>{ if (Math.random()<dt*2.2 && t2.pos.distanceTo(player.pos)<40) puff(t2.pos.clone().add(new THREE.Vector3((Math.random()-0.5)*0.4,0.1,(Math.random()-0.5)*0.4)), 0xffffff, 1, 0.2, 1.2, 1.1, 1.2); } });
+      S3B.vents.push(th); } return; }
+  if (key==='found'){ const [x,z]=[B.at[0], B.at[1]+1.2], m=S3.buildVent(7); m.scale.setScalar(1.8);
+    S3B.vents.push(new Thing('vent', x, z, 0.9, m, 'Look', ()=>dialog('Hot spring', 420, [B.st==='pipes' ? 'Marlo has been here. There are pipes laid out and a pool dug. It fills overnight.' : `Hot water bubbles up out of the ground. ${holderName('bath')} keeps coming to look at it. It needs a proper pool and pipes. Marlo knows water.`]),
+      { solid:false, update:(t2,dt)=>{ if (Math.random()<dt*6 && t2.pos.distanceTo(player.pos)<50) puff(t2.pos.clone().add(new THREE.Vector3((Math.random()-0.5)*1,0.2,(Math.random()-0.5)*1)), 0xffffff, 1, 0.4, 2.2, 1.6, 1.6); } })); return; }
+  const [x,z]=B.at, model=S3.buildBathhouse(key==='pool'?1:bathStage(), hashStr('bath:'+S.seed));
+  S3B.bath=placeBuilding('bathhouse', x, z, model, key==='pool'?'Look':'Bathhouse', ()=> key==='pool' ? dialog('Hot spring pool', 420, [B.st==='building' ? 'The builders are putting up the bathhouse tonight. It opens in the morning.' : `A pool of warm water, ringed with stones. ${holderName('bath')} wants a proper bathhouse here. Clementine at the town hall is running the project.`]) : openBath());
+  refreshSmoke(); }
+function openBath(){
+  const B=SY.bath, own=npcName(B.owner||dreamHolder('bath')), nm=`${own}'s Bathhouse`;
+  if (VISIT){ dialog(nm, 420, ['Warm water, cedar benches, and steam curling up into the cold air.']); return; }
+  const render=()=>{ const rested=!!S.day.rested;
+    let h=`<div class="notice"><b>${nm}</b><br><span class="muted">A soak once a day leaves you Well rested: your first chat with each islander that day counts for more.${B.lounge?' The lounge has tea from the tea room and bath salts from Sprig.':''}</span>
+      <div style="margin-top:8px">${rested ? 'You\'re Well rested today.' : '<button class="btn" id="bhSoak">Have a soak</button>'}</div></div>`;
+    if (!B.lounge) h+=`<div class="notice"><b>The lounge</b><br><span class="muted">${own} wants a lounge with tea and bath salts. ${teaOpen()?'The tea room will send tea.':'Tea would have to come from a tea room.'} Salts: ${countItem('bathsalts')} of ${LOUNGE_SALTS} in your bag.</span>${teaOpen() && countItem('bathsalts')>=LOUNGE_SALTS?`<br><button class="btn alt" id="bhLounge" style="margin-top:6px">Stock the lounge (${LOUNGE_SALTS} bath salts)</button>`:''}</div>`;
+    h+=stakeHTML('bath'); pBody.innerHTML=h; bindStake('bath', render);
+    const s=pBody.querySelector('#bhSoak'); if (s) s.onclick=()=>{ S.day.rested=true; save(); Snd.splash(); panelClose=null; closePanel(); toast('Ahhh...', null, 'new', 'Well rested: your first chat with each islander today counts for more.'); };
+    const l=pBody.querySelector('#bhLounge'); if (l) l.onclick=()=>{ if (noEdit() || countItem('bathsalts')<LOUNGE_SALTS || !teaOpen()) return; removeItem('bathsalts', LOUNGE_SALTS); B.lounge=true; save(); Snd.fanfare(); refreshBath(); render(); }; };
+  openPanel(nm); render(); }
+// islanders soak in the evening once the lounge is stocked: 6 to 10, four seats, a sitting every 40 minutes
+function bathSeatOf(res){
+  if (!bathOpen() || !SY.bath.lounge || !S3B.bath || !SY.bath.at) return null; const h=Time.hour(); if (h<18 || h>=22) return null;
+  const pool=S.town.res, slot=Math.floor(h*60/40);
+  for (let k=0;k<S3.BATH_SEATS.length;k++){ const pick=pool[Math.floor(mulberry32(hashStr(today()+':bath:'+k+':'+slot+':'+S.seed))()*pool.length*1.6)]; if (pick===res.spec.id) return 'b'+k; }
+  return null; }
+
+/* =====================================================================
+   LUMI'S FIREFLY GLADE
+   ===================================================================== */
+const GLADE_R=11, GLADE_LAMP_R=16;
+const gladeOpen = () => !!(SY.glade && SY.glade.st==='open' && SY.glade.at);
+const nearGlade = (x,z,r=GLADE_R) => gladeOpen() && Math.hypot(x-SY.glade.at[0], z-SY.glade.at[1])<r;
+// each condition scores 0, 1 or 2
+function gladeConds(){ const G0=SY.glade, [gx,gz]=G0.at;
+  const lamps=LAMP_OBJS.filter(o=>Math.hypot(o.x-gx,o.z-gz)<GLADE_LAMP_R).length, dark = !lamps || G0.lamps ? 2 : 0;
+  let wet=0; for (let x=gx-GLADE_R;x<=gx+GLADE_R;x+=TC) for (let z=gz-GLADE_R;z<=gz+GLADE_R;z+=TC){ if (Math.hypot(x-gx,z-gz)>GLADE_R) continue; const c=terraAt(x,z); if (c && c.w===1) wet++; }
+  if (Math.hypot(POND.x-gx, POND.z-gz)<GLADE_R+POND.r) wet+=8;
+  const water = wet>=12 ? 2 : wet>=3 ? 1 : 0;
+  const fl=S.plants.filter(p=>PLANTS[p.sp] && PLANTS[p.sp].night && (p.stage??3)>=3 && Math.hypot(p.x-gx,p.z-gz)<GLADE_R).length, flowers = fl>=8 ? 2 : fl>=3 ? 1 : 0;
+  const lg=S.stumps.filter(s=>(G0.ok||{})[stumpKey(s)] && Math.hypot(s.x-gx,s.z-gz)<GLADE_R).length, logs = lg>=3 ? 2 : lg>=1 ? 1 : 0;
+  return { dark, water, flowers, logs }; }
+function gladeStageOf(c){ const v=Object.values(c), met=v.filter(x=>x>=1).length; return v.every(x=>x>=2) ? 3 : met===4 ? 2 : met>=2 ? 1 : 0; }
+const gladeStage = () => gladeOpen() ? (SY.glade.stage||0) : 0;
+// which glade bugs can turn up right now (only near the glade, only at night)
+function gladeBugOK(id){ if (!gladeOpen() || World.inside || !nearGlade(player.pos.x, player.pos.z, 24)) return false; const st=gladeStage(), c=SY.glade.cond||{};
+  return id==='gladefly' ? st>=1 : id==='bluespark' ? st>=2 && c.water>=2 : id==='mossglow' ? st>=2 && c.logs>=2 : id==='starlantern' ? st>=3 : false; }
+function gladeBugSpot(){ if (!gladeOpen()) return null; const [gx,gz]=SY.glade.at; for (let k=0;k<20;k++){ const a=Math.random()*TAU, d=1.5+Math.random()*(GLADE_R-2), x=gx+Math.cos(a)*d, z=gz+Math.sin(a)*d; if (walkable(x,z)) return [x,z]; } return null; }
+function refreshGlade(){
+  const G0=SY.glade, key=gladeOpen() ? 'open' : '';
+  if (key===S3B.gladeKey){ gladeLamps(); return; } S3B.gladeKey=key; if (S3B.glade){ S3B.glade.remove(); S3B.glade=null; } if (S3B.flies){ S3B.flies.parent && S3B.flies.parent.remove(S3B.flies); S3B.flies=null; } if (!key) return;
+  const [x,z]=G0.at;
+  S3B.glade=new Thing('glade', x, z, 0.3, S3.buildGladeStones(hashStr('glade:'+S.seed)), 'Look', ()=>gladeLook(), { solid:false, reach:3.2 });
+  S3B.flies=S3.buildFireflies(140, GLADE_R-2, hashStr('flies:'+S.seed)); S3B.flies.position.set(x, groundY(x,z), z); OUT.add(S3B.flies);
+  gladeLamps(); }
+// the street lamps near the glade, switched off at Clementine's say-so
+function gladeLamps(){ if (!gladeOpen() || !SY.glade.lamps) return; const [gx,gz]=SY.glade.at;
+  for (const o of LAMP_OBJS){ if (o.off || Math.hypot(o.x-gx,o.z-gz)>=GLADE_LAMP_R) continue; const lan=o.g.userData.lan; if (!lan) continue; o.off=true;
+    for (const c of lan.children){ if (c.isSprite) c.visible=false; else if (c.material && c.material.emissive) c.material=M(0x6a6050,{ roughness:0.6 }); } } }
+function gladeLook(){ const G0=SY.glade, c=gladeConds(), st=gladeStage(), nm=holderName('glade');
+  const L=[['A ring of mossy stones.','A faint glow drifts between the stones after dark.','After dark the whole glade is full of fireflies.','After dark the glade glows like a lantern. Some of the lights are colors you\'ve never seen.'][st]];
+  if (c.dark<2) L.push('The street lamps on the path make it bright as noon here at night.');
+  if (c.water<1) L.push('It\'s dry. Fireflies like somewhere still and damp nearby.'); else if (c.water<2) L.push('There\'s a little still water nearby. More would be better.');
+  if (c.flowers<1) L.push(`Nothing here blooms at night. ${nm} says Sprig has seeds for flowers that do.`); else if (c.flowers<2) L.push('A few night flowers are open. The glade could take more.');
+  if (c.logs<1) L.push('No old logs or stumps for anything to live in. Mossby is particular about which ones.'); else if (c.logs<2) L.push('An old stump or two. A few more would suit the moths.');
+  const now=gladeStageOf(c); if (now>st) L.push('It feels different tonight. Come back after dark tomorrow.');
+  dialog('Lumi\'s glade'.replace('Lumi', nm), 420, L); }
+// Mossby and the stumps by the glade: knock and he looks it over; dig one he passed and he's cross for a few days
+let mossbyStump=null;
+const stumpKey = rec => rec.key || (rec.x.toFixed(1)+','+rec.z.toFixed(1));
+const gladeStump = rec => nearGlade(rec.x, rec.z) && !(SY.glade.ok||{})[stumpKey(rec)] && !(SY.glade.cross>sday2());
+function gladeKnock(st){ mossbyStump=stumpKey(st.rec); spawnMossby(st.pos.clone(), 'glade'); }
+function gladeApprove(){ if (!mossbyStump || !SY.glade) return; (SY.glade.ok=SY.glade.ok||{})[mossbyStump]=true; mossbyStump=null; save(); }
+function gladeStumpDug(rec){ if (!SY.glade || !(SY.glade.ok||{})[stumpKey(rec)]) return; delete SY.glade.ok[stumpKey(rec)]; SY.glade.cross=sday2()+3; save(); const p=new THREE.Vector3(rec.x,0,rec.z); setTimeout(()=>spawnMossby(p, 'cross'), 1100); }
+const MOSSBY3 = { glade:['Knock knock yourself. What.','...Oh. For Lumi\'s fireflies. Hm. Let me look.','Good wood. Soft in the middle. Beetles already moved in. Fine. This one can stay. Leave it be.'],
+  cross:['You DUG IT UP. The one I said could stay!','Do you know how many beetles lived in that? Eleven families. ELEVEN.','I\'m not looking at any more stumps for you for three days. Three!'] };
+function gladeLamp(k, menu){
+  if (VISIT || GUEST || !gladeOpen() || SY.glade.lamps) return []; const [gx,gz]=SY.glade.at; if (!LAMP_OBJS.some(o=>Math.hypot(o.x-gx,o.z-gz)<GLADE_LAMP_R)) return [];
+  return [{ label:'The lamps by Lumi\'s glade'.replace('Lumi', holderName('glade')), fn:()=>dialog(k.name, k.voice, ['Switch off the street lamps out there? For fireflies?','...You know, I walked home that way as a girl and the whole path glowed green. All right. Just those few.'], null, [
+    { label:'Switch them off', fn:()=>{ if (noEdit()) return; SY.glade.lamps=true; save(); gladeLamps(); Snd.click(); dialog(k.name, k.voice, ['Done. I\'ll tell anyone who complains to bring a candle.'], menu); } },
+    { label:'Leave them on', alt:true, fn:menu } ]) }]; }
+function gladeThistle(k, menu){
+  if (VISIT || GUEST || gladeStage()<1) return []; const glow=['gladefly','bluespark','mossglow','starlantern'].filter(id=>S.museum.items[id]); if (!glow.length) return [];
+  return [{ label:'The night exhibit', fn:()=>dialog(k.name, k.voice, [`I keep the ${glow.length>1?'glade insects':'glade firefly'} in a dark case by the stairs. ${glow.length>=4?'All four of them, now.':`${glow.length} of them so far.`}`,'Come by after dark some time. Children press their noses to the glass for an hour.'], menu) }]; }
+
+/* =====================================================================
+   HAZEL'S WRECK: the diving bell, the four parts, the logbook, the antiques shop
+   ===================================================================== */
+const BELL_GLASS=20000, LENS3=8000, CROW={ iron:3, clams:1500 }, CHARTS=4;
+const wreckOpen = layer => !!(SY.wreck && (layer==='deck' ? SY.wreck.bell : (SY.wreck.layers||{})[layer]));
+COMMISSIONS.push({ id:'bellframe', need:[['plank',25]], clams:0, days:1, gate:()=>!!(SY.wreck && !SY.wreck.bell) && !countItem('bellframe') && !(SY.shop.comm && SY.shop.comm.id==='bellframe') });
+STAKES.antiq={ unit:'shiplantern', place:'in the antiques shop', extraWord:t=>'now and then a piece of salvage',
+  tiers:[{ name:'A share', cost:25000, per:800, extra:0.15 }, { name:'Partner', cost:120000, per:2000, extra:0.3 }, { name:'Co-owner', cost:400000, per:4500, extra:0.5 }],
+  due:()=>!!(SY.antiq && SY.antiq.st==='open'),
+  offer:['None of this would be here without you.','Put some clams into the shop and a share of what it makes is yours, and a lantern from the wreck now and then. Come by the shop.'] };
+const LOGBOOK=[
+  'Log of the Saltwren, Ida Marrow, master. We sailed from the mainland with nine families, their tools and seed, and old Tamsin\'s goat, who has eaten two of my charts. They are leaving the kiln towns, where the smoke never lifts. They want somewhere green. I have promised them I will find it.',
+  'Twelfth day out. A string of islands that no chart I own has drawn. Old Tamsin stood at the rail all morning and said the water here hums. I said it was the rigging. It was not the rigging.',
+  'We put in at the big island with the good spring. Fresh water, fruit trees gone wild, a pond full of frogs. Under the water off the point, when the light is right, you can see cut stones. Somebody lived here before. Somebody built steps that go down into the sea.',
+  'There is a reef out past the little cays, so bright it hurts to look at. Penn caught supper with a bent nail. He has carved a little crab on our stern, for luck. He says crabs always find their way home.',
+  'Hold inventory, for my own peace. Seed corn, eleven sacks. Sailcloth, twenty bolts. Nails, too few. Two crates of books. One church bell we were not supposed to take. Tamsin\'s goat, who will not stay in the hold.',
+  'Tamsin told the children a story tonight. Long ago, she said, there was more land here. A whole country of meadows and dunes and pine hills. The people sang to the land, and the land stayed up. Then they forgot the songs, and it lay down under the water to sleep.',
+  'I asked Tamsin where she heard that. Her grandmother, she said, who heard it from hers, who came from these islands before the kiln towns took everyone in. The songs were learned on an island far to the south, under a sky full of falling stars.',
+  'A young fellow rowed out to us today in a boat no bigger than a washtub. Pointed hat. Said he was apprenticed to the sea, whatever that means. He traded us a pigeon for a sack of flour and told the children the land under the water was only resting. He said his name was Wendell.',
+  'The ships from the kiln towns have found us. They anchor by the cays and break the reef with iron bars to burn it for lime. I rowed out and shouted at them. They laughed. The near side of the reef is going pale already.',
+  'Tamsin showed me how to save it. You cut a living piece from healthy coral, tie it to a stone where the reef is pale, and tend it, and it grows. The children have made a game of it. But if the kiln ships keep coming, one day there will be nothing left to cut.',
+  'Storm from the west, the worst I have seen. The families are ashore and safe, every one, and the goat. The Saltwren is dragging her anchor toward the cays. Penn and I will row for shore in the longboat. Before we go, the chart and the last of this log go in the strongbox, in case the sea takes her.',
+  'To whoever reads this. The chart in this box is the oldest thing I own. It shows the island Tamsin spoke of, far to the south, where the stars fall. Starfall Isle. If the old land is ever to wake, I think the songs are there. Look after the reef. Look after each other. Ida Marrow, master of the Saltwren.' ];
+const PAGES_AT = { deck:4, hold:7, cabin:10, vault:12 };
+function openLogbook(){ const n=Math.min(LOGBOOK.length, (SY.wreck&&SY.wreck.pages)||0);
+  openPanel('The Saltwren\'s logbook'); pBody.innerHTML=`<div class="muted" style="margin-bottom:8px">${n} of ${LOGBOOK.length} pages, dried out and pressed flat by Hazel.</div>`.replace('Hazel', holderName('wreck'))+LOGBOOK.slice(0,n).map((t,i)=>`<div class="letter" style="margin-bottom:8px"><p><b>Page ${i+1}</b></p><p>${esc(t)}</p></div>`).join('')+(n<LOGBOOK.length?'<div class="muted">The rest must still be down in the wreck.</div>':''); }
+function wreckAct(lm){
+  const nm=ISL.ISLE_INFO.dunes.name, W0=SY.wreck;
+  if (!W0 || VISIT || GUEST || W0.st==='pending') return dialog(nm, 420, [lm.userData.desc]);
+  if (W0.bell) return dialog(nm, 420, ['The diving bell hangs over the water by the wreck, ready to go down.'], null, [
+    { label:'Dive', fn:()=>{ makeWreckRoom(); enterRoom('wreck'); } }, { label:'Read the logbook', fn:openLogbook }, { label:'Not now', alt:true, fn:()=>{} } ]);
+  const glass=W0.glass===2, frame=countItem('bellframe')>0, fit=countItem('fitting')>=6, L=[lm.userData.desc];
+  if (glass) L.push('Marlo\'s bell is down here on the sand, wrapped in sailcloth, waiting for something to hang from.');
+  if (glass && frame && fit) return dialog(nm, 420, L, null, [
+    { label:'Put the bell together', fn:()=>{ if (noEdit() || !countItem('bellframe') || countItem('fitting')<6) return; removeItem('bellframe',1); removeItem('fitting',6); W0.bell=true; save(); addBell(lm); Snd.fanfare();
+        dialog(nm, 420, ['The frame goes up on the sand, the bell hangs from it on six iron fittings, and the winch takes the weight.',`${holderName('wreck')} is going to want to go first. You could go now, though. Nobody\'s looking.`]); } },
+    { label:'Not yet', alt:true, fn:()=>{} } ]);
+  dialog(nm, 420, L); }
+function makeWreckRoom(){
+  const exit=(()=>{ const lm=dunesLM(); if (!lm) return [0,0]; lm.updateMatrixWorld(true); const p=lm.localToWorld(new THREE.Vector3(3.6,0,6.4)); return [p.x, p.z]; })();   // you climb out just in front of the bell, on the island side
+  if (ROOMS.wreck){ ROOMS.wreck.exit=exit; wreckGates(); return; }
+  const W=8, D=26, [ox,oz]=roomOrigin(91), container=new THREE.Group(); container.visible=false; scene.add(container);
+  const shell=S3.buildWreckRoom(W, D, hashStr('wreck:'+S.seed)); shell.position.set(ox,0,oz); container.add(shell);
+  const u=shell.userData, L=u.L, bz={ hold:-D/2+3*L, cabin:-D/2+2*L, vault:-D/2+L };
+  ROOMS.wreck={ id:'wreck', ox, oz, w:W, d:D, group:container, shell, spec:{ mood:'museum' }, entry:[ox, oz+D/2-1.2], exit, bed:[ox,oz],
+    walk:(x,z)=>{ const lx=x-ox, lz=z-oz; if (lz>D/2-0.05 || Math.abs(lx)>W/2-0.6) return false;
+      for (const k of ['hold','cabin','vault']){ if (!wreckOpen(k)){ if (lz<bz[k]+0.45) return false; break; } if (Math.abs(lz-bz[k])<0.3 && Math.abs(lx)>0.65) return false; }
+      return lz>-D/2+0.4; } };
+  // the bulkhead doors, each opened with its own thing
+  const need={ hold:['crowbar','The way into the hold is barred with planks, nailed and swollen shut. You\'d need something to pry them off.','Pry it open'],
+    cabin:['wrecklens','The cabin beyond is pitch dark. Your lamp barely reaches past the door. A stronger lens would throw the light further.','Shine the lens through'],
+    vault:['chartpiece','A round iron door, a brass wheel and a lock shaped like a compass rose, in four parts.','Fit the chart pieces'] };
+  for (const k of ['hold','cabin','vault']){ const [id,txt,lab]=need[k], n=k==='vault'?CHARTS:1;
+    new Thing('wgate', ox, oz+bz[k]+0.6, 0.5, new THREE.Group(), ()=>wreckOpen(k)?null:'Look', ()=>{
+      if (wreckOpen(k)) return; const have=countItem(id)>=n;
+      dialog('The wreck', 420, [txt, ...(k==='vault' && countItem(id) && !have ? [`You have ${countItem(id)} of the four pieces.`] : [])], null, have ? [
+        { label:lab, fn:()=>{ if (noEdit() || countItem(id)<n) return; removeItem(id, n); (SY.wreck.layers=SY.wreck.layers||{})[k]=true; save(); wreckGates(); Snd.fanfare(); toast(k==='vault'?'The vault is open!':`The ${k} is open!`, null, 'new', k==='vault'?'There\'s a strongbox at the back.':'Look around for salvage and pages.');
+            if (k==='vault'){ SY.antiq=SY.antiq||{ st:'pending', day:sday2() }; save(); } } },
+        { label:'Not yet', alt:true, fn:()=>{} } ] : null); }, { solid:false, reach:1.6 }); }
+  // salvage and logbook pages
+  for (const layer of S3.WRECK_LAYERS){ const pieces=Object.values(ITEMS).filter(i=>i.salvage===layer).map(i=>i.id);
+    pieces.slice(0,2).forEach((id,i)=>{ const [lx,lz]=u.spots[layer][i], m=buildItemModel(id); m.scale.setScalar(0.9);
+      const th=new Thing('salvage', ox+lx, oz+lz, 0.5, m, ()=>(SY.wreck.got||{})[id] || !wreckOpen(layer)?null:'Salvage', t2=>{ const G0=(SY.wreck.got=SY.wreck.got||{}); if (G0[id] || !wreckOpen(layer)) return; if (!canAdd(id)){ toast('Your bag is full.'); return; }
+          addItem(id); G0[id]=true; save(); Snd.jingle(); itemToast(id, true, 'Salvaged'); t2.obj.visible=false; }, { solid:false, reach:1.6 });
+      th.obj.visible=!(SY.wreck.got||{})[id]; });
+    const pz = layer==='vault' ? -D/2+1.4 : u.spots[layer][0][1]+1.6, px = layer==='vault' ? 0 : -W/2+1.4, pg=new THREE.Group();
+    if (layer!=='vault'){ for (let i=0;i<3;i++){ const s=mk(G.box(0.34,0.02,0.44), M(0xe8dcc0), (i-1)*0.06, 0.05+i*0.02, 0, pg); s.rotation.y=i*0.3; } }
+    const pth=new Thing('pages', ox+px, oz+pz, 0.4, pg, ()=>(SY.wreck.pages||0)>=PAGES_AT[layer] || !wreckOpen(layer)?null:(layer==='vault'?'Open the strongbox':'Pick up'), t2=>{ const W0=SY.wreck; if ((W0.pages||0)>=PAGES_AT[layer] || !wreckOpen(layer)) return;
+        const from=(W0.pages||0)+1; W0.pages=PAGES_AT[layer]; save(); Snd.jingle(); pg.visible=false; toast(`Logbook pages ${from} to ${W0.pages}`, null, 'new', `Damp, but you can read them. ${holderName('wreck')} will want to see.`); }, { solid:false, reach:1.5 });
+    pg.visible=(SY.wreck.pages||0)<PAGES_AT[layer]; }
+  wreckGates(); }
+function wreckGates(){ const R=ROOMS.wreck; if (!R) return; const u=R.shell.userData; for (const k of ['hold','cabin','vault']){ const o=wreckOpen(k); if (u.gates[k]) u.gates[k].visible=!o; if (u.veils[k]) u.veils[k].visible=!o; } }
+function wreckMarlo(k, menu){
+  if (VISIT || GUEST || !SY.wreck) return []; const W0=SY.wreck, v=k.voice, nm=k.name, out=[];
+  if (!W0.bell && !W0.glass && W0.st!=='pending') out.push({ label:'Glass for a diving bell?', fn:()=>dialog(nm, v, ['A diving bell! Thick glass, round portholes, a brass skirt. I\'ve always wanted to make one.',`${fmt(BELL_GLASS)} clams for the glass and the casting. I'll have it down on the sand by the wreck by morning. It'll want iron fittings and a frame to hang from, mind.`], null, [
+    { label:`Make it (${fmt(BELL_GLASS)})`, fn:()=>{ if (noEdit()) return; if (S.clams<BELL_GLASS){ dialog(nm, v, ['Bit short, mate. No rush.'], menu); return; } S.clams-=BELL_GLASS; W0.glass=1; W0.glassDay=sday2(); updateHUD(); save(); Snd.coin(); dialog(nm, v, ['Lovely. Down on the dunes by morning.'], menu); } },
+    { label:'Not yet', alt:true, fn:menu } ]) });
+  if (wreckOpen('hold') && !wreckOpen('cabin') && !countItem('wrecklens')){
+    if (W0.lens===2) out.push({ label:'Is the lens ready?', fn:()=>{ if (!canAdd('wrecklens')){ dialog(nm, v, ['Your bag\'s full, mate.'], menu); return; } addItem('wrecklens'); W0.lens=3; save(); itemToast('wrecklens', true, 'Received'); dialog(nm, v, ['Here she is. Hold it up to a lamp and it\'ll throw light clear across a bay.'], menu); } });
+    else if (W0.lens===1) out.push({ label:'About that lens...', fn:()=>dialog(nm, v, ['Still grinding. Tomorrow.'], menu) });
+    else if (!W0.lens || W0.lens===3) out.push({ label:'A lens for the wreck?', fn:()=>dialog(nm, v, ['Too dark down there? A lantern lens, thick and ground just so, throws light a long way through water.',`${fmt(LENS3)} clams. Come back tomorrow for it.`], null, [
+      { label:`Order it (${fmt(LENS3)})`, fn:()=>{ if (noEdit()) return; if (S.clams<LENS3){ dialog(nm, v, ['Bit short, mate.'], menu); return; } S.clams-=LENS3; W0.lens=1; W0.lensDay=sday2(); updateHUD(); save(); Snd.coin(); dialog(nm, v, ['Righto. Tomorrow.'], menu); } },
+      { label:'Not yet', alt:true, fn:menu } ]) }); }
+  return out; }
+function wreckPemberton(k, menu){
+  if (VISIT || GUEST || !SY.wreck || !SY.wreck.bell || wreckOpen('hold') || countItem('crowbar') || !(SY.forge && SY.forge.st==='open')) return []; const v=k.voice, nm=k.name;
+  return [{ label:'A crowbar for the wreck?', fn:()=>dialog(nm, v, ['Pry open a ship\'s hold? You want a proper bar for that. Forged, not bought.',`${CROW.iron} iron and ${fmt(CROW.clams)} clams. I can make it while you wait.`], null, [
+    { label:`Make it (${fmt(CROW.clams)})`, fn:()=>{ if (noEdit()) return; if (countItem('iron')<CROW.iron || S.clams<CROW.clams){ dialog(nm, v, [countItem('iron')<CROW.iron?'Need the iron first.':'Bit short on clams.'], menu); return; } if (!canAdd('crowbar')){ toast('Your bag is full.'); return; }
+        removeItem('iron', CROW.iron); S.clams-=CROW.clams; addItem('crowbar'); updateHUD(); save(); Snd.thunk(); itemToast('crowbar', true, 'Made'); dialog(nm, v, ['There. Mind your toes.'], menu); } },
+    { label:'Not yet', alt:true, fn:menu } ]) }]; }
+// chart pieces wash up on trip islands once the cabin is open: Shipwreck Cove half the time, a themed isle 15%, a plain one 6%
+function rollTripChart(theme){ const W0=SY.wreck; if (VISIT || GUEST || !W0 || !wreckOpen('cabin') || wreckOpen('vault') || countItem('chartpiece')>=CHARTS) return false; const r=Math.random();
+  return theme==='shipwreck' ? r<0.5 : theme && theme!=='plain' ? r<0.15 : r<0.06; }
+function setupTrip3(){
+  const T=BOOT.trip||{}; if (!TRIP) return;
+  const place=(tag, fn)=>{ const r=tripRand(tag); for (let k=0;k<300;k++){ const a=r()*TAU, d=islandR(a)*(0.84+r()*0.12), x=Math.cos(a)*d, z=Math.sin(a)*d; if (!isBeach(x,z) || !walkable(x,z) || Math.hypot(x-DOCK.x0,z-DOCK.z)<12 || blocked(x,z,0.8)) continue; return fn(x,z); } };
+  if (T.chart && !TX.chart3) place('chart3', (x,z)=>{ const m=buildItemModel('chartpiece'); new Thing('chart', x, z, 0.4, m, ()=>TX.chart3?null:'Pick up', th=>{ if (TX.chart3) return; if (!canAdd('chartpiece')){ toast('Your bag is full.'); return; } TX.chart3=1; addItem('chartpiece'); save(); Snd.jingle(); th.obj.visible=false;
+    toast('A piece of an old chart!', thumb('chartpiece'), 'new', `${countItem('chartpiece')} of ${CHARTS}. It looks like it belongs to the wreck\'s vault.`); }, { solid:false, hit:[0.5,0.3] }); setTimeout(()=>toast('Something is glinting on the beach.', null, '', 'Hazel said to keep an eye out.'.replace('Hazel', holderName('wreck'))), 3200); });
+  if (TRIP_THEME==='shipwreck' && !TX.cloth3) place('cloth3', (x,z)=>{ const m=buildItemModel('sailcloth'); new Thing('cloth', x, z, 0.4, m, ()=>TX.cloth3?null:'Pick up', th=>{ if (TX.cloth3) return; const n=1+(tripRand('clothn')()<0.5?1:0); if (!canAdd('sailcloth')){ toast('Your bag is full.'); return; } TX.cloth3=1; for (let i=0;i<n;i++) addItem('sailcloth'); save(); Snd.jingle(); th.obj.visible=false; itemToast('sailcloth', false, `Found ${n}`); }, { solid:false, hit:[0.5,0.3] }); }); }
+// the antiques shop: three pieces of restored salvage a day
+function refreshAntiq(){
+  const A=SY.antiq, key=A && A.st==='open' ? 'open' : '';
+  if (key===S3B.antiqKey) return; S3B.antiqKey=key; if (S3B.antiq){ S3B.antiq.remove(); setRects('antiques',[]); S3B.antiq=null; } if (!key) return;
+  if (!A.at){ if (VISIT) return; const p=storySpot('antiq', PLACES.museum||PLACES.plaza||[0,0], 10, 30, 3.6, 0); if (!p){ S3B.antiqKey=''; return; } A.at=p; claimSpot(p, 3.8); save(); }
+  S3B.antiq=placeBuilding('antiques', A.at[0], A.at[1], S3.buildAntiques(), 'Antiques', ()=>openAntiq()); refreshSmoke(); }
+const SALVAGE = () => Object.values(ITEMS).filter(i=>i.salvage).map(i=>i.id);
+function antiqStock(){ const r=mulberry32(hashStr(today()+':antiq:'+S.seed)), L=SALVAGE().slice(), out=[]; while (out.length<3 && L.length) out.push(L.splice(Math.floor(r()*L.length),1)[0]); return out; }
+function openAntiq(){
+  const A=SY.antiq, own=npcName(SY.wreck.owner||dreamHolder('wreck')), nm=`${own}'s Antiques`;
+  if (VISIT){ dialog(nm, 420, ['Ship\'s lanterns, a brass globe, a sea chest with a crab carved on the lid.']); return; }
+  const render=()=>{ const sold=(A.sold&&A.sold.day===today()) ? A.sold.ids : [];
+    let h=`<div class="notice"><b>${nm}</b><br><span class="muted">Salvage from the Saltwren, cleaned up and polished. Three pieces out on the floor each day.</span></div><div class="notice">`;
+    for (const id of antiqStock()){ const it=ITEMS[id], gone=sold.includes(id); h+=`<div class="row"><img src="${thumb(id)}"><div class="grow"><div class="nm">${it.name}</div><div class="sub">${gone?'Sold':fmt(it.buy)+' clams'}</div></div>${gone?'':`<button class="btn alt" data-aq="${id}" ${S.clams<it.buy?'disabled':''}>Buy</button>`}</div>`; }
+    h+='</div>'+stakeHTML('antiq'); pBody.innerHTML=h; bindStake('antiq', render);
+    pBody.querySelectorAll('[data-aq]').forEach(b=>b.onclick=()=>{ if (noEdit()) return; const id=b.dataset.aq, it=ITEMS[id]; if (S.clams<it.buy) return; if (!canAdd(id)){ toast('Your bag is full.'); return; }
+      S.clams-=it.buy; const r=addItem(id); A.sold=(A.sold&&A.sold.day===today())?A.sold:{ day:today(), ids:[] }; A.sold.ids.push(id); A.n=(A.n||0)+1; updateHUD(); save(); Snd.coin(); itemToast(id, r==='new', 'Bought'); render(); }); };
+  openPanel(nm); render(); }
+
+/* =====================================================================
+   shops, keepers, Wendell, Clementine's projects
+   ===================================================================== */
+function story3Stock(id){ if (TRIP || VISIT || GUEST) return []; const out=[];
+  if (id==='garden'){ if (millOpen()) out.push('wheat_seeds'); if (gladeOpen()) out.push('moonflower_seeds','primrose_seeds'); if (gladeStage()>=2) out.push('glowjar'); }
+  if (id==='general' && SY.mill && (SY.mill.made||0)>0) out.push('bread');
+  return out.filter(x=>ITEMS[x]); }
+function keeper3(id, k, m){ return id==='garden' ? bathSprig(k, m) : id==='aquarium' ? [...bathMarlo(k, m), ...wreckMarlo(k, m)] : id==='general' ? wreckPemberton(k, m) : []; }
+function wendell3Choices(menu){ if (VISIT || GUEST || TRIP) return []; return [...bathWendell(menu), ...millWendell(menu)]; }
+function thistle3(k, menu){ return [...millThistle(k, menu), ...gladeThistle(k, menu)]; }
+const PROJ3 = { post:{ P:POST_PROJECT, st:'project', blurb:'A post office near the plaza, with a sorting room and a pigeon loft.', name:'Post Office' }, bath:{ P:BATH_PROJECT, st:'pool', blurb:'A cedar bathhouse beside the hot spring pool, with a lounge for tea.', name:'Bathhouse' } };
+function proj3HTML(){ let h='';
+  for (const [key,J] of Object.entries(PROJ3)){ const D=SY[key]; if (!D || !(D.st===J.st || (D.st==='building' && (key!=='bath' || D.at)))) continue; const nm=holderName(key);
+    if (D.st==='building'){ h+=`<div class="notice"><b>${nm}'s ${J.name}</b><br>The builders are at it tonight. It'll open tomorrow!</div>`; continue; }
+    const P=J.P, fund=D.fund||0, left=Math.max(0,P.clams-fund), mat=!!D.mats, ok=!left && mat;
+    h+=`<div class="notice"><b>${nm}'s ${J.name}</b><br><span class="muted">${J.blurb}</span>
+      <div style="margin-top:8px"><b>${fmt(fund)}</b> of ${fmt(P.clams)} clams raised</div><div class="bar" style="margin:6px 0"><div style="width:${Math.min(100,fund/P.clams*100)}%"></div></div>
+      ${left>0?`<div style="display:flex;gap:6px;flex-wrap:wrap">${[1000,10000].map(n=>`<button class="btn alt" data-pf="${key}:${n}" ${S.clams<Math.min(n,left)?'disabled':''}>Chip in ${fmt(Math.min(n,left))}</button>`).join('')}<button class="btn" data-pf="${key}:${left}" ${S.clams<1?'disabled':''}>Chip in ${fmt(Math.min(left,S.clams))}</button></div>`:''}
+      <div style="margin-top:8px">${mat?'Building materials delivered.':`The builders need ${needText(P.need)}.`}</div>${mat?'':`<button class="btn alt" data-pm="${key}" style="margin-top:6px" ${P.need.every(x=>haveNeed(x))?'':'disabled'}>Hand over the materials</button>`}
+      ${ok?`<button class="btn" data-pg="${key}" style="margin-top:8px">Start building</button>`:''}</div>`; }
+  return h; }
+function bindProj3(render){
+  pBody.querySelectorAll('[data-pf]').forEach(b=>b.onclick=()=>{ if (noEdit()) return; const [key,amt]=b.dataset.pf.split(':'), D=SY[key], P=PROJ3[key].P, n=Math.min(+amt, P.clams-(D.fund||0), S.clams); if (n<=0) return; S.clams-=n; D.fund=(D.fund||0)+n; Snd.coin(); updateHUD(); save(); render(); });
+  pBody.querySelectorAll('[data-pm]').forEach(b=>b.onclick=()=>{ if (noEdit()) return; const key=b.dataset.pm, P=PROJ3[key].P; if (!P.need.every(x=>haveNeed(x))) return; takeFor(P.need); SY[key].mats=true; save(); Snd.thunk(); render(); });
+  pBody.querySelectorAll('[data-pg]').forEach(b=>b.onclick=()=>{ if (noEdit()) return; const key=b.dataset.pg; SY[key].st='building'; SY[key].bday=sday2(); save(); Snd.fanfare(); toast('The builders start tonight!', null, 'new', `${holderName(key)}'s ${PROJ3[key].name} will open tomorrow.`); refreshStory3(); render(); }); }
+
+/* ---------- the islanders themselves ---------- */
+function story3Choices(res, menu){
+  if (VISIT || GUEST || TRIP) return []; const id=res.spec.id, nm=res.spec.name, v=res.spec.voice, out=[];
+  if (SY.wreck && isFor('wreck', id) && (SY.wreck.pages||0)>0) out.push({ label:'The logbook', fn:openLogbook });
+  if (SY.bath && isFor('bath', id) && bathOpen()){ const up=BATH_UP.find(u=>(SY.bath[u.key]||0)<2);
+    if (up && SY.bath.lounge){ const P=up, pend=SY.bath[up.key]===1;
+      out.push({ label:pend?'About the bathhouse...':'Plans for the bathhouse?', fn:()=>pend ? dialog(nm, v, ['The builders are in tonight! Tomorrow it\'s ready.'], menu) : dialog(nm, v, [up.key==='steam' ? 'What this place wants is a steam room. Cedar walls, hot stones, a bucket of water and a ladle. You come out feeling like a new dog.' : 'One more thing. Rock pools down the slope, looking out to sea. Sit in hot water and watch the boats come in.', `${fmt(P.clams)} clams and ${needText(P.need)}, and the builders can do it overnight.`], null, [
+        { label:`Build it (${fmt(P.clams)})`, fn:()=>{ if (noEdit()) return; if (S.clams<P.clams || !P.need.every(x=>haveNeed(x))){ dialog(nm, v, ['Not quite enough yet. No rush.'], menu); return; } takeFor(P.need); S.clams-=P.clams; SY.bath[up.key]=1; SY.bath.upDay=sday2(); updateHUD(); save(); Snd.fanfare(); dialog(nm, v, ['Hup hup! Tomorrow, then.'], menu); } },
+        { label:'Not yet', alt:true, fn:menu } ]) }); } }
+  return out; }
+const BEATS3 = {
+  mill:{ dream:['Have you seen the old windmill on the meadow? I keep going up there to look at it.','Sails rotted, stones cracked. A mill like that fed a whole town once.',`New sails would want planks and good canvas. Bramble could make them, if anyone could. The stone is another matter.`],
+    dreamg:['Barley always went on about that old windmill on the meadow. Sails rotted, stones cracked.','A mill like that fed a whole town once. New sails would want planks and good canvas. Bramble could make them.'],
+    stone:['The sails turn! I stood there an hour just watching.','Now it needs a millstone. The old one is cracked right through. They don\'t make them like that anymore. Somebody must have kept one somewhere. Somebody who keeps old things.'],
+    grain:['The stone\'s in! Bring me wheat. Two sheaves make a sack of flour, ground overnight.','Sprig will have the seed. Wheat grows easy, and fast. Plant a whole field.'],
+    wheel:['Listen to that. Wind on the sails and water on the wheel. Twice the flour, and the whole meadow smells like bread.'] },
+  post:{ dream:['I write letters to the little towns out on the trip islands. Lots of letters.','Someone in a fishing village wrote back once. I want to keep writing. Properly.','We need a post office. A real one, with pigeonholes and a stamp. Clementine would know how.'],
+    dreamg:['Wren always wanted a post office. Letters to the little towns out on the islands, properly, every week.','We should have one. Clementine would know how.'],
+    open:['The post office is open! Every town where you have a good pen pal can be a route.','Pack them a crate of what they need, once a week, and Skipper Wick sails it. They\'ll write back, and they send the nicest things.'] },
+  bath:{ dream:['Oof. My back. Too many push-ups. Or not enough. I can never tell.','My gran swore there was warm water under this island. A hot spring, somewhere. She said her gran used to bathe in it.','Wendell would know. Wendell knows what\'s under everything.'],
+    dreamg:['Tobin always said his gran swore there was warm water under the island. A hot spring.','Wendell would know. He knows what\'s under everything.'],
+    found:['You found it! Real hot water, right out of the ground! My gran was right!','It needs a pool and proper pipes. Marlo knows water. And then a bathhouse. Hup hup!'],
+    open:['The bathhouse is open! Come and soak. A soak a day and you\'ll feel like a puppy.','I want a lounge too. Tea from the tea room, and bath salts. Sprig makes a good jar, I bet.'] },
+  glade:{ dream:['There used to be fireflies here. My mother said the whole island glowed in June.','I found a place for them. A ring of old stones out past the plaza. It would need to be dark. And damp. Somewhere still.','And flowers that open at night, and old logs to live in. Mossby would know about logs. He\'s very particular.'],
+    dreamg:['Lumi always talked about fireflies. Their mother said the whole island used to glow in June.','There\'s a ring of old stones out past the plaza where Lumi wanted them. Dark, damp, still. Night flowers and old logs.'],
+    stage1:['I saw them! Last night, at the glade! Only a few, blinking slow, like they weren\'t sure. But I saw them.'],
+    stage2:['There were hundreds last night. Hundreds! I sat on a stone and cried a little.','Here. I caught a few in a jar for you. Put it by your bed. They don\'t mind, they\'re happy anywhere it\'s dark.'],
+    stage3:['There are new ones in the glade. Blue ones, and big slow golden ones. Nobody has ever seen them before. Nobody but us.'] },
+  wreck:{ dream:['Look what I found on the beach! It\'s a page from a logbook. A real captain\'s log!','It came from the old wreck out on Sandpiper Dunes, I\'m sure of it. There must be more pages down there.','If only we could get inside. You\'d need a diving bell. Marlo makes glass, and Bramble makes frames, and Pemberton makes all the iron bits.'],
+    dreamg:['Hazel found a page from a captain\'s logbook on the beach. From the old wreck on Sandpiper Dunes.','There must be more down there. You\'d need a diving bell. Marlo, Bramble and Pemberton between them could make one.'],
+    bell:['You built a diving bell! I\'m so jealous I could bite something. Go down! Find the pages! Read me every one!'],
+    open:['The antiques shop is open! All the salvage, cleaned up and polished. I wept on the ship\'s bell.','And the last page. Starfall Isle. I keep thinking about it. Don\'t you?'] } };
+function storyBeat3(res){
+  if (VISIT || GUEST || TRIP) return null; const id=res.spec.id, now=sday2(), b=(k, st, x)=>({ lines:(asWritten(k)?BEATS3[k][st]:(BEATS3[k][st+'g']||BEATS3[k][st])).map(l=>l.replace(/Bramble/g, holderName('shop'))), after:x });
+  for (const k of ['mill','post','bath','glade','wreck']){ const D=SY[k]; if (!D || !isFor(k, id)) continue;
+    if (D.sold && !D.sold.told && D.sold.to===id){ D.sold.told=true; save(); return { lines:[`${npcName(D.sold.from)} left it to me before they went. I'll look after it.`] }; }
+    if (D.st==='pending' && now>=D.due){
+      if (k==='mill'){ D.st='sails'; save(); return b(k,'dream'); }
+      if (k==='post'){ D.st='project'; save(); setTimeout(()=>refreshPost(), 0); return b(k,'dream'); }
+      if (k==='bath'){ D.st='dream'; save(); return b(k,'dream'); }
+      if (k==='glade'){ const p=storySpot('glade', PLACES.plaza||[0,0], 22, 48, 3.0, 0); if (!p) continue; D.at=p; claimSpot(p, 3.0); D.st='open'; D.stage=0; save(); setTimeout(()=>refreshGlade(), 0); return b(k,'dream'); }
+      if (k==='wreck'){ D.st='open'; D.pages=1; save(); return b(k,'dream', ()=>openLogbook()); } }
+    if (k==='mill'){ if (D.st==='stone' && !D.toldStone){ D.toldStone=true; save(); return b(k,'stone'); } if (D.st==='grain' && !D.toldGrain){ D.toldGrain=true; save(); return b(k,'grain'); } if (D.wheel && !D.toldWheel){ D.toldWheel=true; save(); return b(k,'wheel'); } }
+    if (k==='post' && D.st==='open' && !D.toldOpen){ D.toldOpen=true; save(); return b(k,'open'); }
+    if (k==='bath'){ if (['found','pipes'].includes(D.st) && !D.toldFound){ D.toldFound=true; save(); return b(k,'found'); } if (D.st==='open' && !D.toldOpen){ D.toldOpen=true; save(); return b(k,'open'); } }
+    if (k==='glade' && D.st==='open'){ const st=D.stage||0, told=D.told||0; if (st>told){ D.told=st; save();
+        if (st>=2 && !D.jar){ D.jar=true; save(); return b(k, 'stage'+st, ()=>giveItem('glowjar')); } return b(k,'stage'+st); } }
+    if (k==='wreck'){ if (D.bell && !D.toldBell){ D.toldBell=true; save(); return b(k,'bell'); } if (SY.antiq && SY.antiq.st==='open' && !D.toldOpen){ D.toldOpen=true; save(); return b(k,'open'); } }
+    const sk={ mill:'mill', post:'post', bath:'bath', wreck:'antiq' }[k]; if (sk && stakeOfferDue(sk)){ stakeOffer(sk, res); return { lines:STAKES[sk].offer }; } }
+  return null; }
+
+/* ---------- the day turning over ---------- */
+function storyNewDay3(now){
+  const T=S.town, hall=T.hall||0;
+  // triggers: each dream waits a day or three after the island is ready for it
+  if (!SY.mill && ISLE_K.includes('meadow')) SY.mill={ st:'pending', due:pendingDue('mill', now) };
+  if (!SY.post && hall>=1 && Object.values(S.contacts||{}).some(C=>C.kind==='trip' && C.penpal && TOWN_OF(C.from))) SY.post={ st:'pending', due:pendingDue('post', now) };
+  if (!SY.bath && hall>=1 && S.magic && S.magic.tower) SY.bath={ st:'pending', due:pendingDue('bath', now) };
+  if (!SY.glade && hall>=1 && MUSEUM_IDS.bug.filter(id=>S.museum.items[id]).length>=8) SY.glade={ st:'pending', due:pendingDue('glade', now) };
+  if (!SY.wreck && ISLE_K.includes('dunes')) SY.wreck={ st:'pending', due:pendingDue('wreck', now) };
+  // the mill
+  const M0=SY.mill; if (M0){
+    if (M0.stone===1 && now>M0.stoneDay){ M0.stone=2; M0.st='grain'; M0.owner=dreamHolder('mill'); M0.news='stone'; }
+    if (M0.order && now>M0.order.day){ M0.ready=(M0.ready||0)+M0.order.n; M0.order=null; }
+    if (M0.wheelDay && !M0.wheel && now>M0.wheelDay){ M0.wheel=true; M0.news='wheel'; } }
+  // the post office
+  const P=SY.post; if (P){ if (P.st==='building' && now>P.bday){ P.st='open'; P.built=now; P.owner=dreamHolder('post'); P.news=true; } postNewDay(now); }
+  // the bathhouse
+  const B=SY.bath; if (B){
+    if (B.st==='pipes' && now>B.pipeDay){ B.st='pool'; B.news='pool'; }
+    if (B.st==='building' && now>B.bday){ B.st='open'; B.built=now; B.owner=dreamHolder('bath'); B.news='open'; }
+    for (const u of BATH_UP) if (B[u.key]===1 && now>B.upDay){ B[u.key]=2; B.news=u.key; } }
+  // the glade: tonight's conditions decide how it looks
+  // the glade grows one stage a night toward what its conditions allow, and fades at once if they slip
+  const G0=SY.glade; if (G0 && gladeOpen()){ const c=gladeConds(), to=gladeStageOf(c), was=G0.stage||0; G0.cond=c; G0.stage = to>was ? was+1 : to; }
+  // the wreck
+  const W0=SY.wreck; if (W0){ if (W0.glass===1 && now>W0.glassDay){ W0.glass=2; W0.news='glass'; } if (W0.lens===1 && now>W0.lensDay) W0.lens=2; }
+  const A=SY.antiq; if (A && A.st==='pending' && now>A.day){ A.st='open'; A.built=now; if (SY.wreck) SY.wreck.owner=dreamHolder('wreck'); A.news=true; } }
+function story3News(){ const N=[];
+  const M0=SY.mill; if (M0 && M0.news){ N.push(M0.news==='stone' ? ['The millstone is in!', `${holderName('mill')}'s mill on Clover Meadow is grinding.`] : ['The water wheel is turning!', 'The mill on Clover Meadow grinds twice the flour now.']); M0.news=null; }
+  if (SY.post && SY.post.news){ SY.post.news=false; N.push([`${npcName(SY.post.owner||dreamHolder('post'))}'s Post Office is open!`, 'Near the plaza. Routes to the little towns.']); }
+  if (SY.post && SY.post.mail){ N.push([`${SY.post.mail} crate${SY.post.mail>1?'s':''} delivered!`, 'The towns wrote back. Read their letters from Menu > Pen pals.']); SY.post.mail=0; }
+  const B=SY.bath; if (B && B.news){ N.push({ pool:['The hot spring pool is full!', 'Marlo piped it overnight.'], open:[`${npcName(B.owner||dreamHolder('bath'))}'s Bathhouse is open!`, 'Come and soak.'], steam:['The steam room is built!', 'At the bathhouse.'], rock:['The rock pools are finished!', 'Hot water with a view of the sea.'] }[B.news] || ['The bathhouse changed overnight.', '']); B.news=null; }
+  if (SY.wreck && SY.wreck.news){ SY.wreck.news=null; N.push(['Marlo\'s diving bell is on the dunes!', 'It\'s down by the wreck, waiting for a frame.']); }
+  if (SY.antiq && SY.antiq.news){ SY.antiq.news=false; N.push([`${npcName((SY.wreck&&SY.wreck.owner)||dreamHolder('wreck'))}'s Antiques is open!`, 'Salvage from the Saltwren, near the museum.']); }
+  if (N.length){ save(); N.forEach(([a,b],i)=>setTimeout(()=>toast(a, null, 'new', b), 3800+i*2600)); }
+  const lm=meadowLM(); if (lm) landmark3('meadow', lm); }
+const GOSSIP3 = {
+  mill:['Barley comes home from the meadow covered in flour every night. Happy as anything.','Have you had the bread? Pemberton sells it warm in the mornings.'],
+  post:['Wren read me a letter from a monk. A real monk! He drew a little bee in the corner.','Skipper Wick says the post crates are heavier than people.'],
+  bath:['I soaked at the bathhouse for two hours. I\'m still floppy.','Tobin does stretches by the pool every evening. Loudly.'],
+  glade:['Did you see the glade last night? I went with a blanket and stayed till midnight.','Lumi says the fireflies blink in time with each other if you\'re quiet enough.'],
+  wreck:['Hazel reads the logbook pages to anyone who sits still. I\'ve heard page four eleven times.','Imagine the whole island arriving on one little ship. And a goat!'] };
+function storyGossip3(R){ const out=[];
+  if (millOpen() && !isFor('mill', R.id)) out.push(...GOSSIP3.mill.map(l=>l.replace(/Barley/g, holderName('mill'))));
+  if (postOpen() && !isFor('post', R.id)) out.push(...GOSSIP3.post.map(l=>l.replace(/Wren/g, holderName('post'))));
+  if (bathOpen() && !isFor('bath', R.id)) out.push(...GOSSIP3.bath.map(l=>l.replace(/Tobin/g, holderName('bath'))));
+  if (gladeStage()>=1 && !isFor('glade', R.id)) out.push(...GOSSIP3.glade.map(l=>l.replace(/Lumi/g, holderName('glade'))));
+  if (SY.wreck && (SY.wreck.pages||0)>=4 && !isFor('wreck', R.id)) out.push(...GOSSIP3.wreck.map(l=>l.replace(/Hazel/g, holderName('wreck'))));
+  return out; }
+function storiesHTML3(){ const L=[];
+  const M0=SY.mill; if (M0 && M0.st!=='pending'){ const nm=holderName('mill'); L.push(M0.st==='sails' ? `${nm} wants new sails for the old windmill on Clover Meadow.` : M0.st==='stone' ? `The windmill has sails again. ${nm} is looking for a millstone.` : M0.wheel ? `${nm}'s mill grinds day and night, sails and water wheel both.` : `${nm}'s mill on Clover Meadow is grinding flour.`); }
+  const P=SY.post; if (P && P.st!=='pending'){ const nm=holderName('post'); L.push(P.st==='project' ? `Clementine is raising clams for ${nm}'s post office.` : P.st==='building' ? 'Builders are putting up a post office near the plaza.' : `The post office sends crates to ${Object.keys(P.routes||{}).length||'no'} town${Object.keys(P.routes||{}).length===1?'':'s'}.`); }
+  const B=SY.bath; if (B && B.st!=='pending'){ const nm=holderName('bath'); L.push(B.st==='dream' ? `${nm} is sure there's a hot spring under the island.` : B.st==='vents' ? 'Steam is rising out of the ground in five places. Only one is real.' : ['found','pipes'].includes(B.st) ? `Hot water! ${nm} wants a pool and pipes.` : B.st==='pool' ? `Clementine is raising clams for ${nm}'s bathhouse.` : B.st==='building' ? 'Builders are putting up a bathhouse by the hot spring.' : `${npcName(B.owner||dreamHolder('bath'))}'s Bathhouse is open. Islanders soak there in the evenings.`); }
+  const G0=SY.glade; if (G0 && G0.st==='open') L.push([`${holderName('glade')} is waiting for the fireflies to come back to the glade.`, 'A few fireflies blink in the glade after dark.', 'The glade fills with fireflies every night.', 'Strange new glowing bugs live in the glade now.'][G0.stage||0]);
+  const W0=SY.wreck; if (W0 && W0.st!=='pending'){ const nm=holderName('wreck'); L.push(!W0.bell ? `${nm} wants a diving bell to get inside the wreck on Sandpiper Dunes.` : wreckOpen('vault') ? 'The Saltwren\'s vault is open. Hazel has all twelve pages.'.replace('Hazel', nm) : `The diving bell goes down to the wreck. ${nm} has ${W0.pages||1} of the logbook's pages.`); }
+  return L; }
+
+/* ---------- every frame ---------- */
+function story3Tick(dt, t){
+  if (World.inside==='wreck' && ROOMS.wreck) S3.swimWreck(ROOMS.wreck.shell, t);
+  if (S3B.flies){ const h=Time.hour(), m=Time.month(), st=gladeStage(), on=!World.inside && m>=3 && m<=11 && st>=1;
+    const night=World.night||0, a=on ? Math.min(1, night*1.4) : 0; S3B.flies.visible=a>0.02;
+    if (S3B.flies.visible && player.pos.distanceTo(S3B.flies.position)<70) S3B.flies.userData.tick(t, [0,45,100,140][st], a*0.95, false); }
+  if (S3B.bath && !S3B.bath.removed && !World.inside && Math.random()<dt*3 && player.pos.distanceTo(S3B.bath.pos)<60){ const B=SY.bath, [x,z]=B.at; puff(new THREE.Vector3(x+(Math.random()-0.5)*3.4, groundY(x,z)+0.25, z+1.2+(Math.random()-0.5)*3.4), 0xffffff, 1, 0.3, 1.4, 1.4, 1.4); } }
+
+/* ---------- dev shortcuts ---------- */
+function dev139(){
+  const now=sday2(), msg=[];
+  const step=()=>{
+    if (!SY.mill || SY.mill.st==='pending'){ SY.mill={ st:'sails', due:now }; addItem('millsails'); return 'Mill: sails in your bag, fit them at the windmill.'; }
+    if (SY.mill.st!=='grain'){ SY.mill.sails=true; SY.mill.stone=2; SY.mill.st='grain'; SY.mill.owner=dreamHolder('mill'); for (let i=0;i<20;i++) addItem('wheat'); return 'Mill grinding; 20 wheat in your bag.'; }
+    if (!SY.mill.wheel){ SY.mill.wheel=true; return 'Water wheel built.'; }
+    if (!SY.post || SY.post.st!=='open'){ SY.post=Object.assign(SY.post||{}, { st:'open', built:now, owner:dreamHolder('post') }); return 'Post office open (routes need a good pen pal in a trip town).'; }
+    if (!SY.bath || SY.bath.st==='pending' || SY.bath.st==='dream'){ SY.bath={ st:'dream' }; for (let i=0;i<3;i++) addItem('potion_dig'); return 'Bathhouse dream; 3 Diviner\'s Elixirs in your bag for Wendell.'; }
+    if (!bathOpen()){ if (!placeVents()) return 'No room for the bathhouse.'; SY.bath.st='open'; SY.bath.built=now; SY.bath.owner=dreamHolder('bath'); claimSpot(SY.bath.at, 6.2); return 'Bathhouse open.'; }
+    if (!SY.bath.lounge){ SY.bath.lounge=true; return 'Lounge stocked.'; }
+    if ((SY.bath.rock||0)<2){ SY.bath.steam=2; SY.bath.rock=2; return 'Steam room and rock pools built.'; }
+    if (!gladeOpen()){ const p=storySpot('glade', PLACES.plaza||[0,0], 22, 48, 3.0, 0); if (!p) return 'No room for the glade.'; SY.glade={ st:'open', at:p, stage:0, due:now }; claimSpot(p,3.0); return 'Glade open.'; }
+    if ((SY.glade.stage||0)<3){ SY.glade.stage=(SY.glade.stage||0)+1; SY.glade.cond={ dark:2, water:2, flowers:2, logs:2 }; return 'Glade stage '+SY.glade.stage+' (forced; it recomputes tonight).'; }
+    if (!SY.wreck || !SY.wreck.bell){ SY.wreck=Object.assign(SY.wreck||{}, { st:'open', pages:Math.max(1,(SY.wreck&&SY.wreck.pages)||0), bell:true, glass:2 }); const lm=dunesLM(); if (lm) addBell(lm); return 'Diving bell ready (if the dunes are up).'; }
+    if (!wreckOpen('vault')){ SY.wreck.layers={ hold:true, cabin:true, vault:true }; SY.antiq=SY.antiq||{ st:'pending', day:now }; wreckGates(); return 'Every part of the wreck open.'; }
+    if (!SY.antiq || SY.antiq.st!=='open'){ SY.antiq={ st:'open', built:now, day:now }; SY.wreck.owner=dreamHolder('wreck'); return 'Antiques shop open.'; }
+    return 'Every phase 3 story is open.'; };
+  msg.push(step()); save(); refreshStory3(); applyTown(); toast(msg.join(' ')); }
 
 /* =====================================================================
    v0.9: WENDELL THE WIZARD, POTIONS, FAVORS, SHAPING THE ISLAND
@@ -3416,6 +3988,7 @@ function talkWizard(){
   const menu=()=>dialog(W.name, v, [], null, [
     ...favorChoices(npcOf('wendell'), ()=>menu()),
     ...isleChoices(()=>menu()),
+    ...wendell3Choices(()=>menu()),   // v1.39
     { label:'Potions', fn:()=>openPotionShop() },
     ...EN.teachChoices('wendell', ()=>menu()),   // v1.40
     { label:'Chat', fn:()=>keeperChat(WIZARD, ()=>menu()) },
@@ -4000,7 +4573,7 @@ function magicArrive(R){
   setTimeout(()=>document.documentElement.classList.remove('magicret'), 250);
 }
 
-function refreshSmoke(){ smokeSrc.length=0; OUT.updateMatrixWorld(true); const add=e=>{ const c=e.obj.userData.chimney; if(c) smokeSrc.push(c.clone().applyMatrix4(e.obj.matrixWorld)); }; if(houseEnt) add(houseEnt); residentHomes.forEach(add); if (typeof S2B!=='undefined' && S2B) storySmoke(add); }
+function refreshSmoke(){ smokeSrc.length=0; OUT.updateMatrixWorld(true); const add=e=>{ const c=e.obj.userData.chimney; if(c) smokeSrc.push(c.clone().applyMatrix4(e.obj.matrixWorld)); }; if(houseEnt) add(houseEnt); residentHomes.forEach(add); if (typeof S2B!=='undefined' && S2B) storySmoke(add); if (typeof S3B!=='undefined' && S3B) storySmoke3(add); }
 refreshSmoke();
 const CLASSIC_LAMPS = [[3,-1.5],[-7,4],[6,-4],[6,6],[-9,-6],[DOCK.x0-1.5,DOCK.z-1.8],[2,11],[1,-12],[bEnd(bA,1)[0]+1.2,bEnd(bA,1)[1]],[-8,-33],[14,-18],[24,0]];
 function lampSpots(paths){ const L=[]; for(const p of paths){ let acc=5; for(let i=0;i<p.length-1;i++){ const [ax,az]=p[i], [bx,bz]=p[i+1], len=Math.hypot(bx-ax,bz-az); for(let d=0; d<len; d+=0.5){ acc+=0.5; if(acc<11) continue; const x=ax+(bx-ax)*d/len, z=az+(bz-az)*d/len, nx=-(bz-az)/len, nz=(bx-ax)/len;
@@ -4035,14 +4608,15 @@ function buildStreetLamp(r){
   mk(G.box(0.3,0.04,0.3), iron, 0, -0.18, 0, lan); mk(G.box(0.3,0.035,0.3), iron, 0, 0.17, 0, lan);
   const roof=mk(G.cone(0.27,0.2,4), dark, 0, 0.29, 0, lan); roof.rotation.y=Math.PI/4;
   mk(G.sph(0.03,6,4), iron, 0, 0.42, 0, lan);
-  addGlow(lan, 0, 3.2);
+  addGlow(lan, 0, 3.2); g.userData.lan=lan;
   // moss on the cap and the arm, ivy climbing the post
   mk(G.sph(0.1,8,5), moss, x, y+0.06, z, g).scale.set(1.25,0.35,1.25);
   mk(G.sph(0.07,7,4), moss, x+ax*0.25, armY+0.05, z+az*0.25, g).scale.set(1.6,0.4,1);
   if (r()<0.75){ const n=4+Math.floor(r()*4), a0=r()*TAU; for (let i=0;i<n;i++){ const t=i/n, a=a0+t*3.2, yy=0.25+t*1.5; mk(G.sph(0.06,6,4), ivy, Math.cos(a)*0.1+lean[0]*t, yy, Math.sin(a)*0.1+lean[1]*t, g).scale.set(1,0.55,1.2); } }
   return g;
 }
-function placeLamps(){ if (TRIP) return; LAMPS.forEach(([x,z],i)=>{ const g=buildStreetLamp(mulberry32(hashStr('lamp:'+i+':'+x.toFixed(1)))); g.position.set(x,groundY(x,z),z); OUT.add(g); }); }
+const LAMP_OBJS=[];   // v1.39 kept so the lamps near Lumi's glade can be switched off
+function placeLamps(){ if (TRIP) return; LAMPS.forEach(([x,z],i)=>{ const g=buildStreetLamp(mulberry32(hashStr('lamp:'+i+':'+x.toFixed(1)))); g.position.set(x,groundY(x,z),z); OUT.add(g); LAMP_OBJS.push({ g, x, z }); }); }
 
 /* ---------- Trees, rocks, scenery ---------- */
 const trees=[], rocks=[], wildFlowerSpots=[];
@@ -4238,7 +4812,8 @@ function loadIsle(I, now){
     ()=>{ if (I.kind==='pines'){ const at=SY.pinesAt||workshopSpot(I); if (!SY.pinesAt && !VISIT){ SY.pinesAt=at; save(); } I.taken.push([at[0], at[1], 6.5]); }
       if (I.kind==='crags'){ const at=SY.cragsAt||workshopSpot(I); if (!SY.cragsAt && !VISIT){ SY.cragsAt=at; save(); } I.taken.push([at[0], at[1], 6]); } },   // v1.38 room for the forge
     ()=>{ const [mx,mz,ma]=I.mark, lm=ISL.buildLandmark(I.kind, (S.seed|0)+I.k), f=[Math.cos(ma+Math.PI), Math.sin(ma+Math.PI)];
-      I.lmObj=lm; if (lm.userData.setLit) lm.userData.setLit(lightLit()); const th=new Thing('landmark', mx, mz, I.kind==='dunes'?3.3:2.5, lm, 'Look', ()=> I.kind==='bluff' ? lighthouseAct(lm) : dialog(ISL.ISLE_INFO[I.kind].name, 420, [lm.userData.desc]), { reach:3.6 }); th.obj.rotation.y=Math.atan2(f[0], f[1]); },
+      I.lmObj=lm; if (lm.userData.setLit) lm.userData.setLit(lightLit()); landmark3(I.kind, lm);   // v1.39 the mill's sails and wheel, the diving bell by the wreck
+      const th=new Thing('landmark', mx, mz, I.kind==='dunes'?3.3:2.5, lm, 'Look', ()=> I.kind==='bluff' ? lighthouseAct(lm) : I.kind==='meadow' ? millAct(lm) : I.kind==='dunes' ? wreckAct(lm) : dialog(ISL.ISLE_INFO[I.kind].name, 420, [lm.userData.desc]), { reach:3.6 }); th.obj.rotation.y=Math.atan2(f[0], f[1]); },
     ...ISLE_TREES[I.kind].map(([type,n])=>()=>{ for (let i=0;i<n;i++){ const key='x'+I.k+'_'+type+i, p=isleSpot(I, r, type==='palm'?0.25:SAND_H+0.2, type==='palm'?2.4:14, 2.6); if (!p || S.cut[key]==='gone') continue;   // one kind of tree per frame
         trees.push(new Tree(key, p[0], p[1], type, type==='fruittree'?isleFruit():type==='palm'?'coconut':null)); } }),
     ()=>{ for (let i=0;i<ISLE_ROCKS[I.kind];i++){ const p=isleSpot(I, r, SAND_H+0.1, 14, 2.2); if (!p) continue; const rk=new Rock(200+I.k*10+i, p[0], p[1], r); rk.rich=I.kind==='crags'; rocks.push(rk); } },
@@ -4251,7 +4826,7 @@ let streamT=0;
 function updateStreaming(dt,t){
   if (World.inside) return;
   for (const I of ISLES){ if (I.queue && I.queue.length){ I.queue.shift()(); break; } }   // one piece of one isle per frame
-  for (const I of ISLES) if (I.shown && I.lmObj){ const u=I.lmObj.userData; if (u.spin) u.spin.rotation.z-=dt*0.5;
+  for (const I of ISLES) if (I.shown && I.lmObj){ const u=I.lmObj.userData; if (u.spin) u.spin.rotation.z-=dt*0.5*(u.spinRate??1); if (u.wheel && u.wheel.parent.visible) u.wheel.rotation.x+=dt*0.8;
       if (u.beam){ u.beam.rotation.y+=dt*0.6; u.beamMat.opacity=0.22*World.night; } }
   for (const I of ISLES) if (I.shown && I.mist){ const h=Time.hour(), k=(1-smooth(9,12,h))*smooth(4,6.5,h)*0.75+0.18; for (const sp of I.mist.children){ sp.material.opacity=k*(0.5+0.5*Math.sin(t*0.1+sp.userData.ph)); sp.position.x+=Math.sin(t*0.05+sp.userData.ph)*dt*0.4; } }
   for (const I of ISLES) if (I.shown && I.swing){ const onIt=!!onBridge(player.pos.x,player.pos.z) && onBridge(player.pos.x,player.pos.z)===I.bridge; I.swingA=lerp(I.swingA||0.015, onIt?0.05:0.015, Math.min(1,dt*2)); I.swing.rotation.x=Math.sin(t*1.3)*I.swingA; }
@@ -4292,7 +4867,7 @@ function rollDay(){
   for(let i=0;i<7;i++){ const p=randLand(r,SAND_H+0.2,9,0.6); if(p) weeds.push({x:p[0],z:p[1],pulled:false}); }
   const pickN=(pool,n)=>{ const a=pool.slice(), o=[]; while(o.length<n && a.length) o.push(a.splice(Math.floor(r()*a.length),1)[0].id); return o; };
   const furnPool=generalPool(m), gt=shopTier('general');
-  const seeds=Object.values(ITEMS).filter(i=>i.kind==='seed'), starts=Object.values(ITEMS).filter(i=>i.kind==='sapling'&&PLANTS[i.plant].ptype==='shrub'), saps=Object.values(ITEMS).filter(i=>i.kind==='sapling'&&i.buy>0&&PLANTS[i.plant].ptype==='tree');
+  const seeds=Object.values(ITEMS).filter(i=>i.kind==='seed' && !i.story), starts=Object.values(ITEMS).filter(i=>i.kind==='sapling'&&PLANTS[i.plant].ptype==='shrub'), saps=Object.values(ITEMS).filter(i=>i.kind==='sapling'&&i.buy>0&&PLANTS[i.plant].ptype==='tree');
   const shellPool=Object.values(ITEMS).filter(i=>i.kind==='shell');
   S.ground = S.ground.filter(g=>!g.beach);
   for(let i=0;i<nShell;i++){ for(let k=0;k<30;k++){ const a=r()*TAU, d=(40+r()*16)*SC; const x=Math.cos(a)*d, z=Math.sin(a)*d; if(isBeach(x,z) && !onDock(x,z)){ S.ground.push({ id:tierPick(r,shellPool.filter(allowedFind),i=>i.rarity).id, x, z, beach:true }); break; } } }
@@ -4305,7 +4880,7 @@ function rollDay(){
   // v1.29 wildflowers: this island's 3 flower species grow wild in clumps, topped back up each day. Winter wilts them (Bloom Isle never sees winter).
   if (!VISIT){ const wf=S.plants.filter(p=>p.wf), wild=TRIP_THEME==='bloom' || season!=='winter';
     if (!wild){ for (const p of wf) S.plants.splice(S.plants.indexOf(p),1); }
-    else { const fr=mulberry32(hashStr(key+':wf:'+S.seed)), pool=TRIP_THEME==='bloom' ? Object.keys(PLANTS).filter(k=>PLANTS[k].ptype==='flower') : islandFlowers();
+    else { const fr=mulberry32(hashStr(key+':wf:'+S.seed)), pool=TRIP_THEME==='bloom' ? Object.keys(PLANTS).filter(k=>PLANTS[k].ptype==='flower' && !PLANTS[k].story) : islandFlowers();
       const want=TRIP_THEME==='bloom' ? 24 : TRIP ? 5 : 10; let have=wf.length;
       for (let tries=0; have<want && tries<160; tries++){ const p=randLand(fr,SAND_H+0.2,9,0.8); if (!p) continue; const [x,z]=p;
         if (gardenAtXZ(x,z) || visPathDist(x,z)<1.2 || blocked(x,z,0.45) || S.plants.some(q=>Math.hypot(q.x-x,q.z-z)<1.2) || trees.some(t=>!t.removed && Math.hypot(t.pos.x-x,t.pos.z-z)<1.3)) continue;
@@ -4324,6 +4899,7 @@ function rollDay(){
     for (let k=1;k<nRare;k++){ if (rr()<RARE_ODDS.beachPearl){ const p=beachSpot(rr); if (p) S.ground.push({ id:'moonpearl', x:p[0], z:p[1], beach:true }); }
       const pl=randomPlan(rr); if (pl && rr()<RARE_ODDS.bottlePlan){ const p=beachSpot(rr); if (p) S.ground.push({ id:pl, x:p[0], z:p[1], beach:true, bottle:true }); } }
     if (S.day.peddler && plan && c<RARE_ODDS.peddlerPlan) S.day.pplan=randomPlan(rr);
+    if (S.day.peddler && !TRIP && rr()<SAILCLOTH_ODDS) S.day.pstock=[...S.day.pstock, 'sailcloth'];   // v1.39 a bolt of sailcloth about 1 visit in 3
     { const sc=EN.dailyScroll(rr); if (sc){ const p=beachSpot(rr); if (p) S.ground.push({ id:sc, x:p[0], z:p[1], beach:true, bottle:true }); } } }   // v1.40 a scroll in a bottle
   // v1.38 coral fragments wash up from day one, for everyone: a cheap, ordinary beach find (1 to 3 a day). What they're for only comes out
   // later, when Gill tells you about the reef. A Coral Atoll trip is littered with them; other trips get the odd one.
@@ -4407,7 +4983,7 @@ function updateSnow(dt){
   SNOW_U.value = World.inside ? 0 : lerp(SNOW_U.value, snowTarget, Math.min(1, dt*0.8));
 }
 
-function bugPool(){ const h=Time.hour(), m=Time.month(); return Object.values(ITEMS).filter(i=>i.kind==='bug' && inMonths(m,i.months) && inHours(h,i.hours) && (!i.weather || i.weather===World.weather) && !(World.weather==='rain' && !i.weather && i.where==='air' && i.hours && i.hours[0]<12)); }
+function bugPool(){ const h=Time.hour(), m=Time.month(); return Object.values(ITEMS).filter(i=>i.kind==='bug' && inMonths(m,i.months) && inHours(h,i.hours) && (!i.weather || i.weather===World.weather) && !(World.weather==='rain' && !i.weather && i.where==='air' && i.hours && i.hours[0]<12) && (i.where!=='glade' || gladeBugOK(i.id))); }
 let bugT=0; const BUG_CAP=3, BUG_ROLL=0.28;
 function updateBugs(dt){
   if (World.inside) return; bugT-=dt; if(bugT>0) return; bugT=2.5;
@@ -4421,6 +4997,7 @@ function updateBugs(dt){
     case 'trunk': { const ts=trees.filter(t=>!t.removed&&t.stage>=2&&!['palm'].includes(t.type)&&t.pos.distanceTo(player.pos)<26&&t.pos.distanceTo(player.pos)>5&&!bugs.some(b=>b.trunk===t.pos)); if(ts.length){ const t=ts[Math.floor(Math.random()*ts.length)]; p=[t.pos.x,t.pos.z]; extra.trunk=t.pos; } break; }
     case 'beach': for(let k=0;k<30&&!p;k++){ const a=Math.random()*TAU, d=4+Math.random()*20; const x=player.pos.x+Math.cos(a)*d, z=player.pos.z+Math.sin(a)*d; if(isBeach(x,z)) p=[x,z]; } break;
     case 'pond': if (Math.hypot(player.pos.x-POND.x,player.pos.z-POND.z)<30) p=[POND.x+(Math.random()-0.5)*4, POND.z+(Math.random()-0.5)*4]; break;
+    case 'glade': p=gladeBugSpot(); break;   // v1.39 only in Lumi's glade
   }
   if (p) new Bug(sp.id, p[0], p[1], extra);
 }
@@ -4528,7 +5105,7 @@ function talkTo(res){
     ...favorChoices(npcOf(res.spec.id), ()=>menu()),
     ...EN.teachChoices(res.spec.id, ()=>menu(), res.spec),   // v1.40 Pippa's charms
     { label:'Chat', fn:()=>{ const first=!S.day.chat[res.spec.id]; let line;
-        if(first){ S.day.chat[res.spec.id]=true; S.friend[res.spec.id]=(S.friend[res.spec.id]||0)+1; save();
+        if(first){ S.day.chat[res.spec.id]=true; S.friend[res.spec.id]=(S.friend[res.spec.id]||0)+1+(S.day.rested?1:0); save();   // v1.39 Well rested from the bathhouse
           const tr=pickTree(res.spec); if (tr && Math.random()<0.5){ runTree(res.spec, tr, menu); return; }   // v1.34 little conversations
           line=chatLine(res.spec, P, c); }
         else line = Math.random()<0.6 ? chatLine(res.spec, P, c) : fill(P.again[Math.floor(Math.random()*P.again.length)],c);
@@ -4539,10 +5116,11 @@ function talkTo(res){
     ...(houseTalkOK(res.spec.id) ? [{ label:'About your house...', fn:()=>houseTalk(res, menu) }] : []),
     ...helpChoices(res, ()=>menu()),
     ...teaChoices(res, ()=>menu()),
+    ...story3Choices(res, ()=>menu()),   // v1.39
     ...(canAskToLeave(res.spec.id) ? [{ label:'Ever think about moving?', fn:()=>askToLeave(res, menu) }] : []),
     { label:'Bye!', alt:true, fn:end } ]);
   if (!VISIT){ const tk=(S.day.talked=S.day.talked||{}); if (!tk[res.spec.id]){ tk[res.spec.id]=1; track('talk'); } }
-  const beat=storyBeat(res) || (!VISIT && !GUEST && !TRIP ? storyBeat2(res) : null); if (beat){ Snd.jingle(); dialog(res.spec.name, res.spec.voice, beat.lines.map(l=>fill(l,c)), ()=>{ if (beat.after) beat.after(); menu(); }); return; }   // v1.37 something on their mind
+  const beat=storyBeat(res) || (!VISIT && !GUEST && !TRIP ? storyBeat2(res) || storyBeat3(res) : null); if (beat){ Snd.jingle(); dialog(res.spec.name, res.spec.voice, beat.lines.map(l=>fill(l,c)), ()=>{ if (beat.after) beat.after(); menu(); }); return; }   // v1.37 something on their mind
   dialog(res.spec.name, res.spec.voice, [greetingFor(res)], menu);
 }
 /* ---------- v1.34 more to say: each islander's own lines, questions, and little branching conversations (talk.js) ---------- */
@@ -4958,7 +5536,7 @@ function updateCraftBtn(){ const b=$('#bCraft'); if(b) b.style.display = S.craft
 const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 function monthsText(ms){ if(!ms||ms==='all') return 'All year'; return ms.length>4? MONTHS[ms[0]-1]+' to '+MONTHS[ms[ms.length-1]-1] : ms.map(m=>MONTHS[m-1]).join(', '); }
 function hoursText(h){ if(!h) return 'All day'; const f=x=>{ const a=x%24; return (a%12||12)+(a<12?'am':'pm'); }; return f(h[0])+' to '+f(h[1]); }
-const WHERE = { bay:'Cay Bay', sea:'Sea', river:'River', pond:'Pond', air:'Flying', flower:'On flowers', trunk:'On tree trunks', ground:'On the ground', beach:'On the beach' };
+const WHERE = { bay:'Cay Bay', sea:'Sea', river:'River', pond:'Pond', air:'Flying', flower:'On flowers', trunk:'On tree trunks', ground:'On the ground', beach:'On the beach', glade:'In Lumi\'s glade' };
 function openBook(tab='fish'){
   const tabs=[['fish','Fish'],['bug','Bugs'],['fossil','Fossils'],['shell','Beach'],['flower','Flowers'],['furniture','Furniture']];
   const render=()=>{
@@ -5053,11 +5631,11 @@ function shopStock(which){
   const r=mulberry32(hashStr(S.day.key+':'+id+':'+S.seed));
   const pickN=(pool,k,have=[])=>{ const a=pool.filter(i=>!have.includes(i.id)), o=[]; while(o.length<k && a.length) o.push(a.splice(Math.floor(r()*a.length),1)[0].id); return o; };
   if (id==='general'){ const base=S.day.stock.slice(0,Math.min(4,n)).filter(x=>ITEMS[x]);
-    return [...base, ...pickWeighted(r, generalPool(m), n-base.length, base, i=>stockWeight(i,t)), ...(r()<0.5?['chest']:[])]; }   // v1.36: a storage chest is on the shelf about half the days (it was always there)
+    return [...base, ...pickWeighted(r, generalPool(m), n-base.length, base, i=>stockWeight(i,t)), ...(r()<0.5?['chest']:[]), ...story3Stock(id)]; }   // v1.36: a storage chest is on the shelf about half the days (it was always there)
   const pool=Object.values(ITEMS).filter(i=>i.kind==='furniture' && i.shop===id && (i.tier||0)<=t);
   let out=[...pool.filter(i=>(i.tier||0)===t).map(i=>i.id).slice(0,1)]; out=[...out, ...pickN(pool, n-out.length, out)];
-  if (id==='garden'){ const seeds=Object.values(ITEMS).filter(i=>i.kind==='seed'||(i.kind==='sapling'&&i.buy>0&&(t>=1||PLANTS[i.plant].ptype!=='tree'))); out=[...out, ...pickN(seeds, 1+t)]; }
-  return out;
+  if (id==='garden'){ const seeds=Object.values(ITEMS).filter(i=>!i.story && (i.kind==='seed'||(i.kind==='sapling'&&i.buy>0&&(t>=1||PLANTS[i.plant].ptype!=='tree')))); out=[...out, ...pickN(seeds, 1+t)]; }
+  return [...out, ...story3Stock(id)];   // v1.39 wheat, night flowers, bread
 }
 const isSold = (which, id, i) => { if (which==='rare') return !!S.day.psold[i]; if (which==='stall') return !!(S.day.sold[i] && i<6 && S.day.stock[i]===id) || !!S.day.sold['id:'+id]; const m=(S.day.ssold=S.day.ssold||{}); return !!(m[which]&&m[which][id]); };
 const markSold = (which, id, i) => { if (which==='rare'){ S.day.psold[i]=true; return; } if (which==='stall'){ S.day.sold['id:'+id]=true; return; } const m=(S.day.ssold=S.day.ssold||{}); (m[which]=m[which]||{})[id]=true; };
@@ -5069,7 +5647,8 @@ function talkShop(id){
 }
 function talkShopRest(id, k, shop){
   // v1.36: a shopkeeper greets you and asks what you're after, instead of opening the shop straight away
-  const story=m=> id==='garden' ? sprigReefChoices(k, m) : id==='aquarium' ? [...marloReefChoices(k, m), ...lightChoicesMarlo(k, m), ...reefHallMarlo(k, m)] : id==='general' ? [...forgeChoices(k, m), ...EN.keeperChoices(k, m)] : [];   // v1.37, v1.38
+  const story0=m=> id==='garden' ? sprigReefChoices(k, m) : id==='aquarium' ? [...marloReefChoices(k, m), ...lightChoicesMarlo(k, m), ...reefHallMarlo(k, m)] : id==='general' ? [...forgeChoices(k, m), ...EN.keeperChoices(k, m)] : [];   // v1.37, v1.38
+  const story=m=>[...story0(m), ...keeper3(id, k, m)];   // v1.39
   keeperMenu(k, { first:[{ label:'Let\'s shop', fn:shop }], story, greet:keeperLine(k.id,'greet') });
 }
 /* v1.36 shopkeepers chat too (talk.js KEEPER_CHAT / KEEPER_ASK). The first chat each day is worth a little goodwill. */
@@ -5336,6 +5915,7 @@ function talkSkipperHome(){
     const seed=(Math.random()*1e9)|0, plan=VY.tripPlan(th, seed), fruits=NATIVE_FRUITS.filter(f=>f!==S.nativeFruit), T=TRIP_THEMES[th], name=plan.name||T.name, blurb=plan.blurb||T.blurb;
     const trip={ seed, theme:th, name, fruit:fruits[Math.floor(Math.random()*fruits.length)], start:invCounts(), seen:Object.keys(S.seen||{}), from:S.island };
     const relic=rollTripRelic(th); if (relic) trip.relic=relic;   // v1.38 one of Wendell's relics may be buried there
+    if (rollTripChart(th)) trip.chart=1;   // v1.39 a piece of the wreck's chart may wash up
     if (crew.length){ trip.room=[...crypto.getRandomValues(new Uint8Array(12))].map(b=>b.toString(16).padStart(2,'0')).join('');
       BOOT.sendLive({ t:'game', d:{ trip:'ask', to:crew, room:trip.room, isle:{ seed, theme:th, name, fruit:trip.fruit }, lead:S.player||'' } }); }
     if (ticket) removeItem(ticket,1); else S.clams-=cost;
@@ -5731,7 +6311,7 @@ function roleMenu(P){
       dialog(P.name, P.voice, ['Five pieces of fruit for a handful of our seeds?'], null, [
         { label:'Here you go', fn:()=>{ let need=5; for (let i=S.inv.length-1;i>=0 && need>0;i--){ const s=S.inv[i]; if (ITEMS[s.id].kind!=='fruit') continue; const k=Math.min(need,s.n); removeAt(i,k); need-=k; }
             const home=OWN.gen && OWN.gen.terrain ? islandSeedPool(OWN.seed, OWN.gen.terrain) : islandSeedPool(OWN.seed||0, 'hilly');
-            const pool=Object.keys(CROPS).map(c=>c+'_seeds').filter(id=>ITEMS[id] && !home.includes(id)), id=pool[Math.floor(Math.random()*pool.length)]||'tomato_seeds';
+            const pool=Object.keys(CROPS).filter(c=>!CROPS[c].story).map(c=>c+'_seeds').filter(id=>ITEMS[id] && !home.includes(id)), id=pool[Math.floor(Math.random()*pool.length)]||'tomato_seeds';
             let got=0; for (let k=0;k<5;k++) if (addItem(id)) got++; for (let k=got;k<5;k++) dropNear(id, player.pos, 1);
             TX.monk=(TX.monk||0)+1; save(); Snd.jingle(); dialog(P.name, P.voice, [`${ITEMS[id].name}. They don't grow on your island, so take good care of them.`], back); } },
         { label:'Not now', alt:true, fn:back } ]); } }];
@@ -5838,6 +6418,7 @@ const FALLING=[];
 if (TRIP){
   if (PLAN.secrets.includes('map')) setupTreasureMap();
   setupRelic();   // v1.38
+  setupTrip3();   // v1.39 chart pieces and sailcloth
   if (PLAN.secrets.includes('bottle') && !TX.bottle){ TX.bottle=1; const b=beachSpot(tripRand('bottlespot')); if (b){ S.ground.push({ id:'bottle_note', x:b[0], z:b[1], beach:true, bottle:true, note:'letter' }); } save(); spawnDaily(); }
   else if (PLAN.secrets.includes('map') && TX.map && !TX.mapSpawned){ TX.mapSpawned=1; save(); spawnDaily(); }
   if (PLAN.secrets.includes('cave')) setupCave();
@@ -5973,7 +6554,7 @@ function readLetter(lid){
   pBody.innerHTML=`<div class="letter">${L.lines.map(l=>`<p>${esc(l)}</p>`).join('')}</div>
     ${L.gift ? (L.gift.taken ? '<div class="muted" style="margin-top:8px">You took the gift that came with this letter.</div>' : `<div class="row" style="margin-top:10px"><img src="${thumb(L.gift.id)}"><div class="grow"><div class="nm">${ITEMS[L.gift.id].name}</div><div class="sub">Tucked in the envelope</div></div><button class="btn" id="lTake">Take it</button></div>`) : ''}
     <div style="margin-top:10px">${S.contacts[L.from]?`<button class="btn" id="lReply" ${sentToday(L.from)?'disabled':''}>${sentToday(L.from)?'You wrote today':'Write back'}</button> `:''}<button class="btn alt" id="lBack">Back</button></div>`;
-  const tk=pBody.querySelector('#lTake'); if (tk) tk.onclick=()=>{ const res=addItem(L.gift.id); if (!res){ toast('Your bag is full.'); return; } L.gift.taken=true; save(); itemToast(L.gift.id, res==='new', 'Received'); readLetter(lid); };
+  const tk=pBody.querySelector('#lTake'); if (tk) tk.onclick=()=>{ const n=L.gift.n||1; let res=null, got=0; for (let i=0;i<n;i++){ const r=addItem(L.gift.id); if (!r) break; res=res||r; got++; } if (!got){ toast('Your bag is full.'); return; } if (got<n) L.gift.n=n-got; else L.gift.taken=true; save(); itemToast(L.gift.id, res==='new', got>1?`Received ${got}`:'Received'); readLetter(lid); };   // v1.39 a gift can be several
   const rp=pBody.querySelector('#lReply'); if (rp) rp.onclick=()=>writeLetter(L.from);
   pBody.querySelector('#lBack').onclick=()=>renderPals(); }
 setTimeout(()=>deliverReplies(), 3000);
@@ -5986,6 +6567,7 @@ function talkCurator(){
     { label:'Donate', fn:()=>openDonate() },
     ...thistleReefChoices(k, ()=>menu()),
     ...reefHallThistle(k, ()=>menu()),
+    ...thistle3(k, ()=>menu()),   // v1.39
     { label:'How\'s the collection?', fn:()=>{ const by=MUSEUM.kinds.map(kd=>{ const l=MUSEUM_IDS[kd]; const n=l.filter(id=>S.museum.items[id]).length; return `${n} of ${l.length} ${kd==='shell'?'beach finds':kd==='fossil'?'fossils':kd+(kd==='fish'?'':'s')}`; });
         const next=MUSEUM.gifts.find(([n])=>donatedCount()<n);
         dialog(k.name, v, [`We have ${donatedCount()} of ${MUSEUM_TOTAL} things in the collection. ${by.join(', ')}.`, ...(museumPlans().length?[`Tonight the builders put in ${museumPlans().join(', and ')}.`]:[]), next?`When we reach ${next[0]}, I have a little something for you.`:'You have filled every display I have gifts for. Remarkable!'], menu); } },
@@ -6036,11 +6618,11 @@ class Mossby extends Ent {
       angry:['AGAIN?! I can hear every single one, you know. Thunk. Thunk. THUNK.','Wood is nice. Shade is nicer. Bugs live in trees! Birds live in trees! I live NEAR trees!','Plant three trees today and I\'ll stop yelling. Probably.'],
       furious:['That\'s it. I\'m writing a strongly worded letter. To myself. About you.','Saplings. Fruit. Shovel. Water. Please. I\'m begging. A little.'],
       happy:['Hmph. Three new trees.','...That\'s actually very nice. Carry on.'],
-    }[this.mood];
+    }[this.mood] || MOSSBY3[this.mood].slice();   // v1.39 glade and cross
     const gift = this.mood==='warn' && !S.mossbyGift;
     if (gift) L.push('Take these acorns. Plant them. I\'ll be watching. I\'m always watching. Mostly from stumps.');
-    if (this.mood==='happy') Snd.jingle(); else Snd.fail();
-    dialog('Mossby', MOSSBY_VOICE, L, ()=>{ if (gift){ S.mossbyGift=true; for(let i=0;i<3;i++){ if(!addItem('mossby_acorn')) dropNear('mossby_acorn', player.pos); } save(); itemToast('mossby_acorn', false, 'Received 3'); } this.state='leave'; this.t=0; });
+    if (this.mood==='happy' || this.mood==='glade') Snd.jingle(); else Snd.fail();
+    dialog('Mossby', MOSSBY_VOICE, L, ()=>{ if (this.mood==='glade') gladeApprove(); if (gift){ S.mossbyGift=true; for(let i=0;i<3;i++){ if(!addItem('mossby_acorn')) dropNear('mossby_acorn', player.pos); } save(); itemToast('mossby_acorn', false, 'Received 3'); } this.state='leave'; this.t=0; });
   }
   update(dt,t){ this.t+=dt; const u=this.obj.userData; const dx=player.pos.x-this.pos.x, dz=player.pos.z-this.pos.z, d=Math.hypot(dx,dz);
     this.obj.rotation.y=Math.atan2(dx,dz);
@@ -6693,7 +7275,7 @@ function openMenu(){
     <div class="notice"><b>Testing tools</b><br><span class="muted">The game runs on your real clock. These preview other times and weather.</span>
       <label class="f">Preview time: <span id="mOffT"></span></label><input type="range" id="mOff" min="-23" max="23" step="1" value="${Time.offsetH}">
       <label class="f">Weather <select id="mW"><option value="">Today's weather</option><option>sunny</option><option>cloudy</option><option>rain</option><option>snow</option></select></label>
-      ${DEV?`<div style="margin-top:8px"><b>Shortcuts</b> <span class="muted">(only on this device)</span><br><button class="btn alt" id="dvC">+50,000 clams</button> <button class="btn alt" id="dvT">${S.magic.tower?'Tower is up':'Raise the wizard tower'}</button> ${!GUEST&&!VISIT&&nextIsleKind()?'<button class="btn alt" id="dvI">Raise the next isle</button>':''} <button class="btn alt" id="dvM">${S.devMagic?'Wizard needs requirements again':'Skip wizard requirements'}</button> <button class="btn alt" id="dvF">New favors now</button> <button class="btn alt" id="dvD">Town: skip a day</button> <button class="btn alt" id="dvR">Rare kit</button> <button class="btn alt" id="dvRf">Reef: skip to the rowboat</button> <button class="btn alt" id="dvRg">Reef: grow 12 coral</button> <button class="btn alt" id="dvWs">Workshop: skip ahead</button> <button class="btn alt" id="dvRl">Relics for the next isle</button> <button class="btn alt" id="dvSt">Phase 2: next story</button> <button class="btn alt" id="dvEn">Enchanting + tables kit</button> <button class="btn alt" id="dvOff">Hide shortcuts</button></div>`:''}
+      ${DEV?`<div style="margin-top:8px"><b>Shortcuts</b> <span class="muted">(only on this device)</span><br><button class="btn alt" id="dvC">+50,000 clams</button> <button class="btn alt" id="dvT">${S.magic.tower?'Tower is up':'Raise the wizard tower'}</button> ${!GUEST&&!VISIT&&nextIsleKind()?'<button class="btn alt" id="dvI">Raise the next isle</button>':''} <button class="btn alt" id="dvM">${S.devMagic?'Wizard needs requirements again':'Skip wizard requirements'}</button> <button class="btn alt" id="dvF">New favors now</button> <button class="btn alt" id="dvD">Town: skip a day</button> <button class="btn alt" id="dvR">Rare kit</button> <button class="btn alt" id="dvRf">Reef: skip to the rowboat</button> <button class="btn alt" id="dvRg">Reef: grow 12 coral</button> <button class="btn alt" id="dvWs">Workshop: skip ahead</button> <button class="btn alt" id="dvRl">Relics for the next isle</button> <button class="btn alt" id="dvSt">Phase 2: next story</button> <button class="btn alt" id="dvS3">Phase 3: next story</button> <button class="btn alt" id="dvEn">Enchanting + tables kit</button> <button class="btn alt" id="dvOff">Hide shortcuts</button></div>`:''}
     </div>
     <button class="btn warn" id="mReset">Start a new island</button>${saveOK?'':'<div class="muted" style="margin-top:8px">Saving isn\'t available in this browser.</div>'}`;
     $('#mParty').onclick=()=>{ closePanel(); setTimeout(()=>PARTY.open(), 50); };
@@ -6729,7 +7311,7 @@ function openMenu(){
         else if (SY.shop.st==='open'){ SY.shop.built=sday()-8; SY.shop.made=Math.max(100, SY.shop.made||0); SY.shop.ready=(SY.shop.ready||0)+20; } else SY.shop.st='wizard'; save(); toast(`Workshop story: ${SY.shop.st}.`); };
       $('#dvT').onclick=()=>{ if (!S.magic.tower){ closePanel(); Q.story.wizard='done'; raiseTower(); } };
       $('#dvM').onclick=()=>{ S.devMagic=!S.devMagic; save(); render(); };
-      { const a=$('#dvRl'), b=$('#dvSt'); if (a) a.onclick=()=>dev138('relics'); if (b) b.onclick=()=>dev138('stories'); }   // v1.38
+      { const a=$('#dvRl'), b=$('#dvSt'); if (a) a.onclick=()=>dev138('relics'); if (b) b.onclick=()=>dev138('stories'); const c3=$('#dvS3'); if (c3) c3.onclick=()=>dev139(); }   // v1.38, v1.39
       { const di=$('#dvI'); if (di) di.onclick=()=>{ closePanel(); if (nextIsleKind()==='pines' && !SY.shop) SY.shop={ st:'wizard', at:sday() }; raiseIsle(ISLE_K.length); }; }
       $('#dvD').onclick=()=>{ S.town.devDays=(S.town.devDays||0)+1; townNewDay(dayKeyOf(dayNum(today())+S.town.devDays)); applyTown(); toast(`Town moved ahead ${S.town.devDays} day${S.town.devDays>1?'s':''}: ${S.town.res.length} islanders${S.town.next?', '+S.town.next.id+' moving in next':''}.`); };
       $('#dvF').onclick=()=>{ Q.rolledFor=null; Q.offers={}; rollFavors(Math.random); Q.rolledFor=S.day.key; save(); toast('Islanders have new favors to ask.'); };
@@ -7382,6 +7964,7 @@ function frame(now){
   if (bayOn()){ bayUpdate(dt,t); renderer.render(BAYR.scn, camera); return; }   // v1.37 out in Cay Bay
   if (started && !tankView){ updateHold(dt); if (meBody.rag) updateRag(meBody,dt,t); else movePlayer(dt,t); bonkCool=Math.max(0,bonkCool-dt); updateBugs(dt); updateFishing(dt,t); updateCatchMeter(dt); tickDialog(dt); updateActButton(); updateCutaway(); }
   if (World.inside==='reefhall' && ROOMS.reefhall) S2.swimReefHall(ROOMS.reefhall.shell, t);   // v1.38
+  story3Tick(dt, t);   // v1.39
   for(const e of ents.slice()){ if (e.removed) continue; if (e.rag){ updateRag(e,dt,t); continue; } if (e instanceof Resident || e instanceof Peddler || Math.abs(e.pos.x-player.pos.x)<40) e.update(dt,t); }
   WU.uTime.value=t; if (!World.inside){ updateWater(t); updateAmbient(dt,t); updateFalls(dt,t); updateStreaming(dt,t);
     for(const c of clouds){ c.position.x+=c.userData.v*dt; if(c.position.x>150) c.position.x=-150; }
@@ -7798,6 +8381,7 @@ window.__game.v134 = { TALK, plantSpotOk, orchardOk, openOrchardPanel, startOrch
 window.__game.v136 = { get ISLES(){ return ISLES; }, offerMove, startMagic, magicPlace, castMagic, get magicMode(){ return magicMode; }, KEEPERS, talkShop, residents, talkTo, houseTalk, openRedecorate, applyRedecorate, decorOf, shopStock, clothesStock, homeStock, toolOutToday, footprintClear, refreshIncome, incOf, incMoveOffer, keeperChat, get S(){ return S; }, ITEMS, addItem, countItem, dialogOpen:()=>!!dlgState, setCine:(x,z,dist,pitch)=>{ cine = x===null ? null : { camT:new THREE.Vector3(x, groundY(x,z), z), dist, pitch:pitch||1.0, shake:0 }; }, XBR, ISL, loadIsle, isleShown, raiseIsle, isleQuest, isleChoices, talkWizard, walkable, groundY, rawHeight, onBridge, isBeach, COVER_CHUNKS, updateStreaming, chunkInstanced, landingOK, mainLanding };
 // v1.37 testing hooks (headless checks of the island stories)
 window.__game.v138 = { get SY(){ return SY; }, get S2B(){ return S2B; }, isleQuest, isleChoices, relicMissing, wantedRelics, rollTripRelic, hiveColors, colorFam, apiaryChoices, refreshStory2, refreshTea, refreshForge, refreshReefHall, openTeaRoom, openForge, lighthouseAct, wickChoices, teaSeatOf, storyNewDay2, wendellLetter, isleDirWord, dev138, storySpot, bayCutting, nightBay, lightLit, COMMISSIONS, STAKES, stakeOf, talkSkipperHome, talkIncome, talkWizard };
+window.__game.v139 = { get SY(){ return SY; }, get S3B(){ return S3B; }, LOGBOOK, BEATS3, STAKES, COMMISSIONS, millAct, openMill, millstoneOffer, millThistle, millWendell, routeTowns, postRoutes, routeWant, openPost, postNewDay, placeVents, digVent, bathSeatOf, bathStage, openBath, gladeConds, gladeStageOf, gladeBugOK, gladeBugSpot, gladeLook, gladeStump, gladeKnock, gladeApprove, gladeStumpDug, gladeLamps, wreckAct, makeWreckRoom, wreckOpen, rollTripChart, openLogbook, openAntiq, antiqStock, story3Stock, storyBeat3, story3Choices, storyNewDay3, story3News, storiesHTML3, storyGossip3, refreshStory3, dev139, landmark3, meadowLM, dunesLM };
 window.__game.v137 = { get S(){ return S; }, get SY(){ return SY; }, get BAYR(){ return BAYR; }, get ISLES(){ return ISLES; }, get player(){ return player; }, get residents(){ return residents; },
   reefInfo, reefStage, bayPlan, bayPopulate, enterBay, exitBay, bayAct, bayCast, bayDrop, talkGill, talkShop, talkTo, talkHall, talkWizard, talkCurator, openNursery, openWorkshop, openBoard, openHallPanel,
   refreshNurseryTank, spawnRowboat, refreshWorkshop, refreshIncome, storyNewDay, townNewDay, applyTown, raiseIsle, nextIsleKind, isleQuest, loadIsle, incOf, incCollect, pinesRegrow,

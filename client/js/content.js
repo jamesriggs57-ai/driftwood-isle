@@ -26,7 +26,7 @@ export const FRUIT_REGROW_DAYS = 3;   // a picked tree grows fruit again after t
 export const NATIVE_FRUITS = ['apple','pear','peach','orange','plum','cherry','lemon'];
 
 /* ---------- Materials ---------- */
-def('wood',     {name:'Wood',           kind:'material', price:60,  model:{t:'log'}});
+def('wood',     {name:'Wood',           kind:'material', price:30,  model:{t:'log'}});   // v1.39: halved (was 60); regrowing pines made clear-cutting pay too well
 def('softwood', {name:'Driftwood Branch',kind:'material', price:20, model:{t:'branch'}});
 def('stone',    {name:'Stone',          kind:'material', price:75,  model:{t:'stone'}});
 def('clay',     {name:'Clay',           kind:'material', price:100, model:{t:'clay'}});
@@ -54,6 +54,16 @@ relic('relic_coralcrown','Living Coral Crown', 'coralcrown','A ring of every cor
 def('lampframe', {name:'Lamp Frame',     kind:'material', price:0, stack:1, noSell:true, noGift:true, model:{t:'lampframe'}, desc:'An iron and brass frame for the lighthouse lamp, made at the workshop.'});
 def('cutting',   {name:'Coral Cutting',  kind:'coral', price:0, stack:20, noSell:true, noGift:true, model:{t:'cutting'}, desc:'A cutting from a full-grown coral in Cay Bay, for Thistle\'s Reef Hall.'});
 def('teacake',   {name:'Honey Tea Cake', kind:'food', price:650, stack:10, model:{t:'teacake'}, desc:'One of Mabel\'s tea cakes, sticky with honey from Hollis\'s hives.'});
+/* ---------- v1.39 story things (models in story3.js). story:true keeps them out of every shop pool and island seed pool. ---------- */
+def('sailcloth', {name:'Sailcloth',      kind:'material', price:400, buy:1500, stack:10, story:true, model:{t:'sailcloth'}, desc:'Heavy canvas for sails. Fennick sometimes has a bolt on his cart, and old wrecks have it rolled up in their holds.'});
+def('millsails', {name:'Windmill Sails', kind:'material', price:0, stack:1, noSell:true, noGift:true, story:true, model:{t:'millsails'}, desc:'Four new sails for the old windmill on Clover Meadow, made at the workshop.'});
+def('flour',     {name:'Flour',          kind:'food', price:150, stack:30, story:true, model:{t:'flour'}, desc:'Stone-ground flour from Barley\'s mill on Clover Meadow. Mabel bakes with it.'});
+def('bread',     {name:'Country Loaf',   kind:'food', price:260, buy:520, stack:10, story:true, model:{t:'bread'}, desc:'A crusty loaf baked from Barley\'s flour.'});
+def('bathsalts', {name:'Herb Bath Salts', kind:'material', price:300, stack:20, story:true, model:{t:'bathsalts'}, desc:'Sprig\'s mix of sea salt, dried flowers and garden herbs, for Tobin\'s bathhouse.'});
+def('crowbar',   {name:'Crowbar',        kind:'material', price:0, stack:1, noSell:true, noGift:true, story:true, model:{t:'crowbar'}, desc:'A heavy iron bar from Pemberton\'s forge, for prying open a wreck\'s hold.'});
+def('wrecklens', {name:'Lantern Lens',   kind:'material', price:0, stack:1, noSell:true, noGift:true, story:true, model:{t:'wrecklens'}, desc:'A thick glass lens from Marlo that throws a lantern\'s light a long way through dark water.'});
+def('bellframe', {name:'Diving Bell Frame', kind:'material', price:0, stack:1, noSell:true, noGift:true, story:true, model:{t:'bellframe'}, desc:'A stout timber frame from the workshop, to hang Hazel\'s diving bell from.'});
+def('chartpiece',{name:'Treasure Chart Piece', kind:'relic', price:0, stack:4, noSell:true, noGift:true, story:true, model:{t:'chartpiece'}, desc:'A torn corner of an old sea chart, inked with a compass rose. Hazel says there are four.'});
 export const CORAL_KINDS = ['brain','staghorn','fan','table'];
 export const CORAL_NAMES = { brain:'Brain', staghorn:'Staghorn', fan:'Sea Fan', table:'Table' };
 for (const k of CORAL_KINDS){
@@ -184,6 +194,11 @@ bug('fiddler','Fiddler Crab',300,'beach',range(4,10),[8,18],4,[15,30],0.0004,{c:
 bug('hermit','Hermit Crab',1000,'beach',ALL,[19,8],2,[20,40],0.0004,{c:0xe08a6a,c2:0xf2c6a8,w:'hermit'});
 bug('sandhopper','Sand Hopper',220,'beach',ALL,[18,6],4,[10,20],0.00008,{c:0xd8c8a0,c2:0xb8a880,w:'hopper'});
 bug('skater','Pond Skater',140,'pond',range(5,9),[8,19],4,[10,16],0.00002,{c:0x3a3a3a,c2:0x6a6a6a,w:'skater'});
+// v1.39 glade bugs: they only come out at night in Lumi's firefly glade, and only when it's dark, still and in bloom enough for them (main.js gladeStage)
+bug('gladefly','Glade Firefly',600,'glade',range(4,10),[19,4],4,[10,16],0.0001,{c:0x3a3a20,c2:0xc8ff6a,w:'beetle',glow:true});
+bug('bluespark','Blue Spark',1400,'glade',range(4,10),[20,3],2.5,[8,14],0.0001,{c:0x22284a,c2:0x7ad8ff,w:'beetle',glow:true});
+bug('mossglow','Moss Glowmoth',2400,'glade',range(3,11),[20,4],1.6,[30,50],0.00004,{c:0x4a6a3a,c2:0xb8ffa0,w:'moth',glow:true});
+bug('starlantern','Starlantern Beetle',5200,'glade',range(5,9),[21,3],0.6,[20,36],0.0001,{c:0x2a1a3a,c2:0xffe9a0,w:'beetle',glow:true});
 
 /* ---------- Plants ----------
    ptype: flower | shrub | tree.  days: days to fully grow.  bloom: months a shrub flowers. */
@@ -200,6 +215,9 @@ export const PLANTS = {
   lavender:  { name:'Lavender',  ptype:'flower', days:3, colors:[0x9a7ad8], shape:'lav' },
   bellflower:{ name:'Bellflower',ptype:'flower', days:3, colors:[0x5a7ae0,0xffffff], shape:'bell' },
   marigold:  { name:'Marigold',  ptype:'flower', days:2, colors:[0xf8a020,0xf8d040], shape:'pom' },
+  // v1.39 night bloomers for Lumi's firefly glade: Sprig sells the seeds once Lumi has asked. They open at dusk.
+  moonflower:{ name:'Moonflower', ptype:'flower', days:3, colors:[0xf8f8ff,0xe8e0ff], shape:'cup', story:true, night:true },
+  primrose:  { name:'Evening Primrose', ptype:'flower', days:2, colors:[0xf8f0a0,0xf8d8e8], shape:'cup', story:true, night:true },
   hydrangea: { name:'Hydrangea', ptype:'shrub', days:4, bloom:[6,7], colors:[0x7a9ae8,0xf0a0c8] },
   azalea:    { name:'Azalea',    ptype:'shrub', days:4, bloom:[4,5], colors:[0xf060a0,0xffffff] },
   boxwood:   { name:'Boxwood',   ptype:'shrub', days:3, bloom:[], colors:[] },
@@ -224,6 +242,7 @@ for (const [id,p] of Object.entries(PLANTS)){
   } else if (p.ptype==='shrub') def(id+'_start', { name:p.name+' Start', kind:'sapling', plant:id, price:70, buy:280, model:{t:'start', sp:id} });
   else if (id!=='fruittree' && id!=='palm') def(id+'_sapling', { name:p.name+' Sapling', kind:'sapling', plant:id, price:160, buy:640, model:{t:'sapling', sp:id} });
 }
+for (const id of ['moonflower','primrose']){ ITEMS[id].story=true; ITEMS[id+'_seeds'].story=true; ITEMS[id].price=160; }   // v1.39
 def('palm_sapling', { name:'Palm Sapling', kind:'sapling', plant:'palm', price:160, buy:640, model:{t:'sapling', sp:'palm'} });
 
 /* ---------- Furniture ----------
@@ -284,6 +303,22 @@ furn('fourposter','Four-Poster Bed',14000,1.15,{shop:'story',stack:1});
 furn('boatshelf','Boat Bookcase',9000,0.8,{shop:'story',stack:1});
 furn('longtable','Long Table',8000,1.5,{shop:'story',stack:1});
 furn('reeftank','Reef Tank',22000,0.75,{shop:'story',glow:true,stack:1});
+// v1.39 story furniture: Lumi's glow jar, salvage from Hazel's wreck, and keepsakes the trade-route towns send by post
+furn('glowjar','Glow Jar',3200,0.3,{shop:'story',glow:true});
+furn('helmwheel','Captain\'s Helm',9000,0.6,{shop:'story',stack:1,salvage:'deck'});
+furn('figurehead','Mermaid Figurehead',16000,0.6,{shop:'story',stack:1,salvage:'deck'});
+furn('seachest','Sea Chest',7000,0.6,{shop:'story',stack:1,salvage:'hold'});
+furn('shiplantern','Ship\'s Lantern',5000,0.35,{shop:'story',glow:true,salvage:'hold'});
+furn('captaindesk','Captain\'s Desk',15000,0.8,{shop:'story',stack:1,salvage:'cabin'});
+furn('shipglobe','Captain\'s Globe',11000,0.45,{shop:'story',stack:1,salvage:'cabin'});
+furn('treasurechest','Treasure Chest',28000,0.6,{shop:'story',glow:true,stack:1,salvage:'vault'});
+furn('shipbell','Ship\'s Bell',12000,0.45,{shop:'story',stack:1,salvage:'vault'});
+furn('dryingrack','Fish Drying Rack',4200,0.7,{shop:'story',route:'hamlet'});
+furn('abbeybell','Abbey Hand Bell',5200,0.35,{shop:'story',route:'monastery'});
+furn('circusdrum','Circus Drum',4800,0.45,{shop:'story',route:'circus'});
+furn('minilight','Little Lighthouse',6500,0.4,{shop:'story',glow:true,route:'lighthouse'});
+furn('smugglerlamp','Smuggler\'s Lamp',5600,0.35,{shop:'story',glow:true,route:'smugglers'});
+furn('noticeboard','Village Noticeboard',3800,0.6,{shop:'story',route:'board'});
 furn('ironlantern','Iron Lantern',4800,0.4,{shop:'story',glow:true});
 furn('irongate','Iron Gate',6000,1.3,{shop:'story'});
 furn('weathervane','Weathervane',5200,0.4,{shop:'story'});
@@ -743,12 +778,20 @@ export const CROPS = {
   blueberry: { name:'Blueberries',  price:90, days:4, n:[3,5], regrow:true, regrowTo:2, c:0x4a5ab8, berry:true },
   raspberry: { name:'Raspberries',  price:90, days:4, n:[2,4], regrow:true, regrowTo:2, c:0xd8406a, berry:true },
 };
+// v1.39: wheat for Barley's mill (Sprig sells it once the mill has a stone), and three crops that only come by post on Wren's trade routes
+Object.assign(CROPS, {
+  wheat:   { name:'Wheat',    price:50,  days:3, n:[3,5], regrow:false, c:0xe0b860, story:true },
+  chili:   { name:'Chili',    price:160, days:4, n:[2,4], regrow:true,  c:0xd8302a, story:true },
+  melon:   { name:'Melon',    price:420, days:5, n:[1,2], regrow:false, c:0x8ac850, story:true },
+  corn:    { name:'Sweetcorn',price:140, days:4, n:[2,3], regrow:false, c:0xf0d040, story:true },
+});
 for (const [id,c] of Object.entries(CROPS)){
   const pid='crop_'+id;   // the plant is crop_x, the harvest is x
   PLANTS[pid]={ name:c.name, ptype:'crop', days:c.days, colors:[c.c], crop:id };
   def(id, { name:c.name, kind:c.herb?'herb':c.berry?'berry':'veg', price:c.price, model:{t:'furn', b:'v_'+id} });
   // v1.8: crop seeds stack to 99 and sell for little, since every harvest gives some back
-  def(id+'_seeds', { name:(c.berry?c.name.replace(/ies$/,'y').replace(/s$/,''):c.name)+(c.herb?' Starts':' Seeds'), kind:'seed', plant:pid, price:10, buy:c.herb?320:240, stack:99, model:{t:'seed', sp:pid} });
+  def(id+'_seeds', { name:(c.berry?c.name.replace(/ies$/,'y').replace(/s$/,''):c.name)+(c.herb?' Starts':' Seeds'), kind:'seed', plant:pid, price:10, buy:c.herb?320:id==='wheat'?120:240, stack:99, model:{t:'seed', sp:pid} });
+  if (c.story){ ITEMS[id].story=true; ITEMS[id+'_seeds'].story=true; PLANTS[pid].story=true; }
 }
 /* ---------- v1.8: island seeds ----------
    Every island has a few crops that grow wild there: cheap and always in stock at the shops, and their seed packets turn up
@@ -771,7 +814,7 @@ export function islandSeedPool(seed, terrain){
 export const WILDFLOWER_N = 3, WILDFLOWER_SEEDS = [1,3];
 export function islandFlowerPool(seed){
   let s=(seed^0xf10e5)>>>0; const r=()=>{ s=(s+0x6D2B79F5)|0; let t=Math.imul(s^s>>>15,1|s); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; };
-  const all=Object.keys(PLANTS).filter(k=>PLANTS[k].ptype==='flower'), out=[];
+  const all=Object.keys(PLANTS).filter(k=>PLANTS[k].ptype==='flower' && !PLANTS[k].story), out=[];
   while (out.length<WILDFLOWER_N && all.length) out.push(all.splice(Math.floor(r()*all.length),1)[0]);
   return out;
 }

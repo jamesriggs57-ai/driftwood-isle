@@ -438,3 +438,6 @@ Code: `FISH_NEAR` / `FISH_MAX` / `FISH_RATE` above `updateFishing` in `main.js`;
 - Old saves: every plan, table and story step already earned stays. `S.craft.ms` (milestones passed) is kept as it was. `S.craft.per` is filled in on load from what the save knows: each piece made counts its share of everything made, at least 1 and at most 3.
 - Testing tools (#dev, Menu > Shortcuts > Enchanting and tables): "Break the tool in hand". `window.__game.v140` has `breakIt(t)`, `canFix(t)` and `brokenOf(t)`.
 - Save: `rare.broken` and `craft.per`, `craft.msDay`, `craft.msToday`, `craft.msHint`, all inside existing player keys; no new sync keys.
+
+## v1.51: item value in the bag
+Hover a bag slot with a mouse to see the item's name and value; on touch screens a tap selects the slot and the same line shows in the bar at the bottom, as before. Code: `bagValue`, `invGrid` and `invTip` in `main.js`. The value comes from `sellPrice` (and `teaPrice` once the tea room is open), so it always matches what the shops pay.

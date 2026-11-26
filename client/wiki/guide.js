@@ -11,7 +11,7 @@
    built in wiki.js. Writing rules: plain words, no em dashes, no emoji, only facts the code supports.
    ===================================================================== */
 
-export const GUIDE_VERSION = 'v1.50';
+export const GUIDE_VERSION = 'v1.51';
 export const GUIDE_UPDATED = '2026-11-26';
 
 const tip = s => `<div class="tip"><b>Tip</b> ${s}</div>`;
@@ -68,6 +68,7 @@ ${tip('Menu &gt; Battery saver lowers resolution and turns off shadows if your p
 <tr><td>Tidepool (Marlo)</td><td>Fish only</td><td>120%, up to 150% as you invest</td></tr>
 <tr><td>Bug &amp; Bloom (Sprig)</td><td>Bugs and flowers</td><td>120%, up to 150% as you invest</td></tr>
 <tr><td>Mabel's Tea Room (story)</td><td>Fruit, vegetables, herbs, berries, honey</td><td>150%</td></tr></table>
+<p>To see what something is worth, hover over it in your bag with a mouse, or tap it on a phone. It shows the most any shop pays for it today (with your shop upgrades and the size of a catch counted) and who pays that. Story items say they can't be sold.</p>
 <h3>Good money makers</h3>
 <ul>
 <li><b>Foreign fruit.</b> Your island has one native fruit. Other fruit sells for 250 each (native 100, coconut 150). Plant foreign fruit you bring back from trips and orchards pay for themselves.</li>
@@ -738,6 +739,7 @@ ${steps(['Talk to them and pick <b>Come and meet people</b>. They follow you for
 { id:'changes', group:'done', title:'What\'s changed', html:`
 <p>Recent updates, newest first.</p>
 <ul>
+<li><b>v1.51</b>: Hover over an item in your bag (or tap it on a phone) to see its name and what it sells for, and who pays the most for it. Story items say they can't be sold instead of showing 0.</li>
 <li><b>v1.50</b>: Fewer fish swimming about (at most 2 near you and 5 on the island, turning up about half as often). Broken tools aren't gone: fix them at any crafting table, enchantments and all. New woodworking plans now come from making lots of different things (making the same piece over and over no longer counts), at most one batch a day. The Carpenter's Bench now needs 16 different things made, the Master Workbench 30, and Bramble's workshop story 14.</li>
 <li><b>v1.49</b>: The Town Hall has an inside, with Clementine's desk, the Island Records and the islanders' portraits. Moving a building is much more forgiving and says what's in the way.</li>
 <li><b>v1.48</b>: Less grind. Wood sells for 20. Pieces made only from wood, branches, stone and weeds sell for about their materials plus 15% (no more fence fortunes); pieces with iron, clay, stumps or planks never sell below their materials. Shop investing costs 100,000, 200,000 and 400,000. Every passive income and stake tier pays itself back in about a month, and the Heirloom tools (50,000, the can 40,000) and the Grand Expedition Pack (200,000) cost less. Rare and legendary trip islands no longer stop at 200,000; your bag is the limit, and Stardrift Isle's star shower drops a star every 10 to 14 seconds until 100 have fallen.</li>

@@ -176,15 +176,15 @@ export function buildFestStall(seed=1, goods=[]){
 
 /* ---------- Starfall Isle spells ---------- */
 // the aurora: long soft curtains of light high over the island. main.js fades it in after dark.
-export function buildAurora(R=60, seed=3){
+export function buildAurora(R=60, seed=3, dir=null){   // v1.53 dir: center the curtains on that heading (for the view while a spell is cast)
   const g=new THREE.Group(), r=mulberry32(seed), mats=[];
   const vs=`varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }`;
   const fs=`uniform float uT; uniform float uA; uniform vec3 uC1; uniform vec3 uC2; varying vec2 vUv;
     void main(){ float w=sin(vUv.x*18.0+uT*0.7)*0.5+sin(vUv.x*7.0-uT*0.4)*0.5; float band=smoothstep(0.0,0.25,vUv.y)*(1.0-smoothstep(0.35,1.0,vUv.y));
-      float rays=0.65+0.35*sin(vUv.x*120.0+w*4.0+uT*1.3); vec3 c=mix(uC1,uC2,vUv.y+w*0.15); float edge=smoothstep(0.0,0.08,vUv.x)*(1.0-smoothstep(0.92,1.0,vUv.x));
-      gl_FragColor=vec4(c, band*rays*edge*uA*(0.55+0.45*w)); }`;
-  const cols=[[0x3affa0,0x7a5aff],[0x6affd0,0xd05aff],[0x3ad8ff,0x5affa0]];
-  for (let i=0;i<3;i++){ const seg=64, geo=new THREE.PlaneGeometry(1,1,seg,1), pos=geo.attributes.position, a0=r()*TAU, arc=1.6+r()*0.8, rr=R*(0.75+r()*0.4), h=28+r()*10;
+      float rays=0.5+0.5*sin(vUv.x*120.0+w*4.0+uT*1.3); vec3 c=mix(uC1,uC2,vUv.y+w*0.15); float edge=smoothstep(0.0,0.08,vUv.x)*(1.0-smoothstep(0.92,1.0,vUv.x));
+      gl_FragColor=vec4(c*1.3, band*rays*edge*uA*(0.75+0.25*w)); }`;
+  const cols=[[0x20ff80,0x9040ff],[0x40ffb0,0xd040ff],[0x30ff90,0x6050ff]];
+  for (let i=0;i<3;i++){ const seg=64, geo=new THREE.PlaneGeometry(1,1,seg,1), pos=geo.attributes.position, arc=1.6+r()*0.8, a0=dir===null ? r()*TAU : dir-arc/2+(r()-0.5)*0.6, rr=R*(0.75+r()*0.4), h=28+r()*10;
     for (let k=0;k<pos.count;k++){ const u=pos.getX(k)+0.5, v=pos.getY(k)+0.5, a=a0+u*arc, wob=Math.sin(u*9+i)*R*0.06;
       pos.setXYZ(k, Math.cos(a)*(rr+wob), 34+i*5+v*h, Math.sin(a)*(rr+wob)); }
     geo.computeBoundingSphere();
@@ -193,9 +193,39 @@ export function buildAurora(R=60, seed=3){
     mats.push(m); const mesh=new THREE.Mesh(geo, m); mesh.frustumCulled=false; mesh.renderOrder=-1; g.add(mesh); }
   g.userData.tick = (t, a) => { for (const m of mats){ m.uniforms.uT.value=t; m.uniforms.uA.value=a; } g.visible=a>0.01; };
   return g; }
-// glowing stones along every path (one instanced mesh; main.js gives it the points)
-export function buildPathGlow(points){
-  const g=new THREE.Group(); if (!points.length) return g;
-  const mat=glowMat(0x9ae8ff), geo=G.ico(0.1,0), im=new THREE.InstancedMesh(geo, mat, points.length), m=new THREE.Matrix4(), q=new THREE.Quaternion(), s=new THREE.Vector3();
-  points.forEach(([x,y,z,k],i)=>{ q.setFromAxisAngle(new THREE.Vector3(0,1,0), k*2.3); s.set(1,0.55,1).multiplyScalar(0.8+(k%3)*0.2); m.compose(new THREE.Vector3(x,y+0.03,z), q, s); im.setMatrixAt(i, m); });
-  im.castShadow=false; im.receiveShadow=false; g.add(im); g.userData.mat=mat; return g; }
+// v1.53 points of light that drift and fade: the aurora's motes and the sparkles rising off the glowing paths.
+// One Points draw each, moved on the CPU (a hundred or so at a time). spawn(p) places a new one and returns false if
+// there's nowhere to put it; main.js sets uScale from the screen so they keep their size on every device.
+export function buildMotes(n, cols, size=0.3){
+  const geo=new THREE.BufferGeometry(), pos=new Float32Array(n*3), col=new Float32Array(n*3), al=new Float32Array(n);
+  geo.setAttribute('position', new THREE.BufferAttribute(pos,3)); geo.setAttribute('aC', new THREE.BufferAttribute(col,3)); geo.setAttribute('aA', new THREE.BufferAttribute(al,1));
+  const mat=new THREE.ShaderMaterial({ transparent:true, depthWrite:false, blending:THREE.AdditiveBlending,
+    uniforms:{ uScale:{ value:500 }, uSize:{ value:size } },
+    vertexShader:`attribute vec3 aC; attribute float aA; varying vec3 vC; varying float vA; uniform float uScale; uniform float uSize;
+      void main(){ vC=aC; vA=aA; vec4 mv=modelViewMatrix*vec4(position,1.0); gl_PointSize=aA>0.0 ? uSize*uScale/max(1.0,-mv.z) : 0.0; gl_Position=projectionMatrix*mv; }`,
+    fragmentShader:`varying vec3 vC; varying float vA; void main(){ float r=length(gl_PointCoord-0.5); float a=smoothstep(0.5,0.0,r); a=a*a*0.8+smoothstep(0.14,0.0,r); gl_FragColor=vec4(vC*a*vA,1.0); }` });
+  const P=new THREE.Points(geo, mat); P.frustumCulled=false; P.renderOrder=2;
+  const st=[...Array(n)].map(()=>({ life:0, max:1, x:0, y:0, z:0, vx:0, vy:0, vz:0, ph:Math.random()*TAU, c:0 }));
+  P.userData.update=(dt, t, strength, spawn, budget=4)=>{
+    for (let i=0;i<n;i++){ const p=st[i];
+      if (p.life<=0){ if (strength>0.01 && budget>0 && spawn(p)){ budget--; p.life=p.max; const c=cols[p.c%cols.length]; col[i*3]=c.r; col[i*3+1]=c.g; col[i*3+2]=c.b; } else { al[i]=0; continue; } }
+      p.life-=dt; p.x+=(p.vx+Math.sin(t*1.1+p.ph)*0.25)*dt; p.y+=p.vy*dt; p.z+=(p.vz+Math.cos(t*0.9+p.ph)*0.25)*dt;
+      const k=1-p.life/p.max; pos[i*3]=p.x; pos[i*3+1]=p.y; pos[i*3+2]=p.z;
+      al[i]=Math.max(0, strength*Math.sin(Math.PI*Math.min(1,k))*(0.75+0.25*Math.sin(t*6+p.ph*3))); }
+    geo.attributes.position.needsUpdate=geo.attributes.aA.needsUpdate=geo.attributes.aC.needsUpdate=true; };
+  P.userData.cols=cols.map(c=>new THREE.Color(c)); cols=P.userData.cols;
+  return P; }
+// v1.53 the moment a spell takes at the star altar: a column of light up into the sky, rings rising and opening out.
+// Runs on its own clock (tick(dt) returns false when it's over).
+export function buildCastBeam(color=0x9ad8ff){
+  const g=new THREE.Group(), mats=[];
+  const bm=new THREE.MeshBasicMaterial({ color, transparent:true, opacity:0, depthWrite:false, blending:THREE.AdditiveBlending, side:THREE.DoubleSide, fog:false }); mats.push(bm);
+  const beam=new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.6, 80, 16, 1, true), bm); beam.position.y=40; g.add(beam);
+  const core=new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.3, 80, 10, 1, true), new THREE.MeshBasicMaterial({ color:0xffffff, transparent:true, opacity:0, depthWrite:false, blending:THREE.AdditiveBlending, fog:false })); core.position.y=40; g.add(core); mats.push(core.material);
+  const rings=[...Array(5)].map((_,i)=>{ const m=new THREE.Mesh(new THREE.TorusGeometry(1,0.06,8,40), new THREE.MeshBasicMaterial({ color:i%2?0xd8b0ff:color, transparent:true, opacity:0, depthWrite:false, blending:THREE.AdditiveBlending, fog:false })); m.rotation.x=Math.PI/2; g.add(m); return m; });
+  let T=0; const D=4.2;
+  g.userData.tick=dt=>{ T+=dt; const up=Math.min(1,T/0.5), down=1-Math.max(0,(T-D+1)/1);
+    bm.opacity=0.55*up*down*(0.85+0.15*Math.sin(T*20)); core.material.opacity=0.9*up*down; beam.scale.set(1+0.2*Math.sin(T*7),1,1+0.2*Math.sin(T*7));
+    rings.forEach((m,i)=>{ const k=((T*0.55+i/5)%1); m.position.y=1+k*9; m.scale.setScalar(0.8+k*1.6); m.material.opacity=0.8*(1-k)*up*down; });
+    return T<D; };
+  return g; }

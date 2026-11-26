@@ -8,11 +8,15 @@
    - A tool holds one enchantment. The Twin Charm (Wendell, late game, once you know the strongest form of
      several enchantments) lets a tool hold two.
    - Strengths are never shown as numbers: only "slightly", "moderately" or "greatly increased ...".
-   - A tool that breaks is gone, and its enchantments with it. Repair it first (Tools tab, or Pemberton for clams).
+   - A worn tool can be repaired anywhere (Tools tab) or by Pemberton for clams.
+   - v1.50: a tool that breaks isn't gone. It waits in S.rare.broken with its tier and enchantments, and you can fix it
+     at any crafting table for BROKEN_MULT full repairs' worth of materials. Getting a tool of that kind at the same or
+     a better tier (bought or made) scraps the broken one.
    - Double Output, Triple Output and One-Swing never stack: they share one family, so a tool has at most one.
 
    Save shape (all inside keys that already exist, so nothing new to sync):
      S.tools[t].ench = ['lucky3', 'tough2']        // the enchantments on that tool, at most 2
+     S.rare.broken = { rod:{ tier:2, ench:['lucky2'] } }   // v1.50: tools that broke, waiting to be fixed
      S.rare.ench = { v:1, known:[...ids], twin:false, applied:0, lessons:{ pippa:0 }, lastLesson:'' }
 
    This file is data and pure logic only (no DOM, no THREE), so it runs in node for tests.
@@ -105,6 +109,8 @@ export const REPAIR = {
 };
 const canTier = (t,k) => t==='can' && k>=1 ? k+1 : k;   // map the can's tiers onto the others' (it skips Sturdy)
 export const REPAIR_CLAMS = 0.45;   // Pemberton's full repair costs this share of the tool's price
+export const BROKEN_MULT = 2;       // v1.50: fixing a broken tool costs twice a full repair (Flimsy: 4 wood, 4 branches; Sturdy: 6 wood, 2 iron; Golden: 8 iron, 8 stone)
+export const FIX_BENCH = 1;         // and needs a crafting table (any: Workbench or bigger)
 // Crafting a tool from materials. Same requirements as buying it (reqMet). Heirloom tools are a long haul on purpose.
 export const CRAFT = {
   net:    [ [['softwood',4],['weed',6]], [['wood',4],['softwood',3],['iron',2]], [['iron',6],['fitting',2],['goldsap',1]], [['heartwood',3],['starstone',3],['goldsap',3],['moonpearl',3],['glimmermoss',3],['fitting',4]] ],
@@ -134,6 +140,11 @@ export function migrate(S){
   if (!E.lessons || typeof E.lessons!=='object') E.lessons={};
   for (const t of Object.keys(S.tools||{})){ const T=S.tools[t]; if (!T) continue;
     if (T.ench!==undefined){ if (!Array.isArray(T.ench)) delete T.ench; else { T.ench=T.ench.filter(id=>ENCH[id] && fits(id,t)).slice(0, TWIN_SLOTS); if (!T.ench.length) delete T.ench; } } }
+  // v1.50 broken tools: drop anything that doesn't make sense (unknown tool, bad tier, an heirloom, or a broken one no better than the one you hold)
+  if (S.rare.broken!==undefined && (!S.rare.broken || typeof S.rare.broken!=='object' || Array.isArray(S.rare.broken))) delete S.rare.broken;
+  for (const [t,B] of Object.entries(S.rare.broken||{})){ const tr=TOOLS[t] && B && TOOLS[t].tiers[B.tier], own=S.tools && S.tools[t];
+    if (!tr || tr.forever || (own && own.tier>=B.tier)){ delete S.rare.broken[t]; continue; }
+    if (B.ench!==undefined){ if (!Array.isArray(B.ench)) delete B.ench; else { B.ench=B.ench.filter(id=>ENCH[id] && fits(id,t)).slice(0, TWIN_SLOTS); if (!B.ench.length) delete B.ench; } } }
   return E;
 }
 export const fits = (id, t) => { const e=ENCH[id], F=e && FAMILIES[e.fam]; return !!(F && F.tools.includes(t)); };
@@ -204,12 +215,38 @@ export function repair(S, t, inv){ const need=repairNeed(S,t); if (!need) return
   for (const [m,n] of need) inv.take(m,n); S.tools[t].uses=maxUses(S,t); return { ok:true }; }
 export function repairForClams(S, t, pay){ const c=repairClams(S,t); if (!c) return { ok:false, why:'It doesn\'t need fixing.' }; if (!pay(c)) return { ok:false, why:'Not enough clams.' }; S.tools[t].uses=maxUses(S,t); return { ok:true, cost:c }; }
 
+/* v1.50: broken tools. breakTool runs when a tool's last use is spent: the tool leaves your hands but keeps its tier
+   and enchantments in S.rare.broken until you fix it at a crafting table. Fixing puts it back in your hands, good as new.
+   If you're holding a stand-in of that kind (say a Flimsy Rod you bought after your Golden Rod broke), the fixed one
+   takes its place, and anything on the stand-in is lost (the Tools tab asks first). */
+export const brokenOf = (S, t) => (S.rare && S.rare.broken && S.rare.broken[t]) || null;
+export const brokenList = S => Object.keys(TOOLS).filter(t=>brokenOf(S,t));
+export function breakTool(S, t){ const T=S.tools[t]; if (!T) return null; delete S.tools[t];
+  if (TOOLS[t].tiers[T.tier] && TOOLS[t].tiers[T.tier].forever) return null;
+  const B=(S.rare.broken=S.rare.broken||{}); B[t]={ tier:T.tier }; if (T.ench && T.ench.length) B[t].ench=T.ench.slice(); return B[t]; }
+export const fixNeed = (t, k) => REPAIR[canTier(t,k)].map(([m,n])=>[m, n*BROKEN_MULT]);
+// bench = the best crafting table in reach (0 none, 1 to 3)
+export function canFix(S, t, inv, bench){ const B=brokenOf(S,t); if (!B) return { ok:false, why:'Nothing to fix.' };
+  const need=fixNeed(t,B.tier), own=S.tools[t], lose=own && own.ench && own.ench.length ? own.ench.filter(id=>!(B.ench||[]).includes(id)) : [];
+  const base={ need, replaces:own ? own.tier : null, loses:lose.length ? lose : null };
+  if ((bench|0)<FIX_BENCH) return { ok:false, why:'Needs a crafting table.', ...base };
+  const miss=missing(need, inv); if (miss.length) return { ok:false, why:'Missing materials.', miss, ...base };
+  return { ok:true, ...base }; }
+export function fix(S, t, inv, bench){ const c=canFix(S,t,inv,bench); if (!c.ok) return c; const B=brokenOf(S,t);
+  for (const [m,n] of c.need) inv.take(m,n);
+  S.tools[t]={ tier:B.tier, uses:0 }; const keep=(B.ench||[]).filter(id=>ENCH[id] && fits(id,t)); if (keep.length) S.tools[t].ench=keep;
+  S.tools[t].uses=maxUses(S,t); delete S.rare.broken[t]; return { ok:true, replaced:c.replaces, lost:c.loses }; }
+
 /* A new tool of the same kind (bought or made) takes the old one's enchantments with it. Only a broken tool loses them.
    The one exception: Tough can't sit on an heirloom (it never wears out), so it comes off. Returns what came off. */
 export function carryDrops(S, t, k){ const old=S.tools[t], d=TOOLS[t].tiers[k]||{}; return (old && old.ench || []).filter(id=>ENCH[id] && (!fits(id,t) || (ENCH[id].fam==='tough' && d.forever))); }
 export function upgradeTool(S, t, k){
   const old=S.tools[t], d=TOOLS[t].tiers[k], drop=carryDrops(S,t,k), keep=(old && old.ench || []).filter(id=>ENCH[id] && !drop.includes(id));
-  S.tools[t]={ tier:k, uses:0 }; if (keep.length) S.tools[t].ench=keep; S.tools[t].uses = d.forever ? 0 : maxUses(S,t); return drop; }
+  S.tools[t]={ tier:k, uses:0 }; if (keep.length) S.tools[t].ench=keep; S.tools[t].uses = d.forever ? 0 : maxUses(S,t);
+  const B=brokenOf(S,t); if (B && B.tier<=k) delete S.rare.broken[t];   // v1.50: a tool as good or better scraps the broken one
+  return drop; }
+// v1.50: what getting tier k of tool t would scrap: the broken one, if it's no better (null if nothing, or nothing on it worth a warning)
+export function scrapsBroken(S, t, k){ const B=brokenOf(S,t); return B && B.tier<=k ? B : null; }
 
 /* Craft: same requirements as buying (pass reqMet). You can't craft a tool you already have at that tier or better. */
 export function craftNeed(t, k){ return (CRAFT[t]||[])[k] || null; }

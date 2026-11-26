@@ -257,7 +257,7 @@ ${tip('Making 10 <b>different</b> pieces is what starts Bramble\'s workshop stor
 <ul><li><b>Heartwood</b>: chopping, more when a tree comes down.</li><li><b>Golden Sap</b>: shaking trees.</li>
 <li><b>Starstone</b>: hitting rocks, more at night.</li><li><b>Moonpearl</b>: with a catch, or on the beach.</li>
 <li><b>Glimmer Moss</b>: digging out old stumps, or with weeds at night.</li></ul>
-<p>Luck potions make them more likely. Golden Grove (sap and heartwood) and the Starfall Isle trip (starstones) are full of them.</p>
+<p>Luck potions make them more likely. Golden Grove (sap and heartwood) and Stardrift Isle (starstones) are full of them.</p>
 `},
 
 { id:'tables', group:'island', title:'Crafting tables', html:`
@@ -309,7 +309,7 @@ ${tip('Making 10 <b>different</b> pieces is what starts Bramble\'s workshop stor
 <ul><li><b>Aurora</b> (80,000): green and violet light over your island every clear night.</li>
 <li><b>Glowing paths</b> (50,000): small stones along every path that glow after dark, isles included.</li></ul>
 <p>Both are for looks only. You can lift either one at the altar and bring it back later for free.</p>
-${note('The legendary trip island Starfall Isle (Skipper Wick) is a different place with the same name.')}
+${note('Stardrift Isle, the legendary trip island, is a different place. It was called Starfall Isle before v1.41.')}
 ${note('Islands that raised isles before v1.37 keep their old order (meadow, dunes, bluff, crags) and get Old Pinewood next.')}
 `},
 
@@ -388,7 +388,7 @@ ${note('Relics can\'t be sold, gifted, mailed or traded. A storage chest holds t
 <tr><td>The Wizard's Garden</td><td>Rare</td><td>Bellamy, Wendell's old teacher, gives a 50,000-clam spell voucher</td></tr>
 <tr><td>The Plan Library</td><td>Rare</td><td>Pick any plan you don't know</td></tr>
 <tr><td>The Wishing Workshop</td><td>Legendary</td><td>Bring 10 wood, get any furniture at all</td></tr>
-<tr><td>Starfall Isle</td><td>Legendary</td><td>Always night; starstones lying around and falling</td></tr>
+<tr><td>Stardrift Isle</td><td>Legendary</td><td>Always night; starstones lying around and falling</td></tr>
 <tr><td>The Collector's Attic</td><td>Legendary</td><td>Any museum specimen you're missing</td></tr>
 <tr><td>Shimmer Lagoon</td><td>Legendary</td><td>Only very rare and legendary fish</td></tr></table>
 `},
@@ -614,7 +614,7 @@ ${steps(['<b>Diving bell</b>: Marlo\'s glass (20,000, on the sand the next day),
 
 { id:'nook', group:'stories', title:'Juniper\'s Reading Nook', html:`
 <p><b>Starts:</b> once the town hall is up and Bramble's workshop is open, a day or three later. Juniper (or whoever holds the dream) wants a reading nook beside the museum.</p>
-${steps(['<b>Rare plans</b>: know 5 of the 6 rare plans, the ones for the legendary showpieces (see <a href="#crafting">Woodworking</a>). Juniper brings it up again the next time you talk once you do.',
+${steps(['<b>Rare plans</b>: know 3 of the 6 rare plans, the ones for the legendary showpieces (see <a href="#crafting">Woodworking</a>). Juniper brings it up again the next time you talk once you do.',
  '<b>Shelves</b>: commission the Reading Nook Shelves at the workshop (20 planks, 5 clay, 15,000; ready the next day).',
  '<b>Build</b>: give Juniper the shelves. The builders work overnight and the reading room opens the next morning.'])}
 <p>Inside you can reread every island story, every letter you kept, and the <i>Saltwren</i>'s logbook pages you've found.</p>
@@ -646,7 +646,7 @@ ${steps(['Talk to them and pick <b>Come and meet people</b>. They follow you for
 `},
 
 { id:'charter', group:'stories', title:'The Island Charter and the Driftwood Festival', html:`
-<p><b>Starts:</b> Clementine brings it up ("You look pleased with yourself") once all of these are in place: Gill's Trawler, the workshop on Old Pinewood, the tea room, the lighthouse lit, the forge, 10 islanders and the Grand Town Hall. Before that, ask her "What's next for the town?" and she says what's still missing.</p>
+<p><b>Starts:</b> Clementine brings it up ("You look pleased with yourself") once all of these are in place: Gill's Trawler, the workshop on Old Pinewood, the tea room, the lighthouse lit, the forge and 10 islanders. Before that, ask her "What's next for the town?" and she says what's still missing.</p>
 <p><b>Cost:</b> 500,000 clams (chip in at the town projects, any amount), 50 planks, 20 iron fittings and 10 honey. Sign it, the whole town signs overnight, and the next day it's official.</p>
 <ul><li>The hall becomes the <b>Charter Hall</b>, with flags and bunting at the door. Ask Clementine about the charter for a brass copy to hang up.</li>
 <li>The day after, Wendell writes his last letter. That opens Starfall Isle (see <a href="#isles">Wendell's isles</a>).</li></ul>
@@ -696,7 +696,7 @@ ${steps(['Talk to them and pick <b>Come and meet people</b>. They follow you for
 { id:'changes', group:'done', title:'What\'s changed', html:`
 <p>Recent updates, newest first.</p>
 <ul>
-<li><b>v1.41</b>: Juniper's reading nook, Otis's race course, Marigold's flower show and a spring show every April, the newcomer, the Island Charter and Charter Hall, the Driftwood Festival every season, and Starfall Isle with its own bugs and Wendell's two spells.</li>
+<li><b>v1.41</b>: Juniper's reading nook, Otis's race course, Marigold's flower show and a spring show every April, the newcomer, the Island Charter and Charter Hall, the Driftwood Festival every season, and Starfall Isle with its own bugs and Wendell's two spells. The legendary trip island Starfall Isle is now called Stardrift Isle.</li>
 <li><b>v1.40</b>: Repair, make and enchant your tools. Pippa and Wendell teach enchantments, and scrolls turn up now and then (Fennick sometimes sells one). Two bigger crafting tables, the Carpenter's Bench and the Master Workbench, with pieces of their own. Most woodworking now needs a table nearby.</li>
 <li><b>v1.39.1</b>: Darker nights. Lamps, windows, fireflies, the lighthouse beam and night fish now stand out. Menu &gt; Brightness lifts the whole scene if it's too dark for you.</li>
 <li><b>v1.39 fixes</b>: Climb the lighthouse on Lighthouse Point and meet the keeper at the top. Mossby stays on your home island. Skipper Wick's goodbye no longer says you can never come back.</li>

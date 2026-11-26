@@ -1912,7 +1912,7 @@ function buildHall(){
   if (hallEnt){ hallEnt.remove(); hallEnt=null; } if (clerk){ clerk.remove(); clerk=null; } setRects('hall',[]);
   if (!PLACES.hall) return;
   const [hx,hz]=PLACES.hall, t=S.town.hall||0;
-  const chn=t>=2 && !TRIP && charterBuilt(); hallEnt=placeBuilding('hall', hx, hz, buildTownHall(t, chn?'Charter Hall':null), 'Read', ()=>talkHall()); hallEnt.charter=chn;   // v1.41
+  const chn=t>=1 && !TRIP && charterBuilt(); hallEnt=placeBuilding('hall', hx, hz, buildTownHall(t, chn?'Charter Hall':null), 'Read', ()=>talkHall()); hallEnt.charter=chn;   // v1.41
   const [dx,dz]=hallEnt.doorPt; clerk=new Keeper(KEEPERS.clementine, dx+(t===0?1.9:1.6), dz-(t===0?0.6:0.3), ()=>talkHall()); clerk.rest=0; hallEnt.tier=t;
 }
 const HALL_NAMES=['Town Tent','Town Hall','Grand Town Hall'];
@@ -2026,7 +2026,7 @@ function talkHall(){
 function openHallPanel(){
   const render=()=>{ const T=S.town, t=T.hall||0; let h=`<div class="notice"><b>${HALL_NAMES[t]}</b><br><span class="muted">${T.res.length} islanders live here.</span></div>`;
     if (T.hallPend) h+=`<div class="notice"><b>Building the ${HALL_NAMES[t+1]}</b><br>The builders work overnight. Check back tomorrow!</div>`;
-    else if (t>=2) h+='<div class="notice">The Grand Town Hall is as grand as it gets. The whole island thanks you!</div>';
+    else if (t>=2) h+=`<div class="notice">The ${HALL_NAMES[t]} is as grand as it gets. The whole island thanks you!</div>`;   // v1.41 the Charter Hall once chartered
     else { const cost=HALL_COST[t+1], rq=hallReqs(t+1), ok=rq.every(r=>r[1]), fund=T.fund||0, left=Math.max(0,cost-fund);
       h+=`<div class="notice"><b>Next: ${HALL_NAMES[t+1]}</b><br><span class="muted">Clementine is saving up for something bigger. Who knows what it'll bring.</span>
         <div style="margin-top:8px"><b>${fmt(fund)}</b> of ${fmt(cost)} clams raised</div><div class="bar" style="margin:6px 0"><div style="width:${Math.min(100,fund/cost*100)}%"></div></div>
@@ -3732,7 +3732,7 @@ function dev139(){
 
 /* =====================================================================
    v1.41 ISLAND STORIES PHASE 4 (design: claude/driftwood-isle-quests.md, sections 6e, 8 and 11).
-   - Juniper's reading nook: five rare plans found and shelves from the workshop. A reading room beside the museum
+   - Juniper's reading nook: three rare plans found and shelves from the workshop. A reading room beside the museum
      where you can reread your letters, the island's stories and the Saltwren's logbook.
    - Otis's race course: the bike, three isles, and a sign from the workshop. A timed lap of the island against the
      islanders; beat them all for the race cup.
@@ -3802,12 +3802,12 @@ const CHARTER = { clams:500000, need:[['plank',50],['fitting',20],['honey',10]] 
 // what Clementine wants to see first (in her words, for the hall and the board)
 function charterReqs(){ return [
   ['Gill\'s Trawler', incOf('boat').tier>=1], ['the workshop on Old Pinewood', !!(SY.shop && SY.shop.st==='open')], ['the tea room', teaOpen()],
-  ['the lighthouse lit', lightLit()], ['the forge', !!(SY.forge && SY.forge.st==='open')], ['ten islanders', S.town.res.length>=10], ['the Grand Town Hall', (S.town.hall||0)>=2] ]; }
+  ['the lighthouse lit', lightLit()], ['the forge', !!(SY.forge && SY.forge.st==='open')], ['ten islanders', S.town.res.length>=10] ]; }   // v1.41 the doc's list; in play the workshop already means a Grand Town Hall (Old Pinewood needs one)
 const charterReady = () => charterReqs().every(r=>r[1]);
 function hall4Choices(k, menu){ if (VISIT || GUEST || TRIP) return []; const v=k.voice, C=SY.charter;
   if (!C && charterReady()) return [{ label:'You look pleased with yourself', fn:()=>{ if (noEdit()) return; SY.charter={ st:'project', since:sday2() }; save(); Snd.jingle();
       dialog(k.name, v, ['I was going through the town books last night, dear, and I had a little cry.','A trawler in the bay. A workshop. Tea on the terrace, a light on the bluff, a forge in the crags. And ten of us!','I think we\'ve become a real town. A charter would make it official.','Half a million clams, fifty planks, twenty iron fittings and ten jars of honey for the seal. It\'s in the town projects whenever you\'re ready.'], menu); } }];
-  if (!C && (S.town.hall||0)>=2) return [{ label:'What\'s next for the town?', fn:()=>{ const miss=charterReqs().filter(r=>!r[1]).map(r=>r[0]);
+  if (!C && (S.town.hall||0)>=1) return [{ label:'What\'s next for the town?', fn:()=>{ const miss=charterReqs().filter(r=>!r[1]).map(r=>r[0]);
       dialog(k.name, v, ['One day I\'d like us to have a proper charter. Make it official.', `Not yet, though. I'd want to see ${andList(miss)} first.`], menu); } }];
   if (C && C.st==='done' && !C.plaque){ return [{ label:'The charter', fn:()=>{ if (noEdit()) return; if (!canAdd('charterplaque')){ dialog(k.name, v, ['Make a little room in your bag, dear. I have something for you.'], menu); return; }
       C.plaque=true; giveItem('charterplaque'); dialog(k.name, v, ['A copy of the charter, on brass. Everyone on the island signed it. Look, there\'s your name, at the top.'], menu); } }]; }
@@ -3826,7 +3826,7 @@ function bindProj4(render){
   const g=pBody.querySelector('#cfGo'); if (g) g.onclick=()=>{ if (noEdit()) return; SY.charter.st='building'; SY.charter.bday=sday2(); save(); Snd.fanfare(); toast('Everyone signs tonight!', null, 'new', 'The Island Charter is official tomorrow.'); render(); }; }
 // the Charter Hall: flags either side of the door, bunting, and the charter plate on a stone
 function refreshCharter(){
-  if (charterBuilt()){ HALL_NAMES[2]='Charter Hall'; if (hallEnt && (S.town.hall||0)>=2 && !hallEnt.charter){ buildHall(); buildPlaza(); } }
+  if (charterBuilt()){ HALL_NAMES[1]=HALL_NAMES[2]='Charter Hall'; if (hallEnt && (S.town.hall||0)>=1 && !hallEnt.charter){ buildHall(); buildPlaza(); } }
   const key = charterBuilt() && hallEnt && PLACES.hall ? 'on:'+PLACES.hall.join(',')+':'+(hallEnt.tier||0) : '';
   if (key===S4B.dressKey && (!key || (S4B.dress && S4B.dress.parent))) return; S4B.dressKey=key;
   if (S4B.dress){ if (S4B.dress.parent) S4B.dress.parent.remove(S4B.dress); S4B.dress=null; setRects('charter',[]); } if (!key) return;
@@ -3888,7 +3888,7 @@ function openStall(id){
 /* =====================================================================
    JUNIPER'S READING NOOK
    ===================================================================== */
-const NOOK_PLANS=5;
+const NOOK_PLANS=3;   // v1.41 three of the six rare plans (five was too steep a gate)
 const nookOpen = () => !!(SY.nook && SY.nook.st==='open' && SY.nook.at);
 COMMISSIONS.push({ id:'nookshelves', need:[['plank',20],['clay',5]], clams:15000, days:1, gate:()=>!!(SY.nook && SY.nook.st==='shelves') && !countItem('nookshelves') && !(SY.shop.comm && SY.shop.comm.id==='nookshelves') });
 COMMISSIONS.push({ id:'racesign', need:[['plank',10],['iron',2]], clams:8000, days:1, gate:()=>!!(SY.race && SY.race.st==='sign') && !countItem('racesign') && !(SY.shop.comm && SY.shop.comm.id==='racesign') });
@@ -4021,9 +4021,9 @@ function newbChoices(res, menu){ const N=SY.newb; if (!N || N.st!=='intro') retu
    the threads in each islander's words
    ===================================================================== */
 const BEATS4 = {
-  nook:{ dream:['Can I tell you a secret? I\'d love a reading nook. A real one, with a window seat and a lamp.','Right next to Thistle\'s museum, where it\'s quiet. All the island\'s letters and notes on one shelf.',`If you came across some of those rare plans out there, the clever ones, five or so, I could furnish it properly. And Bramble could build the shelves.`],
-    dreamg:['Juniper always wanted a reading nook beside the museum. A window seat, a lamp, all the island\'s letters on one shelf.','It would want a few of those rare plans to furnish it, five or so, and shelves from the workshop.'],
-    shelves:['Five rare plans! Oh, the chairs I could have. Now I only need the shelves.','Bramble takes commissions at the workshop. Ask for the reading nook shelves.'],
+  nook:{ dream:['Can I tell you a secret? I\'d love a reading nook. A real one, with a window seat and a lamp.','Right next to Thistle\'s museum, where it\'s quiet. All the island\'s letters and notes on one shelf.',`If you came across some of those rare plans out there, the clever ones, three or so, I could furnish it properly. And Bramble could build the shelves.`],
+    dreamg:['Juniper always wanted a reading nook beside the museum. A window seat, a lamp, all the island\'s letters on one shelf.','It would want a few of those rare plans to furnish it, three or so, and shelves from the workshop.'],
+    shelves:['Three rare plans! Oh, the chairs I could have. Now I only need the shelves.','Bramble takes commissions at the workshop. Ask for the reading nook shelves.'],
     open:['The reading room is open! Come and sit in the window. Every letter you ever kept is on the shelf, and the logbook too.'] },
   race:{ dream:['You\'ve got a bike! And bridges all over the place now! You know what this island needs? A RACE.','A course right around the whole island. Flags, a big arch, timed laps. I\'d train every single morning.','Bramble could paint us a proper start sign. Ask at the workshop!'],
     dreamg:['Otis always wanted a bike race around the island. Flags, an arch, timed laps.','The workshop could paint a proper start sign.'],
@@ -4052,7 +4052,7 @@ function story4Choices(res, menu){
   if (VISIT || GUEST || TRIP) return []; const id=res.spec.id, nm=res.spec.name, v=res.spec.voice, out=[];
   if (typeof res.teaK==='string' && res.teaK[0]==='f') out.push({ label:'See the stall', fn:()=>openStall(id) });
   const Nk=SY.nook; if (Nk && isFor('nook', id)){
-    if (Nk.st==='plans') out.push({ label:'About the reading nook...', fn:()=>dialog(nm, v, [`Five rare plans, that's all I'd need to furnish it. You know ${(S.rare.plans||[]).length} so far.`], menu) });
+    if (Nk.st==='plans') out.push({ label:'About the reading nook...', fn:()=>dialog(nm, v, [`Three rare plans, that's all I'd need to furnish it. You know ${(S.rare.plans||[]).length} so far.`], menu) });
     if (Nk.st==='shelves') out.push({ label:'About the reading nook...', fn:()=>{ if (!countItem('nookshelves')){ dialog(nm, v, [`Just the shelves now. ${holderName('shop')} takes commissions at the workshop.`], menu); return; }
         dialog(nm, v, ['The shelves! Oh, they\'re perfect. Shall we put it up beside the museum?'], null, [
           { label:'Build the reading room', fn:()=>{ if (noEdit() || !countItem('nookshelves')) return; removeItem('nookshelves',1); Nk.st='building'; Nk.bday=sday2(); save(); Snd.fanfare(); refreshNook(); dialog(nm, v, ['The builders say tonight. I won\'t sleep a wink.'], menu); } },
@@ -6474,7 +6474,7 @@ function onTripNet(fromId, fromName, d){
       { label:'No thanks', alt:true, fn:()=>{ tripAsk=null; } } ]); };
   show(); }
 async function joinTrip(A){ tripAsk=null;
-  const I=A.isle, trip={ seed:I.seed|0, theme:I.theme, name:String(I.name||'a little island').slice(0,60), fruit:NATIVE_FRUITS.includes(I.fruit)?I.fruit:undefined, room:A.room, leader:A.from,
+  const I=A.isle, trip={ seed:I.seed|0, theme:I.theme, name:(I.theme==='starfall' && I.name==='Starfall Isle') ? 'Stardrift Isle' : String(I.name||'a little island').slice(0,60),   // v1.41 the legendary trip was renamed fruit:NATIVE_FRUITS.includes(I.fruit)?I.fruit:undefined, room:A.room, leader:A.from,
     start:invCounts(), seen:Object.keys(S.seen||{}), from:VISIT?(BOOT.host&&BOOT.host.name)||'':S.island, back: VISIT && BOOT.host ? { visit:BOOT.host.id } : null };
   try { sessionStorage.setItem('dw-trip', JSON.stringify(trip)); sessionStorage.removeItem('dw-trip-world'); } catch(e){}
   document.documentElement.classList.add('magicret'); Snd.swoosh();
@@ -6902,7 +6902,7 @@ const HOSTS = {
 function setupSpecial(){
   const th=TRIP_THEME, nearDock=(d=6)=>openSpotNear(DOCK.x0-4, DOCK.z, 3, d, tripRand('sign'));
   const sp=nearDock(); const lines={ clamstone:['Clamstone Isle','Every rock on this island has clams in it. Hit them all!'], grove:['Golden Grove','Shake a tree for golden sap. Chop one for heartwood.'],
-    starfall:['Starfall Isle','The stars fall here every night. Pick them up before the tide takes them.'], shimmer:['Shimmer Lagoon','Only the rarest fish swim in these waters. Bring a good rod.'] }[th];
+    starfall:['Stardrift Isle','The stars fall here every night. Pick them up before the tide takes them.'], shimmer:['Shimmer Lagoon','Only the rarest fish swim in these waters. Bring a good rod.'] }[th];
   if (sp && lines) placeSign(sp[0], sp[1], lines[0], [lines[1], `(There's only so much on any island. About ${fmt(VY.HAUL_CAP)} clams' worth, then it's spent.)`]);
   const H=HOSTS[th]; if (H && LAY.host){ const [hx,hz]=LAY.host; clearPatch(hx,hz,6);
     const obj=buildCottage('host_'+th, { roofC:H.roof, accent:0xe8c070 }); const b=placeCottage('host', hx, hz, obj, 'Knock', ()=>{ Snd.door(); toast(`${H.name} is outside.`); });

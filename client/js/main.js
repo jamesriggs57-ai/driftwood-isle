@@ -4572,6 +4572,80 @@ function devRaiseAll(){ if (GUEST || VISIT || TRIP){ toast('Isles only rise on y
   S.terra.isleA=plan.map(p=>+p.a.toFixed(4)); S.terra.isles=kinds.length; S.terra.isleK=kinds.slice();
   if (kinds.includes('pines') && !SY.shop) SY.shop={ st:'project', at:sday() };
   const last=plan[kinds.length-1]; save(); toast('Raising every isle...'); magicExit({ kind:'isle', at:[last.cx, last.cz], key:String(kinds.length-1) }); }
+/* v1.66 #dev: lower every isle and reset the stories that live on them, so they can be played again from the start.
+   What goes: the isles themselves, Wendell's isle quest (where he's up to, his letter about the next one, the relics he asked
+   for), the windmill (Clover Meadow), the shipwreck and the antique shop it opened, Bramble's workshop (back to "go and see
+   Wendell"), the lighthouse (and Wick's night voyages and his share), and the forge. Kept: every town story (apiary, tea room,
+   post office, bathhouse, glade, reading room, race, charter, flower show, Reef Hall), the Starfall spells you cast, and
+   every item already in your bag. Nothing you own is thrown away: clams you paid into a business that goes are paid back
+   (only where the save recorded the payment), goods waiting or being made come to your bag, and what was placed, planted or
+   left lying on an isle comes back too. What doesn't fit in the bag comes in letters from Wendell. Returns the summary. */
+const LOWER_KEYS = ['mill','wreck','antiq','light','forge','wl','relic','pinesAt','cragsAt'];
+const LOWER_STAKES = ['shop','forge','mill','antiq','wick'];
+// on an isle or its bridge, and under the sea once the isles are gone (so the main island's end of a bridge doesn't count)
+function onIsleLand(x,z){ if (!(x<500)) return false; let near=!!isleAt(x,z);
+  if (!near) for (const b of XBR){ const [u,v]=bridgeLocal(b,x,z); if (Math.abs(u)<b.len/2+0.5 && Math.abs(v)<b.w+0.5){ near=true; break; } }
+  if (!near) return false; mainOnly=true; try { return rawHeight(x,z)<0.15; } finally { mainOnly=false; } }
+function lowerIsles(){
+  if (GUEST || VISIT || TRIP) return null;
+  const rep={ isles:ISLE_K.map(k=>(ISL.ISLE_INFO[k]||{}).name||k), stories:[], clams:0, items:0, mailed:0, gone:[], kept:[] };
+  const give={}, add=(id,n=1)=>{ n=Math.floor(n); if (!id || !ITEMS[id] || n<1) return; give[id]=(give[id]||0)+n; };
+  const now=sday2();
+  // the businesses: pay back what the save says was paid, and hand over what was waiting
+  const D=SY.shop;
+  if (D && ['project','building','open'].includes(D.st)){
+    rep.clams+=D.fund||0; if (D.mats) for (const [id,n] of SHOP_PROJECT.need) add(id,n);
+    if (D.order) add('plank', D.order.n); add('plank', D.ready||0); if (D.comm && D.comm.id) add(D.comm.id, 1);
+    SY.shop={ st:'wizard', at:now, ...(D.holder ? { holder:D.holder } : {}) }; rep.stories.push('Bramble\'s workshop (back to asking Wendell for land)'); }
+  const F=SY.forge;
+  if (F){ if (F.bday!==undefined){ rep.clams+=FORGE_PROJECT.clams; for (const [id,n] of FORGE_PROJECT.need) add(id,n); }
+    if (F.order) add('fitting', F.order.n); add('fitting', F.ready||0); }
+  const Mi=SY.mill;
+  if (Mi){ if (Mi.wheelDay!==undefined) rep.clams+=WHEEL_COST; if (Mi.order) add('flour', Mi.order.n); add('flour', Mi.ready||0); }
+  const Li=SY.light; if (Li && Li.lensDay!==undefined) rep.clams+=LENS_COST;
+  const Wr=SY.wreck; if (Wr){ if (Wr.glassDay!==undefined) rep.clams+=BELL_GLASS; if (Wr.lensDay!==undefined) rep.clams+=LENS3; }
+  for (const k of LOWER_STAKES){ const St=S.stakes[k], T=STAKES[k]; if (!St || !T) continue;
+    for (let t=0; t<=St.tier && T.tiers[t]; t++) rep.clams+=T.tiers[t].cost;
+    rep.clams+=Math.floor(St.acc||0); add(T.unit, St.extra||0); S.stakes[k]={ tier:-1 }; }
+  const NAMES={ mill:'the windmill', wreck:'the shipwreck', antiq:'the antique shop', light:'the lighthouse (with Wick\'s night voyages)', forge:'the forge' };
+  for (const k of LOWER_KEYS){ if (SY[k]===undefined) continue; if (NAMES[k]) rep.stories.push(NAMES[k]); delete SY[k]; }
+  if (SY.helpers) delete SY.helpers.shop;
+  S.magic.isleQ={};
+  // things on the isles' land and bridges
+  const keepP=[]; for (const p of S.placed){ if (!onIsleLand(p.x,p.z)){ keepP.push(p); continue; } if (!ITEMS[p.id]){ keepP.push(p); rep.kept.push(p.id); continue; }
+    add(p.id,1); for (const s of (p.store||[])) add(s.id, s.n||1); }
+  S.placed=keepP;
+  S.ground=S.ground.filter(g=>{ if (!onIsleLand(g.x,g.z)) return true; if (!g.beach) add(g.id, g.n||1); return false; });   // today's beach finds just wash away, as they do each night
+  S.plants=S.plants.filter(p=>{ if (!onIsleLand(p.x,p.z)) return true; const P=PLANTS[p.sp]; if (!p.wild && P){ const id=P.ptype==='tree' ? (p.sp==='fruittree' ? p.fruit : p.sp+'_sapling') : seedOf(p); if (ITEMS[id]) add(id,1); } return false; });
+  for (const g of (S.gardens||[])) g.cells=g.cells.filter(c=>{ const [i,j]=c.split(',').map(Number); return !onIsleLand(i*CELL, j*CELL); });
+  S.gardens=(S.gardens||[]).filter(g=>g.cells.length);
+  for (const k of Object.keys(S.terra.cells||{})){ const [i,j]=k.split(',').map(Number); if (onIsleLand((i+0.5)*TC, (j+0.5)*TC)) delete S.terra.cells[k]; }
+  // the isles' trees, stumps and fruit are keyed by isle number: a new isle in that slot must start fresh
+  const xk=/^x\d+_/; for (const O of [S.cut, S.pinesCut, S.fruitPicked, S.day&&S.day.fruit, S.day&&S.day.branch, S.day&&S.day.chop, S.day&&S.day.rock]) if (O) for (const k of Object.keys(O)) if (xk.test(k)) delete O[k];
+  S.stumps=(S.stumps||[]).filter(s=>!xk.test(String(s.key||'')) && !onIsleLand(s.x,s.z));
+  if (S.day){ S.day.isl={}; for (const d of (S.day.digs||[])) if (onIsleLand(d.x,d.z)) d.dug=true; for (const w of (S.day.weeds||[])) if (onIsleLand(w.x,w.z)) w.pulled=true; }
+  // anything else built on isle land that we don't move (shouldn't happen: town spots keep off the isles)
+  for (const k of INC_IDS){ const I=S.income[k]; if (I && I.at && onIsleLand(I.at[0],I.at[1])) rep.gone.push(INC_PLACE[k]||k); }
+  for (const [k,v] of Object.entries(SY)) if (v && Array.isArray(v.at) && onIsleLand(v.at[0],v.at[1])) rep.gone.push(k);
+  // the land itself
+  S.terra.isles=0; S.terra.isleK=[]; S.terra.isleA=[]; S.terra.isleFx={};
+  if (S.terra.ext) delete S.terra.ext.mv;   // how far the old isles moved out when the coast grew: an isle raised again is planned off today's coast
+  // into the bag, and Wendell posts the rest
+  const mail=[]; for (const [id,n] of Object.entries(give)){ let k=n; while (k>0 && canAdd(id)){ const st=ITEMS[id].stack, s=S.inv.find(x=>x.id===id && !x.m && x.n<st); if (s){ const t=Math.min(k, st-s.n); s.n+=t; k-=t; } else { const t=Math.min(k, st); S.inv.push({ id, n:t }); k-=t; } if (!S.seen[id]) S.seen[id]=Date.now(); }
+    rep.items+=n; if (k>0) mail.push([id,k]); }
+  for (const [id,n] of mail){ rep.mailed+=n;
+    S.letters.inbox.unshift({ id:'L'+Date.now().toString(36)+Math.floor(Math.random()*1e4)+'s', from:'wendell', name:WIZARD.name, lines:['The sea has the isles back, but not your things. This one wouldn\'t fit in your bag.', 'Wendell'], gift:{ id, n }, at:today(), read:false }); }
+  S.clams+=rep.clams; save(); return rep; }
+function lowerSummary(r){ const L=[r.isles.length ? `${andList(r.isles)} sank back under the sea.` : 'No isles were up.'];
+  if (r.stories.length) L.push(`Reset: ${andList(r.stories)}. Wendell's isle quest starts over.`); else L.push('Wendell\'s isle quest starts over.');
+  if (r.clams) L.push(`${fmt(r.clams)} clams paid back.`); if (r.items) L.push(`${r.items} thing${r.items>1?'s':''} came back to you${r.mailed?`, ${r.mailed} of them by letter from Wendell (Menu > Pen pals)`:''}.`);
+  if (r.gone.length) L.push(`Still standing out at sea: ${r.gone.join(', ')}.`); if (r.kept.length) L.push(`Left where they were: ${r.kept.join(', ')}.`);
+  return L; }
+const lowerAny = () => ISLE_K.length>0 || LOWER_KEYS.some(k=>SY[k]!==undefined) || !!(SY.shop && ['project','building','open'].includes(SY.shop.st)) || Object.keys(S.magic.isleQ||{}).length>0;
+function devLowerAll(){ if (GUEST || VISIT || TRIP){ toast('Isles only sink on your own signed-in island.'); return; }
+  if (riding) setRiding(false); stopMove();
+  const r=lowerIsles(); if (!r) return; const at=PLACES.plaza||[0,0];
+  toast('Lowering the isles...'); magicExit({ kind:'lower', at:[at[0], at[1]], msg:lowerSummary(r) }); }
 // somewhere to stand near a spot
 function devTravel(x, z, label, look){
   if (World.inside){ exitRoom(); setTimeout(()=>devTravel(x, z, label, look), 900); return; }
@@ -4613,7 +4687,7 @@ function openStoryMap(){
   openPanel('Story map (dev)'); const render=()=>{ const { T, St, Is }=devPlaces(), missing=ISL.ISLE_ORDER.filter(k=>!ISLE_K.includes(k)), btn=(id,l,dis)=>`<button class="btn alt" data-dv="${id}" ${dis?'disabled':''}>${l}</button>`;
     const go=(L,pre)=>L.map(([l],i)=>`<button class="btn alt" data-go="${pre}${i}">${l}</button>`).join(' ');
     let h=`<div class="notice"><b>Isles</b><br><span class="muted">Up: ${ISLE_K.map(k=>(ISL.ISLE_INFO[k]||{}).name||k).join(', ')||'none'}. ${missing.length?`Still to rise: ${missing.map(k=>(ISL.ISLE_INFO[k]||{}).name||k).join(', ')}.`:''}</span><br>
-      ${GUEST||VISIT||TRIP?'<span class="muted">Isles only rise on your own signed-in island.</span>':btn('isles', missing.length?'Raise every isle now':'Every isle is up', !missing.length)}</div>
+      ${GUEST||VISIT||TRIP?'<span class="muted">Isles only rise on your own signed-in island.</span>':btn('isles', missing.length?'Raise every isle now':'Every isle is up', !missing.length)+' '+btn('lower', 'Lower every isle and reset their stories', !lowerAny())}</div>
       <div class="notice"><b>Stories</b><br>${GUEST||VISIT||TRIP?'<span class="muted">The island stories only run on your own signed-in island.</span></div>':`<span class="muted">"Next" moves one story one step. "Open all" finishes every story in that phase.</span><br>
       ${btn('p2','Phase 2: next')} ${btn('p2a','Phase 2: open all')}<br>${btn('p3','Phase 3: next')} ${btn('p3a','Phase 3: open all')}<br>${btn('p4','Phase 4: next')} ${btn('p4a','Phase 4: open all')}<br>
       ${btn('fest', festOn()?'The festival is on':'Festival: today')} ${btn('show','Flower show: today')} ${btn('sky','Starfall spells: cast both')}</div>`}
@@ -4632,6 +4706,7 @@ function openStoryMap(){
     const A={
       folk:()=>devAsk('Move every islander in now, and have all four keepers turn up? This skips the usual wait and the 10-islander limit.', ()=>{ const n=devEveryone(); render(); toast(`${n} moved in. ${S.town.res.length} islanders now.`); }),
       isles:()=>devAsk(`Raise ${missing.length} isle${missing.length>1?'s':''} now (${missing.map(k=>(ISL.ISLE_INFO[k]||{}).name||k).join(', ')})? The island reloads.`, devRaiseAll),
+      lower:()=>devAsk('Lower every isle and reset the stories that live on them (windmill, shipwreck and antique shop, workshop, lighthouse, forge, Wendell\'s isle quest)? Clams you paid into those come back, and so does everything on the isles. The island reloads.', devLowerAll),
       p2:()=>devAsk('Move a phase 2 story one step?', ()=>{ dev138('stories'); render(); }), p2a:()=>devAsk('Open every phase 2 story?', ()=>devAll(()=>dev138('stories'), 'Every phase 2')),
       p3:()=>devAsk('Move a phase 3 story one step?', ()=>{ dev139(); render(); }), p3a:()=>devAsk('Open every phase 3 story?', ()=>devAll(dev139, 'Every phase 3')),
       p4:()=>devAsk('Move a phase 4 story one step?', ()=>{ dev141(); render(); }), p4a:()=>devAsk('Open every phase 4 story?', ()=>devAll(dev141, 'Every phase 4')),
@@ -4652,7 +4727,7 @@ function openStoryMap(){
 const MAGIC_CSS = `
 .sw.mix{position:relative;background:conic-gradient(#e2483d,#f0c040,#7cc35a,#3aa6d8,#8a6ad8,#e2483d);overflow:hidden}
 .sw.mix input{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;border:0;padding:0}
-#potions{position:absolute;top:calc(env(safe-area-inset-top) + 74px);left:calc(env(safe-area-inset-left) + 10px);display:flex;flex-direction:column;gap:4px;pointer-events:none}
+#potions{position:absolute;top:calc(env(safe-area-inset-top) + 142px);left:calc(env(safe-area-inset-left) + 10px);display:flex;flex-direction:column;gap:4px;pointer-events:none}
 #potions .pc{background:rgba(255,248,234,.95);border:2px solid #c8b0ff;border-radius:14px;padding:3px 10px;font-size:13px;font-weight:600;display:flex;gap:6px;align-items:center}
 #potions .pc i{width:10px;height:10px;border-radius:50%;display:inline-block}
 #magicBar{position:fixed;left:0;right:0;bottom:0;display:none;flex-direction:column;gap:8px;background:var(--cream);border-top:4px solid var(--line);border-radius:22px 22px 0 0;box-shadow:0 -8px 30px rgba(0,0,0,.18);z-index:22;padding:10px 12px calc(env(safe-area-inset-bottom) + 10px)}
@@ -5648,7 +5723,7 @@ function spellLand(P){
 }
 // the lilac shimmer comes up, the island is saved and reloaded behind it, and you land back where you were
 async function magicExit(P){
-  const ret={ kind:P.kind, at: P.at || [P.cx, P.cz], key:P.key||null, dist:cine?cine.dist:28, px:+player.pos.x.toFixed(2), pz:+player.pos.z.toFixed(2), face:+player.face.toFixed(2) };
+  const ret={ kind:P.kind, at: P.at || [P.cx, P.cz], key:P.key||null, msg:P.msg||null, dist:cine?cine.dist:28, px:+player.pos.x.toFixed(2), pz:+player.pos.z.toFixed(2), face:+player.face.toFixed(2) };
   try { sessionStorage.setItem('dw-magic', JSON.stringify(ret)); } catch(e){}
   document.documentElement.classList.add('magicret'); Snd.swoosh();
   try { if (BOOT.flush) await BOOT.flush(); } catch(e){}
@@ -5669,6 +5744,7 @@ function magicArrive(R){
   let sw=0; timeline(2.4, (t,dt)=>{ sw+=dt; while (sw>0.04){ sw-=0.04; const a=Math.random()*TAU, d=Math.random()*7; const g=glowBall(Math.random()<0.5?0xffffff:0xd8c4ff, 0.3+Math.random()*0.3); g.position.set(at.x+Math.cos(a)*d, at.y+4+Math.random()*3, at.z+Math.sin(a)*d); scene.add(g); let k=0;
       FX.add(dd=>{ k+=dd; g.position.y-=dd*2.2; g.position.x+=Math.sin(k*3+a)*dd*0.6; g.material.opacity=Math.sin(Math.min(1,k/1.4)*Math.PI); if (k>1.4){ scene.remove(g); g.material.dispose(); return false; } return true; }); } },
     ()=>{ cine=null; $('#hud').classList.remove('magic'); if (R.kind==='isle' && ISLES[+R.key]){ const I=ISLES[+R.key]; Snd.fanfare(); toast(`${I.name} rose from the sea!`, null, 'new', `${ISL.ISLE_INFO[I.kind].blurb[0].toUpperCase()+ISL.ISLE_INFO[I.kind].blurb.slice(1)}. The bridge is ready.`); }
+      else if (R.kind==='lower'){ Snd.jingle(); toast('The isles sank back under the sea.', null, 'new'); if (Array.isArray(R.msg) && R.msg.length) setTimeout(()=>dialog(WIZARD.name, WIZARD.voice, R.msg.map(String)), 900); }   // v1.66 #dev: what was reset and what came back
       else toast(R.kind==='move'?'Poof! Moved.':'The land settles.', null, 'new'); });
   setTimeout(()=>document.documentElement.classList.remove('magicret'), 250);
 }
@@ -8562,7 +8638,7 @@ function openMenu(){
     <div class="notice"><b>Testing tools</b><br><span class="muted">The game runs on your real clock. These preview other times and weather.</span>
       <label class="f">Preview time: <span id="mOffT"></span></label><input type="range" id="mOff" min="-23" max="23" step="1" value="${Time.offsetH}">
       <label class="f">Weather <select id="mW"><option value="">Today's weather</option><option>sunny</option><option>cloudy</option><option>rain</option><option>snow</option></select></label>
-      ${DEV?`<div style="margin-top:8px"><b>Shortcuts</b> <span class="muted">(only on this device)</span><div class="muted" style="margin:6px 0 2px">Story map</div><button class="btn" id="dvMap">Story map: isles, stories, places</button><div class="muted" style="margin:6px 0 2px">Isles and stories</div><button class="btn alt" id="dvT">${S.magic.tower?'Tower is up':'Raise the wizard tower'}</button> ${!GUEST&&!VISIT&&nextIsleKind()?'<button class="btn alt" id="dvI">Raise the next isle</button>':''} <button class="btn alt" id="dvM">${S.devMagic?'Wizard needs requirements again':'Skip wizard requirements'}</button> <button class="btn alt" id="dvRl">Relics for the next isle</button> <button class="btn alt" id="dvSt">Phase 2: next story</button> <button class="btn alt" id="dvS3">Phase 3: next story</button><div class="muted" style="margin:6px 0 2px">Town and island</div><button class="btn alt" id="dvC">+50,000 clams</button> <button class="btn alt" id="dvF">New favors now</button> <button class="btn alt" id="dvD">Town: skip a day</button> <button class="btn alt" id="dvR">Rare kit</button> <button class="btn alt" id="dvRf">Reef: skip to the rowboat</button> <button class="btn alt" id="dvRg">Reef: grow 12 coral</button> <button class="btn alt" id="dvWs">Workshop: skip ahead</button><div class="muted" style="margin:6px 0 2px">Shops and fishing</div><button class="btn alt" id="dvSh3">Shops to tier 3 of 4</button> <button class="btn alt" id="dvSh4">Shops to the top tier</button> <button class="btn alt" id="dvBk">Back room: next week</button> <button class="btn alt" id="dvGb">Gill: next boat</button><div class="muted" style="margin:6px 0 2px">Lighthouse</div><button class="btn alt" id="dvLp">Go to Lighthouse Point</button> <button class="btn alt" id="dvLt">Lighthouse top, with the keeper</button><div class="muted" style="margin:6px 0 2px">Lantern Bluff lighthouse</div><button class="btn alt" id="dvBh">Go to the bluff lighthouse</button> <button class="btn alt" id="dvBh0">Inside: ruined</button> <button class="btn alt" id="dvBh1">Inside: lens up</button> <button class="btn alt" id="dvBh2">Inside: mending</button> <button class="btn alt" id="dvBh3">Inside: lit</button> <button class="btn alt" id="dvBhT">Top of the stair</button> <button class="btn alt" id="dvBhR">Back to the story's stage</button><div class="muted" style="margin:6px 0 2px">Enchanting and tables</div><button class="btn alt" id="dvEnL">Learn every enchantment</button> <button class="btn alt" id="dvEnT">${S.rare&&S.rare.ench&&S.rare.ench.twin?'Two-enchantment trick learned':'Learn the two-enchantment trick'}</button> <button class="btn alt" id="dvEnI">+20 of each ingredient</button> <button class="btn alt" id="dvEnK">A Sturdy tool of each kind</button> <button class="btn alt" id="dvBrk">Break the tool in hand</button> ${!VISIT&&!TRIP?'<button class="btn alt" id="dvB1">Workbench here</button> <button class="btn alt" id="dvB2">Carpenter\'s Bench here</button> <button class="btn alt" id="dvB3">Master Workbench here</button>':''} <button class="btn alt" id="dvBA">${BN.dev.any?'Tables work normally again':'Count as a Master Workbench anywhere'}</button> <button class="btn alt" id="dvEn">All of it at once</button>${PLACES.hall?`<div class="muted" style="margin:6px 0 2px">Town hall</div><button class="btn alt" id="dvH">Into the town hall</button> <button class="btn alt" id="dvHg">${(S.town.hall||0)>=2?'Make it the Town Hall':'Make it the Grand Town Hall'}</button>`:''}<br><button class="btn alt" id="dvOff">Hide shortcuts</button></div>`:''}
+      ${DEV?`<div style="margin-top:8px"><b>Shortcuts</b> <span class="muted">(only on this device)</span><div class="muted" style="margin:6px 0 2px">Story map</div><button class="btn" id="dvMap">Story map: isles, stories, places</button><div class="muted" style="margin:6px 0 2px">Isles and stories</div><button class="btn alt" id="dvT">${S.magic.tower?'Tower is up':'Raise the wizard tower'}</button> ${!GUEST&&!VISIT&&nextIsleKind()?'<button class="btn alt" id="dvI">Raise the next isle</button>':''} ${!GUEST&&!VISIT&&!TRIP&&lowerAny()?'<button class="btn alt" id="dvLo">Lower every isle</button> ':''}<button class="btn alt" id="dvM">${S.devMagic?'Wizard needs requirements again':'Skip wizard requirements'}</button> <button class="btn alt" id="dvRl">Relics for the next isle</button> <button class="btn alt" id="dvSt">Phase 2: next story</button> <button class="btn alt" id="dvS3">Phase 3: next story</button><div class="muted" style="margin:6px 0 2px">Town and island</div><button class="btn alt" id="dvC">+50,000 clams</button> <button class="btn alt" id="dvF">New favors now</button> <button class="btn alt" id="dvD">Town: skip a day</button> <button class="btn alt" id="dvR">Rare kit</button> <button class="btn alt" id="dvRf">Reef: skip to the rowboat</button> <button class="btn alt" id="dvRg">Reef: grow 12 coral</button> <button class="btn alt" id="dvWs">Workshop: skip ahead</button><div class="muted" style="margin:6px 0 2px">Shops and fishing</div><button class="btn alt" id="dvSh3">Shops to tier 3 of 4</button> <button class="btn alt" id="dvSh4">Shops to the top tier</button> <button class="btn alt" id="dvBk">Back room: next week</button> <button class="btn alt" id="dvGb">Gill: next boat</button><div class="muted" style="margin:6px 0 2px">Lighthouse</div><button class="btn alt" id="dvLp">Go to Lighthouse Point</button> <button class="btn alt" id="dvLt">Lighthouse top, with the keeper</button><div class="muted" style="margin:6px 0 2px">Lantern Bluff lighthouse</div><button class="btn alt" id="dvBh">Go to the bluff lighthouse</button> <button class="btn alt" id="dvBh0">Inside: ruined</button> <button class="btn alt" id="dvBh1">Inside: lens up</button> <button class="btn alt" id="dvBh2">Inside: mending</button> <button class="btn alt" id="dvBh3">Inside: lit</button> <button class="btn alt" id="dvBhT">Top of the stair</button> <button class="btn alt" id="dvBhR">Back to the story's stage</button><div class="muted" style="margin:6px 0 2px">Enchanting and tables</div><button class="btn alt" id="dvEnL">Learn every enchantment</button> <button class="btn alt" id="dvEnT">${S.rare&&S.rare.ench&&S.rare.ench.twin?'Two-enchantment trick learned':'Learn the two-enchantment trick'}</button> <button class="btn alt" id="dvEnI">+20 of each ingredient</button> <button class="btn alt" id="dvEnK">A Sturdy tool of each kind</button> <button class="btn alt" id="dvBrk">Break the tool in hand</button> ${!VISIT&&!TRIP?'<button class="btn alt" id="dvB1">Workbench here</button> <button class="btn alt" id="dvB2">Carpenter\'s Bench here</button> <button class="btn alt" id="dvB3">Master Workbench here</button>':''} <button class="btn alt" id="dvBA">${BN.dev.any?'Tables work normally again':'Count as a Master Workbench anywhere'}</button> <button class="btn alt" id="dvEn">All of it at once</button>${PLACES.hall?`<div class="muted" style="margin:6px 0 2px">Town hall</div><button class="btn alt" id="dvH">Into the town hall</button> <button class="btn alt" id="dvHg">${(S.town.hall||0)>=2?'Make it the Town Hall':'Make it the Grand Town Hall'}</button>`:''}<br><button class="btn alt" id="dvOff">Hide shortcuts</button></div>`:''}
     </div>
     <button class="btn warn" id="mReset">Start a new island</button>${saveOK?'':'<div class="muted" style="margin-top:8px">Saving isn\'t available in this browser.</div>'}`;
     $('#mParty').onclick=()=>{ closePanel(); setTimeout(()=>PARTY.open(), 50); };
@@ -8615,6 +8691,7 @@ function openMenu(){
       $('#dvM').onclick=()=>{ S.devMagic=!S.devMagic; save(); render(); };
       { const a=$('#dvRl'), b=$('#dvSt'); if (a) a.onclick=()=>dev138('relics'); if (b) b.onclick=()=>dev138('stories'); const c3=$('#dvS3'); if (c3) c3.onclick=()=>dev139(); const mp=$('#dvMap'); if (mp) mp.onclick=()=>openStoryMap(); }   // v1.41 Story map   // v1.38, v1.39
       { const di=$('#dvI'); if (di) di.onclick=()=>{ closePanel(); if (nextIsleKind()==='pines' && !SY.shop) SY.shop={ st:'wizard', at:sday() }; raiseIsle(ISLE_K.length); }; }
+      { const lo=$('#dvLo'); if (lo) lo.onclick=()=>{ openStoryMap(); const x=pBody.querySelector('[data-dv="lower"]'); if (x) x.click(); }; }   // v1.66 the same ask as on the Story map
       $('#dvD').onclick=()=>{ S.town.devDays=(S.town.devDays||0)+1; townNewDay(dayKeyOf(dayNum(today())+S.town.devDays)); applyTown(); toast(`Town moved ahead ${S.town.devDays} day${S.town.devDays>1?'s':''}: ${S.town.res.length} islanders${S.town.next?', '+S.town.next.id+' moving in next':''}.`); };
       $('#dvF').onclick=()=>{ Q.rolledFor=null; Q.offers={}; rollFavors(Math.random); Q.rolledFor=S.day.key; save(); toast('Islanders have new favors to ask.'); };
       $('#dvOff').onclick=()=>{ try{ localStorage.removeItem('dwDev'); }catch(e){} toast('Shortcuts hidden. Open the game with #dev at the end of the address to bring them back.'); render(); }; }
@@ -8668,10 +8745,11 @@ toolBtn.addEventListener('click', e=>{ e.stopPropagation(); if(toolPop.classList
   let h=`<button class="tp${!S.equip?' on':''}" data-t="">${HAND_SVG}<span>Hands</span></button>`;
   for(const t of Object.keys(TOOLS)){ const T=S.tools[t]; if(!T) continue; const d=TOOLS[t].tiers[T.tier]; h+=`<button class="tp${S.equip===t?' on':''}" data-t="${t}"><img src="${toolThumb(t,T.tier)}"><span>${TOOLS[t].name}</span><i style="width:${d.forever?100:Math.max(4,T.uses/EN.maxUses(t)*100)}%"></i></button>`; }
   if (!Object.keys(S.tools).length) h+='<div class="muted" style="padding:6px">No tools yet.</div>';
-  h+=`<button class="tp" id="tpMap"><img src="${mapThumb()}"><span>Map</span></button>`;   // v1.26: the map is always on you, like a tool, and takes no bag space
   toolPop.innerHTML=h; toolPop.classList.add('show'); positionToolPop(); Snd.click();
-  toolPop.querySelector('#tpMap').onclick=ev=>{ ev.stopPropagation(); toolPop.classList.remove('show'); openMap(); };
   toolPop.querySelectorAll('[data-t]').forEach(b=>b.onclick=ev=>{ ev.stopPropagation(); equip(b.dataset.t||null); toolPop.classList.remove('show'); Snd.click(); }); });
+// v1.66 the map is always on you and takes no bag space: its own button, top left under the clock
+const mapBtn=$('#mapBtn');
+if (mapBtn){ mapBtn.addEventListener('pointerdown', e=>e.stopPropagation()); mapBtn.addEventListener('click', e=>{ e.stopPropagation(); toolPop.classList.remove('show'); closeMore(); Snd.click(); openMap(); }); }
 /* v1.26: the island map. Land, water, paths, every building and whose house is whose. It doesn't show where anyone is. */
 let _mapThumb=null;
 function mapThumb(){ if (_mapThumb) return _mapThumb; const cv=document.createElement('canvas'); cv.width=cv.height=64; const x=cv.getContext('2d');
@@ -8679,6 +8757,7 @@ function mapThumb(){ if (_mapThumb) return _mapThumb; const cv=document.createEl
   x.strokeStyle='rgba(139,107,80,.6)'; x.lineWidth=1.5; x.beginPath(); x.moveTo(-7,-22); x.lineTo(-7,18); x.moveTo(8,-18); x.lineTo(8,22); x.stroke();
   x.fillStyle='#7cbf5a'; x.beginPath(); x.ellipse(0,0,13,10,0.3,0,TAU); x.fill(); x.strokeStyle='#e2483d'; x.lineWidth=2.5; x.beginPath(); x.moveTo(3,-3); x.lineTo(9,3); x.moveTo(9,-3); x.lineTo(3,3); x.stroke();
   return _mapThumb=cv.toDataURL(); }
+if (mapBtn) mapBtn.innerHTML=`<img src="${mapThumb()}" alt="">`;
 // v1.58 the map frames the island, its far shore and the isles (no longer always centred on the plaza)
 function mapExtent(){ let x0=1e9, z0=1e9, x1=-1e9, z1=-1e9; const grow=(x,z)=>{ x0=Math.min(x0,x); x1=Math.max(x1,x); z0=Math.min(z0,z); z1=Math.max(z1,z); };
   for (let i=0;i<128;i++){ const a=i/128*TAU, r=islandR(a)*1.12; grow(Math.cos(a)*r, Math.sin(a)*r); }
@@ -9710,6 +9789,7 @@ window.__game.v139 = { get SY(){ return SY; }, get S3B(){ return S3B; }, LOGBOOK
 window.__game.v150 = { AUR, PATH_GLOW, PATH_STONES, castSpell4, get cast(){ return S4B.cast; }, get cine(){ return cine; }, set cine(v){ cine=v; } };   // v1.53 test hooks
 window.__game.v141 = { get SY(){ return SY; }, get S4B(){ return S4B; }, refreshStory4, dev141, dev138, dev139, openStoryMap, devRaiseAll, devTravel, devPlaces, blocked: (x,z)=>blocked(x,z,0.3), devTrip, raceStart, raceEnd, raceCourse, raceLength, raceRivals, raceMenu, openReadingRoom, openStall, festDay, festOn, festSpots, refreshFest, refreshShow, showTableAct, showEntries, storyBeat4, story4Choices, storyNewDay4, story4News, storiesHTML4, starAltarAct, skyHour, skyNear, skyIsle, refreshSpells, refreshCharter, charterReqs, charterReady, hall4Choices, newbChoices, CHARTER, get ISLE_K(){ return ISLE_K; } };   // v1.41 test hooks
 window.__game.v162 = { get trees(){ return trees; }, get rocks(){ return rocks; }, PLACES, get ISLES(){ return ISLES; }, DOCK, DOCK_OLD, RIVER, get EXT(){ return EXT; }, get migrate(){ return migrateEven.last||null; }, rawHeight, walkable, isBeach, islandR, islandR0, LAY, get PATHS(){ return PATHS; } };   // v1.62 test hooks
+window.__game.v166 = { lowerIsles, lowerSummary, devLowerAll, onIsleLand, lowerAny, LOWER_KEYS, LOWER_STAKES };   // v1.66 test hooks: lowering the isles
 window.__game.v158 = { get EXT(){ return EXT; }, EXT_BOX, rawHeightOld, baseHeightOld, baseHeight, islandR, islandR0, islandT, HG, devEveryone, mapExtent, townNewDay, refreshIncome, randLand, get extOff(){ return extOff; } };   // v1.58 test hooks
 window.__game.v137 = { get S(){ return S; }, get SY(){ return SY; }, get BAYR(){ return BAYR; }, get ISLES(){ return ISLES; }, get player(){ return player; }, get residents(){ return residents; },
   reefInfo, reefStage, bayPlan, bayPopulate, enterBay, exitBay, bayAct, bayCast, bayDrop, talkGill, talkShop, talkTo, talkHall, talkWizard, talkCurator, openNursery, openWorkshop, openBoard, openHallPanel,

@@ -507,3 +507,14 @@ Code: `fossils2.js` (the 69 new fossil builders and their rocks, `buildFossil2In
 - **Loading.** Fossil models and Collection Book pictures come in a few per frame (about 8 ms) so 80 fossils don't freeze a phone.
 - **Achievements.** 25, 50 and 80 fossils, and 250 and 288 museum displays. The old 11-fossil achievement keeps its id and is now called Fossil Shelf.
 - Save: no new keys.
+
+## v1.66: the map button, and a #dev command to lower the isles
+- **Map button.** The map has its own round button (`#mapBtn`, 48 px) at the top left, under the clock; it is gone from the tool picker. To make room on the left, `#picks` moved from 72 to 140 px down (134 px on short screens), `#potions` from 74 to 142 px and `#partyBox` from 82 to 150 px. Hidden while building, laying out the controls, in a menu preview, during a spell and out in Cay Bay.
+- **Lower every isle (#dev only).** Story map > Isles, or Menu > Shortcuts > Lower every isle, asks first, then `lowerIsles()` sinks every raised isle and resets the stories that live on them, then reloads the island at the plaza and Wendell says what changed. Only on your own signed-in island (not as a guest, a visitor or on a trip).
+  - Reset: `S.terra` isles, isleK, isleA, isleFx and `ext.mv`; story keys mill, wreck, antiq, light, forge, wl, relic, pinesAt, cragsAt; `story.shop` back to `st:'wizard'` (holder kept); `story.helpers.shop`; `magic.isleQ`; the shop, forge, mill, antiq and wick stakes; isle tree, stump and fruit keys (`x<n>_`), today's isle spawns.
+  - Kept: every town story (apiary, tea room, post office, bathhouse, glade, reading room, race, charter, flower show, Reef Hall), the Starfall spells in `story.sky`, and everything already in the bag.
+  - Paid back, only where the save records the payment: the workshop fund, the forge (when `bday` is set), the mill wheel, the lighthouse lens, the bell glass and the wreck lens, every stake tier bought plus its waiting clams. Not paid back: Wendell's raising price, materials and relics handed over, night voyages, the crowbar.
+  - Given back: workshop materials if handed over, planks, fittings and flour on order or waiting, a commission, stake goods waiting; furniture on isle land (and what was stored in it), non-beach things lying there, and planted crops and trees (as seeds, saplings or fruit; wild plants just go). Today's beach finds on the isles wash away. What doesn't fit in the bag arrives as gifts in letters from Wendell.
+  - The original trees are laid out again without the isles' bridges, which can move a few of them (on one test island: one tree went, one came back and a palm moved about 2 m).
+- Test hooks (#dev): `window.__game.v166`.
+- Save: no new keys.

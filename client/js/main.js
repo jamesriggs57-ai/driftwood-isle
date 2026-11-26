@@ -14,6 +14,7 @@ import * as S2 from './story2.js';   // v1.38 phase 2 buildings and furniture
 import * as S3 from './story3.js';   // v1.39 phase 3 buildings and furniture
 import * as S4 from './story4.js';   // v1.41 phase 4 buildings, festival and Starfall spells
 import * as LH from './lighthouse.js';   // v1.39 fixes: the climbable lighthouse on Lighthouse Point
+import * as TW from './towerroom.js';   // v1.47 inside Wendell's tower
 import { ACHIEVEMENTS, ACH_GROUPS } from './achieve.js';
 import { BY_SLOT, SLOT_NAMES } from './wardrobe-data.js';
 import { CELL, buildSoil, buildFences, buildStake, buildGardenSign, buildScarecrow, buildLanternPost, buildFlowerArch } from './farm.js';
@@ -2849,7 +2850,7 @@ function isleChoices(menu){
     if (S.clams<q.Qd.clams){ dialog(W.name, v, [WEN.price, `${fmt(q.Qd.clams)} clams, and we can begin.`], menu); return; }
     dialog(W.name, v, ['You have everything? Let me see...'], null, [
       { label:`Raise it (${fmt(q.Qd.clams)})`, fn:()=>{ if (S.clams<q.Qd.clams || q.Qd.need.some(x=>!haveNeed(x)) || (!dev && relicMissing(q).length)) return menu();
-          takeFor(q.Qd.need); if (!dev) for (const id of (q.Qd.relics||[])) removeItem(id,1); S.clams-=q.Qd.clams; updateHUD(); track('isle'); dialog(W.name, v, isleAsk(q,'done'), ()=>raiseIsle(q.n, q.kind)); } },
+          takeFor(q.Qd.need); if (!dev) for (const id of (q.Qd.relics||[])) removeItem(id,1); S.clams-=q.Qd.clams; updateHUD(); track('isle'); dialog(W.name, v, isleAsk(q,'done'), ()=>outdoors(()=>raiseIsle(q.n, q.kind))); } },
       { label:'Not yet', alt:true, fn:menu } ]); } }]; }
 // a day after an isle rises, Wendell writes about the next one (which way to look, nothing more)
 const COMPASS=['east','northeast','north','northwest','west','southwest','south','southeast'];
@@ -4213,7 +4214,7 @@ function openStoryMap(){
       <div class="notice"><b>Go to: town</b><br>${go(T,'T')}</div>
       <div class="notice"><b>Go to: story places</b><br>${St.length?go(St,'S'):'<span class="muted">None built yet. Open some stories first.</span>'}</div>
       <div class="notice"><b>Go to: isles</b><br>${Is.length?go(Is,'I'):'<span class="muted">No isles yet.</span>'}</div>
-      <div class="notice"><b>Go inside</b><br>${btn('bay','Cay Bay (row out)', GUEST||VISIT)} ${btn('wreck','Dive the shipwreck', !ISLE_K.includes('dunes')||GUEST||VISIT)} ${btn('nook','Reading room', !nookOpen())}</div>
+      <div class="notice"><b>Go inside</b><br>${btn('bay','Cay Bay (row out)', GUEST||VISIT)} ${btn('wreck','Dive the shipwreck', !ISLE_K.includes('dunes')||GUEST||VISIT)} ${btn('nook','Reading room', !nookOpen())} ${btn('tower','Wizard tower', !towerEnt)} ${btn('towertop','Wizard tower: upstairs', !towerEnt)}</div>
       <div class="notice"><b>Trips</b> <span class="muted">· free, straight there${BOOT.mode==='account'?'':' (signed-in islands only)'}</span><br>
       ${Object.keys(TRIP_THEMES).map(th=>`<button class="btn alt" data-trip="${th}" ${BOOT.mode!=='account'||TRIP?'disabled':''}>${TRIP_THEMES[th].name}</button>`).join(' ')}<br>
       <span class="muted">Towns:</span> ${Object.entries(TOWN_KIND_NAMES).map(([k,l])=>`<button class="btn alt" data-town="${k}" ${BOOT.mode!=='account'||TRIP?'disabled':''}>${l}</button>`).join(' ')}</div>`;
@@ -4231,7 +4232,9 @@ function openStoryMap(){
       sky:()=>devAsk('Cast the aurora and the glowing paths for free?', ()=>{ SY.sky=Object.assign(SY.sky||{}, { aurora:true, paths:true, auroraOff:false, pathsOff:false }); save(); refreshSpells(); toast('Aurora and glowing paths are on. Look at night.'); }),
       bay:()=>{ closePanel(); enterBay(); },
       wreck:()=>{ if (!dunesLM()){ toast('The wreck isn\'t up yet.'); return; } closePanel(); makeWreckRoom(); enterRoom('wreck'); },
-      nook:()=>openReadingRoom() };
+      nook:()=>openReadingRoom(),
+      tower:()=>{ if (!towerEnt) return; closePanel(); makeTowerRooms(); enterRoom('tower'); towerHello(); },   // v1.47
+      towertop:()=>{ if (!towerEnt) return; closePanel(); makeTowerRooms(); enterRoom('tower'); setTimeout(()=>towerFloor('towertop'), 450); } };
     pBody.querySelectorAll('[data-dv]').forEach(b=>b.onclick=()=>{ const f=A[b.dataset.dv]; if (f) f(); }); };
   render(); }
 
@@ -4338,15 +4341,89 @@ const shopsBacked = () => ['general','aquarium','garden'].filter(k=>(S.shops[k]?
 const moveUnlocked = () => DEV&&S.devMagic || (cellsBuilt()>=MAGIC.unlockMove.cells && shopsBacked()>=MAGIC.unlockMove.shops);
 const landUnlocked = () => DEV&&S.devMagic || (cellsBuilt()>=MAGIC.unlockLand.cells && shopsBacked()>=MAGIC.unlockLand.shops);
 class Wizard extends Keeper {
-  update(dt,t){ super.update(dt,t); const o=this.obj.userData.orb; if(o) o.material.emissiveIntensity=0.8+Math.sin(t*3)*0.4;
-    const orbs=towerEnt && towerEnt.model.userData.orbs; if(orbs) orbs.forEach((b,i)=>{ const a=t*0.7+i*Math.PI/2; b.position.set(Math.cos(a)*2.9, 3.2+Math.sin(t*1.3+i)*0.6, Math.sin(a)*2.9); }); }
+  update(dt,t){ super.update(dt,t); const o=this.obj.userData.orb; if(o) o.material.emissiveIntensity=0.8+Math.sin(t*3)*0.4; }
 }
+const spinOrbs = t => { const orbs=towerEnt && towerEnt.model.userData.orbs; if(orbs) orbs.forEach((b,i)=>{ const a=t*0.7+i*Math.PI/2; b.position.set(Math.cos(a)*2.9, 3.2+Math.sin(t*1.3+i)*0.6, Math.sin(a)*2.9); }); };
 function buildTowerEnt(){
-  if (towerEnt){ towerEnt.remove(); setRects('tower',[]); towerEnt=null; } if (wizard){ wizard.remove(); wizard=null; }
+  if (towerEnt){ towerEnt.remove(); setRects('tower',[]); towerEnt=null; }
   if (!PLACES.tower) return;
-  towerEnt=placeBuilding('tower', PLACES.tower[0], PLACES.tower[1], buildTower(), 'Knock', ()=>{ Snd.door(); toast('Wendell works outside. He says the inside is "a bit explode-y" at the moment.'); });
-  const [dx,dz]=towerEnt.doorPt; wizard=new Wizard(Object.assign({ build:buildWizard }, WIZARD), dx+2.1, dz-0.2, ()=>talkWizard());
+  towerEnt=placeBuilding('tower', PLACES.tower[0], PLACES.tower[1], buildTower(), 'Enter', ()=>{ makeTowerRooms(); enterRoom('tower'); towerHello(); });   // v1.47 Wendell works inside now
+  towerEnt.update=(dt,t)=>spinOrbs(t);
+  if (ROOMS.tower) ROOMS.tower.exit=ROOMS.towertop.exit=[towerEnt.doorPt[0], towerEnt.doorPt[1]+0.2];
 }
+/* ---------- v1.47 inside Wendell's tower (models and words in towerroom.js) ----------
+   Ground floor ('tower'): Wendell at his cauldron, and things to tap: the cauldron (potions), the shelves (a book),
+   the lectern (enchanting), the scrying bowl (moving buildings, shaping land), the star chart, the owl, the chair.
+   A stair goes up to the observatory ('towertop'): the telescope, the orrery, the star globe, the Starglass cushion. */
+const TOWER_IDX=[97,98];
+let towerL=null, topL=null;
+// some of Wendell's spells happen outside: step out of the tower first
+const outdoors = fn => { if (World.inside){ exitRoom(); setTimeout(fn, 700); } else fn(); };
+function towerSkyState(){ return { night:World.night>0.5, starfall:ISLE_K.includes('starfall'), charter:charterDone(), island:S.island, day:dayNum(today()) }; }
+function makeTowerRooms(){
+  const exit=towerEnt ? [towerEnt.doorPt[0], towerEnt.doorPt[1]+0.2] : [0,0];
+  if (ROOMS.tower){ ROOMS.tower.exit=ROOMS.towertop.exit=exit; TW.drawChart(towerL.chart, towerSkyState()); refreshTowerLook(); return; }
+  const seed=hashStr('tower:'+(S.seed|0)), W=WIZARD;
+  const room=(id, idx, L, R)=>{ const [ox,oz]=roomOrigin(idx), container=new THREE.Group(); container.visible=false; scene.add(container); L.shell.position.set(ox,0,oz); container.add(L.shell);
+    const inBand=(lx,lz,r)=>{ const a=(Math.atan2(lx,lz)+TAU)%TAU; return (L.bands||[]).some(([a0,a1,rr])=>a>=a0 && a<=a1 && r>rr); };
+    ROOMS[id]={ id, ox, oz, w:R*2+0.6, d:R*2+0.6, group:container, shell:L.shell, spec:{ mood:id }, entry:[ox, oz+R-1.6], exit, bed:[ox,oz],
+      walk:(x,z)=>{ const lx=x-ox, lz=z-oz, r=Math.hypot(lx,lz);
+        if (id==='tower' && Math.abs(lx)<0.8 && lz>0 && lz<R-0.2) return true;   // the doorway
+        if (r>R-0.45 || inBand(lx,lz,r)) return false;
+        return !L.solids.some(([sx,sz,sr])=>Math.hypot(lx-sx,lz-sz)<sr); },
+      exitCheck: id==='tower' ? (x,z)=>z-oz>R-0.75 && Math.abs(x-ox)<0.8 : ()=>false };
+    return ROOMS[id]; };
+  towerL=TW.buildWorkroom(seed); topL=TW.buildObservatory(seed);
+  const A=room('tower', TOWER_IDX[0], towerL, TW.TOWER_R), B=room('towertop', TOWER_IDX[1], topL, TW.TOP_R);
+  const spot=(Rm, kind, [lx,lz], hit, label, act, reach=1.9)=>new Thing(kind, Rm.ox+lx, Rm.oz+lz, 0.4, new THREE.Group(), label, act, { solid:false, reach, hit });
+  // the room's own life: candles, bubbles, the owl, the orrery. Ticks only while you're on that floor.
+  spot(A, 'towertick', [0,0], null, null, null, 0).tick=(e,dt,t)=>{ if (World.inside==='tower') TW.tickTower(towerL, t, dt); };
+  spot(B, 'towertick', [0,0], null, null, null, 0).tick=(e,dt,t)=>{ if (World.inside==='towertop') TW.tickTower(topL, t, dt); };
+  // Wendell, by his cauldron
+  const [wx,wz]=towerL.wendellAt; wizard=new Wizard(Object.assign({ build:buildWizard }, W), A.ox+wx, A.oz+wz, ()=>talkWizard()); wizard.rest=0.5;
+  const say=(lines, more)=>dialog(W.name, W.voice, lines, null, more);
+  const pick=L=>L[Math.floor(Math.random()*L.length)];
+  spot(A, 'cauldron', towerL.cauldAt, [1.0,1.0], 'Potions', ()=>openPotionShop(), 2.0);
+  spot(A, 'towershelf', towerL.spots.shelves, [0.6,1.4], 'Read', ()=>{ const [t,l]=pick(TW.BOOKS);
+    const txt=l.replace('{move}', moveUnlocked() ? 'Wendell can move your buildings now. Ask him, or look in the scrying bowl.' : `Wendell can move buildings once your house covers ${MAGIC.unlockMove.cells} floor squares and you've backed ${MAGIC.unlockMove.shops} shops.`)
+      .replace('{land}', landUnlocked() ? 'Wendell can shape the land for you now: raise it, lower it, dig water, fill it in.' : `Shaping land needs a house of ${MAGIC.unlockLand.cells} floor squares and ${MAGIC.unlockLand.shops} shops backed.`);
+    dialog('The bookshelf', 420, [`You pull out "${t}".`, txt]); });
+  spot(A, 'towerchart', towerL.spots.chart, [0.6,1.6], 'Look', ()=>{ const st=towerSkyState();
+    dialog('The star chart', 420, ['Wendell\'s chart of the night sky, with the Old Goat right in the middle. That one\'s his.', st.starfall ? 'A bright star with rays is drawn where Starfall Isle now hangs over the Crags.' : st.charter ? 'There\'s a dotted circle in the middle, and "Soon" written next to it.' : 'There\'s a dotted circle in the middle with a question mark next to it.']); });
+  spot(A, 'towerbench', towerL.spots.bench, [0.6,1.0], 'Look', ()=>dialog('The workbench', 420, ['Flasks, a bubbling alembic, a rack of vials in five colours, and bundles of herbs drying overhead.', 'A note in Wendell\'s hand: "Do NOT drink the pink one. It is for the cauldron, not for goats."']));
+  spot(A, 'towerlectern', towerL.spots.lectern, [0.5,1.1], ()=>S.magic.met ? 'Enchanting' : 'Look', ()=>{ const c=EN.teachChoices('wendell', ()=>{});
+    if (c.length) c[0].fn(); else dialog('The spellbook', 420, ['A big spellbook, open to a page about enchanting tools. A ribbon of light lifts off it and curls in the air.','Wendell would have to teach you. Talk to him first.']); });
+  spot(A, 'towerbowl', towerL.spots.bowl, [0.7,1.0], 'Look', ()=>{ const back=()=>{}; const opts=[];
+    if (CAN_EDIT && !TRIP){   // the same two spells as asking Wendell
+      opts.push({ label:'Move a building', fn:()=>{ if (noEdit()) return; if (!moveUnlocked()){ say([W.moveLock]); return; } outdoors(()=>openMoveList()); } });
+      opts.push({ label:'Shape the land', fn:()=>{ if (noEdit()) return; if (!landUnlocked()){ say([W.landLock]); return; } outdoors(()=>startMagic('land')); } }); }
+    opts.push({ label:'Just look', alt:true, fn:back });
+    dialog('The scrying bowl', 420, ['Still water in a stone bowl. Your whole island floats in it, tiny, turning slowly.', 'Wendell uses it to plan his spells: moving buildings and shaping the land.'], null, opts); });
+  spot(A, 'towerowl', towerL.spots.owl, [0.4,1.9], 'Look', ()=>{ Snd.pop(); toast(pick(TW.TOWER_LINES.owl)); });
+  spot(A, 'towerchair', towerL.spots.chair, [0.6,0.7], 'Sit', ()=>toast(pick(TW.TOWER_LINES.chair)));
+  spot(A, 'stairs', towerL.spots.up, [0.6,0.8], 'Go up', ()=>towerFloor('towertop'));
+  spot(B, 'stairs', topL.spots.down, [0.6,0.6], 'Go down', ()=>towerFloor('tower'));
+  spot(B, 'towerscope', topL.spots.scope, [0.8,1.4], 'Look through', ()=>openEyepiece(), 2.0);
+  spot(B, 'towerorrery', topL.spots.orrery, [0.6,1.0], 'Look', ()=>toast(pick(TW.TOWER_LINES.orrery)));
+  spot(B, 'towerglobe', topL.spots.globe, [0.5,1.1], 'Look', ()=>toast(pick(TW.TOWER_LINES.globe)));
+  spot(B, 'towerdesk', topL.spots.desk, [0.6,0.8], 'Read', ()=>toast(TW.TOWER_LINES.desk[0]));
+  spot(B, 'towerglass', topL.spots.pedestal, [0.5,1.2], 'Look', ()=>dialog('Under the glass dome', 420, ISLE_K.includes('starfall')
+    ? ['A sliver of Starglass on a velvet cushion. Stars drift inside it, even now.', 'A card underneath, in Wendell\'s hand: "From the night Starfall came up. Do not tap the glass."']
+    : ['An empty velvet cushion under a glass dome.', 'A little card says: "For the Starglass. When it comes."']));
+  TW.drawChart(towerL.chart, towerSkyState()); refreshTowerLook(); }
+// the bits that change with the island and the time of day
+function refreshTowerLook(){ if (!topL) return; const night=World.night>0.5; TW.setTowerNight(night); topL.setSky(night); topL.pedestal.userData.shard.visible=ISLE_K.includes('starfall'); }
+// up and down the stair (like the stairs at home)
+function towerFloor(to){ const R=ROOMS[to], L=to==='tower'?towerL:topL; if (!R) return; Snd.door();
+  fade(()=>{ World.inside=to; for (const k in ROOMS) ROOMS[k].group.visible=(k===to); stopMove(); const [lx,lz]= to==='tower' ? L.upLand : L.downLand;
+    player.pos.set(R.ox+lx, 0, R.oz+lz); player.face=Math.atan2(-lx, -lz); player.obj.rotation.y=player.face; camTarget.copy(player.pos); R.cutState=null; refreshTowerLook(); updateSky(); updateCamera(1); }); }
+// first time in: if you've met him he says hello properly; if not, he introduces himself
+function towerHello(){ setTimeout(()=>{ if (World.inside!=='tower' || dlgState) return; const W=WIZARD;
+  if (!S.magic.met){ talkWizard(); return; }
+  if (!S.magic.inside){ S.magic.inside=true; save(); dialog(W.name, W.voice, TW.TOWER_LINES.first); return; }
+  if (Math.random()<0.25) dialog(W.name, W.voice, [TW.TOWER_LINES.hello[Math.floor(Math.random()*TW.TOWER_LINES.hello.length)]]); }, 450); }
+function openEyepiece(){ const v=TW.eyepiece(towerSkyState()); openPanel('Through the telescope');
+  pBody.innerHTML=`<img src="${v.src}" alt="" style="display:block;width:min(300px,72vw);height:auto;margin:4px auto 10px;border-radius:50%"><div style="text-align:center"><b>${v.caption}</b><div class="muted" style="margin-top:4px">${v.sub}</div></div>`; Snd.pop(); }
 buildTowerEnt();
 /* ---------- Portal Station (v1.7) ----------
    Outside: a round stone platform with an arch over stairs going down, a glowing crystal on top.
@@ -4512,8 +4589,8 @@ function talkWizard(){
     { label:'Potions', fn:()=>openPotionShop() },
     ...EN.teachChoices('wendell', ()=>menu()),   // v1.40
     { label:'Chat', fn:()=>keeperChat(WIZARD, ()=>menu()) },
-    { label:'Move a building', fn:()=>{ if (noEdit()) return; if (!moveUnlocked()){ dialog(W.name, v, [W.moveLock], menu); return; } openMoveList(); } },
-    { label:'Shape the land', fn:()=>{ if (noEdit()) return; if (!landUnlocked()){ dialog(W.name, v, [W.landLock], menu); return; } startMagic('land'); } },
+    { label:'Move a building', fn:()=>{ if (noEdit()) return; if (!moveUnlocked()){ dialog(W.name, v, [W.moveLock], menu); return; } outdoors(()=>openMoveList()); } },   // v1.47 he's indoors now: the spell happens outside
+    { label:'Shape the land', fn:()=>{ if (noEdit()) return; if (!landUnlocked()){ dialog(W.name, v, [W.landLock], menu); return; } outdoors(()=>startMagic('land')); } },
     { label:'Bye!', alt:true, fn:()=>{} } ]);
   if (!S.magic.met){ S.magic.met=true; save(); dialog(W.name, v, W.first, menu); return; }
   const h=Time.hour(); dialog(W.name, v, [(h>=21||h<5) ? W.night[0] : W.greet[Math.floor(Math.random()*W.greet.length)]], menu);
@@ -5547,6 +5624,8 @@ function updateSky(){
     hemi.color.setHex(0xfff0dc); hemi.groundColor.setHex(0x8a6a50); hemi.intensity=1.6-World.night*0.35; sun.color.setHex(0xfff0dc); sun.intensity=1.3; sunDir.set(0.3,1,0.45).normalize();
     if (homeFloorOf(World.inside)>=0 && S.home && S.home.built){ hemi.color.setHex(0xfff0dc); hemi.groundColor.setHex(0x6a5040); hemi.intensity=LT.amb-World.night*0.2; sun.color.setHex(0xfff0dc); sun.intensity=LT.sun; sunDir.set(0.3,1,0.45).normalize(); }
     if (World.inside==='museum'){ hemi.color.setHex(0xffe4c4); hemi.groundColor.setHex(0x5a3e2c); hemi.intensity=0.85; sun.color.setHex(0xffdcb0); sun.intensity=0.6; sunDir.set(0.15,1,0.35).normalize(); }
+    if (World.inside==='tower'){ hemi.color.setHex(0xf0e6ff); hemi.groundColor.setHex(0x4e4060); hemi.intensity=1.25-World.night*0.15; sun.color.setHex(0xffe4c4); sun.intensity=0.85; sunDir.set(0.2,1,0.4).normalize(); }   // v1.47 Wendell's workroom
+    if (World.inside==='towertop'){ const n=World.night; hemi.color.setHex(n>0.5?0xd0d4ff:0xfff4e4); hemi.groundColor.setHex(0x4e4060); hemi.intensity=1.45-n*0.35; sun.color.setHex(n>0.5?0xc8d0ff:0xfff0dc); sun.intensity=1.1-n*0.45; sunDir.set(0.3,1,0.5).normalize(); }
     renderer.toneMappingExposure = 1.15*(S.settings.bright||1); return; }
   sky.visible=stars.visible=true; scene.background=null; scene.fog.near=42; scene.fog.far=150;
   const dim = World.weather==='sunny'?0:(World.weather==='cloudy'?0.3:0.6);
@@ -8961,6 +9040,7 @@ window.__game.v145 = { fishPool, bugPool, isleNear, isleAt, bayMore, bayTipIds, 
 // v1.26 test hooks
 window.__game.v126 = { townNewDay, applyTown, findHomeSpot, claimHomeSpot, townCap, incomeNewDay, refreshIncome, talkIncome, incCollect, incOf, INCOME, incEnts, openMap, talkSkipperHome, talkSkipperTrip, tripGoHome, tripRecap, storyWho, askToLeave, canAskToLeave, pitchOnBuy, merchantDay, get peddler(){ return peddler; }, get skipper(){ return skipper; }, newSquares, LOAN_MAX_SQ, TRIP, TRIP_THEME, residents, residentHomes, plotEnts, KEEPOUT, Q, PATHS, camTarget, updateCamera, set camDist(v){ camDist=v; }, get camDist(){ return camDist; }, set camYaw(v){ camYaw=v; } };
 window.__game.LETTERS = LETTERS;
+window.__game.v147 = { makeTowerRooms, towerFloor, towerHello, openEyepiece, refreshTowerLook, outdoors, get towerL(){ return towerL; }, get topL(){ return topL; }, get wizard(){ return wizard; }, get tower(){ return towerEnt; }, TW };   // v1.47 test hooks
 window.__game.v127 = { roleMenu, folkMenu, smugglerShop, openNoticeBoard, shellGame, talkWorkshop, talkAttic, talkWizGarden, talkLibrary, anglerWants, get perch(){ return PERCH; }, setupTown, get PLAN(){ return PLAN; }, get TX(){ return TX; }, LAY, haulValue, haulLeft, openContacts, deliverReplies, sendLetter, addContact, canInvite, invitePenpal, readTreasureMap, bottleLetter, openNote, contactPerson, XW, POOLS, lowTide, BRIDGES, DOCK, waterType, VY, Thing };
 // v1.25 test hooks for the house builder
 window.__game.house = { LT, previewBuild:(w)=>previewBuild(w), renderBuild:(k)=>renderBuild(k), homeBlocked, planIssue, setBuildView:(v)=>setBuildView(v), mossPaintAt, buildMossLayer, roofHit, houseFrame, rebuildFloor, HOME_IDS, get houseEnt(){ return houseEnt; }, edgeTap, stairsTap, landProblem, closeBuild };

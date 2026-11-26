@@ -279,13 +279,14 @@ if (!TRIP){ const sv=S.terra.ext;
     EXT=XT.chooseExt({ R0:islandR0, SC, pref:-2.25, isles:plan.map(I=>({ cx:I.cx, cz:I.cz, r:I.r })), bridges, avoid,
       avoidA:[[0, 0.35], ...plan.filter((I,i)=>I.from==='main' && i<ISLE_K.length).map(I=>[I.a, 0.05])] });   // never over the dock, never under a raised isle's bridge
     if (!VISIT) S.terra.ext={ ...EXT, v:1 }; } }
-let extOff=false;   // true while the original trees and rocks are placed (they go by the old coast, so every saved tree keeps its spot)
+let extOff=false, hOld=null, sOld=null;   // true while the original trees and rocks are placed (they go by the old coast, so every saved tree keeps its spot)
 function islandR(a){ return EXT && !extOff ? XT.extR(islandR0, EXT, a) : islandR0(a); }
 // where a point sits between the middle (0) and the coast (1); inland it is exactly what it always was
 const islandT = (x,z) => EXT && !extOff ? XT.extT(islandR0, EXT, x, z) : Math.hypot(x,z)/islandR0(Math.atan2(z,x));
 const EXT_BOX = EXT ? XT.extBox(islandR0, EXT, 0) : null;   // the island and its new land, edge to edge
 // Cliff coast direction: c > 0 on the cliff side (for the preset Highlands this is the old cos(angle) on the west)
 const cliffC = a => LAY.cliff ? -Math.cos(a - LAY.cliff.a) : 0;
+function baseHeightOld(x,z){ extOff=true; const h=baseHeight(x,z); extOff=false; return h; }   // v1.45 the island as the original trees knew it (before the far shore)
 function baseHeight(x, z){
   const a=Math.atan2(z,x), t=islandT(x,z);
   let h = -2.4 + 2.75*smooth(1.13, 0.99, t) + 0.95*smooth(0.96, 0.88, t);
@@ -569,13 +570,14 @@ const newPathDist = (x,z) => { let m=1e9; for(const p of PATHS_NEW) m=Math.min(m
     const pads=Object.entries(PLACES).filter(([k])=>!(TRIP && k==='plaza')).map(([k,p])=>{ const cx=p[0], cz=p[1]+(k==='museum'?3:1); return [cx,cz,k==='plaza'?7:5.5,flatOf(cont(cx,cz))]; });
     for (const [px,pz,pr] of (LAY.pads||[])) pads.push([px,pz,pr,flatOf(cont(px,pz))]);   // v1.27 flat ground for trip towns and surprises
     const lc=[(lot[0]+lot[2])/2,(lot[1]+lot[3])/2], lotV=flatOf(cont(lc[0],lc[1]));
-    for(let j=0;j<nz;j++) for(let i=0;i<n;i++){ const x=HG.x0+i*HG.step, z=HG.z0+j*HG.step;
+    // one height-grid point (null: nothing to add there). k is where a sheer bluff edge is marked, -1 for none.
+    const cell=(x,z,k)=>{
       const nm=natMask(x,z); let pw=0;
       for(const [px,pz,r] of pads){ const d=Math.hypot(x-px,z-pz); if(d<r+5) pw=Math.max(pw,smooth(r+5,r,d)); }
       const ld=lotDist(x,z); if(ld<5) pw=Math.max(pw,smooth(5,1.2,ld));
       const ed=terraDelta(x,z), wt=terraWet(x,z), lm=terraLand(x,z);
-      if(nm<=0 && pw<=0 && !ed && !wt && !lm && !(TERRA_ANY && (terraLand(x+1.7,z)||terraLand(x-1.7,z)||terraLand(x,z+1.7)||terraLand(x,z-1.7)))) continue;
-      const b=baseHeight(x,z); let v=b+lift(x,z)*nm; if (B && bluffWall && nm>0.5) (HG.wall||(HG.wall=new Uint8Array(n*nz)))[j*n+i]=1;
+      if(nm<=0 && pw<=0 && !ed && !wt && !lm && !(TERRA_ANY && (terraLand(x+1.7,z)||terraLand(x-1.7,z)||terraLand(x,z+1.7)||terraLand(x,z-1.7)))) return null;
+      const b=baseHeight(x,z); let v=b+lift(x,z)*nm; if (B && bluffWall && nm>0.5 && k>=0) (HG.wall||(HG.wall=new Uint8Array(n*nz)))[k]=1;
       for(const [px,pz,r,pv] of pads){ const d=Math.hypot(x-px,z-pz); if(d<r+5) v=lerp(v,pv,smooth(r+5,r,d)); }
       if(ld<5) v=lerp(v,lotV,smooth(5,1.2,ld));
       if (ed){ const v0=v; v+=ed*step; if (ed<0) v=Math.max(v, Math.min(v0, off+0.12)); }   // wizard edits; lowering never digs below the lowest terrace
@@ -585,10 +587,11 @@ const newPathDist = (x,z) => { let m=1e9; for(const p of PATHS_NEW) m=Math.min(m
         const ls=(lm*2+terraLand(x+1.7,z)+terraLand(x-1.7,z)+terraLand(x,z+1.7)+terraLand(x,z-1.7))/6, top=quant(Math.max(off+0.06, off+0.06+ed*step));
         const tgt = lerp(0.3, top, smooth(0.5,0.85,ls)); fin=lerp(fin, Math.max(fin,tgt), smooth(0.0,0.5,ls)); }
       if (wt) fin=lerp(fin,-1.25,smooth(0,0.6,wt));   // dug ponds and rivers
-      h[j*n+i]=fin-b; }
+      return fin-b; };
+    for(let j=0;j<nz;j++) for(let i=0;i<n;i++){ const v=cell(HG.x0+i*HG.step, HG.z0+j*HG.step, j*n+i); if (v!==null) h[j*n+i]=v; }
     // waterfalls: a plateau with a sheer front, a pool on top, terraced steps up the back and sides
     for (const F of FALLS){
-      const I=(x)=>Math.round((x-HG.x0)/HG.step), r0=F.Rp+7, i0=Math.max(0,I(F.cx-r0)), i1=Math.min(n-1,I(F.cx+r0)), j0=Math.max(0,I(F.cz-r0)), j1=Math.min(nz-1,I(F.cz+r0));
+      const I=(x)=>Math.round((x-HG.x0)/HG.step), r0=F.Rp+7, i0=Math.max(0,I(F.cx-r0)), i1=Math.min(n-1,I(F.cx+r0)), J=(z)=>Math.round((z-HG.z0)/HG.step), j0=Math.max(0,J(F.cz-r0)), j1=Math.min(nz-1,J(F.cz+r0));
       let mx=-9; for(let j=j0;j<=j1;j++) for(let i=i0;i<=i1;i++){ const x=HG.x0+i*HG.step, z=HG.z0+j*HG.step; if(Math.hypot(x-F.cx,z-F.cz)<F.Rp) mx=Math.max(mx, baseHeight(x,z)+h[j*n+i]); }
       F.top=Math.max(F.top, mx+0.35);
       for(let j=j0;j<=j1;j++) for(let i=i0;i<=i1;i++){ const x=HG.x0+i*HG.step, z=HG.z0+j*HG.step, d=Math.hypot(x-F.cx,z-F.cz); if(d>=r0) continue;
@@ -599,12 +602,20 @@ const newPathDist = (x,z) => { let m=1e9; for(const p of PATHS_NEW) m=Math.min(m
         let fin=Math.max(cur, s);
         if (((u-4)/2.7)**2+(v/2.1)**2<1) fin=F.top-0.65;   // the pool
         h[j*n+i]=fin-b; } }
+    /* v1.45 the island's original trees and rocks are laid out on the ground as it was before the far shore,
+       so the same trees come up in the same places. Only the old shore on that side is different; work it out there again. */
+    if (EXT){ hOld=h.slice(); for(let j=0;j<nz;j++) for(let i=0;i<n;i++){ const x=HG.x0+i*HG.step, z=HG.z0+j*HG.step, a=Math.atan2(z,x);
+        if (XT.extBulge(EXT, a)<=0 || Math.hypot(x,z)<islandR0(a)*0.6) continue;
+        extOff=true; const v=cell(x, z, -1); extOff=false; hOld[j*n+i]=v===null?0:v; } }
   }
   if (TERRAIN_STYLE!=='flat'){
     const sl=new Float32Array(n*nz);
     const H=(i,j)=>baseHeight(HG.x0+i*HG.step, HG.z0+j*HG.step)+h[j*n+i];
     for(let j=1;j<nz-1;j++) for(let i=1;i<n-1;i++){ if(!h[j*n+i]&&!h[j*n+i+1]&&!h[j*n+i-1]&&!h[(j+1)*n+i]&&!h[(j-1)*n+i]) continue; sl[j*n+i]=Math.hypot(H(i+1,j)-H(i-1,j), H(i,j+1)-H(i,j-1))/(2*HG.step); }
     HG.h=h; HG.s=sl;
+    if (hOld){ sOld=sl.slice(); const H0=(i,j)=>baseHeightOld(HG.x0+i*HG.step, HG.z0+j*HG.step)+hOld[j*n+i];   // the old shore's slopes too (see hOld above)
+      for(let j=1;j<nz-1;j++) for(let i=1;i<n-1;i++){ const x=HG.x0+i*HG.step, z=HG.z0+j*HG.step, a=Math.atan2(z,x); if (XT.extBulge(EXT, a)<=0 || Math.hypot(x,z)<islandR0(a)*0.55) continue;
+        sOld[j*n+i]=Math.hypot(H0(i+1,j)-H0(i-1,j), H0(i,j+1)-H0(i,j-1))/(2*HG.step); } }
   }
 }
 function visPathDistH(x,z){ let m=1e9; for(const p of PATHS) m=Math.min(m, polyDist(x,z,p)); return m; }
@@ -1669,7 +1680,8 @@ const EXT_SHARE = EXT_AREA_DISC/(Math.PI*(56*SC)**2+EXT_AREA_DISC);
 const OLD_LAND = (()=>{ let a2=0; for (let i=0;i<360;i++) a2+=islandR0(i/360*TAU)**2/2; return a2*TAU/360; })();
 const EXT_COVER = 1+EXT_AREA_SQ/OLD_LAND, EXT_SQ_P = EXT_AREA_SQ/((112*SC)**2+EXT_AREA_SQ);   // ground cover: more of it, spread over the new land too
 const coverXY = r => (EXT && r()<EXT_SQ_P) ? (extPt(r, true, 56*SC) || [1e4, 1e4]) : [(r()-0.5)*112*SC, (r()-0.5)*112*SC];
-const baseHeightOld = (x,z) => { extOff=true; const h=baseHeight(x,z); extOff=false; return h; };   // the island as the original trees knew it
+const rawHeightOld = (x,z) => { const b=baseHeightOld(x,z), g=hOld||HG.h; return g ? b+hillSample(g,x,z) : b; };
+function onOldGround(fn){ if (!EXT) return fn(); const h=HG.h, sl=HG.s; extOff=true; if (hOld) HG.h=hOld; if (sOld) HG.s=sOld; try { return fn(); } finally { extOff=false; HG.h=h; HG.s=sl; } }   // the island as it was before the far shore
 function randLand(r, minH, maxH, rad, tries=60, near){
   for(let k=0;k<tries;k++){ let x,z; if(near){ const a=r()*TAU, d=4+r()*near[2]; x=near[0]+Math.cos(a)*d; z=near[1]+Math.sin(a)*d; }
     else if (EXT && !layoutPhase && r()<EXT_SHARE){ const p=extPt(r, false, 56*SC); if (!p) continue; [x,z]=p; }   // v1.45 out on the far shore now and then
@@ -5211,14 +5223,16 @@ const clearForNew = p => !!inRects(p[0],p[1],2.4) || newPathDist(p[0],p[1])<2.3 
     for(let i=0;i<18;i++) add('palm','coconut',0.25,SAND_H);
   } else {   // generated islands: what grows depends on the terrain, and high ground leans to pines and cedars
     const F=LAY.flora, kinds=Object.entries(F.trees), tot=kinds.reduce((a,k)=>a+k[1],0);
-    const kindAt = p => { if (rawHeight(p[0],p[1])>3.3 && r()<0.75) return r()<0.6?'pine':'cedar'; let x=r()*tot; for(const [k,w] of kinds){ x-=w; if(x<=0) return k; } return kinds[0][0]; };
+    const kindAt = p => { if (rawHeightOld(p[0],p[1])>3.3 && r()<0.75) return r()<0.6?'pine':'cedar'; let x=r()*tot; for(const [k,w] of kinds){ x-=w; if(x<=0) return k; } return kinds[0][0]; };
     const TK = LAY.trip ? 0.3*(LAY.treeMul||1) : 1;   // trip islands are about a quarter the size (v1.27: Thicket Isle is dense, Dune Isle nearly bare)
     for(let i=0;i<Math.round(24*F.fruit*(LAY.trip?0.3:1));i++) add('fruittree', TRIP_THEME==='orchard' ? NATIVE_FRUITS[i%NATIVE_FRUITS.length] : S.nativeFruit, SAND_H+0.2,12);
     for(let i=0;i<Math.round(115*TK);i++) add(kindAt,null,SAND_H+0.2,12);
     for(let i=0;i<Math.round(20*F.palms*(LAY.trip?0.3:1));i++) add('palm','coconut',0.25,LAY.sand?SAND_H+1.6:SAND_H);
   }
   const nRocks = LAY.trip ? (TRIP_THEME==='fossil' ? 8 : TRIP_THEME==='clamstone' ? 14 : 4) : LAY.gen ? (LAY.terrain==='mountainous'||LAY.terrain==='cliffs' ? 16 : 12) : 9;
-  for(let i=0;i<nRocks;i++){ const p=randLand(r,SAND_H+0.1,12,2.2); if(!p) continue; reserve(p[0],p[1],2); if(clearForNew(p)) continue; rocks.push(new Rock(i,p[0],p[1],r)); }
+  for(let i=0;i<nRocks;i++){ const p=randLand(r,SAND_H+0.1,12,2.2); if(!p) continue; reserve(p[0],p[1],2);
+    // v1.45 a rock skipped on the old ground stays skipped; one the far shore's new ground rules out still takes its turn of the dice, so the rocks after it stay put
+    if (EXT ? onOldGround(()=>clearForNew(p)) : clearForNew(p)) continue; if (EXT && clearForNew(p)){ r(); continue; } rocks.push(new Rock(i,p[0],p[1],r)); }
 }
 layoutPhase=false;
 /* v1.45 the far shore grows its own trees and rocks: about half the island's again, as the new land is half its size.
@@ -9024,7 +9038,7 @@ window.__game.v136 = { get ISLES(){ return ISLES; }, offerMove, startMagic, magi
 window.__game.v138 = { get SY(){ return SY; }, get S2B(){ return S2B; }, isleQuest, isleChoices, relicMissing, wantedRelics, rollTripRelic, hiveColors, colorFam, apiaryChoices, refreshStory2, refreshTea, refreshForge, refreshReefHall, openTeaRoom, openForge, lighthouseAct, wickChoices, teaSeatOf, storyNewDay2, wendellLetter, isleDirWord, dev138, storySpot, bayCutting, nightBay, lightLit, COMMISSIONS, STAKES, stakeOf, talkSkipperHome, talkIncome, talkWizard };
 window.__game.v139 = { get SY(){ return SY; }, get S3B(){ return S3B; }, LOGBOOK, BEATS3, STAKES, COMMISSIONS, millAct, openMill, millstoneOffer, millThistle, millWendell, routeTowns, postRoutes, routeWant, openPost, postNewDay, placeVents, digVent, bathSeatOf, bathStage, openBath, gladeConds, gladeStageOf, gladeBugOK, gladeBugSpot, gladeLook, gladeStump, gladeKnock, gladeApprove, gladeStumpDug, gladeLamps, wreckAct, makeWreckRoom, wreckOpen, rollTripChart, openLogbook, openAntiq, antiqStock, story3Stock, storyBeat3, story3Choices, storyNewDay3, story3News, storiesHTML3, storyGossip3, refreshStory3, dev139, landmark3, meadowLM, dunesLM };
 window.__game.v141 = { get SY(){ return SY; }, get S4B(){ return S4B; }, refreshStory4, dev141, dev138, dev139, openStoryMap, devRaiseAll, devTravel, devPlaces, blocked: (x,z)=>blocked(x,z,0.3), devTrip, raceStart, raceEnd, raceCourse, raceLength, raceRivals, raceMenu, openReadingRoom, openStall, festDay, festOn, festSpots, refreshFest, refreshShow, showTableAct, showEntries, storyBeat4, story4Choices, storyNewDay4, story4News, storiesHTML4, starAltarAct, skyHour, skyNear, skyIsle, refreshSpells, refreshCharter, charterReqs, charterReady, hall4Choices, newbChoices, CHARTER, get ISLE_K(){ return ISLE_K; } };   // v1.41 test hooks
-window.__game.v145 = { get EXT(){ return EXT; }, EXT_BOX, islandR, islandR0, islandT, HG, devEveryone, mapExtent, townNewDay, refreshIncome, randLand, get extOff(){ return extOff; } };   // v1.45 test hooks
+window.__game.v145 = { get EXT(){ return EXT; }, EXT_BOX, rawHeightOld, baseHeightOld, baseHeight, islandR, islandR0, islandT, HG, devEveryone, mapExtent, townNewDay, refreshIncome, randLand, get extOff(){ return extOff; } };   // v1.45 test hooks
 window.__game.v137 = { get S(){ return S; }, get SY(){ return SY; }, get BAYR(){ return BAYR; }, get ISLES(){ return ISLES; }, get player(){ return player; }, get residents(){ return residents; },
   reefInfo, reefStage, bayPlan, bayPopulate, enterBay, exitBay, bayAct, bayCast, bayDrop, talkGill, talkShop, talkTo, talkHall, talkWizard, talkCurator, openNursery, openWorkshop, openBoard, openHallPanel,
   refreshNurseryTank, spawnRowboat, refreshWorkshop, refreshIncome, storyNewDay, townNewDay, applyTown, raiseIsle, nextIsleKind, isleQuest, loadIsle, incOf, incCollect, pinesRegrow,

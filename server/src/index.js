@@ -140,6 +140,14 @@ async function api(req, env, url) {
   let m;
 
   if (p === '/api/time') return json({ now: Date.now() });
+  // v1.67: everything the game needs to start, in one request (server time, who you are, your save, unopened mail count).
+  // Replaces separate /api/time, /api/me, /api/save and /api/mail calls at startup. Works signed out (user is null).
+  if (p === '/api/boot' && M === 'GET') {
+    const now = Date.now(), me = await currentUser(env, req);
+    if (!me) return json({ now, user: null });
+    const [s, mail] = await Promise.all([loadSave(env, me.id), env.DB.prepare('SELECT COUNT(*) AS n FROM mail WHERE to_id = ? AND claimed = 0').bind(me.id).first()]);
+    return json({ now, user: me, save: s || { data: null, version: 0 }, mail: mail?.n || 0 });
+  }
 
   // Sign up or sign in: email a 6-digit code (and a backup link)
   if (p === '/api/auth/start' && M === 'POST') {
@@ -412,63 +420,81 @@ export default {
 
 /* ---------- Live room: one per island ---------- */
 const EMOTES = ['wave', 'happy', 'laugh', 'heart', 'surprised', 'sad', 'thinking', 'sleepy', 'thanks', 'bye'];
+/* v1.67: uses the WebSocket Hibernation API. While nobody sends anything, the room sleeps and costs nothing,
+   but sockets stay connected. Who is connected lives on each socket (serializeAttachment), open trades live in the
+   room's storage, so both survive a sleep. Last positions and throttles are memory only: when someone joins,
+   clients resend their position (see online.js), so a sleep never leaves anyone standing in the wrong place. */
 export class IslandRoom {
-  constructor(state, env) { this.state = state; this.env = env; this.peers = new Map(); this.trades = new Map(); }
+  constructor(state, env) { this.state = state; this.env = env; this.pos = new Map(); this.thr = new Map(); }
+  live() { const out = []; for (const w of this.state.getWebSockets()) { let p = null; try { p = w.deserializeAttachment(); } catch {} if (p && !p.gone) out.push([w, p]); } return out; }
   async fetch(req) {
     const pair = new WebSocketPair(); const [client, ws] = Object.values(pair);
-    ws.accept();
-    const me = { id: req.headers.get('x-user'), name: decodeURIComponent(req.headers.get('x-name') || ''), role: req.headers.get('x-role'), owner: req.headers.get('x-owner'), st: null };
+    const me = { id: req.headers.get('x-user'), name: decodeURIComponent(req.headers.get('x-name') || ''), role: req.headers.get('x-role'), owner: req.headers.get('x-owner') };
     // one connection per player: a new tab replaces the old one
-    for (const [w, p] of this.peers) if (p.id === me.id) { try { w.close(4000, 'replaced'); } catch {} this.peers.delete(w); }
-    this.peers.set(ws, me);
-    ws.send(JSON.stringify({ t: 'hello', you: me.id, peers: [...this.peers.values()].filter(p => p.id !== me.id).map(p => ({ id: p.id, name: p.name, role: p.role, st: p.st })) }));
+    for (const [w, p] of this.live()) if (p.id === me.id) { try { w.serializeAttachment({ ...p, gone: 1 }); w.close(4000, 'replaced'); } catch {} }
+    this.state.acceptWebSocket(ws); ws.serializeAttachment(me);
+    ws.send(JSON.stringify({ t: 'hello', you: me.id, peers: this.live().filter(([, p]) => p.id !== me.id).map(([, p]) => ({ id: p.id, name: p.name, role: p.role, st: this.pos.get(p.id) || null })) }));
     this.broadcast({ t: 'join', id: me.id, name: me.name, role: me.role }, ws);
-    ws.addEventListener('message', ev => this.onMsg(ws, me, ev.data));
-    const bye = () => { if (this.peers.get(ws) === me) { this.peers.delete(ws); this.broadcast({ t: 'leave', id: me.id }); this.cancelTradesOf(me.id); } };
-    ws.addEventListener('close', bye); ws.addEventListener('error', bye);
     return new Response(null, { status: 101, webSocket: client });
   }
-  broadcast(msg, except) { const s = JSON.stringify(msg); for (const w of this.peers.keys()) if (w !== except) { try { w.send(s); } catch {} } }
-  sendTo(id, msg) { const s = JSON.stringify(msg); for (const [w, p] of this.peers) if (p.id === id) { try { w.send(s); } catch {} } }
+  async webSocketMessage(ws, raw) { let me = null; try { me = ws.deserializeAttachment(); } catch {} if (me && !me.gone) await this.onMsg(ws, me, raw); }
+  async webSocketClose(ws, code, reason) { await this.bye(ws); try { ws.close(code >= 1000 && code < 5000 && ![1004, 1005, 1006, 1015].includes(code) ? code : 1000, reason); } catch {} }
+  async webSocketError(ws) { await this.bye(ws); }
+  async bye(ws) {
+    let me = null; try { me = ws.deserializeAttachment(); } catch {} if (!me || me.gone) return;
+    try { ws.serializeAttachment({ ...me, gone: 1 }); } catch {}
+    if (this.live().some(([w, p]) => w !== ws && p.id === me.id)) return;   // still here in another socket
+    this.pos.delete(me.id); this.broadcast({ t: 'leave', id: me.id }); await this.cancelTradesOf(me.id);
+  }
+  broadcast(msg, except) { const s = JSON.stringify(msg); for (const [w] of this.live()) if (w !== except) { try { w.send(s); } catch {} } }
+  sendTo(id, msg) { const s = JSON.stringify(msg); for (const [w, p] of this.live()) if (p.id === id) { try { w.send(s); } catch {} } }
+  here(id) { return this.live().some(([, p]) => p.id === id); }
+  async trades() { return (await this.state.storage.get('trades')) || {}; }
+  async putTrades(t) { if (Object.keys(t).length) await this.state.storage.put('trades', t); else await this.state.storage.delete('trades'); }
+  throttled(id, key, ms) { const k = id + key, now = Date.now(); if (now - (this.thr.get(k) || 0) < ms) return true; this.thr.set(k, now); return false; }
   async onMsg(ws, me, raw) {
+    if (typeof raw !== 'string' || raw.length > 4000) return;
     let m; try { m = JSON.parse(raw); } catch { return; }
-    if (typeof raw === 'string' && raw.length > 4000) return;
     switch (m.t) {
       case 'pos': {   // position, facing, moving; numbers only
         const st = { x: +m.x || 0, z: +m.z || 0, y: +m.y || 0, f: +m.f || 0, w: m.w ? 1 : 0, b: m.b ? 1 : 0, in: typeof m.in === 'string' ? m.in.slice(0, 20) : null, lk: typeof m.lk === 'string' && m.lk.length <= 1500 && /^[a-z]{2,12}(\.\d{1,2}){6,11}(~g[A-Za-z0-9_-]{8,1400})?$/.test(m.lk) ? m.lk : '' };
         if (Array.isArray(m.rg) && m.rg.length === 4 && m.rg.every(v => Number.isFinite(+v))) { st.rg = m.rg.map(v => Math.max(-1, Math.min(1, +v))); st.rs = m.rs ? 1 : 0; }   // tumbling pose (v1.6)
-        me.st = st; this.broadcast({ t: 'pos', id: me.id, ...st }, ws); break; }
+        this.pos.set(me.id, st); this.broadcast({ t: 'pos', id: me.id, ...st }, ws); break; }
       case 'emote': if (EMOTES.includes(m.e)) this.broadcast({ t: 'emote', id: me.id, e: m.e }); break;
       case 'bonk': {   // a playful knock-over: no effect on saves, just an animation for everyone in the room
-        const now = Date.now(); if (now - (me.bonkT || 0) < 400) return; me.bonkT = now;
-        const to = String(m.to); if (to === me.id || ![...this.peers.values()].some(p => p.id === to)) return;
+        if (this.throttled(me.id, 'bonk', 400)) return;
+        const to = String(m.to); if (to === me.id || !this.here(to)) return;
         const dx = Math.max(-1, Math.min(1, +m.dx || 0)), dz = Math.max(-1, Math.min(1, +m.dz || 0));
         const p = Math.max(0.5, Math.min(1.5, +m.p || 1));   // v1.40: Ultrabonk launch power from the sender's tool
         this.broadcast({ t: 'bonk', id: me.id, to, dx, dz, p }, ws); break; }
       case 'game': {   // party games (v1.14): the host's game state, ball hits, join/leave. Relayed as-is; nothing here touches saves.
-        const now = Date.now(); if (now - (me.gameT || 0) < 40) return; me.gameT = now;
+        if (this.throttled(me.id, 'game', 40)) return;
         if (!m.d || typeof m.d !== 'object' || Array.isArray(m.d) || JSON.stringify(m.d).length > 1500) return;
         this.broadcast({ t: 'game', id: me.id, d: m.d }, ws); break; }
       case 'world': if (me.role === 'owner' || me.role === 'resident') this.broadcast({ t: 'world', id: me.id, v: m.v | 0 }, ws); break;   // "island changed, refresh when ready"
       case 'gift': this.sendTo(String(m.to), { t: 'gift', from: me.id, name: me.name }); break;      // the gift itself went through /api/mail
-      case 'trade-ask': { const to = String(m.to); if (to === me.id || ![...this.peers.values()].some(p => p.id === to)) return;
-        const id = rid(8); this.trades.set(id, { id, a: me.id, b: to, offer: { [me.id]: [], [to]: [] }, ok: {}, ver: {} });
+      case 'trade-ask': { const to = String(m.to); if (to === me.id || !this.here(to)) return;
+        const T = await this.trades(), id = rid(8); T[id] = { id, a: me.id, b: to, offer: { [me.id]: [], [to]: [] }, ok: {}, ver: {} }; await this.putTrades(T);
         this.sendTo(to, { t: 'trade-ask', trade: id, from: me.id, name: me.name }); this.sendTo(me.id, { t: 'trade-open', trade: id, with: to }); break; }
-      case 'trade-accept': { const tr = this.trades.get(m.trade); if (!tr || tr.b !== me.id) return; tr.open = true; this.sendTo(tr.a, { t: 'trade-open', trade: tr.id, with: tr.b }); this.sendTo(tr.b, { t: 'trade-open', trade: tr.id, with: tr.a }); break; }
-      case 'trade-offer': { const tr = this.trades.get(m.trade); if (!tr || !tr.open || (tr.a !== me.id && tr.b !== me.id)) return;
-        tr.offer[me.id] = (Array.isArray(m.items) ? m.items : []).slice(0, 8).map(i => ({ slot: i.slot | 0, id: String(i.id) })).filter(i => !KEEP_IDS.test(i.id)); tr.ok = {};
+      case 'trade-accept': { const T = await this.trades(), tr = T[m.trade]; if (!tr || tr.b !== me.id) return; tr.open = true; await this.putTrades(T);
+        this.sendTo(tr.a, { t: 'trade-open', trade: tr.id, with: tr.b }); this.sendTo(tr.b, { t: 'trade-open', trade: tr.id, with: tr.a }); break; }
+      case 'trade-offer': { const T = await this.trades(), tr = T[m.trade]; if (!tr || !tr.open || (tr.a !== me.id && tr.b !== me.id)) return;
+        tr.offer[me.id] = (Array.isArray(m.items) ? m.items : []).slice(0, 8).map(i => ({ slot: i.slot | 0, id: String(i.id) })).filter(i => !KEEP_IDS.test(i.id)); tr.ok = {}; await this.putTrades(T);
         this.sendTo(tr.a, { t: 'trade-state', trade: tr.id, offer: tr.offer, ok: tr.ok }); this.sendTo(tr.b, { t: 'trade-state', trade: tr.id, offer: tr.offer, ok: tr.ok }); break; }
-      case 'trade-ok': { const tr = this.trades.get(m.trade); if (!tr || !tr.open || (tr.a !== me.id && tr.b !== me.id)) return;
+      case 'trade-ok': { const T = await this.trades(), tr = T[m.trade]; if (!tr || !tr.open || (tr.a !== me.id && tr.b !== me.id)) return;
         tr.ok[me.id] = true; tr.ver[me.id] = m.version | 0;
+        const both = tr.ok[tr.a] && tr.ok[tr.b]; if (both) delete T[tr.id]; await this.putTrades(T);   // settled once: a second ok can't run it again
         this.sendTo(tr.a, { t: 'trade-state', trade: tr.id, offer: tr.offer, ok: tr.ok }); this.sendTo(tr.b, { t: 'trade-state', trade: tr.id, offer: tr.offer, ok: tr.ok });
-        if (tr.ok[tr.a] && tr.ok[tr.b]) await this.settle(tr); break; }
-      case 'trade-cancel': { const tr = this.trades.get(m.trade); if (!tr || (tr.a !== me.id && tr.b !== me.id)) return; this.trades.delete(tr.id); const msg = { t: 'trade-end', trade: tr.id, done: false, by: me.name }; this.sendTo(tr.a, msg); this.sendTo(tr.b, msg); break; }
+        if (both) await this.settle(tr); break; }
+      case 'trade-cancel': { const T = await this.trades(), tr = T[m.trade]; if (!tr || (tr.a !== me.id && tr.b !== me.id)) return; delete T[tr.id]; await this.putTrades(T);
+        const msg = { t: 'trade-end', trade: tr.id, done: false, by: me.name }; this.sendTo(tr.a, msg); this.sendTo(tr.b, msg); break; }
     }
   }
-  cancelTradesOf(uid) { for (const tr of this.trades.values()) if (tr.a === uid || tr.b === uid) { this.trades.delete(tr.id); const msg = { t: 'trade-end', trade: tr.id, done: false, by: 'disconnect' }; this.sendTo(tr.a, msg); this.sendTo(tr.b, msg); } }
+  async cancelTradesOf(uid) { const T = await this.trades(); let n = 0;
+    for (const tr of Object.values(T)) if (tr.a === uid || tr.b === uid) { delete T[tr.id]; n++; const msg = { t: 'trade-end', trade: tr.id, done: false, by: 'disconnect' }; this.sendTo(tr.a, msg); this.sendTo(tr.b, msg); }
+    if (n) await this.putTrades(T); }
   // Both players confirmed: swap the items in both saves in one database transaction
-  async settle(tr) {
-    this.trades.delete(tr.id);
+  async settle(tr) {   // already removed from storage by the caller
     const fail = why => { const msg = { t: 'trade-end', trade: tr.id, done: false, by: why }; this.sendTo(tr.a, msg); this.sendTo(tr.b, msg); };
     const env = this.env;
     const A = await loadSave(env, tr.a), B = await loadSave(env, tr.b);

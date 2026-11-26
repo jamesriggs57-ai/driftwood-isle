@@ -11,7 +11,7 @@
    built in wiki.js. Writing rules: plain words, no em dashes, no emoji, only facts the code supports.
    ===================================================================== */
 
-export const GUIDE_VERSION = 'v1.66';
+export const GUIDE_VERSION = 'v1.67';
 export const GUIDE_UPDATED = '2026-11-26';
 
 const tip = s => `<div class="tip"><b>Tip</b> ${s}</div>`;
@@ -843,6 +843,7 @@ ${steps(['Talk to them and pick <b>Come and meet people</b>. They follow you for
 { id:'changes', group:'done', title:'What\'s changed', html:`
 <p>Recent updates, newest first.</p>
 <ul>
+<li><b>v1.67</b>: Online islands save in a smarter way. When you play alone, your island is saved online about once a minute (every 30 seconds on a visit or boat trip), and right away when you switch apps, close the game, travel, trade or send mail. Every change is also kept in your browser at once, so if the game closes before it reaches the server, it is picked up the next time you play on that device. With friends on the island it still saves a couple of seconds after each change, so everyone sees the same island.</li>
 <li><b>v1.66</b>: The map has its own button at the top left of the screen, under the clock, so it is one tap away (it used to be in the tool picker). Pickup notes, potions and the party list now sit a little lower on the left to make room.</li>
 <li><b>v1.65</b>: 69 new fossils, 80 in all, each with its own model: shells, corals, sea life, trilobites, ancient fish and sea reptiles, plants, amber, dinosaur skulls and bones, Ice Age mammals and more. A fossil you haven't found yet is twice as likely to turn up. Once more than 6 fossils are donated, the museum builds the full Fossil Hall with a pedestal or a glass case spot for every fossil (see The museum). New achievements for 25, 50 and all 80 fossils and for 250 and 288 museum displays; the old 11-fossil one is now called Fossil Shelf.</li>
 <li><b>v1.64</b>: Sewing. Buy a Sewing Machine from Pemberton (12,000), place it and use it to make rugs and clothes and paint them pixel by pixel; the more you sew, the finer the grid and the stranger the alterations (up to glowing trim, orbiting stars and little wings).</li>

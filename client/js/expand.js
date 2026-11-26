@@ -517,8 +517,7 @@ export function buildIsleFx(I, gy, seed){
       const glow=F.t==='skypool', wm=glow ? new THREE.MeshStandardMaterial({ color:0x6ac8f0, emissive:0x2a7ab8, emissiveIntensity:0.45, transparent:true, opacity:0.85, roughness:0.15 }) : waterM;
       const pool=new THREE.Mesh(new THREE.CircleGeometry(F.r+0.25, 32), wm); pool.rotation.x=-Math.PI/2; pool.position.set(F.x, F.lvl, F.z); pool.receiveShadow=true; g.add(pool);
       for (let k=0;k<12;k++){ const a=k/12*TAU+r()*0.3, d=F.r+0.5+r()*0.4, x=F.x+Math.cos(a)*d, z=F.z+Math.sin(a)*d; if (F.run && polyD(x,z,F.run)<F.hw+0.6) continue; const b=mk(G.dod(0.3+r()*0.3), stone2, x, gy(x,z)+0.1, z, g); b.rotation.set(r()*3,r()*3,0); }
-      if (glow){ for (let k=0;k<7;k++){ const a=r()*TAU, d=r()*F.r*0.7, s=mk(G.sph(0.06,6,4), glowMat(0xd8f4ff), F.x+Math.cos(a)*d, F.lvl+0.3+r()*0.8, F.z+Math.sin(a)*d, g); s.castShadow=false; s.userData.ph=r()*TAU; s.userData.y0=s.position.y; keep.push(s); ticks.push((dt,t)=>{ s.position.y=s.userData.y0+Math.sin(t*0.8+s.userData.ph)*0.25; }); }
-        addGlow(pool, 0.2, F.r*1.2, 0x9ad8ff).position.set(0,0,0.25); }
+      if (glow){ for (let k=0;k<7;k++){ const a=r()*TAU, d=r()*F.r*0.7, s=mk(G.sph(0.06,6,4), glowMat(0xd8f4ff), F.x+Math.cos(a)*d, F.lvl+0.3+r()*0.8, F.z+Math.sin(a)*d, g); s.castShadow=false; s.userData.ph=r()*TAU; s.userData.y0=s.position.y; keep.push(s); ticks.push((dt,t)=>{ s.position.y=s.userData.y0+Math.sin(t*0.8+s.userData.ph)*0.25; }); } }
       if (F.run && F.run.length>1){ g.add(ribbon(densify(F.run,0.5), F.hw+0.2, F.lvl-0.02, wm));
         // the waterfall: over the cliff edge and down to the sea
         const [lx,lz]=F.lip, pr=F.run[F.run.length-2], dx=lx-pr[0], dz=lz-pr[1], L=Math.hypot(dx,dz)||1, ux=dx/L, uz=dz/L;

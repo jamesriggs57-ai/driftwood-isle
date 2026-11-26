@@ -5475,7 +5475,7 @@ function loadIsle(I, now){
     ...ISLE_TREES[I.kind].map(([kind,n])=>()=>{ const type=kind.replace(/2$/,''); for (let i=0;i<n;i++){ const key='x'+I.k+'_'+kind+i, palm=type==='palm', p=isleSpot(I, r, palm?0.25:SAND_H+0.2, palm?(I.sand?4.6:2.4):I.sky?20:14, 2.6); if (!p || S.cut[key]==='gone') continue;   // one kind of tree per frame
         trees.push(new Tree(key, p[0], p[1], type, type==='fruittree'?isleFruit():palm?'coconut':null)); } }),
     ()=>{ for (const F of ISL.fxSpots(I,'orchard')) F.trees.forEach(([x,z],i)=>{ const key='x'+I.k+'_orch'+i; I.taken.push([x,z,2.2]); if (S.cut[key]==='gone') return; trees.push(new Tree(key, x, z, 'fruittree', isleFruit())); }); },   // v1.50 the meadow's orchard, in rows
-    ()=>{ for (let i=0;i<ISLE_ROCKS[I.kind];i++){ const p=isleSpot(I, r, SAND_H+0.1, I.sky?20:14, 2.2); if (!p) continue; const rk=new Rock(200+I.k*10+i, p[0], p[1], r, I.kind==='crags'); rocks.push(rk); } },
+    ()=>{ for (let i=0;i<ISLE_ROCKS[I.kind];i++){ const p=isleSpot(I, r, SAND_H+0.1, I.sky?20:14, 2.2) || isleSpot(I, r, SAND_H+0.1, I.sky?20:14, 1.3); if (!p) continue; const rk=new Rock(200+I.k*10+i, p[0], p[1], r, I.kind==='crags'); rocks.push(rk); } },
     ()=>{ isleCover(I, grp); },
     ()=>{ isleDaily(I); I.ready=true; if (I.kind==='pines'){ workshopKey=''; refreshWorkshop(); } if (I.kind==='crags'){ S2B.forgeKey=''; refreshForge(); } isleShown(I, I.shown); },
   ];

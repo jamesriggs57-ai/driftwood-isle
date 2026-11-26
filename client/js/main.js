@@ -4215,7 +4215,7 @@ function track(ev, n=1){ if (!S.stats || VISIT && ev!=='visit') return; const k=
     if (f.prog>=f.n){ toast(`${favorTask(f)}: done!`, null, 'new', `Go tell ${npcName(f.who)}.`); Snd.jingle(); } }
   achDirty=true; }
 let achDirty=true, achTicks=0;
-const seenKinds = kind => Object.keys(S.seen).filter(id=>ITEMS[id] && ITEMS[id].kind===kind).length;
+const seenKinds = kind => Object.keys(S.seen).filter(id=>!id.startsWith('cf_') && ITEMS[id] && ITEMS[id].kind===kind).length;   // v1.41 custom pieces don't count
 function achValue(stat){ const st=S.stats||{};
   switch (stat){
     case 'bugKinds': return seenKinds('bug'); case 'fishKinds': return seenKinds('fish'); case 'fossilKinds': return seenKinds('fossil'); case 'shellKinds': return seenKinds('shell');

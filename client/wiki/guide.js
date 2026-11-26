@@ -11,7 +11,7 @@
    built in wiki.js. Writing rules: plain words, no em dashes, no emoji, only facts the code supports.
    ===================================================================== */
 
-export const GUIDE_VERSION = 'v1.39.1';
+export const GUIDE_VERSION = 'v1.41';
 export const GUIDE_UPDATED = '2026-11-26';
 
 const tip = s => `<div class="tip"><b>Tip</b> ${s}</div>`;
@@ -225,6 +225,35 @@ ${tip('Making 10 <b>different</b> pieces is what starts Bramble\'s workshop stor
 <p>Luck potions make them more likely. Golden Grove (sap and heartwood) and Starfall Isle (starstones) are full of them.</p>
 `},
 
+{ id:'custom', group:'island', title:'Custom furniture', html:`
+<p>Once you've made 10 different woodworking pieces, crafting gets a <b>Design</b> tab. Stand at a crafting table, pick a piece and choose every part of it yourself.</p>
+<table class="t"><tr><th>Piece</th><th>Parts you choose</th></tr>
+<tr><td>Chair</td><td>11 legs, 12 backs, 7 seats, 5 arms, 8 trims</td></tr>
+<tr><td>Table</td><td>10 bases, 8 tops, 6 aprons, 9 things on top</td></tr>
+<tr><td>Bed</td><td>7 frames, 10 headboards, 6 footboards, 7 beddings, 5 canopies</td></tr>
+<tr><td>Shelf</td><td>7 bodies, 6 crowns, 5 bases, 7 fillings</td></tr>
+<tr><td>Lamp</td><td>7 bases, 6 stems, 9 shades, 5 finishes</td></tr>
+<tr><td>Dresser</td><td>6 bodies, 6 feet, 7 fronts, 6 handles, 6 tops</td></tr></table>
+<p>That's 68,412 shapes. On top of that: 16 woods and paints, a second wood, 5 metals, 14 fabrics and 9 patterns. A spinning preview shows the piece as you go. <b>Surprise me</b> picks a matching set in one style (rustic, cottage, antique, modern or woodland).</p>
+<h3>Unlocking parts</h3>
+<ul><li>A <b>Workbench</b> opens the everyday parts, woods and finishes.</li>
+<li>A <b>Carpenter's Bench</b> opens fancier ones (turned and twisted legs, wingbacks, marble tops, damask and velvet).</li>
+<li>A <b>Master Workbench</b> opens the finest (cabriole and claw feet, shield backs, sleigh beds, stained glass, gold leaf, ebony).</li>
+<li>A few rare parts only come from <b>sketches</b>: claw feet, carved leaf backs, moss cushions, moonpearl finials, starstone inlay, root bases, hollow-trunk shelves, carved forest headboards and more.</li></ul>
+<h3>Sketches</h3>
+<p>Now and then a whole furniture sketch turns up: about 1 dig in 80, 1 felled tree in 50 and 1 catch in 250. The sketch goes straight into your designs and teaches any rare parts it uses.</p>
+<h3>What pieces are worth</h3>
+<ul><li>Every copy sells for its materials plus 15%, so you can't get rich making the same chair over and over.</li>
+<li>The <b>first time you sell a design you made yourself</b>, you get a craftsmanship bonus on top: more for detailed parts and for materials you can't farm (iron, planks, clay, stumps, rare ingredients). It's usually 700 to 3,500 clams, and much more when rare ingredients go in.</li>
+<li>Only 2 new designs a day earn the bonus. Sell the rest another day and they still get it.</li></ul>
+<h3>Islanders' requests</h3>
+<p>An islander you're friends with (friendship 3+) sometimes asks you to make something and shows you a sketch of it, in a style that suits them (gruff: rustic, elegant: antique, dreamy: woodland, sporty and lazy: modern, cheerful and caring: cottage). Make it at a crafting table, then talk to them and hand it over.</p>
+<ul><li>The closer it is to the sketch, the more they pay. Shape counts most, then the wood, then the fabric.</li>
+<li>Get at least half of it right or they'll ask you to try again.</li>
+<li>A close match is +3 friendship, a looser one +2. They keep the piece.</li>
+<li>Each islander asks at most once every 2 weeks, and you can have 2 requests open at once. Open requests show in the Design tab, with a "Try it" button that loads the sketch into the designer.</li></ul>
+${tip('Your saved designs are kept, so making a matching set of chairs is quick: press Make on the saved design.')}
+`},
 { id:'cooking', group:'island', title:'Cooking', data:'recipes', html:`
 <p>Mabel teaches cooking once she knows you. Cook at a <b>campfire</b> (craftable; simple dishes marked "fire") or a <b>Wood Stove</b> (anything). Dishes sell well, islanders love them, and eating one makes you walk a little faster for 5 minutes. "Fish" or "fruit" in a recipe means any fish or fruit.</p>
 `},
@@ -582,6 +611,7 @@ ${steps(['<b>Diving bell</b>: Marlo\'s glass (20,000, on the sand the next day),
 <li>The reef Restored and the Driftwood Queen</li>
 <li>Every story business: workshop, apiary, tea room, lighthouse, forge, mill, post office with routes at level 5, bathhouse with rock pools, glade at full strength, all 4 wreck layers and the antiques shop</li>
 <li>All six legendary woodworking showpieces</li>
+<li>Every rare custom-furniture part from sketches, and a request finished for every islander</li>
 <li>Every passive income and stake at its top tier</li>
 <li>Best friends with everyone</li>
 <li>Both party game cups</li>
@@ -592,6 +622,7 @@ ${steps(['<b>Diving bell</b>: Marlo\'s glass (20,000, on the sand the next day),
 { id:'changes', group:'done', title:'What\'s changed', html:`
 <p>Recent updates, newest first.</p>
 <ul>
+<li><b>v1.41</b>: Custom furniture. Design your own chairs, tables, beds, shelves, lamps and dressers part by part, find sketches, and make pieces islanders ask for.</li>
 <li><b>v1.39.1</b>: Darker nights. Lamps, windows, fireflies, the lighthouse beam and night fish now stand out. Menu &gt; Brightness lifts the whole scene if it's too dark for you.</li>
 <li><b>v1.39 fixes</b>: Climb the lighthouse on Lighthouse Point and meet the keeper at the top. Mossby stays on your home island. Skipper Wick's goodbye no longer says you can never come back.</li>
 <li><b>v1.39</b>: Barley's mill, Wren's trade routes, Tobin's bathhouse, Lumi's firefly glade, Hazel's wreck. Wood now sells for 30.</li>

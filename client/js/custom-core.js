@@ -242,7 +242,7 @@ export const BASES = {
       O('Panel doors','Panelled','cottage antique rustic',2,1,1,{ wood:1 }),
       O('Glass doors','Glass-front','antique cottage',2,2,2,{ clay:1 }),
       O('Carved fronts','Carved','antique woodland',2,3,3,{ wood:2, heartwood:1 },'find'),
-      O('Painted flowers','Painted','cottage',2,2,2,{ flower:2 }),
+      O('Painted flowers','Painted','cottage',2,2,2,{ clay:1 }),
       O('Plank doors','Plank','rustic',2,0,1,{ wood:1 }),
       O('Slatted fronts','Slatted','modern',2,1,2,{ wood:1 }) ],
     pulls:[
@@ -334,7 +334,8 @@ export function firstBonus(d){ const hard=Object.entries(matsOf(d)).filter(([m])
 /* ---------- items: any cf_ id becomes a furniture item the moment something asks for it ---------- */
 export function customItem(id){
   const d=decode(id); if (!d) return null; const B=BASES[d.base];
-  return def(id, { name:nameOf(d), kind:'furniture', buy:0, price:copyPrice(d), r:B.r, shop:'custom', stack:5, custom:true, glow:glows(d), style:styleOf(d),
+  const desc = `A one-of-a-kind ${STYLE_NAME[styleOf(d)].toLowerCase()} ${B.name.toLowerCase()}: ${partsOf(d).filter(([,o])=>o.d||o.tag).map(([,o])=>o.name.toLowerCase()).join(', ')}.`;
+  return def(id, { name:nameOf(d), kind:'furniture', buy:0, price:copyPrice(d), r:B.r, shop:'custom', stack:5, custom:true, glow:glows(d), style:styleOf(d), desc,
     model:{ t:'custom', code:id } });
 }
 if (typeof ITEMS.__resolve === 'function') ITEMS.__resolve(customItem);

@@ -11,7 +11,7 @@
    built in wiki.js. Writing rules: plain words, no em dashes, no emoji, only facts the code supports.
    ===================================================================== */
 
-export const GUIDE_VERSION = 'v1.46';
+export const GUIDE_VERSION = 'v1.48';
 export const GUIDE_UPDATED = '2026-11-26';
 
 const tip = s => `<div class="tip"><b>Tip</b> ${s}</div>`;
@@ -300,6 +300,20 @@ ${tip('Making 10 <b>different</b> pieces is what starts Bramble\'s workshop stor
 /* ============================== MAGIC ============================== */
 { id:'wendell', group:'magic', title:'Wendell the wizard', html:`
 <p>Wendell is a semi-retired wizard whose tower appears near the plaza after Lumi's wish (2 starfish and a sand dollar).</p>
+<h3>Inside the tower</h3>
+<p>Wendell works inside his tower (before v1.47 he stood by the door). Walk up to the door and press Enter. The first time you go in, he introduces himself if you haven't met yet, or says hello and tells you where things are if you have.</p>
+<p><b>Downstairs, the workroom:</b></p>
+<ul><li><b>Wendell</b>, by his cauldron. Talk to him for everything on this page: potions, enchanting lessons, moving buildings, shaping land and the isles.</li>
+<li><b>The cauldron</b>: tap it to go straight to the potion shop.</li>
+<li><b>The bookshelves</b>: pull out a book at random. Two of them tell you how close you are to his moving and land spells.</li>
+<li><b>The lectern</b>: his enchanting lessons, once you've met him.</li>
+<li><b>The scrying bowl</b>: another way to start moving a building or shaping the land.</li>
+<li><b>The star chart</b>, the workbench, his owl Hoot and the armchair are there to look at. Starfall Isle shows on the chart once it has risen.</li></ul>
+<p>Moving a building, shaping land and raising an isle all happen outdoors, so you step out of the tower before the spell starts.</p>
+<p><b>Upstairs, the observatory</b> (take the stair by the star chart):</p>
+<ul><li><b>The telescope</b>: by day you see sky and clouds. At night you see one of five constellations, a different one each day, or Starfall Isle hanging over the Crags once it has risen.</li>
+<li><b>The glass dome</b>: an empty cushion waiting for Starglass. Once Starfall Isle has risen, a Starglass Shard sits there.</li>
+<li>The orrery, the star globe and the desk are for looking at.</li></ul>
 <h3>Luck potions</h3>
 <p>Each lasts 10 real minutes and makes rare finds of one kind far more likely (rare things about 3.5x, very rare and legendary about 3x).</p>
 <table class="t"><tr><th>Potion</th><th>Price</th><th>Luck for</th></tr>
@@ -718,7 +732,8 @@ ${steps(['Talk to them and pick <b>Come and meet people</b>. They follow you for
 { id:'changes', group:'done', title:'What\'s changed', html:`
 <p>Recent updates, newest first.</p>
 <ul>
-<li><b>v1.46</b>: The Town Hall has an inside, with Clementine's desk, the Island Records and the islanders' portraits. Moving a building is much more forgiving and says what's in the way.</li>
+<li><b>v1.48</b>: The Town Hall has an inside, with Clementine's desk, the Island Records and the islanders' portraits. Moving a building is much more forgiving and says what's in the way.</li>
+<li><b>v1.47</b>: You can go inside Wendell's tower. He works at his cauldron in a round workroom full of books, candles and a scrying bowl, and a stair leads up to an observatory with a telescope. See Wendell the wizard.</li>
 <li><b>v1.44</b>: Shop rewards and fishing tips. At the top two tiers Pemberton opens his back room (one piece a week, sometimes a rare plan), Marlo adds a rare shelf and Sprig sells rare flower colors, hybrids and the glowing Lantern Bloom. Marlo and Gill tell you what's biting, more exactly as their shop and boat grow.</li>
 <li><b>v1.41</b>: Juniper's reading nook, Otis's race course, Marigold's flower show and a spring show every April, the newcomer, the Island Charter and Charter Hall, the Driftwood Festival every season, and Starfall Isle with its own bugs and Wendell's two spells. The legendary trip island Starfall Isle is now called Stardrift Isle.</li>
 <li><b>v1.40</b>: Repair, make and enchant your tools. Pippa and Wendell teach enchantments, and scrolls turn up now and then (Fennick sometimes sells one). Two bigger crafting tables, the Carpenter's Bench and the Master Workbench, with pieces of their own. Most woodworking now needs a table nearby.</li>

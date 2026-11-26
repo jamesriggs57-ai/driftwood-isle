@@ -203,6 +203,41 @@ ${note('If the islander a story favor was written for doesn\'t live on your isla
 { id:'tools', group:'island', title:'Tools, bags and the bike', data:'tools', html:`
 <p>Tools break after a number of uses. Golden tools need you to prove yourself first, and Heirloom tools never break. Only Sturdy and Golden (and Heirloom) axes can cut a tree down; the Flimsy axe only chops wood.</p>
 <p>Other gear: the <b>bike</b> (60,000), the <b>Wooden Sled</b> (3,000, for winter hills) and the <b>map</b>, which sits with your tools and shows land, paths, buildings and whose house is whose (not where anyone is).</p>
+<h3>Repairing</h3>
+<p>Fix a worn tool before it breaks. Two ways:</p>
+<ul><li><b>Yourself</b>: the Tools tab in the Craft panel, anywhere, no crafting table needed. It costs materials by tier (see the table below), scaled by how worn the tool is, at least 1 of each.</li>
+<li><b>Pemberton</b>: "Fix my tools" at the General Store, for clams. The more worn the tool, the more it costs, and enchanted tools cost a bit more to fix.</li></ul>
+<p>Heirloom tools never wear out, so they never need fixing. You get one warning when an enchanted tool is wearing thin. A tool that breaks is gone, along with any enchantments on it.</p>
+<h3>Making tools</h3>
+<p>The Tools tab's "Make a tool" list makes the same tools Pemberton sells, from materials. You need the same experience as buying (the "Needs" column below). A Flimsy tool (and the basic Watering Can) can be made anywhere; each better tier needs a bigger crafting table: Sturdy at a Workbench, Golden at a Carpenter's Bench, Heirloom at a Master Workbench. The watering can skips Sturdy, so the Golden Can needs only a Workbench and the Heirloom Can a Carpenter's Bench. See <a href="#tables">Crafting tables</a>.</p>
+<p>A new tool of the same kind, bought or made, takes the old one's enchantments with it. The one exception: Tough, Tougher and Ultratough come off when you move up to an Heirloom tool, because it never wears out. The shop and the Tools tab warn you first.</p>
+`},
+
+{ id:'enchanting', group:'island', title:'Enchanting tools', data:'enchanting', html:`
+<p>Enchantments make a tool better at something. You learn each one once, like a plan, then put it on a tool whenever you have the ingredients. The game never shows exact strengths: only "slightly", "moderately" or "greatly increased".</p>
+<h3>Where to do it</h3>
+<p>Open the Craft panel and pick the <b>Tools</b> tab (it shows up once Bramble has given you his workbench). "Your tools" lists each tool with its enchantments, a Repair button and an Enchant list. A first-rank enchantment needs a Workbench nearby, a second-rank one a Carpenter's Bench, and the strongest ones a Master Workbench. Taking one off works anywhere, but the charm unravels: you'd need the ingredients again to put it back.</p>
+<h3>Learning them</h3>
+<ul><li><b>Pippa</b> teaches the first rank for free. Once your friendship with her reaches 6, talk to her and pick "Charms?" for Tough, Bonk and Lucky. At friendship 10, after you've put 3 enchantments on tools, she has Steady, Hefty and Splash too.</li>
+<li><b>Wendell</b> teaches the stronger ones for clams ("Enchanting", once you've met him). He offers up to 4 at a time. A second rank needs the first rank of that kind known. A third rank needs the second known and 8 enchantments put on tools in all. Double Output needs 3 put on. Triple Output and One-Swing need Double Output known and 15 put on.</li>
+<li><b>Enchanting Scrolls</b> teach one enchantment you don't know yet the moment you pick them up. They're rare finds: now and then when you dig up a fossil, fell a tree or catch a fish, and sometimes in a bottle on the beach. Stronger ones are rarer. Fennick sometimes has one on his cart too (see <a href="#fennick">Fennick's cart</a>). Guests don't find them.</li></ul>
+<h3>Rules</h3>
+<ul><li>A tool holds <b>one</b> enchantment until you learn the Twin Charm.</li>
+<li>Putting on a stronger (or different) enchantment of the same kind replaces the old one. On a full tool you pick which one comes off.</li>
+<li>Double Output, Triple Output and One-Swing are one kind, so a tool never has more than one of them.</li>
+<li>Tough can't go on an Heirloom tool, since it never wears out.</li>
+<li>Your enchantments move over when you buy or make a better tool of the same kind. They're only lost if the tool breaks, so repair it in time.</li></ul>
+<h3>What the special ones do</h3>
+<ul><li><b>Bonk</b>: swing at an islander (or a friend) and they fly farther.</li>
+<li><b>Lucky</b>: better odds of rare-or-better finds. On the axe that's things like heartwood, on the shovel fossils and other finds, on the net bugs, on the rod fish. On rocks it counts for whichever of the axe or shovel you hit with.</li>
+<li><b>Steady, Sure, Sure Catch</b>: on the net, bugs are less skittish and catching is easier. On the rod, fish notice the bobber from farther, scare less and give you a longer bite.</li>
+<li><b>Hefty, Trophy, Big Game</b>: bigger fish and bugs more often.</li>
+<li><b>Splash, Shower, Downpour</b>: watering one plant also waters dry plants around it, for one use of the can.</li>
+<li><b>Double and Triple Output</b>: more from each swing: wood from chopping and felling, stone, clay and iron from rocks, stumps, and the fossil from a dig spot.</li>
+<li><b>One-Swing</b>: on the axe, a tree comes down in one chop with a pile of wood (even a Flimsy axe can do it). On the shovel, one swing taps a rock out for the day.</li></ul>
+<h3>The Twin Charm</h3>
+<p>Late game, Wendell teaches the Twin Charm (300,000) once you know the strongest form of 3 different kinds and have put 25 enchantments on tools. After that every tool can hold two. Whenever a tool ends up holding two, it also uses 1 Starstone and 1 Golden Sap, and that has to be done at a Master Workbench.</p>
+${note('Guests can learn from Pippa and enchant, but don\'t find scrolls. On a friend\'s island you can\'t enchant.')}
 `},
 
 { id:'garden', group:'island', title:'Gardening and farming', data:'crops', html:`
@@ -223,7 +258,7 @@ ${note('If the islander a story favor was written for doesn\'t live on your isla
 `},
 
 { id:'crafting', group:'island', title:'Woodworking', data:'woodwork', html:`
-<p>Make furniture at a workbench (Craft under More). You start knowing 4 plans (Stump Stool, Fence, Log Pile, Mossy Stump Seat). Making 10 things teaches 6 more (Signpost, Birdhouse, Crate, Bench, Workbench, Campfire).</p>
+<p>Make furniture from the Craft panel. Away from a crafting table you can only make a few simple things (Stump Stool, Wooden Fence, Log Pile, Wooden Signpost, Mossy Stump Seat, Cozy Campfire and the Workbench itself); everything else needs a table nearby, and rare showpieces need a Carpenter's Bench. See <a href="#tables">Crafting tables</a>. You start knowing 4 plans (Stump Stool, Fence, Log Pile, Mossy Stump Seat). Making 10 things teaches 6 more (Signpost, Birdhouse, Crate, Bench, Workbench, Campfire).</p>
 <p>After that new plans come from:</p>
 <ul><li>A batch of 4 or 5 at 25, 50, 100, 150, 250, 400, 600, 850 and 1,150 things made.</li>
 <li>Woodworking Plan items: dug up (1.5% of digs), from felled trees (1%), or Pemberton's one-a-day plan.</li>
@@ -236,6 +271,16 @@ ${tip('Making 10 <b>different</b> pieces is what starts Bramble\'s workshop stor
 <li><b>Starstone</b>: hitting rocks, more at night.</li><li><b>Moonpearl</b>: with a catch, or on the beach.</li>
 <li><b>Glimmer Moss</b>: digging out old stumps, or with weeds at night.</li></ul>
 <p>Luck potions make them more likely. Golden Grove (sap and heartwood) and Starfall Isle (starstones) are full of them.</p>
+`},
+
+{ id:'tables', group:'island', title:'Crafting tables', html:`
+<p>Place a crafting table and stand next to it, then open the Craft panel. The top of the panel says which table you're at. A bigger table does everything the smaller ones do.</p>
+<table class="t"><tr><th>Table</th><th>How you get it</th><th>What it adds</th></tr>
+<tr><td>None</td><td></td><td>Repair tools, make Flimsy tools and a few simple pieces</td></tr>
+<tr><td>Workbench</td><td>Bramble gives you one when he teaches woodworking; you can make more</td><td>All everyday woodworking, Sturdy tools, first-rank enchantments</td></tr>
+<tr><td>Carpenter's Bench</td><td>Its plan comes once you've made 12 different things</td><td>Rare-plan showpieces, Golden tools, second-rank enchantments and Double Output, plus Rocking Horse, Garden Wagon, Rolltop Desk and Vine Pergola</td></tr>
+<tr><td>Master Workbench</td><td>Its plan comes once you've made 24 different things, one of them a Carpenter's Bench</td><td>Heirloom tools, the strongest enchantments and the Twin Charm's binding, plus Carousel Music Box, Weaving Loom, Garden Windmill and Garden Gazebo</td></tr></table>
+<p>Building a table for the first time teaches its pieces. Materials are in the <a href="#crafting">Woodworking</a> table.</p>
 `},
 
 { id:'cooking', group:'island', title:'Cooking', data:'recipes', html:`
@@ -355,6 +400,7 @@ ${note('Relics can\'t be sold, gifted, mailed or traded. A storage chest holds t
 { id:'fennick', group:'away', title:'Fennick\'s cart', html:`
 <p>Fennick is a traveling frog merchant. He only comes once Otis's beacon favor lights the beacon on the Portal Station (3 iron, 10 wood). After that he arrives through the portal every 3 or 4 days and pushes his cart around the island.</p>
 <p>He carries rare goods you can't get elsewhere: beach umbrellas, campfires, wind chimes, telescopes, the Golden Birdcage, now and then a rare woodworking plan (45,000), and about 1 day in 3 a bolt of <b>Sailcloth</b> for Barley's mill.</p>
+<p>About 1 visit in 20 he also has an <b>Enchanting Scroll</b> for one of Wendell's enchantments you don't know yet, at 60% of Wendell's fee (for example 60,000 for Luckiest). It teaches you the enchantment straight away, without Wendell's conditions. Guests don't get them.</p>
 `},
 
 { id:'penpals', group:'away', title:'Pen pals and letters', html:`
@@ -595,6 +641,7 @@ ${steps(['<b>Diving bell</b>: Marlo\'s glass (20,000, on the sand the next day),
 <li>The reef Restored and the Driftwood Queen</li>
 <li>Every story business: workshop, apiary, tea room, lighthouse, forge, mill, post office with routes at level 5, bathhouse with rock pools, glade at full strength, all 4 wreck layers and the antiques shop</li>
 <li>All six legendary woodworking showpieces</li>
+<li>Every enchantment and the Twin Charm</li>
 <li>Every passive income and stake at its top tier</li>
 <li>Best friends with everyone</li>
 <li>Both party game cups</li>
@@ -606,6 +653,7 @@ ${steps(['<b>Diving bell</b>: Marlo\'s glass (20,000, on the sand the next day),
 <p>Recent updates, newest first.</p>
 <ul>
 <li><b>v1.44</b>: Shop rewards and fishing tips. At the top two tiers Pemberton opens his back room (one piece a week, sometimes a rare plan), Marlo adds a rare shelf and Sprig sells rare flower colors, hybrids and the glowing Lantern Bloom. Marlo and Gill tell you what's biting, more exactly as their shop and boat grow.</li>
+<li><b>v1.40</b>: Repair, make and enchant your tools. Pippa and Wendell teach enchantments, and scrolls turn up now and then (Fennick sometimes sells one). Two bigger crafting tables, the Carpenter's Bench and the Master Workbench, with pieces of their own. Most woodworking now needs a table nearby.</li>
 <li><b>v1.39.1</b>: Darker nights. Lamps, windows, fireflies, the lighthouse beam and night fish now stand out. Menu &gt; Brightness lifts the whole scene if it's too dark for you.</li>
 <li><b>v1.39 fixes</b>: Climb the lighthouse on Lighthouse Point and meet the keeper at the top. Mossby stays on your home island. Skipper Wick's goodbye no longer says you can never come back.</li>
 <li><b>v1.39</b>: Barley's mill, Wren's trade routes, Tobin's bathhouse, Lumi's firefly glade, Hazel's wreck. Wood now sells for 30.</li>

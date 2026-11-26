@@ -149,21 +149,16 @@ export function makeLighthouse(ctx){
   const dp=at(0, LT.rBot+0.7, 0); dp.y=ctx.groundY(dp.x, dp.z);
   const door=new ctx.Thing('lhdoor', dp.x, dp.z, 0.4, new THREE.Group(), ()=>st.mode==='off' ? (ctx.TX.climbed?'Climb up again':'Climb up') : null, ()=>{ if (st.mode==='off') climb(); }, { solid:false, reach:1.8, hit:[0.8,1.0] });
   const blockers = () => [[W(keeperA), 0.34], [W(scopeA), 0.2]];        // [world angle, half-width in radians] on the walking ring
-  // does walking d radians round the ring from a run into the keeper or the telescope? then a tap goes the other way round
-  const crosses = (a, d) => blockers().some(([ba,hw]) => { const o=angD(ba, a); return Math.sign(o)===Math.sign(d) && Math.abs(o) < Math.abs(d)-0.05; });
+  const ring = { cx, cz, Gy, walkR:LT.walkR, railR:LT.railR, panR:1.1, blockers, cutaway:on=>cutaway(on) };
 
   // ---- helpers ----
-  // on the stair the HUD goes away like a cutscene; up top you get the action button and joystick back, but no tools or bag
-  if (!document.getElementById('lhCss')){ const c=document.createElement('style'); c.id='lhCss'; c.textContent='#hud.lhtop #swingBtn,#hud.lhtop #bar{display:none}'; document.head.appendChild(c); }
-  const hud = m => { const h=ctx.hud; if (!h) return; h.classList.toggle('inbay', !!m); h.classList.toggle('magic', m==='climb'); h.classList.toggle('lhtop', m==='top'); };
+  const kit=perchKit(ctx), { hud, walkAnim, still } = kit;
   const pose = (a, rr, h, face) => { const p=at(a, rr, h); P.pos.copy(p); P.obj.position.copy(p); if (face!==undefined){ P.face=face; P.obj.rotation.y=face; } };
-  const walkAnim = (t, k) => { const u=P.obj.userData; if (!u.legs) return; const ph=t*11; u.legs[0].rotation.x=Math.sin(ph)*0.7*k; u.legs[1].rotation.x=-Math.sin(ph)*0.7*k; if (u.arms){ u.arms[0].rotation.x=-Math.sin(ph)*0.6*k; u.arms[1].rotation.x=Math.sin(ph)*0.6*k; } if (u.body) u.body.position.y=Math.abs(Math.sin(ph))*0.07*k; };
-  const still = () => { const u=P.obj.userData; (u.legs||[]).forEach(l=>l.rotation.x*=0.8); (u.arms||[]).forEach(a=>a.rotation.x*=0.8); if (u.body) u.body.position.y*=0.8; };
   const cutaway = (on, camW) => { const local = camW!==undefined ? camW-rot : 0; U.segs.forEach((sg,i)=>{ sg.visible = !on || Math.abs(angD(segMid(i), local))>1.2; });
     (U.brackets||[]).forEach(b=>{ b.visible = !on || Math.abs(angD(b.userData.a, local))>1.0; }); };   // the deck's struts would hide you near the top
   // where you are on the stair for f in 0..1, in local terms
   const helix = f => { const a=LT.a0+f*LT.turns*TAU; return { a, h:LT.base+f*(LT.G-LT.base) }; };
-  const CLIMB_T = 10, IN_T = 1.1, OUT_T = 1.1, PAN_T = 9;
+  const CLIMB_T = 10, IN_T = 1.1, OUT_T = 1.1;
   const NOTES = [[0.22,'Round and round. The keeper has painted a little blue fish on the wall.'],[0.5,'Halfway. A shelf of old logbooks, every storm written down.'],[0.78,'Your legs are burning a bit. Nearly there.']];
   let noteI=0, stepI=0;
 
@@ -214,22 +209,7 @@ export function makeLighthouse(ctx){
         if (st.t>=OUT_T){ st.ang=W(LT.a1); arrive(); }
         return true; }
       if (st.mode==='pan' || st.mode==='down'){ still(); return true; }
-      if (st.mode==='top'){
-        let w=0;   // how far round the ring you want to go this frame, in radians
-        let [ix,iz]=ctx.input(); if (ctx.dialogOpen()) ix=iz=0;
-        const fA=st.ang+st.lookYaw, fx=Math.sin(fA), fz=Math.cos(fA), rx=-fz, rz=fx;   // camera forward and right
-        const tx=Math.cos(st.ang), tz=-Math.sin(st.ang);                                 // the way round the ring (angle increasing)
-        const speed=3.2/LT.walkR;
-        if (ix||iz){ ctx.stopMove(); const mx=rx*ix-fx*iz, mz=rz*ix-fz*iz, L=Math.hypot(mx,mz)||1; w=(mx*tx+mz*tz)/L*speed*dt*Math.min(1,Math.hypot(ix,iz)); }
-        else if (P.target && !ctx.dialogOpen()){ const tA=Math.atan2(P.target.x-cx, P.target.z-cz); let d=angD(tA, st.ang); if (crosses(st.ang, d)) d-=Math.sign(d)*TAU; const stopAt=P.targetEnt ? (P.targetEnt.reach-0.2)/LT.walkR : 0.03;
-          const near = P.targetEnt ? Math.hypot(P.targetEnt.pos.x-P.pos.x, P.targetEnt.pos.z-P.pos.z) <= P.targetEnt.reach : Math.abs(d)<=stopAt;
-          if (near){ const cb=P.cb; ctx.stopMove(); if (cb) cb(); } else w=Math.sign(d)*Math.min(Math.abs(d), speed*dt); }
-        if (w){ let na=st.ang+w; for (const [ba,hw] of blockers()){ const d0=angD(st.ang,ba), d1=angD(na,ba); if (Math.abs(d1)<hw && Math.abs(d1)<Math.abs(d0)){ na=st.ang; if (P.target && !P.targetEnt) ctx.stopMove(); } }
-          st.ang=na; walkAnim(t, 0.9); } else still();
-        const face = w ? st.ang+Math.sign(w)*Math.PI/2 : P.face;
-        P.pos.set(cx+Math.sin(st.ang)*LT.walkR, Gy, cz+Math.cos(st.ang)*LT.walkR); P.obj.position.copy(P.pos);
-        let df=face-P.obj.rotation.y; df=Math.atan2(Math.sin(df),Math.cos(df)); P.obj.rotation.y+=df*Math.min(1,dt*12); P.face=face;
-        return true; }
+      if (st.mode==='top') return ringMove(ctx, kit, st, ring, dt, t);
       return false;
     },
     cam(dt){
@@ -241,21 +221,8 @@ export function makeLighthouse(ctx){
         const camY=Math.min(P.pos.y+2.4, Gy-0.45), want=new THREE.Vector3(cx+Math.sin(st.camA)*8.6, camY, cz+Math.cos(st.camA)*8.6);
         st.camP.lerp(want, k); st.look.lerp(P.pos.clone().add(new THREE.Vector3(0,0.8,0)), k*1.5);
         c.position.copy(st.camP); c.lookAt(st.look); cutaway(true, st.camA); ctx.skyFollow(P.pos); return true; }
-      if (st.mode==='pan'){ // standing in the lamp room, turning slowly all the way round
-        const f=clamp(st.t/PAN_T,0,1), a=st.panFrom+smooth(0,1,f)*TAU; cutaway(false);
-        c.position.set(cx+Math.sin(a)*1.1, Gy+1.9, cz+Math.cos(a)*1.1); st.look.set(cx+Math.sin(a)*13, Gy-0.9, cz+Math.cos(a)*13); c.lookAt(st.look);   // stand just in front of the lamp, so it stays behind you
-        farFog(); ctx.skyFollow(P.pos); if (f>=1) endPan(); return true; }
-      if (st.mode==='top' || st.mode==='down'){
-        // from your own eyes: the gallery is too narrow for a camera behind you, so up here you see it first-hand
-        st.lookYaw=clamp(ctx.getCamYaw(), -1.3, 1.3); const a=st.ang+st.lookYaw;
-        const want=new THREE.Vector3(cx+Math.sin(st.ang)*(LT.walkR-0.25), Gy+1.65, cz+Math.cos(st.ang)*(LT.walkR-0.25));
-        const look=new THREE.Vector3(want.x+Math.sin(a)*12, Gy-1.2, want.z+Math.cos(a)*12);
-        if (keeper && ctx.dialogOpen() && Math.hypot(keeper.pos.x-P.pos.x, keeper.pos.z-P.pos.z)<3){   // chatting: step back along the rail and look at the keeper, not the sea
-          // stand by the rail well round from the keeper, so the sightline clears the lamp room's frame and the whole keeper fits
-          const ca=W(keeperA)-Math.sign(angD(W(keeperA), st.ang))*1.6, cr=LT.railR-0.2;
-          want.set(cx+Math.sin(ca)*cr, Gy+1.85, cz+Math.cos(ca)*cr); look.set(keeper.pos.x, Gy+1.05, keeper.pos.z); }
-        st.camP.lerp(want, k); st.look.lerp(look, k); c.position.copy(st.camP); c.lookAt(st.look); cutaway(false);
-        farFog(); ctx.skyFollow(P.pos); return true; }
+      if (st.mode==='pan'){ if (panCam(ctx, kit, st, ring)) endPan(); return true; }
+      if (st.mode==='top' || st.mode==='down') return ringCam(ctx, kit, st, ring, dt, keeper ? { keeper, keeperA:W(keeperA) } : null);
       return false;
     },
     tap(p){
@@ -270,10 +237,66 @@ export function makeLighthouse(ctx){
       const e=ctx.nearestEnt(); if (e){ ctx.stopMove(); ctx.interact(e, 'manual'); }
     },
   };
-  // from up here you can see much further than from the beach
-  function farFog(){ const f=ctx.scene.fog; if (!f) return; f.near=Math.max(f.near, 90); f.far=Math.max(f.far, 330); }
 
   // the lamp turns all the time; the beam shows after dusk
   const tick = (dt, t) => { U.lens.rotation.y=t*0.6; const n=ctx.night(); U.beamM.opacity=0.13*smooth(0.35,0.8,n); U.beam.visible=n>0.3; if (U.vane) U.vane.rotation.y=Math.sin(t*0.13)*1.2; };
   return { perch, keeper, door, hatch, tick, jumpTop, get mode(){ return st.mode; } };
 }
+
+/* ---------- shared by both climbable lighthouses: this one and the Lantern Bluff one (bluffhouse.js) ----------
+   kit: HUD modes and the walk cycle. A ring is the gallery: { cx, cz, Gy, walkR, railR, panR, blockers(), cutaway(on) },
+   blockers() gives [world angle, half-width in radians] for things you can't walk through on it.
+   st (the controller's own state) carries ang, lookYaw, camP, look, panFrom and t. */
+export function perchKit(ctx, o={}){
+  const P=ctx.player;
+  // on the stair the HUD goes away like a cutscene; up top you get the action button and joystick back, but no tools or bag
+  if (!document.getElementById('lhCss')){ const c=document.createElement('style'); c.id='lhCss'; c.textContent='#hud.lhtop #swingBtn,#hud.lhtop #bar{display:none}'; document.head.appendChild(c); }
+  const hud = m => { const h=ctx.hud; if (!h) return; h.classList.toggle('inbay', !!m); h.classList.toggle('magic', m==='climb'); h.classList.toggle('lhtop', m==='top'); };
+  const walkAnim = (t, k) => { const u=P.obj.userData; if (!u.legs) return; const ph=t*11; u.legs[0].rotation.x=Math.sin(ph)*0.7*k; u.legs[1].rotation.x=-Math.sin(ph)*0.7*k; if (u.arms){ u.arms[0].rotation.x=-Math.sin(ph)*0.6*k; u.arms[1].rotation.x=Math.sin(ph)*0.6*k; } if (u.body) u.body.position.y=Math.abs(Math.sin(ph))*0.07*k; };
+  const still = () => { const u=P.obj.userData; (u.legs||[]).forEach(l=>l.rotation.x*=0.8); (u.arms||[]).forEach(a=>a.rotation.x*=0.8); if (u.body) u.body.position.y*=0.8; };
+  // from up there you can see much further than from the beach
+  const [fogN, fogF] = o.fog || [90, 330];   // how far you see from up top (the bluff keeps it shorter: the sea's far edge shows from up there)
+  const farFog = () => { const f=ctx.scene.fog; if (!f) return; f.near=Math.max(f.near, fogN); f.far=Math.max(f.far, fogF); };
+  return { P, hud, walkAnim, still, farFog };
+}
+// walking round the gallery: joystick or keys go along the ring relative to the camera, a tap walks there the short way round
+export function ringMove(ctx, kit, st, o, dt, t){
+  const P=kit.P, { cx, cz, Gy, walkR } = o;
+  const crosses = (a, d) => o.blockers().some(([ba]) => { const q=angD(ba, a); return Math.sign(q)===Math.sign(d) && Math.abs(q) < Math.abs(d)-0.05; });   // would walking d radians from a run into something? then go the other way round
+  let w=0;   // how far round the ring you want to go this frame, in radians
+  let [ix,iz]=ctx.input(); if (ctx.dialogOpen()) ix=iz=0;
+  const fA=st.ang+st.lookYaw, fx=Math.sin(fA), fz=Math.cos(fA), rx=-fz, rz=fx;   // camera forward and right
+  const tx=Math.cos(st.ang), tz=-Math.sin(st.ang);                                 // the way round the ring (angle increasing)
+  const speed=3.2/walkR;
+  if (ix||iz){ ctx.stopMove(); const mx=rx*ix-fx*iz, mz=rz*ix-fz*iz, L=Math.hypot(mx,mz)||1; w=(mx*tx+mz*tz)/L*speed*dt*Math.min(1,Math.hypot(ix,iz)); }
+  else if (P.target && !ctx.dialogOpen()){ const tA=Math.atan2(P.target.x-cx, P.target.z-cz); let d=angD(tA, st.ang); if (crosses(st.ang, d)) d-=Math.sign(d)*TAU; const stopAt=P.targetEnt ? (P.targetEnt.reach-0.2)/walkR : 0.03;
+    const near = P.targetEnt ? Math.hypot(P.targetEnt.pos.x-P.pos.x, P.targetEnt.pos.z-P.pos.z) <= P.targetEnt.reach : Math.abs(d)<=stopAt;
+    if (near){ const cb=P.cb; ctx.stopMove(); if (cb) cb(); } else w=Math.sign(d)*Math.min(Math.abs(d), speed*dt); }
+  if (w){ let na=st.ang+w; for (const [ba,hw] of o.blockers()){ const d0=angD(st.ang,ba), d1=angD(na,ba); if (Math.abs(d1)<hw && Math.abs(d1)<Math.abs(d0)){ na=st.ang; if (P.target && !P.targetEnt) ctx.stopMove(); } }
+    st.ang=na; kit.walkAnim(t, 0.9); } else kit.still();
+  const face = w ? st.ang+Math.sign(w)*Math.PI/2 : P.face;
+  P.pos.set(cx+Math.sin(st.ang)*walkR, Gy, cz+Math.cos(st.ang)*walkR); P.obj.position.copy(P.pos);
+  let df=face-P.obj.rotation.y; df=Math.atan2(Math.sin(df),Math.cos(df)); P.obj.rotation.y+=df*Math.min(1,dt*12); P.face=face;
+  return true;
+}
+// standing in the lamp room, turning slowly all the way round (st.t from 0 to PAN seconds); true once it's done
+export const PAN_T = 9;
+export function panCam(ctx, kit, st, o){
+  const c=ctx.camera, { cx, cz, Gy } = o, f=clamp(st.t/PAN_T,0,1), a=st.panFrom+smooth(0,1,f)*TAU; o.cutaway(false);
+  c.position.set(cx+Math.sin(a)*o.panR, Gy+1.9, cz+Math.cos(a)*o.panR); st.look.set(cx+Math.sin(a)*13, Gy-0.9, cz+Math.cos(a)*13); c.lookAt(st.look);   // stand just in front of the lamp, so it stays behind you
+  kit.farFog(); ctx.skyFollow(kit.P.pos); return f>=1;
+}
+// on the gallery you see from your own eyes: it's too narrow for a camera behind you. chat: { keeper, keeperA (world) } turns to face the keeper while you talk
+export function ringCam(ctx, kit, st, o, dt, chat){
+  const c=ctx.camera, P=kit.P, { cx, cz, Gy, walkR } = o, k=Math.min(1, dt*4);
+  st.lookYaw=clamp(ctx.getCamYaw(), -1.3, 1.3); const a=st.ang+st.lookYaw;
+  const want=new THREE.Vector3(cx+Math.sin(st.ang)*(walkR-0.25), Gy+1.65, cz+Math.cos(st.ang)*(walkR-0.25));
+  const look=new THREE.Vector3(want.x+Math.sin(a)*12, Gy-1.2, want.z+Math.cos(a)*12);
+  const kp=chat && chat.keeper; if (kp && ctx.dialogOpen() && Math.hypot(kp.pos.x-P.pos.x, kp.pos.z-P.pos.z)<3){   // chatting: step back along the rail and look at the keeper, not the sea
+    // stand by the rail well round from the keeper, so the sightline clears the lamp room's frame and the whole keeper fits
+    const ca=chat.keeperA-Math.sign(angD(chat.keeperA, st.ang))*1.6, cr=o.railR-0.2;
+    want.set(cx+Math.sin(ca)*cr, Gy+1.85, cz+Math.cos(ca)*cr); look.set(kp.pos.x, Gy+1.05, kp.pos.z); }
+  st.camP.lerp(want, k); st.look.lerp(look, k); c.position.copy(st.camP); c.lookAt(st.look); o.cutaway(false);
+  kit.farFog(); ctx.skyFollow(P.pos); return true;
+}
+export { angD, wrap };

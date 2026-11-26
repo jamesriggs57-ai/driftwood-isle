@@ -11,7 +11,7 @@
    built in wiki.js. Writing rules: plain words, no em dashes, no emoji, only facts the code supports.
    ===================================================================== */
 
-export const GUIDE_VERSION = 'v1.47';
+export const GUIDE_VERSION = 'v1.51';
 export const GUIDE_UPDATED = '2026-11-26';
 
 const tip = s => `<div class="tip"><b>Tip</b> ${s}</div>`;
@@ -566,8 +566,17 @@ ${steps(['Clementine runs the project: <b>150,000 + 40 planks + 20 stone</b>. Op
 ${steps(['Marlo grinds a lens: <b>10,000</b>, waiting up the bluff the next day.',
  'Bramble makes a <b>lamp frame</b> (workshop commission: 20 planks + 4 iron).',
  'Bring <b>3 moonpearls</b> (rare: now and then with a catch, or washed up on the beach).',
- 'Fit the lamp at the lighthouse. The beam turns at night.'])}
+ 'Climb to the lamp room at the top of the lighthouse and fit the lamp there. The beam turns at night.'])}
 <p>Payoff: two night fish in Cay Bay (once Schooling), Wick's weekly night voyage to a Moonlit isle (8,000), and a stake after your first voyage.</p>
+<h3>Inside the lighthouse</h3>
+<p>The old lighthouse is a tall red and white tower on top of the bluff, tall enough to see from your home island. Tap Go in at the tower to walk inside. On the ground floor you can walk about, read the old keeper's logbook pages and tap Climb the stair. The stair winds round the inside wall all the way up to the lamp room and the gallery. At the top, walk round the gallery for the view, look round the lamp room, or tap Head down. Tap Go outside, or walk out through the door, to leave.</p>
+<p>The tower is in a bad way to begin with, and it gets mended as the story moves on:</p>
+<table><tr><th>When</th><th>What you see</th></tr>
+<tr><td>Before the lens</td><td>Treads missing or snapped on the stair (you hop the gaps and keep to the wall), a fallen beam across the floor, puddles, cobwebs, peeling paint and rust, boarded windows, gulls' nests, logbook pages on the floor, and an empty lamp room with cracked glass.</td></tr>
+<tr><td>Marlo's lens is up</td><td>Fresh planks over the gaps in the stair, rope across the gaps in the rail, and the lens waiting in its crate up top.</td></tr>
+<tr><td>The lamp frame is made or being made</td><td>New treads all the way up, the boards off the windows, new glass in the lamp room, the fallen beam gone and fresh plaster on the walls.</td></tr>
+<tr><td>Lit</td><td>Fresh paint inside and out, a brass rail, lamps on the walls, the keeper's logbook back on its desk and the lamp turning.</td></tr></table>
+${note('The tower stands on a bigger stone base than the old one. Anything you had left right next to the old tower is moved just outside the new base the first time you go near it.')}
 `},
 
 { id:'forge', group:'stories', title:'Pemberton\'s Forge', html:`
@@ -723,6 +732,7 @@ ${steps(['Talk to them and pick <b>Come and meet people</b>. They follow you for
 { id:'changes', group:'done', title:'What\'s changed', html:`
 <p>Recent updates, newest first.</p>
 <ul>
+<li><b>v1.51</b>: The old lighthouse on Lantern Bluff is now about two and a half times as tall and you can walk inside and climb it. It starts out broken down and gets mended step by step as the lighthouse story goes on. You now fit the lamp from the lamp room at the top.</li>
 <li><b>v1.47</b>: You can go inside Wendell's tower. He works at his cauldron in a round workroom full of books, candles and a scrying bowl, and a stair leads up to an observatory with a telescope. See Wendell the wizard.</li>
 <li><b>v1.44</b>: Shop rewards and fishing tips. At the top two tiers Pemberton opens his back room (one piece a week, sometimes a rare plan), Marlo adds a rare shelf and Sprig sells rare flower colors, hybrids and the glowing Lantern Bloom. Marlo and Gill tell you what's biting, more exactly as their shop and boat grow.</li>
 <li><b>v1.41</b>: Juniper's reading nook, Otis's race course, Marigold's flower show and a spring show every April, the newcomer, the Island Charter and Charter Hall, the Driftwood Festival every season, and Starfall Isle with its own bugs and Wendell's two spells. The legendary trip island Starfall Isle is now called Stardrift Isle.</li>

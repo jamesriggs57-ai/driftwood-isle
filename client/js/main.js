@@ -13,6 +13,7 @@ import * as S2 from './story2.js';   // v1.38 phase 2 buildings and furniture
 import * as S3 from './story3.js';   // v1.39 phase 3 buildings and furniture
 import * as S4 from './story4.js';   // v1.41 phase 4 buildings, festival and Starfall spells
 import * as LH from './lighthouse.js';   // v1.39 fixes: the climbable lighthouse on Lighthouse Point
+import * as BH from './bluffhouse.js';   // v1.51 the bigger, walk-in Lantern Bluff lighthouse
 import * as TW from './towerroom.js';   // v1.47 inside Wendell's tower
 import { ACHIEVEMENTS, ACH_GROUPS } from './achieve.js';
 import { BY_SLOT, SLOT_NAMES } from './wardrobe-data.js';
@@ -47,7 +48,7 @@ import { hasUpstairs, winAt, winKey, trelAt, balcAt, buildCustomHouse, buildHome
 const $ = s => document.querySelector(s);
 const World = { weather:'sunny', season:seasonOf(Time.month()), night:0, inside:null };
 let buildMode=null;   // set while the home builder is open
-let PERCH=null, LHC=null;   // v1.39 fixes: set while you're inside or on top of the Lighthouse Point lighthouse (lighthouse.js)
+let PERCH=null, LHC=null, BLUFF=null;   // v1.39 fixes: set while you're inside or on top of the Lighthouse Point lighthouse (lighthouse.js)
 MODEL.season = World.season; MODEL.month = Time.month();
 
 /* ---------- Save state ---------- */
@@ -825,6 +826,7 @@ for (const [n,I] of ISLES.entries()){
   m.onBeforeCompile=waterCompile({ uDepth:{ value:tex }, uBox:{ value:new THREE.Vector3(x0,z0,size) }, uClip:{ value:clips }, uClipN:{ value:cn } }); m.customProgramCacheKey=()=>'driftwood-water-v2';
   const w=new THREE.Mesh(new THREE.PlaneGeometry(size,size).rotateX(-Math.PI/2), m); w.position.set((x0+x1)/2, 0, (z0+z1)/2); w.receiveShadow=true; OUT.add(w); I.waterMat=m; I.water=w;
   I.lod=buildTerrain({ isle:I, cx:(x0+x1)/2, cz:(z0+z1)/2, size, N:Math.round(size/2.4) }); OUT.add(I.lod);
+  if (I.kind==='bluff'){ const [mx,mz,ma]=I.mark, t=BH.buildBluffLod(); t.position.set(mx-(x0+x1)/2, rawHeight(mx,mz), mz-(z0+z1)/2); t.rotation.y=Math.atan2(Math.cos(ma+Math.PI), Math.sin(ma+Math.PI)); I.lod.add(t); I.lodTower=t; }   // v1.51 the lighthouse stands out on the skyline before the isle loads
   if (I.sky){ I.under=ISL.buildSkyUnder(I); OUT.add(I.under); }   // v1.41 seen from everywhere, so it's always there
 }
 // Waves only roll on the open sea. Ponds and rivers lie still, so their big flat-shaded triangles no longer flash
@@ -2970,18 +2972,52 @@ const LENS_COST=10000, NIGHT_FEE=8000;
 const lightLit = () => !!(SY.light && SY.light.st==='lit');
 const nightBay = () => lightLit() && reefStage()>=3 ? NIGHT_BAY.filter(id=>ITEMS[id]) : [];
 const bluffIsle = () => ISLES.find(I=>I.kind==='bluff');
-function lighthouseAct(lm){
-  const nm=ISL.ISLE_INFO.bluff.name, L=SY.light;
-  if (lightLit()) return dialog(nm, 420, ['The lamp turns slow and steady. Out at sea, the far isles catch its light.']);
-  if (!L || VISIT || GUEST) return dialog(nm, 420, [lm.userData.desc]);
+// v1.51 the Lantern Bluff lighthouse is walk-in (bluffhouse.js). Its insides get mended as the story goes:
+// 0 ruined, 1 Marlo's lens is up (fresh planks on the stair), 2 the lamp frame is made or being made (new treads, glass, the boards off), 3 lit.
+let BLUFF_DEV_STAGE=null;   // #dev: look at a stage without touching the story
+function bluffStage(){
+  if (BLUFF_DEV_STAGE!==null) return BLUFF_DEV_STAGE;
+  const L=SY.light; if (!L) return 0; if (L.st==='lit') return 3;
+  let n = countItem('lampframe')>0 || (SY.shop && SY.shop.comm && SY.shop.comm.id==='lampframe') ? 2 : L.lens===2 ? 1 : 0;
+  if (n>=2 && !L.mend && !VISIT && !GUEST) L.mend=2;   // the repairs stay once they're done, even with the frame put away in a chest
+  return Math.max(n, L.mend||0); }
+const BLUFF_TOP = [
+  'The lamp room is empty. The old lamp lies in pieces, the glass is cracked and two panes are boarded over. A gull has made its nest by the pedestal.',
+  'The lamp room is still a mess, but Marlo\'s new lens is up here, wrapped in sailcloth and waiting.',
+  'New glass all round and a chalk ring on the floor where the lamp will stand. It just needs its frame and something to burn.',
+  'The lamp turns slow and steady. Out at sea, the far isles catch its light.' ];
+function lighthouseAct(lm){   // from the lamp room, at the top of the stair
+  const nm=ISL.ISLE_INFO.bluff.name, L=SY.light, n=bluffStage();
+  if (lightLit() || n===3) return dialog(nm, 420, [BLUFF_TOP[3]]);   // n is 3 here only in a #dev look at the lit stage
+  const lines=[BLUFF_TOP[Math.min(n,2)]];
+  if (!L || VISIT || GUEST) return dialog(nm, 420, lines);
   const lens=L.lens===2, frame=countItem('lampframe')>0, pearls=countItem('moonpearl')>=3;
-  const lines=[lm.userData.desc]; if (lens) lines.push('Marlo\'s new lens is up here, wrapped in sailcloth and waiting.');
   if (lens && frame && pearls) return dialog(nm, 420, lines, null, [
     { label:'Fit the lamp', fn:()=>{ if (noEdit() || countItem('lampframe')<1 || countItem('moonpearl')<3) return; removeItem('lampframe',1); removeItem('moonpearl',3);
-        L.st='lit'; L.litDay=sday2(); save(); if (lm.userData.setLit) lm.userData.setLit(true); Snd.fanfare(); const p=player.pos.clone().add(new THREE.Vector3(0,3,0)); for (let i=0;i<5;i++) setTimeout(()=>sparkle(p.clone().add(new THREE.Vector3((Math.random()-0.5)*3,Math.random()*3,(Math.random()-0.5)*3))), i*160);
-        dialog(nm, 420, ['The frame goes in, then the lens. Three moonpearls in the cradle, and the whole lamp room fills with a soft silver light.','Somewhere down at the dock, Skipper Wick is going to be very happy.']); } },
+        L.st='lit'; L.litDay=sday2(); save(); if (lm.userData.setLit) lm.userData.setLit(true); const I=bluffIsle(); if (I && I.lodTower) I.lodTower.userData.setLit(true); if (BLUFF) BLUFF.refreshStage();
+        Snd.fanfare(); const p=player.pos.clone().add(new THREE.Vector3(0,3,0)); for (let i=0;i<5;i++) setTimeout(()=>sparkle(p.clone().add(new THREE.Vector3((Math.random()-0.5)*3,Math.random()*3,(Math.random()-0.5)*3))), i*160);
+        dialog(nm, 420, ['The frame goes in, then the lens. Three moonpearls in the cradle, and the whole lamp room fills with a soft silver light.','The light runs down the stair and the whole old tower seems to wake up with it.','Somewhere down at the dock, Skipper Wick is going to be very happy.']); } },
     { label:'Not yet', alt:true, fn:()=>{} } ]);
   dialog(nm, 420, lines); }
+// v1.51 the bluff isle loads its lighthouse: the controller for walking in and climbing, and anything left inside its new, bigger footprint moved out
+function setupBluff(I, lm, th){
+  const ctx={ tower:lm, cx:th.pos.x, cz:th.pos.z, rot:lm.rotation.y, player, camera, scene, get camTarget(){ return camTarget; }, groundY, Thing, Snd, toast, dialog, fade, save, stopMove, interact, nearestEnt, updateSky, updateCamera,
+    hud:$('#hud'), step:()=>Snd.click(), night:()=>World.night, dialogOpen:()=>!!dlgState, getCamYaw:()=>camYaw, setCamYaw:v=>{ camYaw=v; }, setPerch:p=>{ PERCH=p; },
+    busy:()=>!!(dlgState || placing || buildMode || magicMode || cine || Fishing.state!=='idle' || knockedDown()),
+    prep:()=>{ if (riding) setRiding(false); if (sledding) setSled(false); },
+    input:()=>{ const jm=Math.hypot(joy.x,joy.y); if (joy.active && jm>0.15) return [joy.x/jm*clamp((jm-0.15)/0.7,0.25,1), joy.y/jm*clamp((jm-0.15)/0.7,0.25,1)];
+      return [(keys['d']||keys['arrowright']?1:0)-(keys['a']||keys['arrowleft']?1:0), (keys['s']||keys['arrowdown']?1:0)-(keys['w']||keys['arrowup']?1:0)]; },
+    skyFollow:tg=>{ sky.position.copy(camera.position); stars.position.copy(camera.position); sun.target.position.copy(tg); sun.position.copy(tg).addScaledVector(sunDir,50); },
+    stage:()=>({ n:bluffStage(), lens:!!(SY.light && SY.light.lens===2) || bluffStage()===3 || (BLUFF_DEV_STAGE!==null && BLUFF_DEV_STAGE>=1) }), lampAct:()=>lighthouseAct(lm), ray:()=>ray };
+  BLUFF=BH.makeBluffLighthouse(ctx);
+  if (!VISIT && CAN_EDIT){ const R=BH.BT.foot+0.35, cx=th.pos.x, cz=th.pos.z; let moved=0;
+    for (const e of ents.slice()){ if (e.removed || e===th || e.pos.x>500 || e instanceof Resident) continue; const dx=e.pos.x-cx, dz=e.pos.z-cz, d=Math.hypot(dx,dz);
+      if (d>=R+(e.r||0) || d<1e-3 && e.kind!=='furn' && e.kind!=='plant' && e.kind!=='item' && e.kind!=='dig' && e.kind!=='weed') continue;
+      const rec = e.rec || (e instanceof DigSpot ? S.day.digs[e.i] : e instanceof Weed ? S.day.weeds[e.i] : null); if (!rec) continue;
+      const k=(R+0.3+(e.r||0))/Math.max(d,1e-3), nx=cx+(d<1e-3?1:dx)*(d<1e-3?R+0.3:k), nz=cz+(d<1e-3?0:dz*k);
+      rec.x=nx; rec.z=nz; e.pos.set(nx, groundY(nx,nz), nz); e.obj.position.copy(e.pos); moved++; }
+    if (moved) save(); }
+  return BLUFF; }
 function lightChoicesMarlo(k, menu){
   if (VISIT || GUEST || !SY.light || SY.light.st==='lit') return []; const L=SY.light, v=k.voice, nm=k.name;
   if (L.lens===1) return [{ label:'About that lens...', fn:()=>dialog(nm, v, ['Grinding it now. Rings and rings of glass, like a seashell. I\'ll carry it up the bluff myself tomorrow.'], menu) }];
@@ -5405,7 +5441,7 @@ function loadIsle(I, now){
       if (I.kind==='crags'){ const at=SY.cragsAt||workshopSpot(I); if (!SY.cragsAt && !VISIT){ SY.cragsAt=at; save(); } I.taken.push([at[0], at[1], 6]); } },   // v1.38 room for the forge
     ()=>{ const [mx,mz,ma]=I.mark, lm=ISL.buildLandmark(I.kind, (S.seed|0)+I.k), f=[Math.cos(ma+Math.PI), Math.sin(ma+Math.PI)];
       I.lmObj=lm; if (lm.userData.setLit) lm.userData.setLit(lightLit()); landmark3(I.kind, lm);   // v1.39 the mill's sails and wheel, the diving bell by the wreck
-      const th=new Thing('landmark', mx, mz, I.kind==='dunes'?3.3:2.5, lm, 'Look', ()=> I.kind==='bluff' ? lighthouseAct(lm) : I.kind==='meadow' ? millAct(lm) : I.kind==='dunes' ? wreckAct(lm) : I.kind==='starfall' ? starAltarAct(lm) : dialog(ISL.ISLE_INFO[I.kind].name, 420, [lm.userData.desc]), { reach:3.6 }); th.obj.rotation.y=Math.atan2(f[0], f[1]); },
+      const bl=I.kind==='bluff', th=new Thing('landmark', mx, mz, I.kind==='dunes'?3.3:bl?BH.BT.foot:2.5, lm, bl ? ()=>BLUFF && BLUFF.mode!=='off' ? null : 'Go in' : 'Look', ()=> bl ? BLUFF && BLUFF.enter() : I.kind==='meadow' ? millAct(lm) : I.kind==='dunes' ? wreckAct(lm) : I.kind==='starfall' ? starAltarAct(lm) : dialog(ISL.ISLE_INFO[I.kind].name, 420, [lm.userData.desc]), { reach:bl?BH.BT.foot+1.3:3.6 }); th.obj.rotation.y=Math.atan2(f[0], f[1]); if (bl) setupBluff(I, lm, th); },
     ...ISLE_TREES[I.kind].map(([type,n])=>()=>{ for (let i=0;i<n;i++){ const key='x'+I.k+'_'+type+i, p=isleSpot(I, r, type==='palm'?0.25:SAND_H+0.2, type==='palm'?2.4:I.sky?20:14, 2.6); if (!p || S.cut[key]==='gone') continue;   // one kind of tree per frame
         trees.push(new Tree(key, p[0], p[1], type, type==='fruittree'?isleFruit():type==='palm'?'coconut':null)); } }),
     ()=>{ for (let i=0;i<ISLE_ROCKS[I.kind];i++){ const p=isleSpot(I, r, SAND_H+0.1, I.sky?20:14, 2.2); if (!p) continue; const rk=new Rock(200+I.k*10+i, p[0], p[1], r); rk.rich=I.kind==='crags'; rocks.push(rk); } },
@@ -5414,7 +5450,7 @@ function loadIsle(I, now){
   ];
   if (now) while (I.queue.length) I.queue.shift()();
 }
-let streamT=0;
+let streamT=0, bluffT=0;
 function updateStreaming(dt,t){
   if (World.inside) return;
   for (const I of ISLES){ if (I.queue && I.queue.length){ I.queue.shift()(); break; } }   // one piece of one isle per frame
@@ -5422,6 +5458,7 @@ function updateStreaming(dt,t){
       if (u.beam){ u.beam.rotation.y+=dt*0.6; u.beamMat.opacity=0.22*World.night; } }
   for (const I of ISLES) if (I.shown && I.mist){ const h=Time.hour(), k=(1-smooth(9,12,h))*smooth(4,6.5,h)*0.75+0.18; for (const sp of I.mist.children){ sp.material.opacity=k*(0.5+0.5*Math.sin(t*0.1+sp.userData.ph)); sp.position.x+=Math.sin(t*0.05+sp.userData.ph)*dt*0.4; } }
   for (const I of ISLES) if (I.shown && I.swing){ const onIt=!!onBridge(player.pos.x,player.pos.z) && onBridge(player.pos.x,player.pos.z)===I.bridge; I.swingA=lerp(I.swingA||0.015, onIt?0.05:0.015, Math.min(1,dt*2)); I.swing.rotation.x=Math.sin(t*1.3)*I.swingA; }
+  if (BLUFF && !PERCH && (bluffT-=dt)<0){ bluffT=1; const I=bluffIsle(); if (I && I.shown) BLUFF.refreshStage(); }   // v1.51 the lighthouse mends as the story moves on
   if ((streamT-=dt)>0) return; streamT=0.35;
   const px=player.pos.x, pz=player.pos.z;
   for (const c of COVER_CHUNKS){ const s=c.boundingSphere; c.visible = Math.hypot(s.center.x-px, s.center.z-pz) < 85+s.radius; }
@@ -5534,7 +5571,7 @@ const snowGeo=new THREE.BufferGeometry(); const snowPos=new Float32Array(RAIN_N*
 const snow=new THREE.Points(snowGeo,new THREE.PointsMaterial({ color:0xffffff, size:0.18, transparent:true, opacity:0.9 })); snow.frustumCulled=false; scene.add(snow);
 for(let i=0;i<RAIN_N;i++){ const x=(Math.random()-0.5)*50, y=Math.random()*25, z=(Math.random()-0.5)*50; rainPos.set([x,y,z,x,y-0.6,z],i*6); snowPos.set([x,y,z],i*3); }
 function updatePrecip(dt,t){
-  const c=player.pos; rain.visible=World.weather==='rain'&&!World.inside; snow.visible=World.weather==='snow'&&!World.inside;
+  const c=player.pos, roofed=World.inside || (BLUFF && BLUFF.roofed); rain.visible=World.weather==='rain'&&!roofed; snow.visible=World.weather==='snow'&&!roofed;   // v1.51 none inside the bluff lighthouse
   if(rain.visible){ for(let i=0;i<RAIN_N;i++){ let y=rainPos[i*6+1]-dt*22, x=rainPos[i*6], z=rainPos[i*6+2]; if(y<0){ y=20+Math.random()*6; x=c.x+(Math.random()-0.5)*50; z=c.z+(Math.random()-0.5)*50; } rainPos[i*6]=x; rainPos[i*6+1]=y; rainPos[i*6+2]=z; rainPos[i*6+3]=x+0.05; rainPos[i*6+4]=y-0.7; rainPos[i*6+5]=z; } rainGeo.attributes.position.needsUpdate=true; }
   if(snow.visible){ for(let i=0;i<RAIN_N;i++){ let y=snowPos[i*3+1]-dt*1.6, x=snowPos[i*3]+Math.sin(t+i)*dt*0.4, z=snowPos[i*3+2]; if(y<0){ y=16+Math.random()*6; x=c.x+(Math.random()-0.5)*50; z=c.z+(Math.random()-0.5)*50; } snowPos[i*3]=x; snowPos[i*3+1]=y; snowPos[i*3+2]=z; } snowGeo.attributes.position.needsUpdate=true; }
 }
@@ -5629,6 +5666,7 @@ function updateSky(){
   { const c=waterMat.color, b=WATER_BASE; WU.uTint.value.set(c.r/b.r, c.g/b.g, c.b/b.b); for (const I of ISLES) if (I.waterMat) I.waterMat.color.copy(c); }
   deepSea.material.color.setHex(0x2a8aa8).lerp(_c1.setHex(0x24427a), World.night*0.6); WU.uSpark.value=(1-World.night)*(1-dim*0.8); WU.uFoamA.value=0.8-World.night*0.3;
   renderer.toneMappingExposure = (1.15 - World.night*0.05) * (S.settings.bright||1);
+  if (BLUFF) BLUFF.indoorLight(hemi, sun, World.night);   // v1.51 inside the Lantern Bluff lighthouse
   clouds.forEach(c=>c.children.forEach(s=>s.material.color.setHex(0xffffff).lerp(_c1.copy(bot),0.3+World.night*0.25).lerp(_c2.setHex(0x8a94a0),dim)));
 }
 const fadeEl=$('#fade');
@@ -6958,6 +6996,18 @@ function devLighthouse(top){
   try { sessionStorage.setItem('dw-trip', JSON.stringify(trip)); sessionStorage.removeItem('dw-trip-world'); if (top) sessionStorage.setItem('dw-dev-lhtop','1'); } catch(e){}
   closePanel(); save(); document.documentElement.classList.add('magicret');
   (async()=>{ try { if (BOOT.flush) await BOOT.flush(); } catch(e){} setTimeout(()=>location.reload(), 300); })(); }
+// #dev v1.51: the Lantern Bluff lighthouse. stage 0-3 goes inside showing that repair stage (only to look at, the story isn't touched); top goes up to the gallery
+function devBluff(stage, top){
+  if (TRIP){ toast('Sail home first.'); return; }
+  const I=bluffIsle(); if (!I){ toast('No bluff isle yet. Story map, then Raise every isle now.'); return; }
+  closePanel(); if (stage!==undefined) BLUFF_DEV_STAGE=stage;
+  if (!I.full) loadIsle(I, true); else { while (I.queue && I.queue.length) I.queue.shift()(); isleShown(I, true); }
+  if (!BLUFF) return; BLUFF.refreshStage();
+  if (PERCH){ if (PERCH!==BLUFF.perch) toast('Come down from the other lighthouse first.'); return; }
+  const lm=I.lmObj, a=lm.rotation.y, R=BH.BT.foot+1.2, x=lm.position.x+Math.sin(a)*R, z=lm.position.z+Math.cos(a)*R;
+  stopMove(); player.pos.set(x, groundY(x,z), z); player.obj.position.copy(player.pos); player.face=a+Math.PI; player.obj.rotation.y=player.face; camTarget.copy(player.pos); updateSky(); updateCamera(1);
+  if (stage!==undefined || top) setTimeout(()=>{ if (!BLUFF.jumpIn(!!top)) toast('Finish what you\'re doing first.'); }, 120); }
+function devBluffReal(){ BLUFF_DEV_STAGE=null; if (BLUFF) BLUFF.refreshStage(); toast(`Lighthouse back to the story: ${BH.BLUFF_STAGES[bluffStage()]}.`); }
 function shellGame(P, back){
   const plays=TX.cups||0; if (plays>=5) return dialog(P.name, P.voice, ['That\'s enough cups for one day! Come back next time the circus is in town.'], back);
   if (S.clams<300) return dialog(P.name, P.voice, ['Three hundred clams a go. Come back when your pockets jingle!'], back);
@@ -7906,7 +7956,7 @@ function openMenu(){
     <div class="notice"><b>Testing tools</b><br><span class="muted">The game runs on your real clock. These preview other times and weather.</span>
       <label class="f">Preview time: <span id="mOffT"></span></label><input type="range" id="mOff" min="-23" max="23" step="1" value="${Time.offsetH}">
       <label class="f">Weather <select id="mW"><option value="">Today's weather</option><option>sunny</option><option>cloudy</option><option>rain</option><option>snow</option></select></label>
-      ${DEV?`<div style="margin-top:8px"><b>Shortcuts</b> <span class="muted">(only on this device)</span><div class="muted" style="margin:6px 0 2px">Story map</div><button class="btn" id="dvMap">Story map: isles, stories, places</button><div class="muted" style="margin:6px 0 2px">Isles and stories</div><button class="btn alt" id="dvT">${S.magic.tower?'Tower is up':'Raise the wizard tower'}</button> ${!GUEST&&!VISIT&&nextIsleKind()?'<button class="btn alt" id="dvI">Raise the next isle</button>':''} <button class="btn alt" id="dvM">${S.devMagic?'Wizard needs requirements again':'Skip wizard requirements'}</button> <button class="btn alt" id="dvRl">Relics for the next isle</button> <button class="btn alt" id="dvSt">Phase 2: next story</button> <button class="btn alt" id="dvS3">Phase 3: next story</button><div class="muted" style="margin:6px 0 2px">Town and island</div><button class="btn alt" id="dvC">+50,000 clams</button> <button class="btn alt" id="dvF">New favors now</button> <button class="btn alt" id="dvD">Town: skip a day</button> <button class="btn alt" id="dvR">Rare kit</button> <button class="btn alt" id="dvRf">Reef: skip to the rowboat</button> <button class="btn alt" id="dvRg">Reef: grow 12 coral</button> <button class="btn alt" id="dvWs">Workshop: skip ahead</button><div class="muted" style="margin:6px 0 2px">Shops and fishing</div><button class="btn alt" id="dvSh3">Shops to tier 3 of 4</button> <button class="btn alt" id="dvSh4">Shops to the top tier</button> <button class="btn alt" id="dvBk">Back room: next week</button> <button class="btn alt" id="dvGb">Gill: next boat</button><div class="muted" style="margin:6px 0 2px">Lighthouse</div><button class="btn alt" id="dvLp">Go to Lighthouse Point</button> <button class="btn alt" id="dvLt">Lighthouse top, with the keeper</button><div class="muted" style="margin:6px 0 2px">Enchanting and tables</div><button class="btn alt" id="dvEnL">Learn every enchantment</button> <button class="btn alt" id="dvEnT">${S.rare&&S.rare.ench&&S.rare.ench.twin?'Two-enchantment trick learned':'Learn the two-enchantment trick'}</button> <button class="btn alt" id="dvEnI">+20 of each ingredient</button> <button class="btn alt" id="dvEnK">A Sturdy tool of each kind</button> ${!VISIT&&!TRIP?'<button class="btn alt" id="dvB1">Workbench here</button> <button class="btn alt" id="dvB2">Carpenter\'s Bench here</button> <button class="btn alt" id="dvB3">Master Workbench here</button>':''} <button class="btn alt" id="dvBA">${BN.dev.any?'Tables work normally again':'Count as a Master Workbench anywhere'}</button> <button class="btn alt" id="dvEn">All of it at once</button><br><button class="btn alt" id="dvOff">Hide shortcuts</button></div>`:''}
+      ${DEV?`<div style="margin-top:8px"><b>Shortcuts</b> <span class="muted">(only on this device)</span><div class="muted" style="margin:6px 0 2px">Story map</div><button class="btn" id="dvMap">Story map: isles, stories, places</button><div class="muted" style="margin:6px 0 2px">Isles and stories</div><button class="btn alt" id="dvT">${S.magic.tower?'Tower is up':'Raise the wizard tower'}</button> ${!GUEST&&!VISIT&&nextIsleKind()?'<button class="btn alt" id="dvI">Raise the next isle</button>':''} <button class="btn alt" id="dvM">${S.devMagic?'Wizard needs requirements again':'Skip wizard requirements'}</button> <button class="btn alt" id="dvRl">Relics for the next isle</button> <button class="btn alt" id="dvSt">Phase 2: next story</button> <button class="btn alt" id="dvS3">Phase 3: next story</button><div class="muted" style="margin:6px 0 2px">Town and island</div><button class="btn alt" id="dvC">+50,000 clams</button> <button class="btn alt" id="dvF">New favors now</button> <button class="btn alt" id="dvD">Town: skip a day</button> <button class="btn alt" id="dvR">Rare kit</button> <button class="btn alt" id="dvRf">Reef: skip to the rowboat</button> <button class="btn alt" id="dvRg">Reef: grow 12 coral</button> <button class="btn alt" id="dvWs">Workshop: skip ahead</button><div class="muted" style="margin:6px 0 2px">Shops and fishing</div><button class="btn alt" id="dvSh3">Shops to tier 3 of 4</button> <button class="btn alt" id="dvSh4">Shops to the top tier</button> <button class="btn alt" id="dvBk">Back room: next week</button> <button class="btn alt" id="dvGb">Gill: next boat</button><div class="muted" style="margin:6px 0 2px">Lighthouse</div><button class="btn alt" id="dvLp">Go to Lighthouse Point</button> <button class="btn alt" id="dvLt">Lighthouse top, with the keeper</button><div class="muted" style="margin:6px 0 2px">Lantern Bluff lighthouse</div><button class="btn alt" id="dvBh">Go to the bluff lighthouse</button> <button class="btn alt" id="dvBh0">Inside: ruined</button> <button class="btn alt" id="dvBh1">Inside: lens up</button> <button class="btn alt" id="dvBh2">Inside: mending</button> <button class="btn alt" id="dvBh3">Inside: lit</button> <button class="btn alt" id="dvBhT">Top of the stair</button> <button class="btn alt" id="dvBhR">Back to the story's stage</button><div class="muted" style="margin:6px 0 2px">Enchanting and tables</div><button class="btn alt" id="dvEnL">Learn every enchantment</button> <button class="btn alt" id="dvEnT">${S.rare&&S.rare.ench&&S.rare.ench.twin?'Two-enchantment trick learned':'Learn the two-enchantment trick'}</button> <button class="btn alt" id="dvEnI">+20 of each ingredient</button> <button class="btn alt" id="dvEnK">A Sturdy tool of each kind</button> ${!VISIT&&!TRIP?'<button class="btn alt" id="dvB1">Workbench here</button> <button class="btn alt" id="dvB2">Carpenter\'s Bench here</button> <button class="btn alt" id="dvB3">Master Workbench here</button>':''} <button class="btn alt" id="dvBA">${BN.dev.any?'Tables work normally again':'Count as a Master Workbench anywhere'}</button> <button class="btn alt" id="dvEn">All of it at once</button><br><button class="btn alt" id="dvOff">Hide shortcuts</button></div>`:''}
     </div>
     <button class="btn warn" id="mReset">Start a new island</button>${saveOK?'':'<div class="muted" style="margin-top:8px">Saving isn\'t available in this browser.</div>'}`;
     $('#mParty').onclick=()=>{ closePanel(); setTimeout(()=>PARTY.open(), 50); };
@@ -7953,6 +8003,7 @@ function openMenu(){
       $('#dvWs').onclick=()=>{ if (!SY.shop) SY.shop={ st:'wizard', at:sday() }; else if (SY.shop.st==='project'){ SY.shop.fund=SHOP_PROJECT.clams; SY.shop.mats=true; SY.shop.st='building'; SY.shop.bday=sday()-1; storyNewDay(); applyTown(); }
         else if (SY.shop.st==='open'){ SY.shop.built=sday()-8; SY.shop.made=Math.max(100, SY.shop.made||0); SY.shop.ready=(SY.shop.ready||0)+20; } else SY.shop.st='wizard'; save(); toast(`Workshop story: ${SY.shop.st}.`); };
       $('#dvLp').onclick=()=>devLighthouse(false); $('#dvLt').onclick=()=>devLighthouse(true);   // v1.39 fixes
+      $('#dvBh').onclick=()=>devBluff(); for (let n=0;n<4;n++) $('#dvBh'+n).onclick=()=>devBluff(n); $('#dvBhT').onclick=()=>devBluff(undefined, true); $('#dvBhR').onclick=()=>devBluffReal();   // v1.51
       $('#dvT').onclick=()=>{ if (!S.magic.tower){ closePanel(); Q.story.wizard='done'; raiseTower(); } };
       $('#dvM').onclick=()=>{ S.devMagic=!S.devMagic; save(); render(); };
       { const a=$('#dvRl'), b=$('#dvSt'); if (a) a.onclick=()=>dev138('relics'); if (b) b.onclick=()=>dev138('stories'); const c3=$('#dvS3'); if (c3) c3.onclick=()=>dev139(); const mp=$('#dvMap'); if (mp) mp.onclick=()=>openStoryMap(); }   // v1.41 Story map   // v1.38, v1.39
@@ -9025,6 +9076,7 @@ window.__game.v144 = Object.assign({ SR, shopStock:w=>shopStock(w), talkGill:()=
 window.__game.v126 = { townNewDay, applyTown, findHomeSpot, claimHomeSpot, townCap, incomeNewDay, refreshIncome, talkIncome, incCollect, incOf, INCOME, incEnts, openMap, talkSkipperHome, talkSkipperTrip, tripGoHome, tripRecap, storyWho, askToLeave, canAskToLeave, pitchOnBuy, merchantDay, get peddler(){ return peddler; }, get skipper(){ return skipper; }, newSquares, LOAN_MAX_SQ, TRIP, TRIP_THEME, residents, residentHomes, plotEnts, KEEPOUT, Q, PATHS, camTarget, updateCamera, set camDist(v){ camDist=v; }, get camDist(){ return camDist; }, set camYaw(v){ camYaw=v; } };
 window.__game.LETTERS = LETTERS;
 window.__game.v147 = { makeTowerRooms, towerFloor, towerHello, openEyepiece, refreshTowerLook, outdoors, get towerL(){ return towerL; }, get topL(){ return topL; }, get wizard(){ return wizard; }, get tower(){ return towerEnt; }, TW };   // v1.47 test hooks
+window.__game.v151 = { get bluff(){ return BLUFF; }, get lhc(){ return LHC; }, devLighthouse, bluffStage, devBluff, devBluffReal, setupBluff, BH, get devStage(){ return BLUFF_DEV_STAGE; } };
 window.__game.v127 = { roleMenu, folkMenu, smugglerShop, openNoticeBoard, shellGame, talkWorkshop, talkAttic, talkWizGarden, talkLibrary, anglerWants, get perch(){ return PERCH; }, setupTown, get PLAN(){ return PLAN; }, get TX(){ return TX; }, LAY, haulValue, haulLeft, openContacts, deliverReplies, sendLetter, addContact, canInvite, invitePenpal, readTreasureMap, bottleLetter, openNote, contactPerson, XW, POOLS, lowTide, BRIDGES, DOCK, waterType, VY, Thing };
 // v1.25 test hooks for the house builder
 window.__game.house = { LT, previewBuild:(w)=>previewBuild(w), renderBuild:(k)=>renderBuild(k), homeBlocked, planIssue, setBuildView:(v)=>setBuildView(v), mossPaintAt, buildMossLayer, roofHit, houseFrame, rebuildFloor, HOME_IDS, get houseEnt(){ return houseEnt; }, edgeTap, stairsTap, landProblem, closeBuild };

@@ -441,3 +441,10 @@ Code: `FISH_NEAR` / `FISH_MAX` / `FISH_RATE` above `updateFishing` in `main.js`;
 
 ## v1.51: item value in the bag
 Hover a bag slot with a mouse to see the item's name and value; on touch screens a tap selects the slot and the same line shows in the bar at the bottom, as before. Code: `bagValue`, `invGrid` and `invTip` in `main.js`. The value comes from `sellPrice` (and `teaPrice` once the tea room is open), so it always matches what the shops pay.
+
+## v1.53: Wendell's star altar spells, made to show from the normal camera
+The outdoor camera never looks above the horizon, so the old aurora (curtains high in the sky) was never seen. Code: `AUR`, `AUR_GLSL` and `PATH_GLOW` near the terrain and path stones in `main.js`, the spell section after `starAltarAct`, and `buildMotes` / `buildCastBeam` in `story4.js`.
+- **Aurora** (80,000). `AUR.uAur` fades in after dark (off in rain, half when cloudy). The terrain shader adds slow green and violet bands of light (`aurLight`), the water shader tints the sea toward the same green and violet with brighter streaks and glints, the night hemisphere light and fog lean toward its color, and 170 motes drift around the player. The old sky curtains (`buildAurora`) are now only drawn during the cast, centered on the view, since that's the only time the sky is on screen.
+- **Glowing paths** (50,000). The cobblestones share one material (`STONE_MAT`) with a shader patch: each stone has its own color, a rune and a ring on its top, and `aS` (distance along its path) carries pulses of light down every path. Isle dirt paths get a line of the same stones. Up to 120 sparks rise from stones near the player, mostly where a pulse is passing. No lights; the cost is one shader branch on the stones and two point-sprite draws.
+- **Casting.** Buying a spell at the altar plays a beam and rings from the altar (`castSpell4`) and a camera move (the existing `cine`) out over the island, tilted up, for about 4.5 seconds; then Wendell's line. The camera lock itself is unchanged.
+- Prices unchanged. Save unchanged (`story.sky`). Test hooks: `window.__game.v150`.

@@ -11,7 +11,7 @@
    built in wiki.js. Writing rules: plain words, no em dashes, no emoji, only facts the code supports.
    ===================================================================== */
 
-export const GUIDE_VERSION = 'v1.52';
+export const GUIDE_VERSION = 'v1.53';
 export const GUIDE_UPDATED = '2026-11-26';
 
 const tip = s => `<div class="tip"><b>Tip</b> ${s}</div>`;
@@ -349,8 +349,9 @@ ${tip('Making 14 <b>different</b> pieces is what starts Bramble\'s workshop stor
 <h3>Starfall Isle</h3>
 <p>The stair climbs from Hollow Crags. Up top it is always night, whatever the clock says, and three bugs live nowhere else: the Sky Drifter, the Comet Beetle and the rare Nebula Moth. They're in the bug catalog under "On Starfall Isle".</p>
 <p>The <b>star altar</b> takes two of Wendell's spells. Leave the clams in the bowl:</p>
-<ul><li><b>Aurora</b> (80,000): green and violet light over your island every clear night.</li>
-<li><b>Glowing paths</b> (50,000): small stones along every path that glow after dark, isles included.</li></ul>
+<ul><li><b>Aurora</b> (80,000): green and violet curtains of light over your island every clear night. Since the camera looks down at the island, you see it where its light lands: bands of green and violet drifting across the grass, streaks of it on the sea, and small lights floating in the air around you. It doesn't show in the rain, and it's fainter when it's cloudy.</li>
+<li><b>Glowing paths</b> (50,000): every stone on every path lights up, each with a rune in it and its own color, and pulses of light run along the paths. Sparks rise off the stones near you. A line of glowing stones also runs down each isle's path. It's brightest at night, and you can just see it in the daytime.</li></ul>
+<p>When you cast one, a beam of light goes up from the altar and the view swings out over your island so you can see the sky for a moment.</p>
 <p>Both are for looks only. You can lift either one at the altar and bring it back later for free.</p>
 ${note('Stardrift Isle, the legendary trip island, is a different place. It was called Starfall Isle before v1.41.')}
 ${note('Islands that raised isles before v1.37 keep their old order (meadow, dunes, bluff, crags) and get Old Pinewood next.')}
@@ -746,6 +747,7 @@ ${steps(['Talk to them and pick <b>Come and meet people</b>. They follow you for
 { id:'changes', group:'done', title:'What\'s changed', html:`
 <p>Recent updates, newest first.</p>
 <ul>
+<li><b>v1.53</b>: Wendell's spells are much brighter. The aurora's light now drifts across the island and the sea, with floating lights in the air, so you can see it from the normal view. Glowing paths light every path stone with a rune, run pulses of light along the paths and send up sparks. Casting either one at the star altar now has a short show.</li>
 <li><b>v1.52</b>: 54 new fish and 57 new bugs, so there are now 100 of each, every one with its own model. New homes: the sea around each of Wendell's isles, the isles themselves, Starfall Isle, the boat trip islands, and six bigger reef fish that come back to Cay Bay as the reef grows. The museum gets new tanks for them, and there are new achievement tiers for 60 and 100 kinds of fish or bugs and 150 and 200 museum displays.</li>
 <li><b>v1.51</b>: Hover over an item in your bag (or tap it on a phone) to see its name and what it sells for, and who pays the most for it. Story items say they can't be sold instead of showing 0.</li>
 <li><b>v1.50</b>: Fewer fish swimming about (at most 2 near you and 5 on the island, turning up about half as often). Broken tools aren't gone: fix them at any crafting table, enchantments and all. New woodworking plans now come from making lots of different things (making the same piece over and over no longer counts), at most one batch a day. The Carpenter's Bench now needs 16 different things made, the Master Workbench 30, and Bramble's workshop story 14.</li>

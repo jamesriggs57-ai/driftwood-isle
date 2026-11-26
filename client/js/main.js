@@ -657,13 +657,28 @@ function groundTex(){ const cv=document.createElement('canvas'); cv.width=cv.hei
   for (let i=0;i<500;i++){ const px=r()*W, py=r()*W, s2=1+r()*2.5;                                       // B: grit and speckle for sand and dirt
     x.fillStyle=`rgba(128,128,${r()<0.5?40:230},0.5)`; wrap(()=>{ x.beginPath(); x.arc(px,py,s2,0,TAU); x.fill(); }); }
   const t=new THREE.CanvasTexture(cv); t.wrapS=t.wrapT=THREE.RepeatWrapping; t.anisotropy=renderer.capabilities.getMaxAnisotropy?Math.min(8,renderer.capabilities.getMaxAnisotropy()):4; return t; }
+// v1.53 Wendell's aurora as it reaches the ground: soft green and violet light drifting across the island in bands, and
+// the same light caught on the sea. The camera never looks at the sky, so this is where you see it. main.js fades uAur in after dark.
+const AUR = { uAur:{ value:0 }, uAurT:{ value:0 } };
+const AUR_GLSL = `uniform float uAur; uniform float uAurT;
+float aurH(vec2 p){ return fract(sin(dot(p, vec2(41.3, 289.1))) * 43758.5453); }
+float aurN(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.0-2.0*f); return mix(mix(aurH(i), aurH(i+vec2(1,0)), f.x), mix(aurH(i+vec2(0,1)), aurH(i+vec2(1,1)), f.x), f.y); }
+vec3 aurLight(vec2 w){ float t=uAurT;
+  float n=aurN(vec2(w.x*0.045+t*0.05, w.y*0.03-t*0.035));
+  float b=0.5+0.5*sin(w.x*0.55 + w.y*0.12 + n*7.0 + t*0.5); b=b*b*b*b*b*b;
+  float b2=0.5+0.5*sin(w.x*0.31 - w.y*0.21 + n*5.0 - t*0.35 + 2.0); b2=b2*b2*b2*b2*b2*b2;
+  float k=aurN(vec2(w.x*0.06 - t*0.03, w.y*0.06 + t*0.015));
+  vec3 c=mix(vec3(0.15,1.0,0.5), vec3(0.7,0.25,1.0), smoothstep(0.35,0.65,k));
+  return c*(0.04 + b*0.9) + vec3(0.6,0.3,1.0)*b2*0.6; }
+`;
 let _terrainMat=null;
 function terrainMat(){ if (_terrainMat) return _terrainMat;
   const m=new THREE.MeshStandardMaterial({ vertexColors:true, roughness:0.95 }); const tex=groundTex();
-  m.userData.patch=sh=>{ sh.uniforms.uGround={ value:tex };
+  m.userData.patch=sh=>{ sh.uniforms.uGround={ value:tex }; Object.assign(sh.uniforms, AUR);
     sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nattribute float grassy; varying float vGrassy; varying vec3 vGW;')
       .replace('#include <project_vertex>','#include <project_vertex>\nvGrassy=grassy; vGW=(modelMatrix*vec4(transformed,1.0)).xyz;');
-    sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\nuniform sampler2D uGround; varying float vGrassy; varying vec3 vGW;')
+    sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\nuniform sampler2D uGround; varying float vGrassy; varying vec3 vGW;\n'+AUR_GLSL)
+      .replace('#include <emissivemap_fragment>','#include <emissivemap_fragment>\nif (uAur>0.001) totalEmissiveRadiance += diffuseColor.rgb*aurLight(vGW.xz)*uAur*0.6;')
       .replace('#include <color_fragment>',`#include <color_fragment>
       { vec4 a=texture2D(uGround, vGW.xz*0.23); vec4 b=texture2D(uGround, vGW.xz*0.055+vec2(0.37,0.11)); float gr=clamp(vGrassy,0.0,1.0);
         vec4 f=texture2D(uGround, vGW.xz*0.85+vec2(0.19,0.53));   // fine blades up close
@@ -673,7 +688,7 @@ function terrainMat(){ if (_terrainMat) return _terrainMat;
         diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb*vec3(1.1,1.05,0.78), clamp(warm,0.0,1.0));
         diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb*vec3(0.86,0.97,1.08), clamp(-warm,0.0,1.0));
         diffuseColor.rgb *= 1.0 + (a.b-0.5)*0.16*(1.0-gr); }`); };
-  m.onBeforeCompile=m.userData.patch; m.customProgramCacheKey=()=>'ground2'; return _terrainMat=m; }
+  m.userData.patchKey='ground3'; m.onBeforeCompile=m.userData.patch; m.customProgramCacheKey=()=>'ground3'; return _terrainMat=m; }
 // v1.36: also builds the terrain of Wendell's isles (o.isle), each as its own mesh, at its own detail
 function buildTerrain(o={}){
   const I=o.isle||null, ox=I?o.cx:0, oz=I?o.cz:0;
@@ -748,7 +763,7 @@ const waterDepthTex = (()=>{ const N=WATER_D_RES, d=new Uint8Array(N*N);
 const WU = { uTime:{ value:0 }, uDepth:{ value:waterDepthTex }, uShallow:{ value:new THREE.Color(0x5edbd0) }, uDeep:{ value:new THREE.Color(0x2b92c4) },
   uFish:{ value:Array.from({ length:WATER_FISH_MAX }, ()=>new THREE.Vector4()) }, uFishCol:{ value:new THREE.Color(0x10283a) }, uFishA:{ value:0.7 },
   uSpark:{ value:1 }, uFoamA:{ value:0.8 }, uTint:{ value:new THREE.Vector3(1,1,1) },
-  uBox:{ value:new THREE.Vector3(-160,-160,320) }, uClip:{ value:Array.from({ length:4 }, ()=>new THREE.Vector4(1,1,-1,-1)) }, uClipN:{ value:0 } };   // v1.36: isle water uses its own depth map and box
+  uBox:{ value:new THREE.Vector3(-160,-160,320) }, uClip:{ value:Array.from({ length:4 }, ()=>new THREE.Vector4(1,1,-1,-1)) }, uClipN:{ value:0 }, uAur:AUR.uAur, uAurT:AUR.uAurT };   // v1.36: isle water uses its own depth map and box
 const WATER_BASE = new THREE.Color(0x4cc3d6);   // the material's daytime color; updateSky tints it and the shader follows by this ratio
 const waterCompile = (over={}) => sh => {
   Object.assign(sh.uniforms, WU, over);
@@ -773,6 +788,7 @@ float wFishShape(vec2 d, vec4 f){ // d: offset from the fish, f: x, z, heading, 
   float tail = (1.0 - smoothstep(-0.04, 0.06, abs(q.y) - (0.06 + tx*0.75))) * smoothstep(-0.06, 0.04, tx) * (1.0 - smoothstep(0.3, 0.42, tx));
   return max(body, tail*0.9); }
 float wD, wFoam, wFish, wGlint; vec2 wN;
+${AUR_GLSL}
 ` + sh.fragmentShader
     .replace('#include <color_fragment>', `#include <color_fragment>
   { vec2 w = vWPos.xz; float t = uTime;
@@ -806,12 +822,20 @@ float wD, wFoam, wFish, wGlint; vec2 wN;
     .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
   normal = normalize(normal + (viewMatrix * vec4(wN.x, 0.0, wN.y, 0.0)).xyz * (1.0 - wFoam));`)
     .replace('#include <opaque_fragment>', `outgoingLight += vec3(1.0, 0.98, 0.9) * wGlint * 0.3;
+  if (uAur > 0.001){ vec2 aw = vWPos.xz + wN*4.0;   // the aurora on the water: long streaks running toward you, broken up by the ripples
+    vec3 ar = aurLight(vec2(aw.x*0.45, aw.y*0.12)) + aurLight(vec2(aw.x*0.8+40.0, aw.y*0.2))*0.6;
+    float st = 0.5+0.5*sin(aw.x*1.3 + wN.x*9.0 + uAurT*1.7); float sp = smoothstep(0.62, 0.8, wNoise(aw*vec2(3.0,0.8) + vec2(uAurT*0.4, -uAurT*0.9)));
+    float st4 = st*st*st*st;
+    float am = clamp(0.1 + 0.45*st4 + 1.5*sp*(0.4+0.6*st), 0.0, 1.0) * (0.45 + 0.55*smoothstep(0.1, 1.2, wD)) * (1.0 - wFoam*0.7);
+    vec3 ah = ar / max(0.002, max(ar.r, max(ar.g, ar.b)));   // the aurora's own hue, green or violet
+    float al = clamp(dot(ar, vec3(0.333))*3.0, 0.0, 1.0);
+    outgoingLight = mix(outgoingLight, ah*(0.18 + 0.95*am), uAur*clamp(0.3 + 0.7*am, 0.0, 1.0)*(0.45 + 0.55*al)); }
   outgoingLight = mix(outgoingLight, uFishCol, wFish * uFishA);
   diffuseColor.a = max(diffuseColor.a, wFish * uFishA);
   #include <opaque_fragment>`);
 };
 waterMat.onBeforeCompile = waterCompile();
-waterMat.customProgramCacheKey = () => 'driftwood-water-v2';
+waterMat.customProgramCacheKey = () => 'driftwood-water-v3';
 const water = new THREE.Mesh(waterGeo, waterMat); water.receiveShadow = true; OUT.add(water);
 // The deep sea plane sits below the lowest sea floor. (At -1.2 it was level with the pond bed, so the two fought
 // for the same pixels and the pond flickered.)
@@ -824,7 +848,7 @@ for (const [n,I] of ISLES.entries()){
   const tex=new THREE.DataTexture(d,N,N,THREE.RedFormat,THREE.UnsignedByteType); tex.magFilter=tex.minFilter=THREE.LinearFilter; tex.needsUpdate=true;
   const clips=[new THREE.Vector4(-160,-160,160,160), ...ISLES.slice(0,n).map(J=>new THREE.Vector4(...J.box))].slice(0,4), cn=clips.length; while (clips.length<4) clips.push(new THREE.Vector4(1,1,-1,-1));
   const m=new THREE.MeshStandardMaterial({ color:0x4cc3d6, transparent:true, opacity:0.78, roughness:0.32, metalness:0.05 });
-  m.onBeforeCompile=waterCompile({ uDepth:{ value:tex }, uBox:{ value:new THREE.Vector3(x0,z0,size) }, uClip:{ value:clips }, uClipN:{ value:cn } }); m.customProgramCacheKey=()=>'driftwood-water-v2';
+  m.onBeforeCompile=waterCompile({ uDepth:{ value:tex }, uBox:{ value:new THREE.Vector3(x0,z0,size) }, uClip:{ value:clips }, uClipN:{ value:cn } }); m.customProgramCacheKey=()=>'driftwood-water-v3';
   const w=new THREE.Mesh(new THREE.PlaneGeometry(size,size).rotateX(-Math.PI/2), m); w.position.set((x0+x1)/2, 0, (z0+z1)/2); w.receiveShadow=true; OUT.add(w); I.waterMat=m; I.water=w;
   I.lod=buildTerrain({ isle:I, cx:(x0+x1)/2, cz:(z0+z1)/2, size, N:Math.round(size/2.4) }); OUT.add(I.lod);
   if (I.sky){ I.under=ISL.buildSkyUnder(I); OUT.add(I.under); }   // v1.41 seen from everywhere, so it's always there
@@ -880,8 +904,34 @@ function stoneTex(){ const cv=document.createElement('canvas'); cv.width=cv.heig
   for (let i=0;i<500;i++){ const v=150+r()*105|0; x.fillStyle=`rgba(${v},${v},${v},0.6)`; x.fillRect(r()*128,r()*128,1+r()*3,1+r()*3); }
   for (let i=0;i<10;i++){ x.strokeStyle='rgba(110,105,100,0.35)'; x.lineWidth=1; x.beginPath(); x.moveTo(r()*128,r()*128); x.lineTo(r()*128,r()*128); x.stroke(); }
   const t=new THREE.CanvasTexture(cv); t.colorSpace=THREE.SRGBColorSpace; t.wrapS=t.wrapT=THREE.RepeatWrapping; return t; }
-{ const r=mulberry32(77), K=4, N=2000, mat=new THREE.MeshStandardMaterial({ roughness:0.88, map:stoneTex() });
+// v1.53 the glowing paths spell lights every one of these stones: PATH_GLOW drives a shader patch on their one material,
+// and aS (how far along its path a stone sits) lets a pulse of light run down each path. No lights, no extra draws.
+const PATH_GLOW = { uPG:{ value:0 }, uPGT:{ value:0 } };
+function pathGlowPatch(mat){
+  mat.userData.patchKey='pg1';
+  mat.userData.patch=sh=>{ Object.assign(sh.uniforms, PATH_GLOW);
+    sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nattribute float aS; varying float vPS; varying vec3 vPP; varying vec3 vPO;')
+      .replace('#include <project_vertex>','#include <project_vertex>\nvPS=aS; vPO=position;\n#ifdef USE_INSTANCING\nvPP=(modelMatrix*instanceMatrix*vec4(0.0,0.0,0.0,1.0)).xyz;\n#else\nvPP=(modelMatrix*vec4(0.0,0.0,0.0,1.0)).xyz;\n#endif');
+    sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\nuniform float uPG; uniform float uPGT; varying float vPS; varying vec3 vPP; varying vec3 vPO;')
+      .replace('#include <emissivemap_fragment>',`#include <emissivemap_fragment>
+      if (uPG>0.001){ float h=fract(sin(dot(floor(vPP.xz*7.0),vec2(12.9898,78.233)))*43758.5453);
+        float top=smoothstep(-0.01,0.04,vPO.y);
+        float run=pow(0.5+0.5*sin(vPS*0.42-uPGT*2.2), 12.0);                     // light running down the path
+        float run2=pow(0.5+0.5*sin(vPS*0.17+uPGT*1.1+1.7), 18.0)*0.7;           // a slower one the other way
+        float tw=0.7+0.3*sin(uPGT*(1.3+h*2.2)+h*40.0);                          // each stone breathes on its own
+        float a=h*6.2832, ca=cos(a), sa=sin(a); vec2 q=vec2(ca*vPO.x-sa*vPO.z, sa*vPO.x+ca*vPO.z)*14.0;
+        float rune=1.0-smoothstep(0.0,0.16,abs(sin(q.x+sin(q.y*1.3+h*9.0)*1.2)));  // a glowing vein carved across the top
+        rune=max(rune, 1.0-smoothstep(0.0,0.12,abs(length(q*vec2(1.0,1.4))-1.6-h))); // and a ring
+        vec3 c=mix(vec3(0.1,0.75,1.0), vec3(0.62,0.25,1.0), smoothstep(0.35,0.95,h));
+        c=mix(c, vec3(0.2,1.0,0.65), smoothstep(0.85,1.0,fract(h*7.3))*0.7);
+        diffuseColor.rgb *= 1.0 - 0.55*uPG*top;                                        // the stone darkens so its light reads
+        totalEmissiveRadiance += c*uPG*( (0.05+0.07*tw)*(0.3+0.7*top) + rune*top*(0.55+1.5*run+0.5*run2) + (run+run2)*0.35 ); }`); };
+  mat.onBeforeCompile=mat.userData.patch; mat.customProgramCacheKey=()=>'pathglow1'; }
+const STONE_MAT=new THREE.MeshStandardMaterial({ roughness:0.88, map:stoneTex() }); pathGlowPatch(STONE_MAT);
+const PATH_STONES=[];   // [x, y, z, s] for each stone, for the glowing paths' sparkles
+{ const r=mulberry32(77), K=4, N=2000, mat=STONE_MAT, sArr=[...Array(K)].map(()=>new Float32Array(N));
   const ims=[...Array(K)].map((_,k)=>new THREE.InstancedMesh(stoneGeo(31+k*17), mat, N)), cnt=new Array(K).fill(0); const dm=new THREE.Object3D(), col=new THREE.Color();
+  let run=0;
   const stoneCols=[0xd8cdb8,0xc8bca6,0xe2d8c4,0xbfb29a,0xcfc2a8,0xb8b0a0,0xd8c8b0];
   for (const P of PATHS) for(let i=0;i<P.length-1;i++){ const [ax,az]=P[i], [bx,bz]=P[i+1]; const L=Math.hypot(bx-ax,bz-az); const nx=-(bz-az)/L, nz=(bx-ax)/L;
     for(let d=r()*0.25; d<L; d+=0.24+r()*0.16){ const per=r()<0.5?2:1;
@@ -889,9 +939,10 @@ function stoneTex(){ const cv=document.createElement('canvas'); cv.width=cv.heig
         if (!walkable(x,z) || onBridge(x,z) || onDock(x,z) || rawHeight(x,z)<0.3 || r()<0.06) continue;
         const k=Math.floor(r()*K); if (cnt[k]>=N) continue; const s=0.55+r()*0.6*(1-Math.abs(off)*0.35);
         dm.position.set(x, groundY(x,z)-0.015-r()*0.02, z); dm.rotation.set((r()-0.5)*0.08, r()*TAU, (r()-0.5)*0.08); dm.scale.set(s,0.8+r()*0.5,s); dm.updateMatrix(); ims[k].setMatrixAt(cnt[k], dm.matrix);
+        sArr[k][cnt[k]]=run+d; PATH_STONES.push([x, dm.position.y, z, run+d]);
         col.setHex(stoneCols[Math.floor(r()*stoneCols.length)]).offsetHSL((r()-0.5)*0.03,(r()-0.5)*0.06,(r()-0.5)*0.09); if (r()<0.12) col.lerp(new THREE.Color(0x8aa060), 0.25+r()*0.2);   // some mossy
-        ims[k].setColorAt(cnt[k], col); cnt[k]++; } } }
-  ims.forEach((im,k)=>{ im.count=cnt[k]; im.receiveShadow=true; im.castShadow=false; OUT.add(im); }); }
+        ims[k].setColorAt(cnt[k], col); cnt[k]++; } } run+=L; }
+  ims.forEach((im,k)=>{ im.geometry.setAttribute('aS', new THREE.InstancedBufferAttribute(sArr[k], 1)); im.count=cnt[k]; im.receiveShadow=true; im.castShadow=false; OUT.add(im); }); }
 /* Part 2: entities (things you can interact with), tools, critters */
 
 const ents=[]; const pickList=[];
@@ -3837,8 +3888,8 @@ function skyBugOK(){ return skyNear()>0.6; }
 function skyBugSpot(){ const I=skyIsle(); if (!I) return null; for (let k=0;k<20;k++){ const a=Math.random()*TAU, d=Math.random()*I.r*0.75, x=I.cx+Math.cos(a)*d, z=I.cz+Math.sin(a)*d;
     if (ISL.isleRaw(I,x,z)>=ISL.SKY-0.2 && walkable(x,z) && Math.hypot(x-player.pos.x, z-player.pos.z)>4) return [x,z]; } return null; }
 const SPELLS4 = [
-  { key:'aurora', name:'Aurora', cost:80000, ask:'An aurora over your island. Green and violet curtains of light, every clear night, from here to the sea.', done:'There. Look up tonight. It will be there every clear night now, as long as you want it.' },
-  { key:'paths', name:'Glowing paths', cost:50000, ask:'Little stones along every path that glow after dark, so nobody on the island ever walks home in the black.', done:'Done. They drink the starlight up here and give it back at night. Look at your paths after sunset.' } ];
+  { key:'aurora', name:'Aurora', cost:80000, ask:'An aurora over your island. Green and violet curtains of light every clear night, washing over the fields, shining on the sea, and little lights drifting on the air.', done:'There. Every clear night now, as long as you want it. Watch the water after dark, and the grass. That\'s the sky\'s light on them.' },
+  { key:'paths', name:'Glowing paths', cost:50000, ask:'Every stone on every path, lit from inside. Runes in the stone, light running along the paths like water, and sparks rising off them after dark.', done:'Done. Every stone drinks the starlight up here and gives it back at night. Walk your paths after sunset.' } ];
 const spellOn = key => !!(SY.sky && SY.sky[key] && !SY.sky[key+'Off']);
 function starAltarAct(lm){
   const nm='The Star Altar', W=WIZARD, v=W.voice;
@@ -3849,22 +3900,43 @@ function starAltarAct(lm){
       ? { label: K[sp.key+'Off'] ? `Bring back the ${sp.name.toLowerCase()}` : `Lift the ${sp.name.toLowerCase()} for now`, fn:()=>{ if (noEdit()) return; K[sp.key+'Off']=!K[sp.key+'Off']; save(); refreshSpells(); Snd.jingle(); dialog(nm, 420, [K[sp.key+'Off'] ? 'The star dims a little. Say the word and it comes back.' : 'The star brightens. It\'s back.'], menu); } }
       : { label:`${sp.name} (${fmt(sp.cost)})`, fn:()=>dialog(W.name, v, [sp.ask, `${fmt(sp.cost)} clams. It only takes up here, under the real stars.`], null, [
           { label:`Cast it (${fmt(sp.cost)})`, fn:()=>{ if (noEdit()) return; if (S.clams<sp.cost){ dialog(W.name, v, ['A little short, I\'m afraid. The bowl knows.'], menu); return; }
-              S.clams-=sp.cost; K[sp.key]=true; K[sp.key+'Off']=false; track('spent', sp.cost); updateHUD(); save(); Snd.fanfare();
-              const p=lm.getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(0,3,0)); for (let i=0;i<6;i++) setTimeout(()=>sparkle(p.clone().add(new THREE.Vector3((Math.random()-0.5)*3,Math.random()*2,(Math.random()-0.5)*3))), i*150);
-              refreshSpells(); dialog(W.name, v, [sp.done], menu); } },
+              S.clams-=sp.cost; K[sp.key]=true; K[sp.key+'Off']=false; track('spent', sp.cost); updateHUD(); save();
+              castSpell4(lm, sp.key, ()=>dialog(W.name, v, [sp.done], menu)); } },
           { label:'Not now', alt:true, fn:menu } ]) }),
     { label:'Leave it', alt:true, fn:()=>{} } ]);
   menu(); }
-// the spells themselves: the aurora over the main island, and glowing stones along every path
+// the spells themselves. Aurora: its light on the ground and the sea (AUR), and motes drifting near you. The curtains
+// themselves are only drawn while it's cast, the one time the view looks at the sky. Glowing paths: every path stone lit (PATH_GLOW), a line of
+// lit stones down each isle's dirt path, and sparks rising off the stones near you.
 function refreshSpells(){
-  if (spellOn('aurora') && !S4B.aurora){ S4B.aurora=S4.buildAurora(islandR(0)*0.85); OUT.add(S4B.aurora); }
-  if (!spellOn('aurora') && S4B.aurora){ OUT.remove(S4B.aurora); S4B.aurora=null; }
+  if (!S4B.motes){ S4B.motes=S4.buildMotes(170, [0x3aff9a, 0x5affd0, 0xa060ff, 0x3aff70, 0xd070ff], 0.55); S4B.sparks=S4.buildMotes(120, [0x9ae8ff, 0xc0a0ff, 0xffffff, 0x7affd8], 0.2); OUT.add(S4B.motes, S4B.sparks); }
   const gk = spellOn('paths') ? 'on:'+ISLES.length : '';
-  if (gk===S4B.glowKey) return; S4B.glowKey=gk; if (S4B.glow){ OUT.remove(S4B.glow); S4B.glow=null; } if (!gk) return;
-  const pts=[], seen=new Set(), add=(x,z,k)=>{ const key=Math.round(x*2)+','+Math.round(z*2); if (seen.has(key) || !walkable(x,z) || inRects(x,z,0.15) || onBridge(x,z) || onDock(x,z)) return; seen.add(key); pts.push([x, groundY(x,z), z, k]); };
-  let k=0; for (const P of [...PATHS, ...ISLES.flatMap(I=>I.paths||[])]) for (let i=0;i<P.length-1;i++){ const [ax,az]=P[i], [bx,bz]=P[i+1], L=Math.hypot(bx-ax,bz-az); if (L<0.01) continue; const ux=(bx-ax)/L, uz=(bz-az)/L;
-    for (let s=0;s<L;s+=2.4){ k++; const x=ax+ux*s, z=az+uz*s, side=k%2?1:-1; add(x-uz*1.05*side, z+ux*1.05*side, k); } }
-  S4B.glow=S4.buildPathGlow(pts); OUT.add(S4B.glow); }
+  if (gk===S4B.glowKey) return; S4B.glowKey=gk; if (S4B.glow){ OUT.remove(S4B.glow); S4B.glow=null; } S4B.isleStones=[]; if (!gk) return;
+  const pts=[]; let run=0; const r=mulberry32(4146);
+  for (const P of ISLES.flatMap(I=>I.paths||[])) for (let i=0;i<P.length-1;i++){ const [ax,az]=P[i], [bx,bz]=P[i+1], L=Math.hypot(bx-ax,bz-az); if (L<0.01) continue; const ux=(bx-ax)/L, uz=(bz-az)/L;
+    for (let d=r()*0.3; d<L; d+=0.55+r()*0.3){ const off=(r()*2-1)*0.55, x=ax+ux*d-uz*off, z=az+uz*d+ux*off; if (!walkable(x,z) || onBridge(x,z) || inRects(x,z,0.1)) continue; pts.push([x, groundY(x,z), z, run+d]); }
+    run+=L; }
+  S4B.isleStones=pts; S4B.glow=new THREE.Group(); if (!pts.length){ OUT.add(S4B.glow); return; }
+  const geo=stoneGeo(97), im=new THREE.InstancedMesh(geo, STONE_MAT, pts.length), aS=new Float32Array(pts.length), dm=new THREE.Object3D(), col=new THREE.Color();
+  pts.forEach(([x,y,z,sv],i)=>{ const sc=0.5+r()*0.45; dm.position.set(x, y-0.02, z); dm.rotation.set(0, r()*TAU, 0); dm.scale.set(sc, 0.9, sc); dm.updateMatrix(); im.setMatrixAt(i, dm.matrix); aS[i]=sv;
+    im.setColorAt(i, col.setHex(0xc8c0b8).offsetHSL(0, 0, (r()-0.5)*0.1)); });
+  geo.setAttribute('aS', new THREE.InstancedBufferAttribute(aS, 1)); im.receiveShadow=true; im.castShadow=false; S4B.glow.add(im); OUT.add(S4B.glow); }
+// v1.53 the moment a spell takes: Wendell's light goes up from the altar, the view swings out over your island so you can
+// see the sky for once, and the new spell comes on in front of you.
+function castSpell4(lm, key, after){
+  const p=lm.getWorldPosition(new THREE.Vector3()), beam=S4.buildCastBeam(key==='aurora' ? 0x7affc0 : 0x9ad8ff); beam.position.copy(p); OUT.add(beam);
+  Snd.magic(); stopMove(); refreshSpells();
+  const C0=S4B.cast; if (C0){ OUT.remove(C0.beam); if (C0.sky) OUT.remove(C0.sky); }
+  const L=Math.hypot(p.x,p.z)||1, ux=-p.x/L, uz=-p.z/L, sx=-uz, sz=ux;   // toward the main island, with the beam off to one side
+  const camT = key==='aurora' ? new THREE.Vector3(p.x+ux*4+sx*3, p.y+9, p.z+uz*4+sz*3) : new THREE.Vector3(p.x, p.y+2, p.z);
+  cine = key==='aurora' ? { camT, dist:16, pitch:-0.12, yaw:Math.atan2(-ux, -uz), shake:0 }   // out and up at the sky
+    : { camT, dist:20, pitch:0.42, yaw:0, shake:0 };                                              // the paths: the beam, and the isle's stones lighting up
+  $('#hud').classList.add('magic');
+  let sky=null; if (key==='aurora'){ sky=S4.buildAurora(120, 11, Math.atan2(uz, ux)); sky.position.set(camT.x-ux*16, camT.y-34, camT.z-uz*16); OUT.add(sky); }   // the curtains, out over your island
+  S4B.cast={ beam, key, T:0, sky };
+  for (let i=0;i<8;i++) setTimeout(()=>sparkle(p.clone().add(new THREE.Vector3((Math.random()-0.5)*3, 2+Math.random()*3, (Math.random()-0.5)*3))), i*120);
+  setTimeout(()=>Snd.fanfare(), 600);
+  setTimeout(()=>{ cine=null; $('#hud').classList.remove('magic'); if (after) after(); }, 4600); }
 
 /* =====================================================================
    THE ISLAND CHARTER
@@ -4187,8 +4259,24 @@ function storiesHTML4(){ const L=[];
 
 /* ---------- every frame ---------- */
 function story4Tick(dt, t){
-  if (S4B.aurora){ const a=!World.inside && World.weather!=='rain' ? smooth(0.35,0.85,World.night||0)*(World.weather==='cloudy'?0.5:1) : 0; S4B.aurora.userData.tick(t, a*0.9); }
-  if (S4B.glow) S4B.glow.visible=!World.inside && (World.night||0)>0.15;
+  if (S4B.cast){ const C=S4B.cast; C.T+=dt; const on=C.beam.userData.tick(dt);
+    if (C.sky) C.sky.userData.tick(t, 2.2*Math.min(1, C.T/1.2)*(1-smooth(3.6, 4.6, C.T)));
+    if (!on && C.T>4.6){ OUT.remove(C.beam); if (C.sky) OUT.remove(C.sky); S4B.cast=null; } }
+  const aurA = spellOn('aurora') && !World.inside && World.weather!=='rain' ? smooth(0.35,0.85,World.night||0)*(World.weather==='cloudy'?0.5:1) : 0;
+  AUR.uAur.value = aurA; AUR.uAurT.value = t;
+  const castP = S4B.cast && S4B.cast.key==='paths' ? smooth(0.8, 1.6, S4B.cast.T)*(1-smooth(3.4, 4.6, S4B.cast.T)) : 0;   // the stones flare as it takes
+  const pathA = spellOn('paths') && !World.inside ? 0.15+0.85*smooth(0.1,0.7,World.night||0)+castP*1.6 : 0;
+  PATH_GLOW.uPG.value = pathA; PATH_GLOW.uPGT.value = t;
+  if (S4B.motes && !World.inside){ const sc=renderer.domElement.height/(2*Math.tan(camera.fov*Math.PI/360)); S4B.motes.material.uniforms.uScale.value=S4B.sparks.material.uniforms.uScale.value=sc;
+    const px=player.pos.x, pz=player.pos.z-6;   // the view runs north of you, so the lights do too
+    S4B.motes.userData.update(dt, t, aurA*1.5, m=>{ const a=Math.random()*TAU, d=3+Math.random()*20, x=px+Math.cos(a)*d, z=pz+Math.sin(a)*d*0.9; const gy=Math.max(0, groundY(x,z));
+      m.x=x; m.y=gy+0.4+Math.random()*3.5; m.z=z; m.vx=(Math.random()-0.5)*0.4; m.vy=0.15+Math.random()*0.35; m.vz=(Math.random()-0.5)*0.4; m.max=4+Math.random()*5; m.c=Math.floor(Math.random()*5); return true; }, 6);
+    if ((S4B.nearT=(S4B.nearT||0)-dt)<=0){ S4B.nearT=1; S4B.near=pathA>0 ? [...PATH_STONES, ...(S4B.isleStones||[])].filter(q=>Math.abs(q[0]-px)<24 && Math.abs(q[2]-pz)<22) : []; }
+    const near=S4B.near||[], night=smooth(0.1,0.7,World.night||0);
+    S4B.sparks.userData.update(dt, t, pathA>0 ? 0.25+0.75*night : 0, m=>{ for (let k=0;k<6;k++){ const q=near[Math.floor(Math.random()*near.length)]; if (!q) return false;
+        const run=Math.pow(0.5+0.5*Math.sin(q[3]*0.42-t*2.2), 12); if (Math.random()>0.12+run+castP) continue;   // most rise where the light is running
+        m.x=q[0]+(Math.random()-0.5)*0.3; m.y=q[1]+0.08; m.z=q[2]+(Math.random()-0.5)*0.3; m.vx=(Math.random()-0.5)*0.15; m.vy=0.5+Math.random()*0.9; m.vz=(Math.random()-0.5)*0.15; m.max=1.6+Math.random()*2.2; m.c=Math.floor(Math.random()*4); return true; }
+      return false; }, 5 + Math.round(night*4) + (castP>0 ? 10 : 0)); }
   if ((S4B.festT-=dt)<=0){ S4B.festT=4; if (!TRIP && !GUEST){ try { refreshFest(); refreshShow(); } catch(e){ console.warn('v1.41', e); } } }
   raceTick(); }
 
@@ -5706,7 +5794,7 @@ function computeSnow(){
 }
 function patchSnow(mat){
   if (mat.userData.snow || mat.userData.char || mat.transparent || !mat.isMeshStandardMaterial) return; mat.userData.snow=true;
-  const prev=mat.userData.patch, prevKey=prev?'g':'';
+  const prev=mat.userData.patch, prevKey=prev?(mat.userData.patchKey||'g'):'';
   mat.onBeforeCompile=sh=>{ if (prev) prev(sh); sh.uniforms.uSnow=SNOW_U;
     sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nvarying vec3 vSnN; varying vec3 vSnP;')
       .replace('#include <defaultnormal_vertex>','#include <defaultnormal_vertex>\nvSnN = normalize((vec4(transformedNormal,0.0)*viewMatrix).xyz);')
@@ -5785,6 +5873,9 @@ function updateSky(){
   deepSea.material.color.setHex(0x2a8aa8).lerp(_c1.setHex(0x24427a), World.night*0.6); WU.uSpark.value=(1-World.night)*(1-dim*0.8); WU.uFoamA.value=0.8-World.night*0.3;
   renderer.toneMappingExposure = (1.15 - World.night*0.05) * (S.settings.bright||1);
   clouds.forEach(c=>c.children.forEach(s=>s.material.color.setHex(0xffffff).lerp(_c1.copy(bot),0.3+World.night*0.25).lerp(_c2.setHex(0x8a94a0),dim)));
+  // v1.53 under the aurora the night light turns green and violet, and the far edge of the view glows with it
+  const aA=AUR.uAur.value; if (aA>0.01){ const ph=0.5+0.5*Math.sin(performance.now()/1000*0.07);
+    _c1.setHex(0x5affb0).lerp(_c2.setHex(0xa070ff), ph); hemi.color.lerp(_c1, 0.2*aA); scene.fog.color.lerp(_c1.multiplyScalar(0.35), 0.3*aA); }
 }
 const fadeEl=$('#fade');
 function fade(cb){ fadeEl.classList.add('show'); setTimeout(()=>{ cb(); setTimeout(()=>fadeEl.classList.remove('show'), 60); }, 260); }
@@ -9233,6 +9324,7 @@ window.__game.v136 = { get ISLES(){ return ISLES; }, offerMove, startMagic, magi
 // v1.37 testing hooks (headless checks of the island stories)
 window.__game.v138 = { get SY(){ return SY; }, get S2B(){ return S2B; }, isleQuest, isleChoices, relicMissing, wantedRelics, rollTripRelic, hiveColors, colorFam, apiaryChoices, refreshStory2, refreshTea, refreshForge, refreshReefHall, openTeaRoom, openForge, lighthouseAct, wickChoices, teaSeatOf, storyNewDay2, wendellLetter, isleDirWord, dev138, storySpot, bayCutting, nightBay, lightLit, COMMISSIONS, STAKES, stakeOf, talkSkipperHome, talkIncome, talkWizard };
 window.__game.v139 = { get SY(){ return SY; }, get S3B(){ return S3B; }, LOGBOOK, BEATS3, STAKES, COMMISSIONS, millAct, openMill, millstoneOffer, millThistle, millWendell, routeTowns, postRoutes, routeWant, openPost, postNewDay, placeVents, digVent, bathSeatOf, bathStage, openBath, gladeConds, gladeStageOf, gladeBugOK, gladeBugSpot, gladeLook, gladeStump, gladeKnock, gladeApprove, gladeStumpDug, gladeLamps, wreckAct, makeWreckRoom, wreckOpen, rollTripChart, openLogbook, openAntiq, antiqStock, story3Stock, storyBeat3, story3Choices, storyNewDay3, story3News, storiesHTML3, storyGossip3, refreshStory3, dev139, landmark3, meadowLM, dunesLM };
+window.__game.v150 = { AUR, PATH_GLOW, PATH_STONES, castSpell4, get cast(){ return S4B.cast; }, get cine(){ return cine; }, set cine(v){ cine=v; } };   // v1.53 test hooks
 window.__game.v141 = { get SY(){ return SY; }, get S4B(){ return S4B; }, refreshStory4, dev141, dev138, dev139, openStoryMap, devRaiseAll, devTravel, devPlaces, blocked: (x,z)=>blocked(x,z,0.3), devTrip, raceStart, raceEnd, raceCourse, raceLength, raceRivals, raceMenu, openReadingRoom, openStall, festDay, festOn, festSpots, refreshFest, refreshShow, showTableAct, showEntries, storyBeat4, story4Choices, storyNewDay4, story4News, storiesHTML4, starAltarAct, skyHour, skyNear, skyIsle, refreshSpells, refreshCharter, charterReqs, charterReady, hall4Choices, newbChoices, CHARTER, get ISLE_K(){ return ISLE_K; } };   // v1.41 test hooks
 window.__game.v137 = { get S(){ return S; }, get SY(){ return SY; }, get BAYR(){ return BAYR; }, get ISLES(){ return ISLES; }, get player(){ return player; }, get residents(){ return residents; },
   reefInfo, reefStage, bayPlan, bayPopulate, enterBay, exitBay, bayAct, bayCast, bayDrop, talkGill, talkShop, talkTo, talkHall, talkWizard, talkCurator, openNursery, openWorkshop, openBoard, openHallPanel,

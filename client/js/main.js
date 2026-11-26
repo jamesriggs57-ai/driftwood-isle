@@ -14,7 +14,7 @@ import * as S2 from './story2.js';   // v1.38 phase 2 buildings and furniture
 import * as S3 from './story3.js';   // v1.39 phase 3 buildings and furniture
 import * as S4 from './story4.js';   // v1.41 phase 4 buildings, festival and Starfall spells
 import * as LH from './lighthouse.js';   // v1.39 fixes: the climbable lighthouse on Lighthouse Point
-import * as BH from './bluffhouse.js';   // v1.59 the bigger, walk-in Lantern Bluff lighthouse
+import * as BH from './bluffhouse.js';   // v1.60 the bigger, walk-in Lantern Bluff lighthouse
 import * as TW from './towerroom.js';   // v1.47 inside Wendell's tower
 import { ACHIEVEMENTS, ACH_GROUPS } from './achieve.js';
 import { BY_SLOT, SLOT_NAMES } from './wardrobe-data.js';
@@ -768,6 +768,9 @@ function terrainMat(){ if (_terrainMat) return _terrainMat;
         diffuseColor.rgb *= 1.0 + (a.b-0.5)*0.16*(1.0-gr); }`); };
   m.userData.patchKey='ground3'; m.onBeforeCompile=m.userData.patch; m.customProgramCacheKey=()=>'ground3'; return _terrainMat=m; }
 // v1.36: also builds the terrain of Wendell's isles (o.isle), each as its own mesh, at its own detail
+// v1.59 Hollow Crags' ground: grey stone and gravel, moss in a few hollows (the grass, ferns and flowers keep to the moss)
+const CRAG_STONE=[new THREE.Color(0x8e8d88), new THREE.Color(0x77756f), new THREE.Color(0xa5a39b)], CRAG_MOSS=new THREE.Color(0x6a8a4c), CRAG_PATH=new THREE.Color(0xb2a68c), CRAG_TMP=new THREE.Color();
+function cragMoss(x,z){ return smooth(0.58,0.74,vnoise(x*0.085+4,z*0.085-2)); }
 function buildTerrain(o={}){
   const I=o.isle||null; let ox=I?o.cx:0, oz=I?o.cz:0;
   const SZ=o.size||132*SC, N=o.N||(SC>1 ? (isMobile?320:400) : (isMobile?245:290));
@@ -796,7 +799,10 @@ function buildTerrain(o={}){
       if (!inland) c.lerp(SAND, smooth(SAND_H+0.2, SAND_H, y)); else if (y<SAND_H) c.lerp(new THREE.Color(0x9a8a6a), smooth(SAND_H,0.2,y));
       if (I){ const sl=ISL.isleSlope(I,x,z); if (sl>0.18 && pd>1.4) c.lerp(TIER_EDGE, smooth(0.18,0.6,sl)*0.75);
         if (sl>1.5) c.lerp(CLIFF_ROCK, smooth(1.5,2.6,sl)*0.9).offsetHSL(0,0,(vnoise(x*1.7,z*1.7)-0.5)*0.06);
-        if (I.kind==='crags'){ c.lerp(new THREE.Color(0x8a9a78), 0.3*vnoise(x*0.3,z*0.3)); gw[i]*=0.8; }
+        if (I.kind==='crags'){ const mo=cragMoss(x,z), g0=fbm(x*0.21+5,z*0.21-8);   // v1.59 bare stone and gravel, with moss only in a few hollows
+          CRAG_TMP.copy(CRAG_STONE[0]).lerp(CRAG_STONE[1], g0).lerp(CRAG_STONE[2], smooth(0.6,0.85,vnoise(x*0.7,z*0.7))*0.5).offsetHSL(0,0,(vnoise(x*3.1,z*3.1)-0.5)*0.07);
+          c.lerp(CRAG_TMP, (1-mo*0.75)*(sl>1.5?0.35:0.92)).lerp(CRAG_MOSS, mo*0.55);
+          if (pd<1.4) c.lerp(CRAG_PATH, smooth(1.4,0.6,pd)*0.6); gw[i]*=mo*0.7; }
         if (I.kind==='pines'){ c.lerp(new THREE.Color(0x4f7a3a), 0.38+0.2*vnoise(x*0.2,z*0.2)); c.lerp(new THREE.Color(0x7a6a4a), 0.18*smooth(0.55,0.8,vnoise(x*0.5+3,z*0.5))); gw[i]*=0.85; }   // dark, mossy, needle-strewn
         if (I.sand){ c.lerp(SAND, 0.94).offsetHSL(0,0,(vnoise(x*0.9,z*0.9)-0.5)*0.05+(vnoise(x*0.07,z*0.07)-0.5)*0.05); gw[i]=0; } }   // v1.57 the dunes are all sand
       else if (HG.h && TERRAIN_STYLE==='tiers'){ const sl=hillSample(HG.s,x,z); if (sl>0.18 && pd>1.4) c.lerp(TIER_EDGE, smooth(0.18,0.6,sl)*0.75);
@@ -932,7 +938,7 @@ for (const [n,I] of ISLES.entries()){
   m.onBeforeCompile=waterCompile({ uDepth:{ value:tex }, uBox:{ value:new THREE.Vector3(x0,z0,size) }, uClip:{ value:clips }, uClipN:{ value:cn } }); m.customProgramCacheKey=()=>'driftwood-water-v3';
   const w=new THREE.Mesh(new THREE.PlaneGeometry(size,size).rotateX(-Math.PI/2), m); w.position.set((x0+x1)/2, 0, (z0+z1)/2); w.receiveShadow=true; OUT.add(w); I.waterMat=m; I.water=w;
   I.lod=buildTerrain({ isle:I, cx:(x0+x1)/2, cz:(z0+z1)/2, size, N:Math.round(size/2.4) }); OUT.add(I.lod);
-  if (I.kind==='bluff'){ const [mx,mz,ma]=I.mark, t=BH.buildBluffLod(); t.position.set(mx-(x0+x1)/2, rawHeight(mx,mz), mz-(z0+z1)/2); t.rotation.y=Math.atan2(Math.cos(ma+Math.PI), Math.sin(ma+Math.PI)); I.lod.add(t); I.lodTower=t; }   // v1.59 the lighthouse stands out on the skyline before the isle loads
+  if (I.kind==='bluff'){ const [mx,mz,ma]=I.mark, t=BH.buildBluffLod(); t.position.set(mx-(x0+x1)/2, rawHeight(mx,mz), mz-(z0+z1)/2); t.rotation.y=Math.atan2(Math.cos(ma+Math.PI), Math.sin(ma+Math.PI)); I.lod.add(t); I.lodTower=t; }   // v1.60 the lighthouse stands out on the skyline before the isle loads
   if (I.sky){ I.under=ISL.buildSkyUnder(I); OUT.add(I.under); }   // v1.41 seen from everywhere, so it's always there
 }
 // Waves only roll on the open sea. Ponds and rivers lie still, so their big flat-shaded triangles no longer flash
@@ -1114,11 +1120,11 @@ if (!S.stumps) S.stumps=[];
 function buildRockModel(r){ const g=new THREE.Group(); const c=[0x9aa1a8,0x8a9198,0xa8afb5]; mk(G.dod(0.75), M(c[0],{flatShading:true}), 0,0.45,0,g).scale.set(1.1,0.8,1); mk(G.dod(0.45), M(c[1],{flatShading:true}), 0.6,0.25,0.3,g); mk(G.dod(0.35), M(c[2],{flatShading:true}), -0.5,0.2,0.35,g); const moss=mk(G.sph(0.35,10,6), M(0x6a9a4a), -0.1,0.78,0.05,g); moss.scale.set(1.2,0.25,1); g.rotation.y=r()*TAU; return g; }
 // v1.57 a Hollow Crags rock, each hit: iron half the time (stone 30%, clay 20%), a 20% chance of a second iron, and a 4% chance of a fossil.
 // Four hits a day comes to about 2.8 iron a rock, against about 0.5 from a rock on the main island.
-const CRAG_ROCK = { stone:0.3, clay:0.2, bonus:0.2, fossil:0.04 };
+const CRAG_ROCK = { stone:0.3, clay:0.2, bonus:0.2, fossil:0.04, emerald:0.02 };   // v1.59 emerald: per hit, only on the crags
 function buildRichRock(r){ const g=new THREE.Group(), c=[0x8e8a84,0x7e7a74,0x9a948c], rust=M(0xa0562e,{flatShading:true, roughness:0.6, metalness:0.25}), rust2=M(0xc0703a,{flatShading:true, roughness:0.5, metalness:0.3});
   mk(G.dod(0.85), M(c[0],{flatShading:true}), 0,0.5,0,g).scale.set(1.15,0.85,1.05); mk(G.dod(0.5), M(c[1],{flatShading:true}), 0.7,0.28,0.3,g); mk(G.dod(0.4), M(c[2],{flatShading:true}), -0.6,0.22,0.4,g);
   for (let i=0;i<6;i++){ const a=r()*TAU, y=0.25+r()*0.6, d=0.62+r()*0.2; const v=mk(G.dod(0.13+r()*0.1), i%2?rust:rust2, Math.cos(a)*d, y, Math.sin(a)*d*0.9, g); v.rotation.set(r()*3,r()*3,0); v.castShadow=false; }   // seams of red iron ore
-  const moss=mk(G.sph(0.32,10,6), M(0x5f8a3e), 0.1,0.9,-0.05,g); moss.scale.set(1.2,0.25,1); g.rotation.y=r()*TAU; return g; }
+  const moss=mk(G.sph(0.32,10,6), M(0x5f8a3e), 0.1,0.9,-0.05,g); moss.scale.set(1.2,0.25,1); g.rotation.y=r()*TAU; mergeStatic(g); return g; }   // v1.59 merged: 12 of these on the crags
 class Rock extends Ent {
   constructor(idx,x,z,r,rich=false){ super('rock',x,z,0.95); this.idx=idx; this.rich=rich; this.solid=true; this.reach=1.9; this.hit=0; this.attach(rich ? buildRichRock(r) : buildRockModel(r)); }
   label(){ return 'Hit'; }
@@ -1135,6 +1141,7 @@ class Rock extends Ent {
     else if (this.idx===S.day.lucky){ const amt=[100,200,400,800][u]; addClams(amt); Snd.coin(); toast('A pouch of '+amt+' clams popped out!'); }
     else if (this.rich){ for (let k=0;k<out;k++){ const x=Math.random(); dropNear(x<CRAG_ROCK.stone?'stone':(x<CRAG_ROCK.stone+CRAG_ROCK.clay?'clay':'iron'), this.pos, 1.7); if (Math.random()<CRAG_ROCK.bonus) dropNear('iron', this.pos, 1.7); }   // v1.57 the crags' iron-heavy rock
       if (Math.random()<CRAG_ROCK.fossil){ const f=tierPick(Math.random, Object.values(ITEMS).filter(i=>i.kind==='fossil' && allowedFind(i)), i=>luckW(i,'dig'), 'dig'); if (f){ dropNear(f.id, this.pos, 1.4); toast('Something was pressed into the stone!'); } }
+      if (Math.random()<CRAG_ROCK.emerald){ const first=!S.seen.emerald; dropNear('emerald', this.pos, 1.4); sparkle(this.pos.clone().add(new THREE.Vector3(0,1.4,0))); Snd.fanfare(); toast(first ? 'An emerald! The first you\'ve found.' : 'An emerald!', thumb('emerald'), 'new', `Emerald ${rarityTag(ITEMS.emerald)}`); S.stats.emeralds=(S.stats.emeralds|0)+1; }   // v1.59 joins this rock's pickup pile
       rareRoll(World.night>0.5?'rockNight':'rock', 'starstone', this.pos); }
     else { for (let k=0;k<out;k++){ const x=Math.random(), q=[0.6,0.88]; dropNear(x<q[0]?'stone':(x<q[1]?'clay':'iron'), this.pos, 1.7); } rareRoll(World.night>0.5?'rockNight':'rock', 'starstone', this.pos); } }
     save();
@@ -3225,7 +3232,7 @@ const LENS_COST=10000, NIGHT_FEE=8000;
 const lightLit = () => !!(SY.light && SY.light.st==='lit');
 const nightBay = () => lightLit() && reefStage()>=3 ? NIGHT_BAY.filter(id=>ITEMS[id]) : [];
 const bluffIsle = () => ISLES.find(I=>I.kind==='bluff');
-// v1.59 the Lantern Bluff lighthouse is walk-in (bluffhouse.js). Its insides get mended as the story goes:
+// v1.60 the Lantern Bluff lighthouse is walk-in (bluffhouse.js). Its insides get mended as the story goes:
 // 0 ruined, 1 Marlo's lens is up (fresh planks on the stair), 2 the lamp frame is made or being made (new treads, glass, the boards off), 3 lit.
 let BLUFF_DEV_STAGE=null;   // #dev: look at a stage without touching the story
 function bluffStage(){
@@ -3252,7 +3259,7 @@ function lighthouseAct(lm){   // from the lamp room, at the top of the stair
         dialog(nm, 420, ['The frame goes in, then the lens. Three moonpearls in the cradle, and the whole lamp room fills with a soft silver light.','The light runs down the stair and the whole old tower seems to wake up with it.','Somewhere down at the dock, Skipper Wick is going to be very happy.']); } },
     { label:'Not yet', alt:true, fn:()=>{} } ]);
   dialog(nm, 420, lines); }
-// v1.59 the bluff isle loads its lighthouse: the controller for walking in and climbing, and anything left inside its new, bigger footprint moved out
+// v1.60 the bluff isle loads its lighthouse: the controller for walking in and climbing, and anything left inside its new, bigger footprint moved out
 function setupBluff(I, lm, th){
   const ctx={ tower:lm, cx:th.pos.x, cz:th.pos.z, rot:lm.rotation.y, player, camera, scene, get camTarget(){ return camTarget; }, groundY, Thing, Snd, toast, dialog, fade, save, stopMove, interact, nearestEnt, updateSky, updateCamera,
     hud:$('#hud'), step:()=>Snd.click(), night:()=>World.night, dialogOpen:()=>!!dlgState, getCamYaw:()=>camYaw, setCamYaw:v=>{ camYaw=v; }, setPerch:p=>{ PERCH=p; },
@@ -5774,8 +5781,10 @@ const ISLE_IN=70, ISLE_OUT=105;
 // v1.57 more trees everywhere but Old Pinewood (its layout stays as it was); the dunes are palms only. The meadow also has an orchard (its own keys).
 const ISLE_TREES = {
   meadow:[['fruittree',7],['blossom',5],['birch',4],['oak',4],['maple',2],['blossom2',4],['birch2',3],['oak2',3],['maple2',3]], dunes:[['palm',34]],
-  bluff:[['pine',10],['cedar',8],['birch',2],['pine2',6],['cedar2',5],['birch2',3]], crags:[['cedar',6],['pine',4],['cedar2',6],['pine2',5]], pines:[['pine',24],['cedar',8]], starfall:[['birch',5],['blossom',6],['birch2',3],['blossom2',4]] };
-const ISLE_ROCKS = { meadow:2, dunes:0, bluff:5, crags:8, pines:2, starfall:2 };   // v1.57 the crags are a proper quarry now
+  bluff:[['pine',10],['cedar',8],['birch',2],['pine2',6],['cedar2',5],['birch2',3]], crags:[['cedar',3],['pine',2],['cedar2',2]], pines:[['pine',24],['cedar',8]], starfall:[['birch',5],['blossom',6],['birch2',3],['blossom2',4]] };
+const ISLE_ROCKS = { meadow:2, dunes:0, bluff:5, crags:12, pines:2, starfall:2 };   // v1.57 the crags are a proper quarry now; v1.59 12 rocks, and only 7 trees
+// a rock's id keys its taps today: the first 10 on each isle keep their old ids, more go in a range of their own
+const isleRockId = (I,i) => i<10 ? 200+I.k*10+i : 400+I.k*10+(i-10);
 // the meadow grows a fruit the main island doesn't, the same one every time
 const isleFruit = () => { const pool=NATIVE_FRUITS.filter(f=>f!==S.nativeFruit); return pool[hashStr('isleFruit:'+S.seed)%pool.length]; };
 function isleSpot(I, r, minH, maxH, rad, keep=true){   // v1.52 keep=false only looks, so a passing bug doesn't hold the spot (or shift where the isle's trees go)
@@ -5790,39 +5799,73 @@ function isleSpot(I, r, minH, maxH, rad, keep=true){   // v1.52 keep=false only 
     if (S.placed.some(p=>p.x<500 && Math.hypot(p.x-x,p.z-z)<rad+0.6) || S.plants.some(p=>!p.wild && Math.hypot(p.x-x,p.z-z)<rad) || S.stumps.some(p=>!mine(p) && Math.hypot(p.x-x,p.z-z)<rad)) continue;   // never on top of anything of yours
     if (keep) I.taken.push([x,z,rad]); return [x,z]; }
   return null; }
+/* v1.59 Hollow Crags reads as rock: loose boulders and scree everywhere, ferns only in the mossy hollows, and a few solid outcrops (cragOutcrops).
+   All of it is instanced, so the whole lot is a handful of draw calls. Decor stays off paths, features, rocks, trees, the forge and anything placed. */
+const CRAG_GEO = { d:new THREE.DodecahedronGeometry(1,0), i:new THREE.IcosahedronGeometry(1,0), m:new THREE.IcosahedronGeometry(1,1) };
+const cragStoneMat = () => new THREE.MeshStandardMaterial({ color:0xffffff, flatShading:true, roughness:0.92 });
+const cragMossMat = () => new THREE.MeshStandardMaterial({ color:0xffffff, flatShading:true, roughness:0.95 });
+function cragFree(I, x, z, rr){ return !I.taken.some(([a,b,c])=>Math.hypot(x-a,z-b)<c*0.8+rr) && !S.placed.some(p=>p.x<500 && Math.hypot(p.x-x,p.z-z)<rr+0.8) && !rocks.some(k=>!k.removed && Math.hypot(k.pos.x-x,k.pos.z-z)<rr+1.3); }
+function cragCover(I, grp, r, rx, rz, ok, add){
+  const dummy=new THREE.Object3D(), col=new THREE.Color(), tint=(k)=>col.copy(CRAG_STONE[k%3]).offsetHSL((r()-0.5)*0.02, (r()-0.5)*0.05, (r()-0.5)*0.09);
+  { const NF=70, fm=new THREE.MeshStandardMaterial({ color:0xffffff, side:THREE.DoubleSide, roughness:0.85 }), ferns=new THREE.InstancedMesh(RF.fernGeo(), fm, NF); let n=0;
+    for (let k=0;k<3000 && n<NF;k++){ const x=rx(), z=rz(); if (!ok(x,z,1.5) || cragMoss(x,z)<0.55) continue; dummy.position.set(x, rawHeight(x,z)-0.02, z); dummy.rotation.set(0, r()*TAU, 0); dummy.scale.setScalar(0.7+r()*0.7); dummy.updateMatrix(); ferns.setMatrixAt(n, dummy.matrix); ferns.setColorAt(n, col.setHex(0x4f8a3a).offsetHSL((r()-0.5)*0.04,0,(r()-0.5)*0.1)); n++; }
+    ferns.count=n; add(ferns); }
+  { const NB=44, bm=new THREE.InstancedMesh(CRAG_GEO.d, cragStoneMat(), NB), mm=new THREE.InstancedMesh(CRAG_GEO.m, cragMossMat(), NB); let n=0, m=0; bm.count=mm.count=0;   // loose boulders, kept smaller than the rocks you can mine
+    for (let k=0;k<1200 && n<NB;k++){ const x=rx(), z=rz(), s=0.25+r()*0.4; if (!ok(x,z,1.4+s) || !cragFree(I,x,z,s)) continue; const h=rawHeight(x,z);
+      dummy.position.set(x, h+s*0.25, z); dummy.rotation.set(r()*3, r()*TAU, r()*3); dummy.scale.set(s*(0.9+r()*0.4), s*(0.55+r()*0.3), s*(0.85+r()*0.3)); dummy.updateMatrix();
+      bm.setMatrixAt(n, dummy.matrix); bm.setColorAt(n, tint(n)); n++;
+      if (cragMoss(x,z)>0.35 || r()<0.2){ dummy.position.set(x, h+s*0.52, z); dummy.rotation.set(0, r()*TAU, 0); dummy.scale.set(s*0.75, s*0.18, s*0.7); dummy.updateMatrix(); mm.setMatrixAt(m, dummy.matrix); mm.setColorAt(m, col.copy(CRAG_MOSS).offsetHSL((r()-0.5)*0.03,0,(r()-0.5)*0.08)); m++; } }
+    bm.count=n; mm.count=m; add(bm); add(mm); }
+  { const NS=isMobile?420:560, sm=new THREE.InstancedMesh(CRAG_GEO.i, cragStoneMat(), NS); let n=0;   // scree: loose stones, thickest at the foot of the slopes
+    for (let k=0;k<NS*6 && n<NS;k++){ const x=rx(), z=rz(); if (!ok(x,z,1.05)) continue; const sl=ISL.isleSlope(I,x,z); if (sl<0.2 && r()<0.55) continue;
+      const cl=1+Math.floor(r()*4); for (let j=0;j<cl && n<NS;j++){ const xx=x+(r()-0.5)*1.1, zz=z+(r()-0.5)*1.1; if (!ok(xx,zz,1.0)) continue; const s=0.06+r()*r()*0.2;
+        dummy.position.set(xx, rawHeight(xx,zz)+s*0.15, zz); dummy.rotation.set(r()*3, r()*TAU, r()*3); dummy.scale.set(s*(0.8+r()*0.5), s*(0.5+r()*0.4), s); dummy.updateMatrix(); sm.setMatrixAt(n, dummy.matrix); sm.setColorAt(n, tint(k+j)); n++; } }
+    sm.count=n; add(sm); }
+}
+// v1.59 the crags' solid outcrops: clusters of tall broken stone. Placed like the rocks (never over a path, a feature or anything of yours), and walked around.
+function cragOutcrops(I, grp, r){
+  const N=9, PER=5, sm=new THREE.InstancedMesh(CRAG_GEO.d, cragStoneMat(), N*PER), mm=new THREE.InstancedMesh(CRAG_GEO.m, cragMossMat(), N*2), dummy=new THREE.Object3D(), col=new THREE.Color(), R=[]; let n=0, m=0;
+  for (let i=0;i<N;i++){ const p=isleSpot(I, r, SAND_H+0.3, 14, 2.6); if (!p) continue; const [x,z]=p, k=3+Math.floor(r()*3); R.push([x-1.35,z-1.35,x+1.35,z+1.35]);
+    for (let j=0;j<k;j++){ const a=r()*TAU, d=j ? 0.5+r()*0.6 : 0, px=x+Math.cos(a)*d, pz=z+Math.sin(a)*d, s=j ? 0.45+r()*0.4 : 0.85+r()*0.45, tall=j ? 0.9+r()*0.6 : 1.5+r()*0.9, h=rawHeight(px,pz);
+      dummy.position.set(px, h+s*tall*0.42, pz); dummy.rotation.set((r()-0.5)*0.35, r()*TAU, (r()-0.5)*0.35); dummy.scale.set(s, s*tall, s*(0.8+r()*0.3)); dummy.updateMatrix();
+      sm.setMatrixAt(n, dummy.matrix); sm.setColorAt(n, col.copy(CRAG_STONE[(i+j)%3]).offsetHSL(0,(r()-0.5)*0.05,(r()-0.5)*0.1)); n++;
+      if (j<2 && r()<0.55){ dummy.position.set(px, h+s*tall*0.82, pz); dummy.rotation.set(0, r()*TAU, 0); dummy.scale.set(s*0.6, s*0.15, s*0.55); dummy.updateMatrix(); mm.setMatrixAt(m, dummy.matrix); mm.setColorAt(m, col.copy(CRAG_MOSS).offsetHSL(0,0,(r()-0.5)*0.08)); m++; } } }
+  sm.count=n; mm.count=m; for (const im of [sm, mm]){ im.castShadow=true; im.receiveShadow=true; im.computeBoundingSphere(); grp.add(im); }
+  setRects('cragrock'+I.k, R); }
 function isleCover(I, grp){
   const r=mulberry32((S.seed|0)+I.k*313+7), dummy=new THREE.Object3D(), col=new THREE.Color(), [x0,z0,x1,z1]=I.box, W=x1-x0, rx=()=>x0+r()*W, rz=()=>z0+r()*W;
   const ok=(x,z,pd=1.3)=>{ if (ISL.isleT(I,x,z)>1.02) return false; const h=rawHeight(x,z); if (h<SAND_H+0.15 || ISL.isleSlope(I,x,z)>1.3 || islePathDist(I,x,z)<pd || onBridge(x,z)) return false;
     if (I.sand) return false;   // v1.57 the dunes are bare sand
     if ([I.spires, I.fxSpires].some(L=>L && L.some(([px,pz,pr])=>Math.hypot(x-px,z-pz)<pr*1.05))) return false; if (I.fxOn && I.fxOn.length && (ISL.fxBlock(I,x,z,0.2) || ISL.fxWet(I,x,z))) return false; return true; };
-  const grow=I.gr ? I.gr.reduce((a,v)=>a+v*v,0)/I.gr.length : 1, frac=(I.r*I.r*grow)/(2500*SC*SC), mul={ meadow:1.25, dunes:0.35, bluff:0.9, crags:0.7, pines:0.75, starfall:0.8 }[I.kind];
+  const grow=I.gr ? I.gr.reduce((a,v)=>a+v*v,0)/I.gr.length : 1, frac=(I.r*I.r*grow)/(2500*SC*SC), mul={ meadow:1.25, dunes:0.35, bluff:0.9, crags:0.5, pines:0.75, starfall:0.8 }[I.kind], bare=(x,z)=>I.kind==='crags' && cragMoss(x,z)<0.3;   // v1.59 on the crags, grass and flowers only grow in the mossy hollows
   const add=im=>{ im.castShadow=false; im.receiveShadow=true; im.computeBoundingSphere(); grp.add(im); };
   { const tuftN=Math.round((isMobile?3600:5800)*frac*mul), TV=3, per=Math.ceil(tuftN/TV)+8, gm=GC.swayMat({ height:0.45, amp:0.05 });
     const tms=[...Array(TV)].map((_,v)=>{ const im=new THREE.InstancedMesh(GC.tuftGeo(v), gm, per); im.count=0; GC.tickWind(im); return im; });
     const gcol=PAL.grass.map(h=>new THREE.Color(h).offsetHSL(0,0.06,0.02)); let n=0;
-    for (let k=0;k<tuftN*4 && n<tuftN;k++){ const x=rx(), z=rz(); if (!ok(x,z)) continue; const dens=vnoise(x*0.11+3,z*0.11-5), cl=2+Math.floor(dens*4);
+    for (let k=0;k<tuftN*4 && n<tuftN;k++){ const x=rx(), z=rz(); if (!ok(x,z) || bare(x,z)) continue; const dens=vnoise(x*0.11+3,z*0.11-5), cl=2+Math.floor(dens*4);
       for (let j=0;j<cl&&n<tuftN;j++){ const xx=x+(r()-0.5)*0.6, zz=z+(r()-0.5)*0.6; if (!ok(xx,zz,1.15)) continue; const im=tms[Math.floor(r()*TV)]; if (im.count>=per) continue;
         dummy.position.set(xx, rawHeight(xx,zz)-0.015, zz); dummy.rotation.set((r()-0.5)*0.25,r()*TAU,(r()-0.5)*0.25); dummy.scale.setScalar(0.75+r()*0.7); dummy.updateMatrix(); im.setMatrixAt(im.count,dummy.matrix);
         col.copy(gcol[Math.floor(r()*gcol.length)]).offsetHSL((r()-0.5)*0.02,0,(r()-0.5)*0.07+(dens-0.5)*0.05); im.setColorAt(im.count,col); im.count++; n++; } }
     tms.forEach(im=>{ im.userData.thin=im.count; if (S.settings.saver) im.count=Math.ceil(im.count/2); add(im); }); }
   // wild flowers: the meadow is thick with them
-  if (PAL.flower.length && I.kind!=='dunes'){ const drifts=Math.round((I.kind==='meadow'?70:I.kind==='bluff'?20:I.kind==='pines'?6:I.kind==='crags'?14:10)*grow)+ISL.fxSpots(I,'field').length*14, fN=drifts*7, sm=GC.swayMat({ height:0.36, amp:0.03, rough:0.8 }), pm=GC.swayMat({ height:0.36, amp:0.03, rough:0.55 });
+  if (PAL.flower.length && I.kind!=='dunes'){ const drifts=Math.round((I.kind==='meadow'?70:I.kind==='bluff'?20:I.kind==='pines'?6:I.kind==='crags'?4:10)*grow)+ISL.fxSpots(I,'field').length*14, fN=drifts*7, sm=GC.swayMat({ height:0.36, amp:0.03, rough:0.8 }), pm=GC.swayMat({ height:0.36, amp:0.03, rough:0.55 });
     const stems=new THREE.InstancedMesh(GC.flowerStemGeo(), sm, fN), daisy=new THREE.InstancedMesh(GC.petalsDaisyGeo(), pm, fN), cup=new THREE.InstancedMesh(GC.petalsCupGeo(), pm, fN), ctr=new THREE.InstancedMesh(GC.flowerCenterGeo(), pm, fN);
     daisy.count=cup.count=0; let m=0;
     const beds=[...ISL.fxSpots(I,'field'), ...ISL.fxSpots(I,'garden')];   // v1.57 the meadow's flower fields: thick drifts in a few places
-    for (let k=0;k<drifts*3 && m<fN;k++){ const B=k<beds.length*14 ? beds[k%beds.length] : null, ba=r()*TAU, bd=B ? Math.sqrt(r())*B.r : 0, px=B ? B.x+Math.cos(ba)*bd : rx(), pz=B ? B.z+Math.sin(ba)*bd : rz(); if (!ok(px,pz,1.6)) continue; const fc=new THREE.Color(PAL.flower[Math.floor(r()*PAL.flower.length)]), isCup=r()<0.35; wildFlowerSpots.push([px,pz]);
+    for (let k=0;k<drifts*3 && m<fN;k++){ const B=k<beds.length*14 ? beds[k%beds.length] : null, ba=r()*TAU, bd=B ? Math.sqrt(r())*B.r : 0, px=B ? B.x+Math.cos(ba)*bd : rx(), pz=B ? B.z+Math.sin(ba)*bd : rz(); if (!ok(px,pz,1.6) || bare(px,pz)) continue; const fc=new THREE.Color(PAL.flower[Math.floor(r()*PAL.flower.length)]), isCup=r()<0.35; wildFlowerSpots.push([px,pz]);
       for (let j=0;j<7&&m<fN;j++){ const x=px+(r()-0.5)*1.7, z=pz+(r()-0.5)*1.7; if (!ok(x,z,1.2)) continue;
         dummy.position.set(x,rawHeight(x,z)-0.02,z); dummy.rotation.set((r()-0.5)*0.15,r()*TAU,(r()-0.5)*0.15); dummy.scale.setScalar(1.15+r()*0.55); dummy.updateMatrix();
         stems.setMatrixAt(m,dummy.matrix); ctr.setMatrixAt(m,dummy.matrix); const hm=isCup?cup:daisy; hm.setMatrixAt(hm.count,dummy.matrix); hm.setColorAt(hm.count, col.copy(fc).offsetHSL(0,0,(r()-0.5)*0.06)); hm.count++; m++; } }
     stems.count=ctr.count=m; [stems,daisy,cup,ctr].forEach(add); GC.tickWind(stems); }
   // v1.37 Old Pinewood: ferns under the pines, mossy boulders, and low mist that drifts through in the mornings
-  if (I.kind==='pines' || I.kind==='crags'){ const NF=I.kind==='pines'?520:260, fm=new THREE.MeshStandardMaterial({ color:0xffffff, side:THREE.DoubleSide, roughness:0.85 }), ferns=new THREE.InstancedMesh(RF.fernGeo(), fm, NF); let n=0;   // v1.57 ferns in the crags' shady corners too
+  if (I.kind==='crags') cragCover(I, grp, r, rx, rz, ok, add);
+  if (I.kind==='pines'){ const NF=520, fm=new THREE.MeshStandardMaterial({ color:0xffffff, side:THREE.DoubleSide, roughness:0.85 }), ferns=new THREE.InstancedMesh(RF.fernGeo(), fm, NF); let n=0;
     for (let k=0;k<4000 && n<NF;k++){ const x=rx(), z=rz(); if (!ok(x,z,1.5) || vnoise(x*0.12+9,z*0.12) < 0.45) continue; dummy.position.set(x, rawHeight(x,z)-0.02, z); dummy.rotation.set(0, r()*TAU, 0); dummy.scale.setScalar(0.8+r()*0.9); dummy.updateMatrix(); ferns.setMatrixAt(n, dummy.matrix); ferns.setColorAt(n, col.setHex(0x4f8a3a).offsetHSL((r()-0.5)*0.04,0,(r()-0.5)*0.1)); n++; }
     ferns.count=n; add(ferns);
     const mossM=M(0x6a9a48), rockM=MF(0x8a8a80);
-    for (let i=0;i<(I.kind==='crags'?22:14);i++){ const x=rx(), z=rz(); if (!ok(x,z,2.2)) continue; const h=rawHeight(x,z), b=new THREE.Group(); b.position.set(x,h,z); grp.add(b); const s=0.5+r()*0.7;
+    for (let i=0;i<14;i++){ const x=rx(), z=rz(); if (!ok(x,z,2.2)) continue; const h=rawHeight(x,z), b=new THREE.Group(); b.position.set(x,h,z); grp.add(b); const s=0.5+r()*0.7;
       const rk=mk(G.dod(s), rockM, 0,s*0.35,0,b); rk.scale.y=0.65; rk.rotation.set(r(),r(),r()); const ms=mk(G.ico(s*0.85,1), mossM, 0,s*0.62,0,b); ms.scale.set(1,0.32,1); ms.castShadow=false; }
-    if (I.kind!=='pines') return; const mist=new THREE.Group(); mist.userData.mist=true; grp.add(mist); I.mist=mist;
+    const mist=new THREE.Group(); mist.userData.mist=true; grp.add(mist); I.mist=mist;
     for (let i=0;i<10;i++){ const sp=new THREE.Sprite(new THREE.SpriteMaterial({ map:RF.mistTex(), color:0xf4f8f4, transparent:true, opacity:0.0, depthWrite:false })); const a=r()*TAU, d=Math.sqrt(r())*I.r*0.8;
       sp.position.set(I.cx+Math.cos(a)*d, rawHeight(I.cx+Math.cos(a)*d, I.cz+Math.sin(a)*d)+1.4+r()*1.2, I.cz+Math.sin(a)*d); sp.scale.set(14+r()*8, 4+r()*2, 1); sp.userData.ph=r()*TAU; mist.add(sp); } }
   // driftwood on the dunes
@@ -5868,7 +5911,8 @@ function loadIsle(I, now){
     ...ISLE_TREES[I.kind].map(([kind,n])=>()=>{ const type=kind.replace(/2$/,''); for (let i=0;i<n;i++){ const key='x'+I.k+'_'+kind+i, palm=type==='palm', p=isleSpot(I, r, palm?0.25:SAND_H+0.2, palm?(I.sand?4.6:2.4):I.sky?20:14, 2.6); if (!p || S.cut[key]==='gone') continue;   // one kind of tree per frame
         trees.push(new Tree(key, p[0], p[1], type, type==='fruittree'?isleFruit():palm?'coconut':null)); } }),
     ()=>{ for (const F of ISL.fxSpots(I,'orchard')) F.trees.forEach(([x,z],i)=>{ const key='x'+I.k+'_orch'+i; I.taken.push([x,z,2.2]); if (S.cut[key]==='gone') return; trees.push(new Tree(key, x, z, 'fruittree', isleFruit())); }); },   // v1.57 the meadow's orchard, in rows
-    ()=>{ for (let i=0;i<ISLE_ROCKS[I.kind];i++){ const p=isleSpot(I, r, SAND_H+0.1, I.sky?20:14, 2.2) || isleSpot(I, r, SAND_H+0.1, I.sky?20:14, 1.3); if (!p) continue; const rk=new Rock(200+I.k*10+i, p[0], p[1], r, I.kind==='crags'); rocks.push(rk); } },
+    ()=>{ for (let i=0;i<ISLE_ROCKS[I.kind];i++){ const p=isleSpot(I, r, SAND_H+0.1, I.sky?20:14, 2.2) || isleSpot(I, r, SAND_H+0.1, I.sky?20:14, 1.3); if (!p) continue; const rk=new Rock(isleRockId(I,i), p[0], p[1], r, I.kind==='crags'); rocks.push(rk); } },
+    ()=>{ if (I.kind==='crags') cragOutcrops(I, grp, r); },
     ()=>{ isleCover(I, grp); },
     ()=>{ isleDaily(I); I.ready=true; if (I.kind==='pines'){ workshopKey=''; refreshWorkshop(); } if (I.kind==='crags'){ S2B.forgeKey=''; refreshForge(); } isleShown(I, I.shown); },
   ];
@@ -5883,7 +5927,7 @@ function updateStreaming(dt,t){
   for (const I of ISLES) if (I.shown && I.fxTick) I.fxTick(dt,t);   // v1.57 the waterfall, Starfall's drifting rocks
   for (const I of ISLES) if (I.shown && I.mist){ const h=Time.hour(), k=(1-smooth(9,12,h))*smooth(4,6.5,h)*0.75+0.18; for (const sp of I.mist.children){ sp.material.opacity=k*(0.5+0.5*Math.sin(t*0.1+sp.userData.ph)); sp.position.x+=Math.sin(t*0.05+sp.userData.ph)*dt*0.4; } }
   for (const I of ISLES) if (I.shown && I.swing){ const onIt=!!onBridge(player.pos.x,player.pos.z) && onBridge(player.pos.x,player.pos.z)===I.bridge; I.swingA=lerp(I.swingA||0.015, onIt?0.05:0.015, Math.min(1,dt*2)); I.swing.rotation.x=Math.sin(t*1.3)*I.swingA; }
-  if (BLUFF && !PERCH && (bluffT-=dt)<0){ bluffT=1; const I=bluffIsle(); if (I && I.shown) BLUFF.refreshStage(); }   // v1.59 the lighthouse mends as the story moves on
+  if (BLUFF && !PERCH && (bluffT-=dt)<0){ bluffT=1; const I=bluffIsle(); if (I && I.shown) BLUFF.refreshStage(); }   // v1.60 the lighthouse mends as the story moves on
   if ((streamT-=dt)>0) return; streamT=0.35;
   const px=player.pos.x, pz=player.pos.z;
   for (const c of COVER_CHUNKS){ const s=c.boundingSphere; c.visible = Math.hypot(s.center.x-px, s.center.z-pz) < 85+s.radius; }
@@ -5996,7 +6040,7 @@ const snowGeo=new THREE.BufferGeometry(); const snowPos=new Float32Array(RAIN_N*
 const snow=new THREE.Points(snowGeo,new THREE.PointsMaterial({ color:0xffffff, size:0.18, transparent:true, opacity:0.9 })); snow.frustumCulled=false; scene.add(snow);
 for(let i=0;i<RAIN_N;i++){ const x=(Math.random()-0.5)*50, y=Math.random()*25, z=(Math.random()-0.5)*50; rainPos.set([x,y,z,x,y-0.6,z],i*6); snowPos.set([x,y,z],i*3); }
 function updatePrecip(dt,t){
-  const c=player.pos, roofed=World.inside || (BLUFF && BLUFF.roofed); rain.visible=World.weather==='rain'&&!roofed; snow.visible=World.weather==='snow'&&!roofed;   // v1.59 none inside the bluff lighthouse
+  const c=player.pos, roofed=World.inside || (BLUFF && BLUFF.roofed); rain.visible=World.weather==='rain'&&!roofed; snow.visible=World.weather==='snow'&&!roofed;   // v1.60 none inside the bluff lighthouse
   if(rain.visible){ for(let i=0;i<RAIN_N;i++){ let y=rainPos[i*6+1]-dt*22, x=rainPos[i*6], z=rainPos[i*6+2]; if(y<0){ y=20+Math.random()*6; x=c.x+(Math.random()-0.5)*50; z=c.z+(Math.random()-0.5)*50; } rainPos[i*6]=x; rainPos[i*6+1]=y; rainPos[i*6+2]=z; rainPos[i*6+3]=x+0.05; rainPos[i*6+4]=y-0.7; rainPos[i*6+5]=z; } rainGeo.attributes.position.needsUpdate=true; }
   if(snow.visible){ for(let i=0;i<RAIN_N;i++){ let y=snowPos[i*3+1]-dt*1.6, x=snowPos[i*3]+Math.sin(t+i)*dt*0.4, z=snowPos[i*3+2]; if(y<0){ y=16+Math.random()*6; x=c.x+(Math.random()-0.5)*50; z=c.z+(Math.random()-0.5)*50; } snowPos[i*3]=x; snowPos[i*3+1]=y; snowPos[i*3+2]=z; } snowGeo.attributes.position.needsUpdate=true; }
 }
@@ -6098,7 +6142,7 @@ function updateSky(){
   { const c=waterMat.color, b=WATER_BASE; WU.uTint.value.set(c.r/b.r, c.g/b.g, c.b/b.b); for (const I of ISLES) if (I.waterMat) I.waterMat.color.copy(c); }
   deepSea.material.color.setHex(0x2a8aa8).lerp(_c1.setHex(0x24427a), World.night*0.6); WU.uSpark.value=(1-World.night)*(1-dim*0.8); WU.uFoamA.value=0.8-World.night*0.3;
   renderer.toneMappingExposure = (1.15 - World.night*0.05) * (S.settings.bright||1);
-  if (BLUFF) BLUFF.indoorLight(hemi, sun, World.night);   // v1.59 inside the Lantern Bluff lighthouse
+  if (BLUFF) BLUFF.indoorLight(hemi, sun, World.night);   // v1.60 inside the Lantern Bluff lighthouse
   clouds.forEach(c=>c.children.forEach(s=>s.material.color.setHex(0xffffff).lerp(_c1.copy(bot),0.3+World.night*0.25).lerp(_c2.setHex(0x8a94a0),dim)));
   // v1.53 under the aurora the night light turns green and violet, and the far edge of the view glows with it
   const aA=AUR.uAur.value; if (aA>0.01){ const ph=0.5+0.5*Math.sin(performance.now()/1000*0.07);
@@ -7467,7 +7511,7 @@ function devLighthouse(top){
   try { sessionStorage.setItem('dw-trip', JSON.stringify(trip)); sessionStorage.removeItem('dw-trip-world'); if (top) sessionStorage.setItem('dw-dev-lhtop','1'); } catch(e){}
   closePanel(); save(); document.documentElement.classList.add('magicret');
   (async()=>{ try { if (BOOT.flush) await BOOT.flush(); } catch(e){} setTimeout(()=>location.reload(), 300); })(); }
-// #dev v1.59: the Lantern Bluff lighthouse. stage 0-3 goes inside showing that repair stage (only to look at, the story isn't touched); top goes up to the gallery
+// #dev v1.60: the Lantern Bluff lighthouse. stage 0-3 goes inside showing that repair stage (only to look at, the story isn't touched); top goes up to the gallery
 function devBluff(stage, top){
   if (TRIP){ toast('Sail home first.'); return; }
   const I=bluffIsle(); if (!I){ toast('No bluff isle yet. Story map, then Raise every isle now.'); return; }
@@ -8477,7 +8521,7 @@ function openMenu(){
       $('#dvWs').onclick=()=>{ if (!SY.shop) SY.shop={ st:'wizard', at:sday() }; else if (SY.shop.st==='project'){ SY.shop.fund=SHOP_PROJECT.clams; SY.shop.mats=true; SY.shop.st='building'; SY.shop.bday=sday()-1; storyNewDay(); applyTown(); }
         else if (SY.shop.st==='open'){ SY.shop.built=sday()-8; SY.shop.made=Math.max(100, SY.shop.made||0); SY.shop.ready=(SY.shop.ready||0)+20; } else SY.shop.st='wizard'; save(); toast(`Workshop story: ${SY.shop.st}.`); };
       $('#dvLp').onclick=()=>devLighthouse(false); $('#dvLt').onclick=()=>devLighthouse(true);   // v1.39 fixes
-      $('#dvBh').onclick=()=>devBluff(); for (let n=0;n<4;n++) $('#dvBh'+n).onclick=()=>devBluff(n); $('#dvBhT').onclick=()=>devBluff(undefined, true); $('#dvBhR').onclick=()=>devBluffReal();   // v1.59
+      $('#dvBh').onclick=()=>devBluff(); for (let n=0;n<4;n++) $('#dvBh'+n).onclick=()=>devBluff(n); $('#dvBhT').onclick=()=>devBluff(undefined, true); $('#dvBhR').onclick=()=>devBluffReal();   // v1.60
       $('#dvT').onclick=()=>{ if (!S.magic.tower){ closePanel(); Q.story.wizard='done'; raiseTower(); } };
       $('#dvM').onclick=()=>{ S.devMagic=!S.devMagic; save(); render(); };
       { const a=$('#dvRl'), b=$('#dvSt'); if (a) a.onclick=()=>dev138('relics'); if (b) b.onclick=()=>dev138('stories'); const c3=$('#dvS3'); if (c3) c3.onclick=()=>dev139(); const mp=$('#dvMap'); if (mp) mp.onclick=()=>openStoryMap(); }   // v1.41 Story map   // v1.38, v1.39
@@ -9559,7 +9603,7 @@ window.__game.v145 = { fishPool, bugPool, isleNear, isleAt, bayMore, bayTipIds, 
 window.__game.v126 = { townNewDay, applyTown, findHomeSpot, claimHomeSpot, townCap, incomeNewDay, refreshIncome, talkIncome, incCollect, incOf, INCOME, incEnts, openMap, talkSkipperHome, talkSkipperTrip, tripGoHome, tripRecap, storyWho, askToLeave, canAskToLeave, pitchOnBuy, merchantDay, get peddler(){ return peddler; }, get skipper(){ return skipper; }, newSquares, LOAN_MAX_SQ, TRIP, TRIP_THEME, residents, residentHomes, plotEnts, KEEPOUT, Q, PATHS, camTarget, updateCamera, set camDist(v){ camDist=v; }, get camDist(){ return camDist; }, set camYaw(v){ camYaw=v; } };
 window.__game.LETTERS = LETTERS;
 window.__game.v147 = { makeTowerRooms, towerFloor, towerHello, openEyepiece, refreshTowerLook, outdoors, get towerL(){ return towerL; }, get topL(){ return topL; }, get wizard(){ return wizard; }, get tower(){ return towerEnt; }, TW };   // v1.47 test hooks
-window.__game.v159 = { get bluff(){ return BLUFF; }, get lhc(){ return LHC; }, devLighthouse, bluffStage, devBluff, devBluffReal, setupBluff, BH, get devStage(){ return BLUFF_DEV_STAGE; } };
+window.__game.v160 = { get bluff(){ return BLUFF; }, get lhc(){ return LHC; }, devLighthouse, bluffStage, devBluff, devBluffReal, setupBluff, BH, get devStage(){ return BLUFF_DEV_STAGE; } };
 window.__game.v127 = { roleMenu, folkMenu, smugglerShop, openNoticeBoard, shellGame, talkWorkshop, talkAttic, talkWizGarden, talkLibrary, anglerWants, get perch(){ return PERCH; }, setupTown, get PLAN(){ return PLAN; }, get TX(){ return TX; }, LAY, haulValue, openContacts, deliverReplies, sendLetter, addContact, canInvite, invitePenpal, readTreasureMap, bottleLetter, openNote, contactPerson, XW, POOLS, lowTide, BRIDGES, DOCK, waterType, VY, Thing };
 // v1.25 test hooks for the house builder
 window.__game.house = { LT, previewBuild:(w)=>previewBuild(w), renderBuild:(k)=>renderBuild(k), homeBlocked, planIssue, setBuildView:(v)=>setBuildView(v), mossPaintAt, buildMossLayer, roofHit, houseFrame, rebuildFloor, HOME_IDS, get houseEnt(){ return houseEnt; }, edgeTap, stairsTap, landProblem, closeBuild };

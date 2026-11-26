@@ -11,8 +11,8 @@
    built in wiki.js. Writing rules: plain words, no em dashes, no emoji, only facts the code supports.
    ===================================================================== */
 
-export const GUIDE_VERSION = 'v1.39';
-export const GUIDE_UPDATED = '2026-11-25';
+export const GUIDE_VERSION = 'v1.39b';
+export const GUIDE_UPDATED = '2026-11-26';
 
 const tip = s => `<div class="tip"><b>Tip</b> ${s}</div>`;
 const note = s => `<div class="note">${s}</div>`;
@@ -206,7 +206,7 @@ ${note('If the islander a story favor was written for doesn\'t live on your isla
 <h3>Trees and orchards</h3>
 <p>Plant fruit to grow a fruit tree; picked trees regrow fruit in 3 days. With 2+ saplings or fruit in your bag you can plant a whole block (up to 25, Tight, Roomy or Wide spacing).</p>
 <h3>Mossby</h3>
-<p>Cut down too many trees in one day (10, 16, 24) and Mossby, the island's little tree spirit, pops up to scold you, angrier each time. Replant 3 and he cheers up.</p>
+<p>Cut down too many trees in one day (10, 16, 24) and Mossby, the island's little tree spirit, pops up to scold you, angrier each time. Replant 3 and he cheers up. He only looks after your home island, so felling trees on a trip island won't bring him out.</p>
 `},
 
 { id:'crafting', group:'island', title:'Woodworking', data:'woodwork', html:`
@@ -288,6 +288,8 @@ ${note('Relics can\'t be sold, gifted, mailed or traded. A storage chest holds t
 <p>With friends on your island, Wick asks who's coming. Everyone gets their own copy of the island's stuff, you see each other live, and only the leader pays.</p>
 <h3>Night voyages</h3>
 <p>Once the lighthouse on Lantern Bluff is lit, Wick runs a night voyage once a week for 8,000, always to a Moonlit isle.</p>
+<h3>Sailing home</h3>
+<p>Talk to Wick on the trip island when you're done. He checks you're ready before you go; pick "Not yet" to stay.</p>
 `},
 
 { id:'tripislands', group:'away', title:'Trip island types', html:`
@@ -318,7 +320,7 @@ ${note('Relics can\'t be sold, gifted, mailed or traded. A storage chest holds t
 <tr><td>Fishing Hamlet</td><td>The old angler pays triple for one fish</td></tr>
 <tr><td>Hilltop Abbey</td><td>Trade 5 fruit for 5 seeds your island doesn't grow</td></tr>
 <tr><td>Circus Camp</td><td>A 300-clam cup game that wins boat tickets</td></tr>
-<tr><td>Lighthouse Point</td><td>Climb it; the keeper gives you a Lighthouse Lantern</td></tr>
+<tr><td>Lighthouse Point</td><td>Tap Climb up at the door to climb the stairs to the top. Walk round the rail for the view. The keeper waits up there and gives you a Lighthouse Lantern once per visit. Tap Head down to leave.</td></tr>
 <tr><td>Smugglers' Cove</td><td>Favor-only and rare pieces at twice the price</td></tr>
 <tr><td>Noticeboard Village</td><td>Three small favors, a ticket each</td></tr></table>
 <p>Townsfolk are made fresh for each town and go into your contacts as pen pals.</p>
@@ -590,6 +592,7 @@ ${steps(['<b>Diving bell</b>: Marlo\'s glass (20,000, on the sand the next day),
 { id:'changes', group:'done', title:'What\'s changed', html:`
 <p>Recent updates, newest first.</p>
 <ul>
+<li><b>v1.39b</b>: Climb the lighthouse on Lighthouse Point and meet the keeper at the top. Mossby stays on your home island. Skipper Wick's goodbye no longer says you can never come back.</li>
 <li><b>v1.39</b>: Barley's mill, Wren's trade routes, Tobin's bathhouse, Lumi's firefly glade, Hazel's wreck. Wood now sells for 30.</li>
 <li><b>v1.38</b>: Relics for Wendell's isles, Hollis's apiary, Mabel's tea room, the lighthouse and night voyages, Pemberton's forge, the Reef Hall, workshop commissions.</li>
 <li><b>v1.37</b>: The reef and Cay Bay, Bramble's workshop and Old Pinewood, thank-you stakes, helpers.</li>

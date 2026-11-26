@@ -5209,6 +5209,14 @@ function track(ev, n=1){ if (!S.stats || VISIT && ev!=='visit') return; const k=
     if (f.prog>=f.n){ toast(`${favorTask(f)}: done!`, null, 'new', `Go tell ${npcName(f.who)}.`); Snd.jingle(); } }
   achDirty=true; }
 let achDirty=true, achTicks=0;
+// v1.65 play time: S.stats.playMs counts milliseconds of active play on your own island. Time counts only while the
+// game has started, the tab is visible and you've touched a key, mouse or screen in the last 2 minutes,
+// so an idle open tab doesn't add up. Not shown to players; read from the save in the database.
+let lastInputAt=Date.now(), playTickAt=0; const PLAY_IDLE_MS=120000;
+for (const ev of ['pointerdown','pointermove','keydown','touchstart','wheel']) addEventListener(ev, ()=>{ lastInputAt=Date.now(); }, { passive:true, capture:true });
+setInterval(()=>{ const now=Date.now(), gap=Math.min(now-(playTickAt||now), 5000); playTickAt=now;   // real elapsed time, capped so a sleeping device adds nothing
+  if (!started || VISIT || !S.stats || document.hidden || now-lastInputAt>=PLAY_IDLE_MS) return;
+  S.stats.playMs=(S.stats.playMs||0)+gap; if (!S.stats.playSince) S.stats.playSince=now; }, 1000);
 const seenKinds = kind => Object.keys(S.seen).filter(id=>!id.startsWith('cf_') && !id.startsWith('cr_') && ITEMS[id] && ITEMS[id].kind===kind).length;   // v1.63 custom pieces don't count
 function achValue(stat){ const st=S.stats||{};
   switch (stat){

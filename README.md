@@ -489,3 +489,13 @@ Code: `custom-core.js` (parts catalog, design codes, styles, generator, prices, 
 - Custom pieces don't count toward "discovered" (backpacks) or furniture-kind achievements.
 - Save: `S.craft.custom` (designs, crafted, sold, found, made, req, bonusDay); no new keys.
 - Test hooks (#dev): `window.__game.custom` (learnAll, sketch, request, choices, make, deliver, sold, generate).
+
+## v1.63: sewing (rugs and clothes painted pixel by pixel)
+Code: `textile-core.js` (palette, levels, options, codes, prices; no THREE, the server imports it), `textile-models.js` (rug model, sewn clothes on the character rig), `textile.js` (the Sewing tab: options, pixel painter, closet, wear). Hooks in main.js (search `v1.63`), chars.js (look codes and the outfit), server (one import and the presence look check).
+- **Codes.** A design is a string: a few base-64 fields then the pixels, run-length coded (a char under 32 is a pixel of that palette colour; 32-63 repeats the last colour 2-33 times). Rugs: `'r' shape w d edge pile edgeColor grid` + pixels, item id `cr_` + code (resolved in ITEMS like `cf_`). Clothes: `'g' base sleeve hem flare alt alt alt grid` + pixels. A worst-case 32x32 painting is about 1,030 chars; codes over 1,400 are refused.
+- **Wearing.** The look code gets `~` + the garment code on the end (`lookCode`/`parseLook` in chars.js). `buildCritter` uses `buildCustomOutfit` when `look.ct` is set, else the normal outfit. Presence messages send a long look only when it changes and every 3 seconds (`lkSend`), and the server's look check accepts the `~g...` suffix up to 1,500 chars.
+- **Skill.** `S.craft.sew.made`: 0/3/8/16/30 pieces = Beginner/Apprentice/Tailor/Artisan/Master, grid 8/12/16/24/32, alterations 0/1/2/3/5. Every option has a level; 18 alterations from pockets to wings.
+- **Prices.** Rugs: copies at materials + 15%; first sale of a rug you designed adds `rugBonus` (colours, grid, shape and edge), 2 new rugs a day. Clothes aren't sold.
+- Sewn rugs and custom furniture don't count toward discoveries, furniture achievements or the catalog.
+- Save: `S.craft.sew` (made, rugs, clothes, closet, sold, bonusDay); no new keys.
+- Test hooks (#dev): `window.__game.sew`.

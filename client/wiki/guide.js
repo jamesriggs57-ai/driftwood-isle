@@ -11,7 +11,7 @@
    built in wiki.js. Writing rules: plain words, no em dashes, no emoji, only facts the code supports.
    ===================================================================== */
 
-export const GUIDE_VERSION = 'v1.62';
+export const GUIDE_VERSION = 'v1.63';
 export const GUIDE_UPDATED = '2026-11-26';
 
 const tip = s => `<div class="tip"><b>Tip</b> ${s}</div>`;
@@ -337,6 +337,30 @@ ${tip('Making 14 <b>different</b> pieces is what starts Bramble\'s workshop stor
 <li>A close match is +3 friendship, a looser one +2. They keep the piece.</li>
 <li>Each islander asks at most once every 2 weeks, and you can have 2 requests open at once. Open requests show in the Design tab, with a "Try it" button that loads the sketch into the designer.</li></ul>
 ${tip('Your saved designs are kept, so making a matching set of chairs is quick: press Make on the saved design.')}
+`},
+{ id:'sewing', group:'island', title:'Sewing: rugs and clothes', html:`
+<p>Once you know woodworking, crafting has a <b>Sewing</b> tab. Weeds are your yarn. Pick a rug or a piece of clothing, set its shape and size, then <b>paint it pixel by pixel</b> from 32 yarn colours. You can sew anywhere; no table needed.</p>
+<h3>Getting better</h3>
+<p>Every piece you sew counts toward your sewing skill. The better you get, the finer your grid (more detail) and the more alterations your clothes can carry.</p>
+<table class="t"><tr><th>Skill</th><th>Pieces sewn</th><th>Grid</th><th>Alterations</th><th>Opens</th></tr>
+<tr><td>Beginner</td><td>0</td><td>8 x 8</td><td>0</td><td>Rectangle, round, oval and runner rugs; shirts and dresses</td></tr>
+<tr><td>Apprentice</td><td>3</td><td>12 x 12</td><td>1</td><td>Octagon rugs, borders, plush pile; coats and overalls; pockets, collars, cuffs, buttons</td></tr>
+<tr><td>Tailor</td><td>8</td><td>16 x 16</td><td>2</td><td>Cloud rugs, tassels, braided edges; robes, bell sleeves; ruffles, bows, hoods, lace</td></tr>
+<tr><td>Artisan</td><td>16</td><td>24 x 24</td><td>3</td><td>Star and leaf rugs, scalloped edges; puffed sleeves, ballgowns; capes, studs, coat tails, patches</td></tr>
+<tr><td>Master</td><td>30</td><td>32 x 32</td><td>5</td><td>Shell rugs, pom-poms; the strange ones: leaf mantles, toadstool epaulettes, fins down the back, glowing trim, orbiting stars, little wings</td></tr></table>
+<p>An old design painted on a coarser grid can be moved up to your current grid with one click, then refined.</p>
+<h3>Painting</h3>
+<ul><li><b>Brush</b> paints one square, <b>Fill</b> fills a patch of one colour, <b>Pick colour</b> copies a colour from the painting.</li>
+<li><b>Mirror</b> paints both sides at once.</li>
+<li><b>Start from</b> stripes, a check, a border or a diamond in your two colours, then paint over it.</li>
+<li>On clothes, the middle half of the painting is the front; the outer quarters wrap round the back.</li></ul>
+<h3>Rugs</h3>
+<p>Choose the shape, width and length (0.6 to 3 m), edge, pile and edge colour. A rug costs weeds by its size (plush pile and tassels or pom-poms take a few more). It goes in your bag; place it like any furniture, and other pieces can stand on it.</p>
+<ul><li>Copies sell for their materials plus 15%.</li>
+<li>The first time you sell a rug you designed, you get an art bonus for the work: more colours, a finer grid and fancier shapes and edges pay more (usually a few hundred to about 2,000 clams). Up to 2 new rugs a day get the bonus.</li></ul>
+<h3>Clothes</h3>
+<p>Choose a garment (shirt, dress, coat, overalls, robe), sleeves, length and, for dresses and robes, how full the skirt is. Then add alterations. Clothes take weeds, plus a little extra for some alterations (iron for studs, branches for a leaf mantle, clay for toadstools, glimmer moss for glowing trim, a starstone for orbiting stars, heartwood for wings).</p>
+<p>Finished clothes go in your <b>closet</b> in the Sewing tab. Press <b>Wear</b> to put one on, <b>Take off</b> to go back to your usual outfit. Friends see what you're wearing, painting and all. Picking a different outfit in Menu &gt; Change my look takes sewn clothes off.</p>
 `},
 { id:'cooking', group:'island', title:'Cooking', data:'recipes', html:`
 <p>Mabel teaches cooking once she knows you. Cook at a <b>campfire</b> (craftable; simple dishes marked "fire") or a <b>Wood Stove</b> (anything). Dishes sell well, islanders love them, and eating one makes you walk a little faster for 5 minutes. "Fish" or "fruit" in a recipe means any fish or fruit.</p>
@@ -810,6 +834,7 @@ ${steps(['Talk to them and pick <b>Come and meet people</b>. They follow you for
 { id:'changes', group:'done', title:'What\'s changed', html:`
 <p>Recent updates, newest first.</p>
 <ul>
+<li><b>v1.63</b>: Sewing. Make rugs and clothes and paint them pixel by pixel; the more you sew, the finer the grid and the stranger the alterations (up to glowing trim, orbiting stars and little wings).</li>
 <li><b>v1.62</b>: Custom furniture. Design your own chairs, tables, beds, shelves, lamps and dressers part by part, find sketches, and make pieces islanders ask for.</li>
 <li><b>v1.61</b>: Fixed signed-in islands with a town hall getting stuck on "Building the island..." the first time they loaded on a new day. Nothing on the island was lost.</li>
 <li><b>v1.60</b>: The old lighthouse on Lantern Bluff is now about two and a half times as tall and you can walk inside and climb it. It starts out broken down and gets mended step by step as the lighthouse story goes on. You now fit the lamp from the lamp room at the top.</li>

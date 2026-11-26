@@ -3,6 +3,8 @@
 // g.userData = { body, head, arms, legs, ears, tail, hand } — ears/tail groups carry userData.base for the jelly animation.
 import * as THREE from 'three';
 import * as WR from './wardrobe.js';
+import { buildCustomOutfit } from './textile-models.js';   // v1.63 sewn clothes
+import { decodeGarment } from './textile-core.js';
 
 const TAU = Math.PI * 2;
 const V3 = (x=0,y=0,z=0)=>new THREE.Vector3(x,y,z);
@@ -91,11 +93,12 @@ export const MOUTHS = [ { id:'smile', name:'Smile' }, { id:'grin', name:'Big gri
 // "species.scheme.outfit.color.eyes.nose.mouth.finish" using indexes, e.g. "rabbit.0.0.5.0.0.0.1" (older 7-part codes read as smooth)
 export function defaultLook(){ return { sp:'rabbit', c:0, top:0, tc:5, e:0, n:0, m:0, f:0, hat:0, face:0, neck:0, back:0 }; }
 // v1.19: four accessory slots on the end (0 = none). Plain looks keep the short 8-part code so older games still read them.
-export function lookCode(L){ const base=[L.sp, L.c, L.top, L.tc, L.e, L.n, L.m, L.f||0]; const acc=WR.SLOTS.map(s=>L[s]|0); return (acc.some(x=>x) ? [...base, ...acc] : base).join('.'); }
-export function parseLook(code){ const d=defaultLook(); if (typeof code!=='string') return d; const p=code.split('.'); if ((p.length!==7 && p.length!==8 && p.length!==12) || !SPECIES[p[0]]) return d;
+// v1.63: clothes you sewed ride on the end after a '~' (the painting is in there, so friends see it too)
+export function lookCode(L){ const base=[L.sp, L.c, L.top, L.tc, L.e, L.n, L.m, L.f||0]; const acc=WR.SLOTS.map(s=>L[s]|0); return (acc.some(x=>x) ? [...base, ...acc] : base).join('.') + (L.ct && decodeGarment(L.ct) ? '~'+L.ct : ''); }
+export function parseLook(code){ const d=defaultLook(); if (typeof code!=='string') return d; const ti=code.indexOf('~'), ct=ti>=0 ? code.slice(ti+1) : ''; if (ti>=0) code=code.slice(0,ti); const p=code.split('.'); if ((p.length!==7 && p.length!==8 && p.length!==12) || !SPECIES[p[0]]) return d;
   const n=(i,max)=>{ const v=parseInt(p[i],10); return Number.isFinite(v) && v>=0 && v<max ? v : 0; };
   return { sp:p[0], c:n(1,SPECIES[p[0]].schemes.length), top:n(2,OUTFITS.length), tc:n(3,OUTFIT_COLORS.length), e:n(4,EYES.length), n:n(5,NOSES.length), m:n(6,MOUTHS.length), f:p.length>=8?n(7,FINISHES.length):0,
-    ...Object.fromEntries(WR.SLOTS.map((s,i)=>[s, p.length===12?n(8+i,WR.SLOT_N[s]+1):0])) }; }
+    ...Object.fromEntries(WR.SLOTS.map((s,i)=>[s, p.length===12?n(8+i,WR.SLOT_N[s]+1):0])), ...(ct && decodeGarment(ct) ? { ct } : {}) }; }
 // A random look. moodBias: 0..1 chance of allowing the angry/sad faces (they are rarer for townsfolk).
 export function randomLook(r=Math.random, moodBias=0.18){ const sp=SPECIES_IDS[Math.floor(r()*SPECIES_IDS.length)], face=()=>r()<moodBias ? 3+Math.floor(r()*2) : Math.floor(r()*3);
   // (only the original outfits and colors, so islanders keep the exact looks they had before v1.19)
@@ -438,9 +441,9 @@ export function buildCritter(look, opts={}){
     const pd=mesh(sph(0.085,16,12), pad, 0,-0.21,fz+0.1875*ft-0.018, p, false); pd.scale.set(1,0.75,0.25);
     if (SH.toes) for (let k=0;k<3;k++) mesh(sph(0.045,12,10), paw, (k-1)*0.08, -0.24, fz+0.17*ft, p).scale.set(1,0.7,1);
     legs.push(p); }
-  buildOutfit(trunk, arms, outfit, ocol, sc);
-  dressUp(trunk, head, look.acc, look.accC);
   const anims=[], animRig=[];
+  if (!(look.ct && buildCustomOutfit(trunk, arms, look.ct, sc, { anim:f=>anims.push(f), rig:o=>animRig.push(o) }))) buildOutfit(trunk, arms, outfit, ocol, sc);   // v1.63 sewn clothes
+  dressUp(trunk, head, look.acc, look.accC);
   if (!npc) WR.dressAccessories(look, { head, trunk, body, wobbler, anim:f=>anims.push(f), rig:o=>animRig.push(o) });
   const tail = (npc && ['fox','otter','tortoise'].includes(sp) && opts.keeperTails===false) ? null : buildTail(body, sp, sc);
   if (tail) tail.position.z*=TR[1];

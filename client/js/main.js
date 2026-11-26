@@ -29,9 +29,11 @@ import * as RF from './reef.js';
 import * as TH from './townhall.js';   // v1.49 town hall inside
 import { createEnchant } from './enchant.js';   // v1.40 tools and enchanting
 import { createBenches } from './benches.js';   // v1.40 crafting tables
-import { createCustom } from './custom.js';   // v1.62 custom furniture
+import { createCustom } from './custom.js';
+import { createSewing } from './textile.js';   // v1.63 sewing
+import { registerRug } from './textile-models.js';   // v1.62 custom furniture
 import { buildBike, MODEL, M, mk, G, outline, windowMat, glowMats, glowMat, glowSprites, addGlow, textSprite, PALETTE, buildItemModel, thumb, toolThumb, FURN_BUILDERS, MF,
-  buildTree, buildStump, buildShrub, buildFlower, buildWildFlower, buildTool, buildAnimal, buildPlayer, buildHouse, buildStall, buildBoard, buildPlankDeck, buildRoom, buildBird, buildGull, buildDuck, buildWeedClump } from './models.js';
+  buildTree, buildStump, buildShrub, buildFlower, buildWildFlower, buildTool, buildAnimal, buildPlayer, buildHouse, buildStall, buildBoard, buildPlankDeck, buildRoom, buildBird, buildGull, buildDuck, buildWeedClump, ITEM_BUILDERS } from './models.js';
 import './furn.js';
 import './decor2.js';
 import './shoprare-models.js';   // v1.44 shop rewards: models
@@ -126,6 +128,11 @@ const SR = createShopRare({ S:()=>S, TRIP:()=>TRIP, VISIT:()=>VISIT, GUEST:()=>G
 const CU = createCustom({ S:()=>S, save:()=>save(), toast:(...a)=>toast(...a), Snd, thumb:id=>thumb(id), fmt:n=>fmt(n), countItem:id=>countItem(id), removeItem:(id,n)=>removeItem(id,n), addItem:id=>addItem(id), canAdd:id=>canAdd(id),
   dialog:(...a)=>dialog(...a), openPanel:(...a)=>openPanel(...a), closePanel:()=>closePanel(), pBody:()=>pBody, pTitle:()=>pTitle, setFoot:h=>setFoot(h), addClams:n=>addClams(n), noEdit:()=>noEdit(),
   GUEST:()=>GUEST, VISIT:()=>VISIT, bench:()=>BN.tier(), benchBanner:()=>BN.banner(), kinds:()=>kindsMade(), today:()=>today(), dayNum:()=>dayNum(today()), sparkle:p=>sparkle(p), track:(k,n)=>track(k,n) });
+// v1.63 sewing (textile.js): rugs and clothes painted pixel by pixel
+registerRug(ITEM_BUILDERS);
+const SX = createSewing({ S:()=>S, save:()=>save(), toast:(...a)=>toast(...a), Snd, thumb:id=>thumb(id), fmt:n=>fmt(n), countItem:id=>countItem(id), removeItem:(id,n)=>removeItem(id,n), addItem:id=>addItem(id), canAdd:id=>canAdd(id),
+  pBody:()=>pBody, pTitle:()=>pTitle, setFoot:h=>setFoot(h), addClams:n=>addClams(n), noEdit:()=>noEdit(), VISIT:()=>VISIT, today:()=>today(), track:(k,n)=>track(k,n),
+  buildPlayer:look=>buildPlayer({ look }), setLook:code=>setPlayerLook(code), look:()=>S.look||CH.lookCode(CH.defaultLook()) });
 /* The town: who lives here so far, who's moving in next, the town hall and the island's public projects.
    New islands start with three neighbors; the rest move in rarely, and only once the town gets upgrades (see townCap). Islands from before v1.0
    (they already have a day on the clock or a player name) keep everyone they had. */
@@ -190,7 +197,7 @@ function addClams(n){ let v=Math.max(0,S.clams+n); if (GUEST && n>0 && v>GUEST_C
 function noEdit(){ if (CAN_EDIT) return false; toast(`You're a visitor here, so you can't change ${BOOT.host?.name||'your friend'}'s island.`); Snd.fail(); return true; }
 // Guest wallets can't go over the cap, so sales that would overflow are refused instead of losing clams
 function walletOK(n){ if (!GUEST || S.clams+n<=GUEST_CAP.clams) return true; toast(`Your wallet can only hold ${fmt(GUEST_CAP.clams)} clams as a guest. Make an account to hold more.`); Snd.fail(); return false; }
-const discovered = () => Object.keys(S.seen).filter(id=>!id.startsWith('cf_')).length;   // v1.62: custom pieces don't count, or you could design your way to the big backpacks
+const discovered = () => Object.keys(S.seen).filter(id=>!id.startsWith('cf_') && !id.startsWith('cr_')).length;   // v1.62: custom pieces don't count, or you could design your way to the big backpacks
 const bestFriends = () => Object.values(S.friend).filter(f=>f>=15).length;
 
 /* Size and weight for each catch */
@@ -5153,7 +5160,7 @@ function track(ev, n=1){ if (!S.stats || VISIT && ev!=='visit') return; const k=
     if (f.prog>=f.n){ toast(`${favorTask(f)}: done!`, null, 'new', `Go tell ${npcName(f.who)}.`); Snd.jingle(); } }
   achDirty=true; }
 let achDirty=true, achTicks=0;
-const seenKinds = kind => Object.keys(S.seen).filter(id=>!id.startsWith('cf_') && ITEMS[id] && ITEMS[id].kind===kind).length;   // v1.62 custom pieces don't count
+const seenKinds = kind => Object.keys(S.seen).filter(id=>!id.startsWith('cf_') && !id.startsWith('cr_') && ITEMS[id] && ITEMS[id].kind===kind).length;   // v1.62 custom pieces don't count
 function achValue(stat){ const st=S.stats||{};
   switch (stat){
     case 'bugKinds': return seenKinds('bug'); case 'fishKinds': return seenKinds('fish'); case 'fossilKinds': return seenKinds('fossil'); case 'shellKinds': return seenKinds('shell');
@@ -6651,11 +6658,12 @@ function openCraft(start){
   if (S.craft && !VISIT && !TRIP){ const got=woodProgress(); if (got.length) setTimeout(()=>{ Snd.fanfare(); toast('You slept on it: new woodworking plans!', thumb(got[0]), 'new', got.map(x=>ITEMS[x].name).join(', ')); }, 300); }   // v1.50: a milestone held over from yesterday
   let filter='all', tab = start || (S.craft ? 'wood' : 'cook'); const qty={};
   const render=()=>{
-    const tabsH = (S.craft && S.cook) || EN.hasTab() || CU.hasTab() ? '<div class="tabs">'+[...(S.craft?[['wood','Woodworking']]:[]),...(CU.hasTab()?[['design','Design']]:[]),...(S.cook?[['cook','Cooking']]:[]),...(EN.hasTab()?[['tools','Tools']]:[])].map(([k,n])=>`<button class="tab${k===tab?' on':''}" data-ct="${k}">${n}</button>`).join('')+'</div>' : '';
+    const tabsH = (S.craft && S.cook) || EN.hasTab() || CU.hasTab() || SX.hasTab() ? '<div class="tabs">'+[...(S.craft?[['wood','Woodworking']]:[]),...(CU.hasTab()?[['design','Design']]:[]),...(SX.hasTab()?[['sew','Sewing']]:[]),...(S.cook?[['cook','Cooking']]:[]),...(EN.hasTab()?[['tools','Tools']]:[])].map(([k,n])=>`<button class="tab${k===tab?' on':''}" data-ct="${k}">${n}</button>`).join('')+'</div>' : '';
     const bindTabs=()=>pBody.querySelectorAll('[data-ct]').forEach(b=>b.onclick=()=>{ tab=b.dataset.ct; Snd.click(); render(); pBody.scrollTop=0; });
     if (tab==='cook'){ pTitle.textContent='Cooking'; pBody.innerHTML=cookTab(tabsH); bindTabs(); bindCook(render); return; }
     if (tab==='tools'){ EN.renderTab(tabsH, bindTabs); return; }   // v1.40
-    if (tab==='design'){ CU.renderTab(tabsH, bindTabs); return; }   // v1.62 custom furniture
+    if (tab==='design'){ CU.renderTab(tabsH, bindTabs); return; }
+    if (tab==='sew'){ SX.renderTab(tabsH, bindTabs); return; }   // v1.63 sewing   // v1.62 custom furniture
     pTitle.textContent='Woodworking';
     const kd=kindsMade(), left=woodUnknown().length;
     // v1.24: no progress bar or locked plans. New plans just turn up as you make things.
@@ -6704,7 +6712,7 @@ const WHERE = { bay:'Cay Bay', sea:'Sea', river:'River', pond:'Pond', air:'Flyin
 function openBook(tab='fish'){
   const tabs=[['fish','Fish'],['bug','Bugs'],['fossil','Fossils'],['shell','Beach'],['flower','Flowers'],['furniture','Furniture']];
   const render=()=>{
-    const list=Object.values(ITEMS).filter(i=>i.kind===tab); const got=list.filter(i=>S.seen[i.id]).length;
+    const list=Object.values(ITEMS).filter(i=>i.kind===tab && !i.custom);   // v1.62 custom pieces aren't in the catalog const got=list.filter(i=>S.seen[i.id]).length;
     let h='<div class="tabs">'+tabs.map(([k,n])=>`<button class="tab${k===tab?' on':''}" data-t="${k}">${n}</button>`).join('')+'</div>';
     h+=`<div class="muted" style="margin-bottom:8px">${got} of ${list.length} discovered</div><div class="bar" style="margin-bottom:12px"><div style="width:${got/list.length*100}%"></div></div>`;
     for(const it of list){ const k=!!S.seen[it.id]; let sub='';
@@ -6898,9 +6906,9 @@ function openShop(which, startTab){
       h+=`<div class="muted" style="margin-bottom:8px">${pays} Bigger catches are worth more.</div>`+invGrid(sel, s=>sellPrice(s,which)===null, s=>{ const p=sellPrice(s,which); return p===null ? (ITEMS[s.id].noSell?'Can\'t be sold':'Not bought here') : `Sells here for ${fmt(p)} clams${s.n>1?' each':''}`; });
       const s=S.inv[sel]; if(s){ const it=ITEMS[s.id], pr=sellPrice(s,which); const same=S.inv.filter(x=>x.id===s.id && !x.m).reduce((a,x)=>a+x.n,0);
         if (pr===null) setFoot(`<div class="detail">${itemDetail(s)}<div class="acts muted" style="max-width:220px">${KEEPERS[SHOPS[sid].keeper].refuse}</div></div>`);
-        else { setFoot(`<div class="detail">${itemDetail(s, `Sells here for <b>${fmt(pr)}</b> clams${s.n>1?' each':''}${CU.sellNote(s.id)}`)}<div class="acts"><button class="btn" id="s1">Sell 1</button>${!s.m&&same>1?`<button class="btn alt" id="sA">Sell all ${fmt(pr*same)}</button>`:''}</div></div>`);
-          pFoot.querySelector('#s1').onclick=()=>{ if(!walletOK(pr)) return; removeAt(sel,1); addClams(pr); addTrade(which,pr); track('sold'); track('earned',pr); CU.sold(s.id); Snd.coin(); if(!S.inv[sel]||S.inv[sel].id!==s.id) sel=-1; render(); };
-          const sa=pFoot.querySelector('#sA'); if(sa) sa.onclick=()=>{ if(!walletOK(pr*same)) return; removeItem(s.id,same); addClams(pr*same); addTrade(which,pr*same); CU.sold(s.id); track('sold',same); track('earned',pr*same); Snd.coin(); sel=-1; render(); }; }
+        else { setFoot(`<div class="detail">${itemDetail(s, `Sells here for <b>${fmt(pr)}</b> clams${s.n>1?' each':''}${CU.sellNote(s.id)}${SX.sellNote(s.id)}`)}<div class="acts"><button class="btn" id="s1">Sell 1</button>${!s.m&&same>1?`<button class="btn alt" id="sA">Sell all ${fmt(pr*same)}</button>`:''}</div></div>`);
+          pFoot.querySelector('#s1').onclick=()=>{ if(!walletOK(pr)) return; removeAt(sel,1); addClams(pr); addTrade(which,pr); track('sold'); track('earned',pr); CU.sold(s.id); SX.sold(s.id); Snd.coin(); if(!S.inv[sel]||S.inv[sel].id!==s.id) sel=-1; render(); };
+          const sa=pFoot.querySelector('#sA'); if(sa) sa.onclick=()=>{ if(!walletOK(pr*same)) return; removeItem(s.id,same); addClams(pr*same); addTrade(which,pr*same); CU.sold(s.id); SX.sold(s.id); track('sold',same); track('earned',pr*same); Snd.coin(); sel=-1; render(); }; }
       } else setFoot('');
       // quick sell-everything-they-want button for specialists
       if (which!=='stall' && which!=='rare'){ const total=S.inv.reduce((a,x)=>{ const p=sellPrice(x,which); return a+(p===null?0:p*x.n); },0); if(total>0) h+=`<button class="btn" id="sAllShop" style="margin-top:10px">Sell all ${buysText(SHOPS[sid])} for ${fmt(total)}</button>`; } }
@@ -6927,7 +6935,7 @@ function openShop(which, startTab){
       panelClose=null; closePanel(); openBuild({ tryItem:it }); });
     pBody.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>{ tab=b.dataset.t; sel=-1; Snd.click(); render(); pBody.scrollTop=0; });
     pBody.querySelectorAll('.slot[data-i]').forEach(el=>el.onclick=()=>{ sel=+el.dataset.i; Snd.click(); render(); });
-    const sAll=pBody.querySelector('#sAllShop'); if(sAll) sAll.onclick=()=>{ let tot=0, cnt=0; for(let i=S.inv.length-1;i>=0;i--){ const x=S.inv[i], p=sellPrice(x,which); if(p===null) continue; if(GUEST && S.clams+tot+p*x.n>GUEST_CAP.clams) continue; tot+=p*x.n; cnt+=x.n; CU.sold(x.id); S.inv.splice(i,1); } addClams(tot); addTrade(which,tot); track('sold',cnt); track('earned',tot); Snd.coin(); save(); sel=-1; render(); };
+    const sAll=pBody.querySelector('#sAllShop'); if(sAll) sAll.onclick=()=>{ let tot=0, cnt=0; for(let i=S.inv.length-1;i>=0;i--){ const x=S.inv[i], p=sellPrice(x,which); if(p===null) continue; if(GUEST && S.clams+tot+p*x.n>GUEST_CAP.clams) continue; tot+=p*x.n; cnt+=x.n; CU.sold(x.id); SX.sold(x.id); S.inv.splice(i,1); } addClams(tot); addTrade(which,tot); track('sold',cnt); track('earned',tot); Snd.coin(); save(); sel=-1; render(); };
     pBody.querySelectorAll('[data-is]').forEach(b=>b.onclick=()=>{ const [id,k0]=b.dataset.is.split(':'), k=+k0, price=ISLAND_SEED_BUY*k; if (S.clams<price) return; if (!roomFor([[id,k]])){ toast('Your bag is full.'); return; }
       S.clams-=price; addTrade(which,price); let isNew=false; for (let q=0;q<k;q++) if (addItem(id)==='new') isNew=true; Snd.coin(); updateHUD(); toast(`${isNew?'New! ':''}Bought ${k} ${ITEMS[id].name.toLowerCase()}.`, thumb(id), isNew?'new':''); save(); render(); });
     pBody.querySelectorAll('[data-b]').forEach(b=>b.onclick=()=>{ const i=+b.dataset.b; const id=list[i], it=ITEMS[id], price=buyPrice(which,it);
@@ -7586,7 +7594,7 @@ function talkWorkshop(H){ const v=H.voice, nm=H.name;
   if (countItem('wood')<10) return dialog(nm, v, [`Ten pieces of wood, that's all. You have ${countItem('wood')}. The trees here chop nicely.`]);
   dialog(nm, v, ['Ah, that\'ll do nicely. Now then. Name it. Any piece of furniture there is, and I\'ll make it.'], ()=>{ removeItem('wood',10); save(); openWishList(H); }); }
 function openWishList(H){
-  const all=Object.values(ITEMS).filter(i=>i.kind==='furniture').sort((a,b)=>a.name.localeCompare(b.name));
+  const all=Object.values(ITEMS).filter(i=>i.kind==='furniture' && !i.custom).sort((a,b)=>a.name.localeCompare(b.name));
   const render=q=>{ const list=all.filter(i=>!q || i.name.toLowerCase().includes(q.toLowerCase()));
     pBody.innerHTML=`<input id="wq" placeholder="Search furniture" value="${q||''}" style="width:100%;padding:8px;border-radius:10px;border:2px solid #e3cfa8;margin-bottom:8px;font:inherit">`+list.map(i=>`<div class="row"><img src="${thumb(i.id)}"><div class="grow"><div class="nm">${i.name}</div><div class="sub">${rarityLabel(i.rarity??5)}${i.legendary?' showpiece':''}</div></div><button class="btn" data-w="${i.id}">This one</button></div>`).join('');
     const inp=pBody.querySelector('#wq'); inp.oninput=()=>{ const v=inp.value, at=inp.selectionStart; render(v); const n=pBody.querySelector('#wq'); n.focus(); n.setSelectionRange(at,at); };
@@ -8488,7 +8496,7 @@ function openMenu(){
     </div>
     <button class="btn warn" id="mReset">Start a new island</button>${saveOK?'':'<div class="muted" style="margin-top:8px">Saving isn\'t available in this browser.</div>'}`;
     $('#mParty').onclick=()=>{ closePanel(); setTimeout(()=>PARTY.open(), 50); };
-    $('#mLook').onclick=async()=>{ closePanel(); const L=await openCreator({ look:CH.parseLook(S.look), title:'Change your look', cancel:true, owned:wardrobeOwned() }); if (L){ const code=CH.lookCode(L); if (code!==S.look) track('look'); setPlayerLook(code); checkAch(); } };
+    $('#mLook').onclick=async()=>{ closePanel(); const L=await openCreator({ look:CH.parseLook(S.look), title:'Change your look', cancel:true, owned:wardrobeOwned() }); if (L){ const was=CH.parseLook(S.look); if (L.ct && (L.top!==was.top || L.tc!==was.tc)) delete L.ct; else if (!L.ct && was.ct && L.top===was.top && L.tc===was.tc) L.ct=was.ct;   /* v1.63 sewn clothes stay on unless you pick another outfit */ const code=CH.lookCode(L); if (code!==S.look) track('look'); setPlayerLook(code); checkAch(); } };
     $('#mAch').onclick=()=>{ closePanel(); setTimeout(()=>openAchievements(), 60); };
     { const mp=$('#mPals'); if (mp) mp.onclick=()=>{ closePanel(); setTimeout(()=>openContacts(), 60); }; }
     const snd=$('#mSnd'); snd.value=S.settings.sound?'1':'0'; snd.onchange=()=>{ Snd.setOn(snd.value==='1'); save(); };
@@ -9540,8 +9548,11 @@ function remoteRag(r, dt, t){
     return true; }
   if (r.rl){ if (r.rl.stars) scene.remove(r.rl.stars); r.rl=null; r.obj.rotation.set(0,r.f,0); resetLimbs(u); r.jel.v=4; }
   return false; }
+// v1.63: a look with sewn clothes can be long, so send it when it changes and every few seconds, not every tick
+let lkSent='', lkAt=0;
+const lkSend = () => { const lk=S.look||''; if (lk.indexOf('~')<0) return lk; const now=performance.now(); if (lk!==lkSent || now-lkAt>3000){ lkSent=lk; lkAt=now; return lk; } return ''; };
 const playerState = () => { const R=meBody.rag, P = R ? player.obj.position : player.pos;
-  const st={ lk:S.look||'', b:riding?1:0, x:+P.x.toFixed(2), z:+P.z.toFixed(2), y:+P.y.toFixed(2), f:+player.face.toFixed(2), w:player.speedFrac>0.05?1:0, in:World.inside||null };
+  const st={ lk:lkSend(), b:riding?1:0, x:+P.x.toFixed(2), z:+P.z.toFixed(2), y:+P.y.toFixed(2), f:+player.face.toFixed(2), w:player.speedFrac>0.05?1:0, in:World.inside||null };
   if (R){ const q=player.obj.quaternion; st.rg=[+q.x.toFixed(3),+q.y.toFixed(3),+q.z.toFixed(3),+q.w.toFixed(3)]; st.rs=R.resting?1:0; }
   return st; };
 // The server changed our bag (gift, mail or trade): take its copy
@@ -9610,7 +9621,7 @@ window.__game.v144 = Object.assign({ SR, shopStock:w=>shopStock(w), talkGill:()=
 // v1.52 test hooks: where the new fish and bugs turn up
 window.__game.v145 = { fishPool, bugPool, isleNear, isleAt, bayMore, bayTipIds, bayPool:()=>bayPool(), waterType, isleSpot, get trees(){ return trees; }, get bugs(){ return bugs; }, newBug:(id,x,z,e)=>new Bug(id,x,z,e||{}), updateBugs:dt=>{ bugT=0; updateBugs(dt||3); }, spawnFish:()=>spawnFish(), get fishes(){ return fishes; },
   openDonate:()=>openDonate(), museumExpand:()=>museumExpand(), buildMuseumAll:()=>buildMuseumAll(), enterRoom:id=>enterRoom(id), tanks:()=>ents.filter(e=>e instanceof MuseumTank), openTankView:e=>openTankView(e), closeTankView:()=>closeTankView(), get tankView(){ return tankView; } };
-window.__game.custom = CU.dev;   // v1.62 custom furniture tests
+window.__game.custom = CU.dev; window.__game.sew = SX.dev;   // v1.63 sewing tests   // v1.62 custom furniture tests
 // v1.26 test hooks
 window.__game.v126 = { townNewDay, applyTown, findHomeSpot, claimHomeSpot, townCap, incomeNewDay, refreshIncome, talkIncome, incCollect, incOf, INCOME, incEnts, openMap, talkSkipperHome, talkSkipperTrip, tripGoHome, tripRecap, storyWho, askToLeave, canAskToLeave, pitchOnBuy, merchantDay, get peddler(){ return peddler; }, get skipper(){ return skipper; }, newSquares, LOAN_MAX_SQ, TRIP, TRIP_THEME, residents, residentHomes, plotEnts, KEEPOUT, Q, PATHS, camTarget, updateCamera, set camDist(v){ camDist=v; }, get camDist(){ return camDist; }, set camYaw(v){ camYaw=v; } };
 window.__game.LETTERS = LETTERS;

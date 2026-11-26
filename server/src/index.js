@@ -11,6 +11,7 @@
 import { ITEMS, BACKPACKS, BASE_SLOTS, LETTERS } from '../../client/js/content.js';
 import '../../client/js/enchant-core.js';   // v1.40: Enchanting Scroll items (define themselves in ITEMS)
 import '../../client/js/custom-core.js';   // v1.62: custom furniture items (cf_ ids carry their whole design)
+import '../../client/js/textile-core.js';   // v1.63: sewn rugs (cr_ ids carry the whole rug)
 import '../../client/js/benches-core.js';  // v1.40: crafting tables and their pieces
 
 const KEEP_IDS = /^(relic_|lampframe$|cutting$|millsails$|bellframe$|crowbar$|wrecklens$|chartpiece$)/;   // v1.38, v1.39 story items that can't be mailed or traded
@@ -434,7 +435,7 @@ export class IslandRoom {
     if (typeof raw === 'string' && raw.length > 4000) return;
     switch (m.t) {
       case 'pos': {   // position, facing, moving; numbers only
-        const st = { x: +m.x || 0, z: +m.z || 0, y: +m.y || 0, f: +m.f || 0, w: m.w ? 1 : 0, b: m.b ? 1 : 0, in: typeof m.in === 'string' ? m.in.slice(0, 20) : null, lk: typeof m.lk === 'string' && /^[a-z]{2,12}(\.\d{1,2}){6,11}$/.test(m.lk) ? m.lk : '' };
+        const st = { x: +m.x || 0, z: +m.z || 0, y: +m.y || 0, f: +m.f || 0, w: m.w ? 1 : 0, b: m.b ? 1 : 0, in: typeof m.in === 'string' ? m.in.slice(0, 20) : null, lk: typeof m.lk === 'string' && m.lk.length <= 1500 && /^[a-z]{2,12}(\.\d{1,2}){6,11}(~g[A-Za-z0-9_-]{8,1400})?$/.test(m.lk) ? m.lk : '' };
         if (Array.isArray(m.rg) && m.rg.length === 4 && m.rg.every(v => Number.isFinite(+v))) { st.rg = m.rg.map(v => Math.max(-1, Math.min(1, +v))); st.rs = m.rs ? 1 : 0; }   // tumbling pose (v1.6)
         me.st = st; this.broadcast({ t: 'pos', id: me.id, ...st }, ws); break; }
       case 'emote': if (EMOTES.includes(m.e)) this.broadcast({ t: 'emote', id: me.id, e: m.e }); break;

@@ -456,4 +456,4 @@ Code: `extend.js` (the shape, `chooseExt`, `extDepth`, `extMounds`, `extBox`), t
 - **Old saves.** Every building, path, placed item, tree and rock stays where it was and keeps its kind: tree and rock placement runs against the old ground (`onOldGround`, `rawHeightOld`). The old beach on that side becomes inland.
 - **Slower arrivals.** A newcomer comes at least 5 days after the last one, then on a 40% chance each day (was 2 days and 50%), so about a week apart. Order: Lumi, Otis, Clover, Juniper, then Barley, Wren, Tobin, Hazel, Marigold (`STORY_ORDER`). A keeper (Gill, Hollis, Russet, Quill) turns up at least 3 days after anyone new, one at a time, never while someone is about to move in.
 - Also fixed: the waterfall plateau on cliff islands used the wrong grid row.
-- #dev Story map: "Everyone moves in now" (`devEveryone`) still brings every resident and keeper in at once. Test hooks: `window.__game.v145`.
+- #dev Story map: "Everyone moves in now" (`devEveryone`) still brings every resident and keeper in at once. Test hooks: `window.__game.v154`.

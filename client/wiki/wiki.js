@@ -50,7 +50,8 @@ function furnWhere(i){
   const s = { stall:'Pemberton\'s', home:'Pemberton\'s shelf', trip:'Trip islands', story:'Island stories', rare:'Fennick\'s cart', craft:'Woodworking',
     party:'Party game prize', gift:'Museum gift', favor:'Favor gift' }[i.shop];
   if (s) return s;
-  if (i.shop==='aquarium') return `Tidepool${i.tier?` (tier ${i.tier})`:''}`;
+  if (i.shop==='backroom') return 'Pemberton\'s back room';   // v1.44
+  if (i.shop==='aquarium') return `Tidepool${i.special?' rare shelf':''}${i.tier?` (tier ${i.tier})`:''}`;
   if (i.shop==='garden') return `Bug &amp; Bloom${i.tier?` (tier ${i.tier})`:''}`;
   return esc(i.shop||'');
 }
@@ -118,8 +119,9 @@ const DATA = {
   plants(){
     const fruit = items('fruit').map(r=>({ ...r }));
     let h = '<h3>Fruit</h3>' + table('tFruit', fruit, [['Fruit', r=>`<b>${esc(r.name)}</b>`], ['Native price', r=>fmt(r.price)], ['As foreign fruit', r=>r.id==='coconut'?fmt(r.price):fmt(FOREIGN_FRUIT_PRICE)]]);
-    const fl = Object.entries(PLANTS).filter(([,p])=>p.ptype==='flower').map(([id,p])=>({ id, name:p.name, days:p.days, story:p.story, night:p.night, it:ITEMS[id], seed:ITEMS[id+'_seeds'] }));
-    h += '<h3>Flowers</h3>' + table('tFlowers', fl, [['Flower', r=>`<b>${esc(r.name)}</b>${r.night?' <span class="tag">night</span>':''}`, r=>r.name], ['Days to bloom', r=>r.days], ['Seeds', r=>fmt(r.seed&&r.seed.buy)], ['Sells', r=>fmt(r.it.price)]]);
+    const fl = Object.entries(PLANTS).filter(([,p])=>p.ptype==='flower').map(([id,p])=>({ id, name:p.name, days:p.days, story:p.story, night:p.night, fk:p.fk, of:p.of, it:ITEMS[id], seed:ITEMS[id+'_seeds'] }));
+    const FK = { color:'rare color', hybrid:'hybrid', glow:'glows' };   // v1.44 Sprig's rare seeds
+    h += '<h3>Flowers</h3>' + table('tFlowers', fl, [['Flower', r=>`<b>${esc(r.name)}</b>${r.night?' <span class="tag">night</span>':''}${r.fk?` <span class="tag">${FK[r.fk]}</span>`:''}${r.of?`<br><span class="muted">${esc(r.of)}</span>`:''}`, r=>r.name], ['Days to bloom', r=>r.days], ['Seeds', r=>fmt(r.seed&&r.seed.buy)], ['Sells', r=>fmt(r.it.price)]]);
     const sap = Object.values(ITEMS).filter(i=>i.kind==='sapling' && i.buy).map(i=>({ ...i, p:PLANTS[i.plant] }));
     h += '<h3>Saplings and shrubs</h3>' + table('tSap', sap, [['Plant', r=>`<b>${esc(r.name)}</b>`, r=>r.name], ['Type', r=>r.p?r.p.ptype:''], ['Days', r=>r.p?r.p.days:''],
       ['Blooms', r=>r.p&&r.p.bloom&&r.p.bloom.length?months(r.p.bloom):''], ['Buy', r=>fmt(r.buy), r=>r.buy]]);
@@ -134,7 +136,7 @@ const DATA = {
   },
   furniture(){
     const rows = items('furniture').sort((a,b)=>a.name.localeCompare(b.name));
-    const src = r => r.salvage?'story':r.route?'story':r.legendary?'craft':['stall','home'].includes(r.shop)?'pemberton':r.shop;
+    const src = r => r.salvage?'story':r.route?'story':r.legendary?'craft':['stall','home','backroom'].includes(r.shop)?'pemberton':r.shop;
     return table('tFurn', rows, [['Piece', r=>`<b>${esc(r.name)}</b>${r.glow?' <span class="tag">lights up</span>':''}`, r=>r.name], ['Where', r=>furnWhere(r), r=>src(r)],
       ['Rarity', r=>r.rarity!=null?rarity(r.rarity):'', r=>r.rarity!=null?RANK[rarityLabel(r.rarity)]:-1], ['Buy', r=>r.buy?fmt(r.buy):'', r=>r.buy||0], ['Sells', r=>fmt(r.price), r=>r.price]],
       { filters:[['','All'],['pemberton','Pemberton\'s'],['aquarium','Tidepool'],['garden','Bug & Bloom'],['rare','Fennick'],['craft','Crafted'],['story','Stories'],['favor','Favors'],['trip','Trips'],['gift','Museum'],['party','Party']], tag:src });

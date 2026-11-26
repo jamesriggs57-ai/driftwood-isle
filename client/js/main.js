@@ -27,6 +27,8 @@ import { buildBike, MODEL, M, mk, G, outline, windowMat, glowMats, glowMat, glow
   buildTree, buildStump, buildShrub, buildFlower, buildWildFlower, buildTool, buildAnimal, buildPlayer, buildHouse, buildStall, buildBoard, buildPlankDeck, buildRoom, buildBird, buildGull, buildDuck, buildWeedClump } from './models.js';
 import './furn.js';
 import './decor2.js';
+import './shoprare-models.js';   // v1.44 shop rewards: models
+import { createShopRare } from './shoprare.js';   // v1.44 back room, rare shelves, what's biting
 import { addAura, buildBottle } from './rare.js';
 import * as GC from './ground.js';
 import * as CH from './chars.js';
@@ -100,6 +102,13 @@ const EN = createEnchant({ S:()=>S, toast:(...a)=>toast(...a), Snd, save:()=>sav
 // v1.40 crafting tables (benches.js): crafting tables in reach, as [id, distance, size]
 const BN = createBenches({ S:()=>S, save:()=>save(), addItem:id=>addItem(id), learnWood:id=>learnWood(id),
   tables:()=>ents.filter(e=>e instanceof Furniture && !e.removed && entVisible(e) && BN.isBench(e.rec.id)).map(e=>[e.rec.id, Math.hypot(e.pos.x-player.pos.x, e.pos.z-player.pos.z), ITEMS[e.rec.id].r]) });
+// v1.44 shop rewards (shoprare.js): Pemberton's back room, Marlo's rare shelf, Sprig's rare seeds, and what's biting (Marlo and Gill)
+const SR = createShopRare({ S:()=>S, TRIP:()=>TRIP, VISIT:()=>VISIT, GUEST:()=>GUEST, noEdit:()=>noEdit(), save:()=>save(), toast:(...a)=>toast(...a), Snd, fmt:n=>fmt(n), thumb:id=>thumb(id),
+  rarityTag:it=>rarityTag(it), shopTier:id=>shopTier(id), today:()=>today(), sday:()=>sday(), month:()=>Time.month(), buyPrice:(w,it)=>buyPrice(w,it), addTrade:(w,n)=>addTrade(w,n),
+  addItem:id=>addItem(id), canAdd:id=>canAdd(id), updateHUD:()=>updateHUD(), itemToast:(...a)=>itemToast(...a), dialog:(...a)=>dialog(...a), openShop:(w,t)=>openShop(w,t),
+  unfoundPlans:()=>unfoundPlans(), knowsPlan:fid=>knowsPlan(fid), learnPlan:id=>learnPlan(id), PLAN_PRICE, allowedFind:it=>allowedFind(it),
+  homeWaters:()=>['sea','pond', ...(((RIVER&&RIVER.length&&LAY.riverType!=='sea') || XW.some(w=>w.type==='river') || (TERRA_ANY && Object.values(TERRA).some(c=>c&&c.w===2))) ? ['river'] : [])],
+  bayIds:()=>SY.reef&&SY.reef.rowboat ? bayTipIds() : [], boatTier:()=>incOf('boat').tier, gillTips:()=>!VISIT && !GUEST && !!(SY.reef && SY.reef.rowboat) && reefStage()>=1 });
 /* The town: who lives here so far, who's moving in next, the town hall and the island's public projects.
    New islands start with three neighbors; the rest move in rarely, and only once the town gets upgrades (see townCap). Islands from before v1.0
    (they already have a day on the clock or a player name) keep everyone they had. */
@@ -1430,7 +1439,7 @@ function fishPool(type){ const h=Time.hour(), m=Time.month(); return Object.valu
 function waterSpot(){ for(let k=0;k<40;k++){ const a=Math.random()*TAU, d=4+Math.random()*12; const x=player.pos.x+Math.cos(a)*d, z=player.pos.z+Math.sin(a)*d; if(isFishWater(x,z) && rawHeight(x,z)<-0.45 && !onDock(x,z) && !onBridge(x,z)) return [x,z]; } return null; }
 function spawnFish(){ const p=waterSpot(); if(!p) return; const type=waterType(p[0],p[1]);
   if (TRIP_THEME==='shimmer' && haulLeft()<=0) return;   // v1.27: Shimmer Lagoon only holds so much
-  const pool=(TRIP_THEME==='shimmer' && type!=='spring' ? Object.values(ITEMS).filter(i=>i.kind==='fish' && (i.rarity??5)<1.5) : fishPool(type)).filter(allowedFind); if(!pool.length) return; const sp=tierPick(Math.random, pool, i=>luckW(i,'fish'), 'fish');
+  const pool=(TRIP_THEME==='shimmer' && type!=='spring' ? Object.values(ITEMS).filter(i=>i.kind==='fish' && (i.rarity??5)<1.5) : fishPool(type)).filter(allowedFind); if(!pool.length) return; const sp=SR.tipSwap(tierPick(Math.random, pool, i=>luckW(i,'fish'), 'fish'), pool, 'marlo');   // v1.44 Marlo's tip
   // v1.26: the fish's length is decided when it spawns, and its shadow shows it: a big shadow is a big one for its species
   const meta=rollStats(sp.id), sz=(SIZE_SCALE[sp.size]||0.85)*(0.8+0.45*(meta.f||0));
   const m=new THREE.Mesh(shadowGeo, shadowMat); m.scale.set(sz*1.6,0.05,sz*0.8); m.position.set(p[0],-0.25,p[1]); m.visible=false; OUT.add(m);   // the water shader draws the shadow (see Water)
@@ -2388,6 +2397,7 @@ function talkGill(){
           takeFor(need); S.clams-=nx.cost; I.tier++; I.since=nowD; if (I.tier===0){ I.last=nowD; I.acc=0; } updateHUD(); save(); Snd.fanfare(); refreshIncome();
           dialog(nm, v, [`A ${nx.name}! I'll be out at first light.`, `It fills up over about ${INC_DAYS} days, then I'll keep it for you.`], back); } },
       { label:'Not yet', alt:true, fn:back } ]) }); }
+  ch.push(...SR.gillChoices({ name:nm, voice:v }, back));   // v1.44 what's biting in the bay
   ch.push({ label:'Bye!', alt:true, fn:()=>{} });
   let line;
   if (R.st==='open') line=REEF_HINT;
@@ -2517,9 +2527,12 @@ function bayPool(){ const h=Time.hour(), m=Time.month(), st=reefStage();
   const sea=Object.values(ITEMS).filter(i=>i.kind==='fish' && i.where==='sea' && (i.rarity??5)>=3 && inMonths(m,i.months) && inHours(h,i.hours));
   const bay=[...baySpecies(), ...nightBay()].map(id=>ITEMS[id]).filter(i=>inHours(h,i.hours));   // v1.38 night fish once the lighthouse is lit
   return (st>=1 ? [...sea.slice(0, st>=3?3:6), ...bay, ...bay] : sea).filter(allowedFind); }
+// v1.44 what Gill can tip you about: the bay's own fish, or before any have come back, the sea fish that turn up in the bay (bayPool without the hour check)
+function bayTipIds(){ const own=[...baySpecies(), ...nightBay()]; if (own.length) return own; const m=Time.month(), st=reefStage();
+  const sea=Object.values(ITEMS).filter(i=>i.kind==='fish' && i.where==='sea' && (i.rarity??5)>=3 && inMonths(m,i.months)); return (st>=1 ? sea.slice(0, st>=3?3:6) : sea).map(i=>i.id); }
 function baySpawnShadow(){ const R=BAYR, B=R.B, grownPlots=R.plots.filter(q=>q.rec && plotAge(q.rec)>=2); if (!grownPlots.length) return;
   const q=grownPlots[Math.floor(Math.random()*grownPlots.length)], a=Math.random()*TAU, d=1+Math.random()*4, x=q.p.x+Math.cos(a)*d, z=q.p.z+Math.sin(a)*d;
-  const pool=bayPool(); if (!pool.length) return; const sp=tierPick(Math.random, pool, i=>luckW(i,'fish'), 'fish'), meta=rollStats(sp.id), sz=({S:0.6,M:0.85,L:1.15,XL:1.55}[sp.size]||0.85)*(0.8+0.45*(meta.f||0));
+  const pool=bayPool(); if (!pool.length) return; const sp=SR.tipSwap(tierPick(Math.random, pool, i=>luckW(i,'fish'), 'fish'), pool, 'gill'), meta=rollStats(sp.id), sz=({S:0.6,M:0.85,L:1.15,XL:1.55}[sp.size]||0.85)*(0.8+0.45*(meta.f||0));
   const m=new THREE.Mesh(G.sph(0.5,14,6), new THREE.MeshBasicMaterial({ color:0x163040, transparent:true, opacity:0.0, depthWrite:false })); m.scale.set(sz*1.6,0.05,sz*0.8); m.position.set(x,-0.12,z); m.renderOrder=3; R.life.add(m);
   R.shadows.push({ id:sp.id, meta, m, home:new THREE.Vector3(x,0,z), ph:Math.random()*10, state:'swim', t:0, age:0, size:sz }); }
 
@@ -5636,10 +5649,10 @@ function shopStock(which){
   const pickN=(pool,k,have=[])=>{ const a=pool.filter(i=>!have.includes(i.id)), o=[]; while(o.length<k && a.length) o.push(a.splice(Math.floor(r()*a.length),1)[0].id); return o; };
   if (id==='general'){ const base=S.day.stock.slice(0,Math.min(4,n)).filter(x=>ITEMS[x]);
     return [...base, ...pickWeighted(r, generalPool(m), n-base.length, base, i=>stockWeight(i,t)), ...(r()<0.5?['chest']:[]), ...story3Stock(id)]; }   // v1.36: a storage chest is on the shelf about half the days (it was always there)
-  const pool=Object.values(ITEMS).filter(i=>i.kind==='furniture' && i.shop===id && (i.tier||0)<=t);
+  const pool=Object.values(ITEMS).filter(i=>i.kind==='furniture' && i.shop===id && (i.tier||0)<=t && !i.special);   // v1.44 specials only come on the rare shelf
   let out=[...pool.filter(i=>(i.tier||0)===t).map(i=>i.id).slice(0,1)]; out=[...out, ...pickN(pool, n-out.length, out)];
   if (id==='garden'){ const seeds=Object.values(ITEMS).filter(i=>!i.story && (i.kind==='seed'||(i.kind==='sapling'&&i.buy>0&&(t>=1||PLANTS[i.plant].ptype!=='tree')))); out=[...out, ...pickN(seeds, 1+t)]; }
-  return [...out, ...story3Stock(id)];   // v1.39 wheat, night flowers, bread
+  return [...out, ...story3Stock(id), ...SR.extraStock(id)];   // v1.39 wheat, night flowers, bread; v1.44 rare shelf
 }
 const isSold = (which, id, i) => { if (which==='rare') return !!S.day.psold[i]; if (which==='stall') return !!(S.day.sold[i] && i<6 && S.day.stock[i]===id) || !!S.day.sold['id:'+id]; const m=(S.day.ssold=S.day.ssold||{}); return !!(m[which]&&m[which][id]); };
 const markSold = (which, id, i) => { if (which==='rare'){ S.day.psold[i]=true; return; } if (which==='stall'){ S.day.sold['id:'+id]=true; return; } const m=(S.day.ssold=S.day.ssold||{}); (m[which]=m[which]||{})[id]=true; };
@@ -5652,7 +5665,7 @@ function talkShop(id){
 function talkShopRest(id, k, shop){
   // v1.36: a shopkeeper greets you and asks what you're after, instead of opening the shop straight away
   const story0=m=> id==='garden' ? sprigReefChoices(k, m) : id==='aquarium' ? [...marloReefChoices(k, m), ...lightChoicesMarlo(k, m), ...reefHallMarlo(k, m)] : id==='general' ? [...forgeChoices(k, m), ...EN.keeperChoices(k, m)] : [];   // v1.37, v1.38
-  const story=m=>[...story0(m), ...keeper3(id, k, m)];   // v1.39
+  const story=m=>[...story0(m), ...SR.keeperChoices(id, k, m), ...keeper3(id, k, m)];   // v1.39; v1.44 back room and what's biting
   keeperMenu(k, { first:[{ label:'Let\'s shop', fn:shop }], story, greet:keeperLine(k.id,'greet') });
 }
 /* v1.36 shopkeepers chat too (talk.js KEEPER_CHAT / KEEPER_ASK). The first chat each day is worth a little goodwill. */
@@ -5695,8 +5708,8 @@ function storeWoodPlan(){ if (!S.craft || GUEST) return null; if (S.day.wplan===
 const toolOutToday = () => { const ks=Object.keys(TOOLS); return ks[hashStr(today()+':toolout:'+(S.seed|0))%ks.length]; };
 function openShop(which, startTab){
   let tab=startTab||'buy', sel=-1; const sid=shopKey(which);
-  const tabs = which==='rare' ? [['buy','Rare finds'],['sell','Sell']] : which==='stall' ? [['buy','Furniture'],['clothes','Clothes'],['home','Home goods'],['garden','Garden'],['tools','Tools'],['packs','Bags & bike'],['sell','Sell'],['invest','Invest']] : [['buy','Shop'],['sell','Sell'],['invest','Invest']];
-  const buyRow=(id,i,sold,price,orig)=>{ const it=ITEMS[id]; return `<div class="row"><img src="${thumb(id)}"><div class="grow"><div class="nm">${it.name}${it.kind==='furniture'&&it.rarity!==undefined?' '+rarityTag(it):''}</div><div class="sub">${fmt(price)} clams${orig&&orig!==price?` <s>${fmt(orig)}</s>`:''}${it.kind==='seed'?' · plant on grass':''}${it.kind==='sapling'?' · needs a shovel to plant':''}</div></div><button class="btn" data-b="${i}" ${sold||S.clams<price?'disabled':''}>${sold?'Sold':'Buy'}</button></div>`; };
+  const tabs = which==='rare' ? [['buy','Rare finds'],['sell','Sell']] : which==='stall' ? [['buy','Furniture'],...(SR.backOpen()?[['back','Back room']]:[]),['clothes','Clothes'],['home','Home goods'],['garden','Garden'],['tools','Tools'],['packs','Bags & bike'],['sell','Sell'],['invest','Invest']] : [['buy','Shop'],['sell','Sell'],['invest','Invest']];
+  const buyRow=(id,i,sold,price,orig)=>{ const it=ITEMS[id]; return `<div class="row"><img src="${thumb(id)}"><div class="grow"><div class="nm">${it.name}${it.kind==='furniture'&&it.rarity!==undefined?' '+rarityTag(it):''}</div><div class="sub">${fmt(price)} clams${orig&&orig!==price?` <s>${fmt(orig)}</s>`:''}${SR.onRareShelf(id)?' · <b>rare shelf</b>':''}${it.kind==='seed'?' · plant on grass':''}${it.kind==='sapling'?' · needs a shovel to plant':''}</div></div><button class="btn" data-b="${i}" ${sold||S.clams<price?'disabled':''}>${sold?'Sold':'Buy'}</button></div>`; };
   let list=[];
   // v1.8: this island's own seeds, always in stock, cheap, by the handful
   const islandRows=()=>`<div class="notice" style="margin-bottom:10px"><b>Grows wild here</b> <span class="muted">· always in stock</span>`+islandSeeds().map(id=>{ const it=ITEMS[id];
@@ -5751,7 +5764,8 @@ function openShop(which, startTab){
       L.forEach(id=>{ const it=ITEMS[id], own=ownsWear(id), p=buyPrice(which,it); h+=`<div class="row"><img src="${thumb(id)}"><div class="grow"><div class="nm">${it.name} ${rarityTag(it)}</div><div class="sub">${fmt(p)} clams${it.buy!==p?` <s>${fmt(it.buy)}</s>`:''} · ${wearKind(it)}</div></div><button class="btn" data-cw="${id}" ${own||S.clams<p?'disabled':''}>${own?'Owned':'Buy'}</button></div>`; });
       h+=`<div class="muted" style="margin-top:10px">You own ${S.wardrobe.length} of ${WEAR_IDS.length} pieces. Some only come as thank-you gifts from islanders.</div>`; }
     if (tab==='invest') h+=investBox(sid);
-    pBody.innerHTML=h;
+    if (tab==='back') h+=SR.backHTML();   // v1.44
+    pBody.innerHTML=h; SR.bindBack(pBody, render);
     pBody.querySelectorAll('[data-cw]').forEach(b=>b.onclick=()=>{ const id=b.dataset.cw, it=ITEMS[id], price=buyPrice(which,it); if (ownsWear(id) || S.clams<price) return; S.clams-=price; addTrade(which,price); Snd.coin(); updateHUD(); grantWear(id); save(); render(); });
     pBody.querySelectorAll('[data-hb]').forEach(b=>b.onclick=()=>{ if (buyHome(homeStock()[+b.dataset.hb])) render(); });
     const bw=pBody.querySelector('#buyWPlan'); if (bw) bw.onclick=()=>{ const wp=storeWoodPlan(); if (!wp) return; const fid=ITEMS[wp].learns, pr=WOOD_PLAN_PRICE(fid); if (knowsWood(fid) || S.clams<pr) return; S.clams-=pr; addTrade(which,pr); updateHUD(); Snd.coin(); learnPlan(wp); save(); render(); };
@@ -7309,7 +7323,7 @@ function openMenu(){
     <div class="notice"><b>Testing tools</b><br><span class="muted">The game runs on your real clock. These preview other times and weather.</span>
       <label class="f">Preview time: <span id="mOffT"></span></label><input type="range" id="mOff" min="-23" max="23" step="1" value="${Time.offsetH}">
       <label class="f">Weather <select id="mW"><option value="">Today's weather</option><option>sunny</option><option>cloudy</option><option>rain</option><option>snow</option></select></label>
-      ${DEV?`<div style="margin-top:8px"><b>Shortcuts</b> <span class="muted">(only on this device)</span><br><button class="btn alt" id="dvC">+50,000 clams</button> <button class="btn alt" id="dvLp">Go to Lighthouse Point</button> <button class="btn alt" id="dvLt">Lighthouse top, with the keeper</button> <button class="btn alt" id="dvT">${S.magic.tower?'Tower is up':'Raise the wizard tower'}</button> ${!GUEST&&!VISIT&&nextIsleKind()?'<button class="btn alt" id="dvI">Raise the next isle</button>':''} <button class="btn alt" id="dvM">${S.devMagic?'Wizard needs requirements again':'Skip wizard requirements'}</button> <button class="btn alt" id="dvF">New favors now</button> <button class="btn alt" id="dvD">Town: skip a day</button> <button class="btn alt" id="dvR">Rare kit</button> <button class="btn alt" id="dvRf">Reef: skip to the rowboat</button> <button class="btn alt" id="dvRg">Reef: grow 12 coral</button> <button class="btn alt" id="dvWs">Workshop: skip ahead</button> <button class="btn alt" id="dvRl">Relics for the next isle</button> <button class="btn alt" id="dvSt">Phase 2: next story</button> <button class="btn alt" id="dvS3">Phase 3: next story</button> <br><b>Enchanting and tables</b> <button class="btn alt" id="dvEnL">Learn every enchantment</button> <button class="btn alt" id="dvEnT">${S.rare&&S.rare.ench&&S.rare.ench.twin?'Two-enchantment trick learned':'Learn the two-enchantment trick'}</button> <button class="btn alt" id="dvEnI">+20 of each ingredient</button> <button class="btn alt" id="dvEnK">A Sturdy tool of each kind</button> ${!VISIT&&!TRIP?'<button class="btn alt" id="dvB1">Workbench here</button> <button class="btn alt" id="dvB2">Carpenter\'s Bench here</button> <button class="btn alt" id="dvB3">Master Workbench here</button>':''} <button class="btn alt" id="dvBA">${BN.dev.any?'Tables work normally again':'Count as a Master Workbench anywhere'}</button> <button class="btn alt" id="dvEn">All of it at once</button><br> <button class="btn alt" id="dvOff">Hide shortcuts</button></div>`:''}
+      ${DEV?`<div style="margin-top:8px"><b>Shortcuts</b> <span class="muted">(only on this device)</span><br><button class="btn alt" id="dvC">+50,000 clams</button> <button class="btn alt" id="dvLp">Go to Lighthouse Point</button> <button class="btn alt" id="dvLt">Lighthouse top, with the keeper</button> <button class="btn alt" id="dvT">${S.magic.tower?'Tower is up':'Raise the wizard tower'}</button> ${!GUEST&&!VISIT&&nextIsleKind()?'<button class="btn alt" id="dvI">Raise the next isle</button>':''} <button class="btn alt" id="dvM">${S.devMagic?'Wizard needs requirements again':'Skip wizard requirements'}</button> <button class="btn alt" id="dvF">New favors now</button> <button class="btn alt" id="dvD">Town: skip a day</button> <button class="btn alt" id="dvR">Rare kit</button> <button class="btn alt" id="dvRf">Reef: skip to the rowboat</button> <button class="btn alt" id="dvRg">Reef: grow 12 coral</button> <button class="btn alt" id="dvWs">Workshop: skip ahead</button> <button class="btn alt" id="dvRl">Relics for the next isle</button> <button class="btn alt" id="dvSt">Phase 2: next story</button> <button class="btn alt" id="dvS3">Phase 3: next story</button> <br><b>Shops and tips</b> <button class="btn alt" id="dvSh3">Shops to tier 3 of 4</button> <button class="btn alt" id="dvSh4">Shops to the top tier</button> <button class="btn alt" id="dvBk">Back room: next week</button> <button class="btn alt" id="dvGb">Gill: next boat</button> <br><b>Enchanting and tables</b> <button class="btn alt" id="dvEnL">Learn every enchantment</button> <button class="btn alt" id="dvEnT">${S.rare&&S.rare.ench&&S.rare.ench.twin?'Two-enchantment trick learned':'Learn the two-enchantment trick'}</button> <button class="btn alt" id="dvEnI">+20 of each ingredient</button> <button class="btn alt" id="dvEnK">A Sturdy tool of each kind</button> ${!VISIT&&!TRIP?'<button class="btn alt" id="dvB1">Workbench here</button> <button class="btn alt" id="dvB2">Carpenter\'s Bench here</button> <button class="btn alt" id="dvB3">Master Workbench here</button>':''} <button class="btn alt" id="dvBA">${BN.dev.any?'Tables work normally again':'Count as a Master Workbench anywhere'}</button> <button class="btn alt" id="dvEn">All of it at once</button><br> <button class="btn alt" id="dvOff">Hide shortcuts</button></div>`:''}
     </div>
     <button class="btn warn" id="mReset">Start a new island</button>${saveOK?'':'<div class="muted" style="margin-top:8px">Saving isn\'t available in this browser.</div>'}`;
     $('#mParty').onclick=()=>{ closePanel(); setTimeout(()=>PARTY.open(), 50); };
@@ -7337,6 +7351,10 @@ function openMenu(){
     if (DEV){ $('#dvC').onclick=()=>{ S.clams+=50000; save(); updateHUD(); Snd.coin(); };
       { const on=(id,fn)=>{ const b=$('#'+id); if (b) b.onclick=fn; }, sturdy=()=>{ for (const t of Object.keys(TOOLS)) if (!S.tools[t]) EN.dev.give(t,1); updateToolBtn(); },   // v1.40
           bag=n=>n?` ${n} didn't fit in your bag.`:'', table=k=>{ const id=BN.dev.unlock(k), P=player.pos, rec={ id, x:P.x+1.8, z:P.z+(k-2)*2.4, rot:0 }; S.placed.push(rec); new Furniture(rec); save(); toast(`${ITEMS[id].name} placed next to you, with its plan and pieces learned.`, thumb(id)); };
+        const shopsTo=k=>{ for (const id of ['general','aquarium','garden']){ if (!S.shops[id]) continue; S.shops[id].tier=k; rebuildPlace(id); } save(); toast(`Pemberton, Marlo and Sprig are at tier ${k+1} of 4.`); };   // v1.44
+        on('dvSh3', ()=>shopsTo(2)); on('dvSh4', ()=>shopsTo(3));
+        on('dvBk', ()=>{ const b=SR.dev.nextWeek(); toast(`Back room: ${ITEMS[b.piece].name} this week${b.plan?', and maybe a plan':''}.`); });
+        on('dvGb', ()=>{ const I=incOf('boat'); if (I.tier<2){ I.tier++; I.since=sday(); if (I.tier===0){ I.last=sday(); I.acc=0; } save(); refreshIncome(); } toast(I.tier<0?'Gill has no boat.':`Gill has the ${INCOME.boat.tiers[I.tier].name}.`); });
         on('dvEnL', ()=>toast(`Learned ${EN.dev.learnEnch()} enchantments.`));
         on('dvEnT', ()=>{ EN.dev.learnTwin(); toast('Learned the two-enchantment trick. Binding a second one needs a Master Workbench.'); openMenu(); });
         on('dvEnI', ()=>toast('20 of each enchanting, tool and repair ingredient.'+bag(EN.dev.kit())));
@@ -8417,7 +8435,8 @@ function runWorldSync(){
   }
 }
 window.__game = { v140:EN.dev, v140b:BN.dev, v123:{ toolPitch, pitchTool, buyTool, talkShop, get storeVisit(){ return storeVisit; } }, v120:{ track, checkAch, achValue, grantWear, ownsWear, openAchievements, makeFavor, rollFavors, favorChoices, npcOf, clothesStock, wardrobeOwned, get Q(){ return Q; } }, party:PARTY, v119:{ tierPick, openChest, townCap:()=>townCap() }, v13:{ shopStock:w=>shopStock(w), learnPlan, rareRoll, knowsPlan, unfoundPlans, stockWeight, RARE_WORK, GroundItem, ShopItem, Furniture }, v1:{ scene, camera, OUT, updateSky, updateHUD, snowPass, SNOW_U, townNewDay, applyTown, talkHall, openHallPanel, buildPlaza, refreshStoreItems, buildStoreAll, buildShop, buildMuseumAll, spawnExhibits, mentorMoment, teachWoodworking, openCraft, doCook, nearStation, toggleSled, setSled, get sledding(){ return sledding; }, sledV, eatFood, Plant, fullBagCatch, KB, landSeaTap, terraLand, LAMPS:()=>LAMPS, hasUpstairs, ShopItem, Stairs, get exhibits(){ return exhibits; }, onDisplay, museumNeeds, museumExpand, museumFitState, museumTanks, renderer, nearestEnt:()=>nearestEnt(), doAction:()=>doAction(), openTankView, closeTankView, get tankView(){ return tankView; }, KEEPOUT, dayKeyOf, World, startPlacing, checkPlace, get placing(){ return placing; }, FX, homeStock, buyHome, draftUnowned, get homeRack(){ return homeRack; }, openShop, openBuild:(o)=>openBuild(o), closeBuild, get buildMode(){ return buildMode; }, ents, Tree, Stump, Weed, Bug, bugs, player, interact, layoutBar, pickNote, itemToast, reel, Fishing, fishes, spawnFish, WU, relayout, enterRoom:(id)=>enterRoom(id), trees }, get S(){ return S; }, dbg:{ setCine:(c)=>{ cine=c; }, showChoices:(t,c)=>showChoices(t,c), dialog:(...a)=>dialog(...a), setRiding:(v)=>setRiding(v), enterRoom:(id)=>enterRoom(id), openBuild:()=>openBuild(), rooms:()=>Object.keys(ROOMS), get yaw(){ return camYaw; }, set yaw(v){ camYaw=v; }, get riding(){ return riding; }, get snow(){ return SNOW_U.value; }, setWeather:(w)=>{ weatherOverride=w; World.weather=w; snowT=0; }, get dlg(){ return !!dlgState; } }, walkable, blocked, groundY, launchRag, ragdolls, swing, meBody, refreshPortals, portalArches, get portalEnt(){ return portalEnt; }, enterRoom, PLACES, net:{ party:(id,d)=>PARTY.onNet(id,d), trip:(id,name,d)=>onTripNet(id,name,d), bonked, visibleRemotes:()=>[...remotes.values()].filter(r=>r.obj.visible).map(r=>[r.name,+r.pos.x.toFixed(1),+r.pos.z.toFixed(1)]), remoteUpsert, remotePos, remoteLeave, remoteEmote, playerState, setInventory, toast:(m)=>toast(m), updateHUD:()=>updateHUD(), get started(){ return started; } }, ITEMS, itemThumb:(id)=>thumb(id), layoutInfo:()=>({ id:LAYOUT_ID, PLACES, PATHS, LOT, rects:RECTS.map(r=>r.slice(0,4)), lot:lotRect() }), terrainH:(x,z)=>rawHeight(x,z), terrainSlope:(x,z)=>hillSlope(x,z), interact, spawnBug:(id,x,z)=>new Bug(id,x,z), tapOdds:()=>Object.fromEntries(Object.keys(TAP_BASE).map(k=>[k, +tapChance({rarity:k}).toFixed(2)])), placingObj:()=>placing&&placing.m, toScreen:v=>{ const p=v.clone().project(camera); return [(p.x*0.5+0.5)*innerWidth, (-p.y*0.5+0.5)*innerHeight]; }, rebuildHome:()=>{ buildPlayerHouse(); rebuildHomeRoom(); }, openBuild, closeBuild, get buildMode(){ return buildMode; }, talkShop, openDonate, talkCurator, spawnMossby, onFelled, findPath, startPlacing, LOT, RECTS, shopEnts, museumEnt, houseEnt:()=>houseEnt, Time, player, ents, ITEMS, residents, World, ROOMS, goTo, handleTap, doAction, updateSky, rollDay, spawnDaily, castAt, Fishing, fishes, bugs, openBag, openBook, openShop, openBoard, openMenu, openCraft, doCraft, WOODWORK, enterRoom, exitRoom, equip, startLayout, endLayout, trees, applyControls, magic:{ startMagic, endMagic, landTap, magicPlace, castMagic, get mode(){ return magicMode; }, raiseTower, talkWizard, drinkPotion, potionOn, luckW, rollFavors, Q, favorChoices, findTowerSpot, get tower(){ return towerEnt; }, PLACES, TERRA, FALLS } };
-window.__game.net.applyWorld = applyWorld;   // v1.34 live island sync (online.js)
+window.__game.net.applyWorld = applyWorld;
+window.__game.v144 = Object.assign({ SR, shopStock:w=>shopStock(w), talkGill:()=>talkGill(), spawnFish:()=>spawnFish(), baySpawnShadow:()=>baySpawnShadow(), bayPool:()=>bayPool(), fishPool, incOf }, SR.dev);   // v1.44 tests   // v1.34 live island sync (online.js)
 // v1.26 test hooks
 window.__game.v126 = { townNewDay, applyTown, findHomeSpot, claimHomeSpot, townCap, incomeNewDay, refreshIncome, talkIncome, incCollect, incOf, INCOME, incEnts, openMap, talkSkipperHome, talkSkipperTrip, tripGoHome, tripRecap, storyWho, askToLeave, canAskToLeave, pitchOnBuy, merchantDay, get peddler(){ return peddler; }, get skipper(){ return skipper; }, newSquares, LOAN_MAX_SQ, TRIP, TRIP_THEME, residents, residentHomes, plotEnts, KEEPOUT, Q, PATHS, camTarget, updateCamera, set camDist(v){ camDist=v; }, get camDist(){ return camDist; }, set camYaw(v){ camYaw=v; } };
 window.__game.LETTERS = LETTERS;

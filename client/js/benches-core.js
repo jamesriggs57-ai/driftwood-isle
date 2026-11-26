@@ -38,7 +38,7 @@ export const BENCH_PIECES = [
 // items and recipes (same shape as furn() and WOODWORK in content.js; shop:'craft' keeps them out of every shop)
 for (const p of [...NEW_BENCHES, ...BENCH_PIECES]){
   if (!ITEMS[p.id]) def(p.id, { name:p.name, kind:'furniture', buy:p.buy, price:Math.round(p.buy/4), r:p.r, shop:'craft', stack:p.id.endsWith('bench')?1:5, model:{ t:'furn', b:p.id }, ...(p.glow?{ glow:true }:{}) });
-  if (!WOODWORK.some(r=>r.id===p.id)){ const r={ id:p.id, mats:p.mats, bench:p.bench }; WOODWORK.push(r); repriceCraft(r); }   // v1.45: sells for its materials, see content.js
+  if (!WOODWORK.some(r=>r.id===p.id)){ const r={ id:p.id, mats:p.mats, bench:p.bench }; WOODWORK.push(r); repriceCraft(r); }   // v1.48: sells for its materials, see content.js
 }
 for (const r of WOODWORK) if (r.bench===undefined) r.bench = FIELD.includes(r.id) ? 0 : 1;
 for (const r of RARE_WORK) if (r.bench===undefined) r.bench = 2;   // showpieces from rare plans

@@ -26,7 +26,7 @@ export const FRUIT_REGROW_DAYS = 3;   // a picked tree grows fruit again after t
 export const NATIVE_FRUITS = ['apple','pear','peach','orange','plum','cherry','lemon'];
 
 /* ---------- Materials ---------- */
-def('wood',     {name:'Wood',           kind:'material', price:20,  model:{t:'log'}});   // v1.39: halved (was 60); v1.45: 20 (was 30), so fish and bugs clearly out-earn chopping
+def('wood',     {name:'Wood',           kind:'material', price:20,  model:{t:'log'}});   // v1.39: halved (was 60); v1.48: 20 (was 30), so fish and bugs clearly out-earn chopping
 def('softwood', {name:'Driftwood Branch',kind:'material', price:20, model:{t:'branch'}});
 def('stone',    {name:'Stone',          kind:'material', price:75,  model:{t:'stone'}});
 def('clay',     {name:'Clay',           kind:'material', price:100, model:{t:'clay'}});
@@ -654,7 +654,7 @@ export const SHOPS = {
     perks:['', 'Bugs and flowers sell for 130%, saplings and moth lanterns', 'Bugs and flowers sell for 140%, rose arches', 'Bugs and flowers sell for 150%, garden fountains'] },
 };
 // Investing opens once you have a real house and you've done this much trade at the shop (buying plus selling).
-export const INVEST = { cost:[0,100000,200000,400000], trade:50000 };   // v1.45: was 300,000 and 800,000
+export const INVEST = { cost:[0,100000,200000,400000], trade:50000 };   // v1.48: was 300,000 and 800,000
 
 export const KEEPERS = {
   pemberton:{ id:'pemberton', acc:['beanie'], accC:0xf0c040, top:'overalls',  name:'Pemberton', species:'bear', ears:'round', fur:0x8a8a92, muzzle:0xf4f0ea, shirt:0x6a8a4a, cheek:0xe0a0a0, voice:300, stripe:true,
@@ -1195,7 +1195,7 @@ furn('beaconlamp','Lighthouse Lantern',8000,0.4,{ b:'lantern', shop:'trip', rari
 // A torn page in a bottle (opened where you find it, never kept in the bag)
 def('bottle_note', { name:'Message in a Bottle', kind:'note', price:0, stack:1, model:{ t:'ticket', c:0xc8a060 } });
 
-/* v1.45: what a crafted piece sells for follows what went into it.
+/* v1.48: what a crafted piece sells for follows what went into it.
    A piece made only from things you can gather all day (wood, branches, stone, weeds) sells for about its materials
    plus 15%, so crafting is a small bonus on top of chopping, not a money machine (3 fences from 2 wood paid 225).
    A piece that needs anything scarcer (iron, clay, stumps, planks, rare finds) keeps its old price, and never sells

@@ -29,7 +29,7 @@ import * as RF from './reef.js';
 import * as TH from './townhall.js';   // v1.49 town hall inside
 import { createEnchant } from './enchant.js';   // v1.40 tools and enchanting
 import { createBenches } from './benches.js';   // v1.40 crafting tables
-import { buildBike, MODEL, M, mk, G, outline, windowMat, glowMats, glowMat, glowSprites, addGlow, textSprite, PALETTE, buildItemModel, thumb, toolThumb, FURN_BUILDERS, MF,
+import { buildBike, MODEL, M, mk, G, outline, windowMat, glowMats, glowMat, glowSprites, addGlow, textSprite, PALETTE, buildItemModel, thumb, hasThumb, toolThumb, FURN_BUILDERS, MF,
   buildTree, buildStump, buildShrub, buildFlower, buildWildFlower, buildTool, buildAnimal, buildPlayer, buildHouse, buildStall, buildBoard, buildPlankDeck, buildRoom, buildBird, buildGull, buildDuck, buildWeedClump } from './models.js';
 import './furn.js';
 import './decor2.js';
@@ -42,7 +42,7 @@ import { openCreator } from './creator.js';
 import { createParty } from './party.js';
 import { buildPlot, buildStand, buildStore, buildTownHall, buildMuseumTier, buildCrop, buildStairs } from './models3.js';
 import { buildCottage, cottageStyle as COTTAGE_STYLE, mergeStatic } from './cottage.js';
-import { MIX_GROUPS, FOSSIL_CAP, SHELL_CAP, TANK_GROUPS, tankOf, isBigFossil, museumLayout, buildMuseumHall, buildDesk, buildBench, buildPalm, buildCenterpiece, buildShellCase, shellSlots, buildPedestal, fossilModel, shellModel, buildTank, buildTankView } from './museum.js';
+import { MIX_GROUPS, FOSSIL_CAP, SHELL_CAP, TANK_GROUPS, tankOf, isBigFossil, museumLayout, buildMuseumHall, buildDesk, buildBench, buildPalm, buildCenterpiece, buildShellCase, shellSlots, buildPedestal, fossilModel, shellModel, buildFossilCase, fossilCaseSlots, caseFossilModel, FCASE_TOP, buildTank, buildTankView } from './museum.js';
 import { buildShopBuilding, buildMuseum, buildKeeper, buildMossby, buildExhibit, buildTower, buildWizard } from './models2.js';
 import { hasUpstairs, winAt, winKey, trelAt, balcAt, buildCustomHouse, buildHomeInterior, planGrid, planCells, planProblem, fixDoor, linkKey, linkOf, defaultExt, defaultRoom,
   NFLOORS, FLOOR_KEYS, STAIR_KEYS, FLOOR_NAME, FLOOR_SHORT, floorOf, floorHas, topFloor, stairsOf, shiftPlan, ex as hex_, ez as hez_, ix as hix_, iz as hiz_, cellInside, ridgeOf, cellRects,
@@ -1192,7 +1192,7 @@ class Rock extends Ent {
     if (TRIP_THEME==='clamstone'){ const amt=[1000,2000,4000,8000][u]; addClams(amt); Snd.coin(); toast('A pouch of '+fmt(amt)+' clams popped out!'); }   // v1.27; v1.48 no haul cap
     else if (this.idx===S.day.lucky){ const amt=[100,200,400,800][u]; addClams(amt); Snd.coin(); toast('A pouch of '+amt+' clams popped out!'); }
     else if (this.rich){ for (let k=0;k<out;k++){ const x=Math.random(); dropNear(x<CRAG_ROCK.stone?'stone':(x<CRAG_ROCK.stone+CRAG_ROCK.clay?'clay':'iron'), this.pos, 1.7); if (Math.random()<CRAG_ROCK.bonus) dropNear('iron', this.pos, 1.7); }   // v1.57 the crags' iron-heavy rock
-      if (Math.random()<CRAG_ROCK.fossil){ const f=tierPick(Math.random, Object.values(ITEMS).filter(i=>i.kind==='fossil' && allowedFind(i)), i=>luckW(i,'dig'), 'dig'); if (f){ dropNear(f.id, this.pos, 1.4); toast('Something was pressed into the stone!'); } }
+      if (Math.random()<CRAG_ROCK.fossil){ const f=pickFossil(); if (f){ dropNear(f.id, this.pos, 1.4); toast('Something was pressed into the stone!'); } }
       if (Math.random()<CRAG_ROCK.emerald){ const first=!S.seen.emerald; dropNear('emerald', this.pos, 1.4); sparkle(this.pos.clone().add(new THREE.Vector3(0,1.4,0))); Snd.fanfare(); toast(first ? 'An emerald! The first you\'ve found.' : 'An emerald!', thumb('emerald'), 'new', `Emerald ${rarityTag(ITEMS.emerald)}`); S.stats.emeralds=(S.stats.emeralds|0)+1; }   // v1.59 joins this rock's pickup pile
       rareRoll(World.night>0.5?'rockNight':'rock', 'starstone', this.pos); }
     else { for (let k=0;k<out;k++){ const x=Math.random(), q=[0.6,0.88]; dropNear(x<q[0]?'stone':(x<q[1]?'clay':'iron'), this.pos, 1.7); } rareRoll(World.night>0.5?'rockNight':'rock', 'starstone', this.pos); } }
@@ -1206,7 +1206,7 @@ class DigSpot extends Ent {
   constructor(i,x,z){ super('dig',x,z,0.4); this.i=i; this.reach=1.3; const g=new THREE.Group(); for(const a of [0.6,-0.6]){ const m=mk(G.box(0.7,0.03,0.12), M(0x6a4a30), 0,0.03,0,g); m.rotation.y=a; m.castShadow=false; } this.attach(g); this.hitSphere(0.5,0.2); }
   label(){ return 'Dig'; }
   act(){ if(!needTool('shovel') || !useTool('shovel')) return; Snd.dig(); puff(this.pos.clone().add(new THREE.Vector3(0,0.2,0)), 0xb08a5a, 8, 0.6, 2.5, 1, 0.6); S.day.digs[this.i].dug=true; S.stats.dug++; track('dig'); FX.hole(this.pos.clone(), 0.5, 1.6);
-    const f=tierPick(Math.random, Object.values(ITEMS).filter(i=>i.kind==='fossil' && allowedFind(i)), i=>luckW(i,'dig'), 'dig'); this.remove(); { const o=EN.output('shovel'), p=this.pos.clone(); setTimeout(()=>{ for (let k=0;k<o;k++) dropNear(f.id, p, k?0.8:0.3, !k); }, 200); }
+    const f=pickFossil(); this.remove(); { const o=EN.output('shovel'), p=this.pos.clone(); setTimeout(()=>{ for (let k=0;k<o;k++) dropNear(f.id, p, k?0.8:0.3, !k); }, 200); }
     if (Math.random()<(potionOn('dig')?0.25:0.12)){ setTimeout(()=>{ const got=grantRandomStyle(); if(got){ Snd.jingle(); toast(`Swatch book: ${got}`); } }, 900); }
     if (!GUEST && Math.random()<rareChance('digPlan','dig')){ const pl=randomPlan(); if (pl){ const p=this.pos.clone(); setTimeout(()=>{ dropNear(pl, p, 0.9); sparkle(p.clone().add(new THREE.Vector3(0,1,0))); Snd.jingle(); toast('Something rolled up in the dirt...', thumb(pl), 'new', 'A rare plan!'); }, 1100); } }
     woodPlanRoll(0.015, this.pos);   // v1.34
@@ -2097,7 +2097,8 @@ function refreshStands(){ for (const id of ['aquarium','garden']) if (shopTier(i
 /* The museum starts as one small room and each section grows on its own once it runs out of room (v1.22):
    - fish and bugs share one tank each (8 spaces) until it overflows; then that section gets its own wing with one
      themed tank per group, and later a new tank whenever a group with no tank yet gets its first donation
-   - fossils: 3 pedestals in the main room, then a Fossil Hall with 6, then a second row for the rest
+   - fossils: 3 pedestals in the main room, then a Fossil Hall with 6, then (v1.63) the full Fossil Hall with a spot for
+     every fossil in the game: a pedestal for each big one and themed glass cases for the rest
    - beach finds: a small case of 4, then a long case of 8
    A donation that doesn't fit waits in the back room; the builders make room overnight. */
 const _ord = Object.fromEntries(Object.keys(ITEMS).map((k,i)=>[k,i]));
@@ -2122,7 +2123,7 @@ function museumPlans(){ const st=S.museum.st, out=[];
     if (k==='fish'||k==='bug'){ const nm=k==='fish'?'Aquarium':'Insectarium';
       if (!st[k]) out.push(`a proper ${nm} wing with a tank for each kind of ${k==='fish'?'fish':'bug'}`);
       else { const add=sortGroups(k, donatedOf(k).map(tankGid)).filter(g=>!st[k].includes(g)); out.push(`a new ${add.map(g=>tankName(k,g)).join(' and ')} ${k==='fish'?'tank':'terrarium'} in the ${nm}`); } }
-    if (k==='fossil') out.push(st.fossil===0 ? 'a Fossil Hall across the back' : 'a second row of pedestals in the Fossil Hall');
+    if (k==='fossil') out.push(st.fossil===0 ? 'a Fossil Hall across the back' : 'the full Fossil Hall, with a pedestal or a glass case spot for every fossil there is');
     if (k==='shell') out.push('a bigger case for the beach finds'); }
   return out; }
 function museumExpand(){ const st=S.museum.st, plans=museumPlans();
@@ -2147,6 +2148,7 @@ function buildMuseumAll(){
   for (const [x,z,ry] of LY.benches) put(buildBench(), x, z, ry);
   for (const [x,z] of LY.plants) put(buildPalm(), x, z);
   put(buildShellCase(LY.shells.len, LY.shells.slots), LY.shells.x, LY.shells.z);
+  if (LY.fcases) for (const c of LY.fcases) put(buildFossilCase(c.len, c.name, c.sub), c.x, c.z);
   if (LY.center) put(buildCenterpiece(t), LY.center.x, LY.center.z);
   ROOMS.museum={ id:'museum', ox, oz, w:W, d:D, group:container, shell, spec:{ mood:'museum' }, layout:LY, entry:[ox, oz+D/2-1.2], exit:[museumEnt.doorPt[0], museumEnt.doorPt[1]+0.2], bed:[ox,oz],
     walk:(x,z)=>{ const lx=x-ox, lz=z-oz; if (!(Math.abs(lx)<W/2-0.4 && lz>-D/2+0.4 && lz<D/2-0.05)) return false; for (const b of LY.blocks) if (lx>b[0]-0.28 && lx<b[2]+0.28 && lz>b[1]-0.28 && lz<b[3]+0.28) return false; return true; } };
@@ -4678,6 +4680,9 @@ function tierPick(r, pool, wf, luckKey){
   if (base<=0) return weightedPick(r, pool, wf);
   const boost = (luckKey && potionOn(luckKey) ? 3 : 1)*(luckKey ? EN.luck(luckKey) : 1);
   return weightedPick(r, pool, i=>{ const t=tier(i); return TIER_SHARE[t] ? base*TIER_SHARE[t]*boost/n[t] : wf(i); }); }
+// v1.63: with 80 fossils, one you've never found is twice as likely to turn up as one you have, so the last few don't take
+// forever. (The Very rare and Legendary ones keep their own fixed share, so this doesn't touch the Mammoth Tusk or the Dino Egg.)
+function pickFossil(){ return tierPick(Math.random, Object.values(ITEMS).filter(i=>i.kind==='fossil' && allowedFind(i)), i=>luckW(i,'dig')*(S.seen[i.id]?1:2), 'dig'); }
 
 /* ---------- v1.13 rare finds: showpiece plans and rare ingredients ----------
    Plans are learned the moment you pick one up (no duplicates). Ingredients turn up by chance while
@@ -6742,6 +6747,10 @@ const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov',
 function monthsText(ms){ if(!ms||ms==='all') return 'All year'; return ms.length>4? MONTHS[ms[0]-1]+' to '+MONTHS[ms[ms.length-1]-1] : ms.map(m=>MONTHS[m-1]).join(', '); }
 function hoursText(h){ if(!h) return 'All day'; const f=x=>{ const a=x%24; return (a%12||12)+(a<12?'am':'pm'); }; return f(h[0])+' to '+f(h[1]); }
 const WHERE = { bay:'Cay Bay', sea:'Sea', river:'River', pond:'Pond', air:'Flying', flower:'On flowers', trunk:'On tree trunks', ground:'On the ground', beach:'On the beach', glade:'In Lumi\'s glade', starfall:'On Starfall Isle' };
+// v1.63: pictures that haven't been drawn yet come in a few each frame, so a page of 80 fossils opens at once
+function fillThumbs(root){ const step=()=>{ const imgs=[...root.querySelectorAll('img[data-th]')].filter(i=>i.isConnected); if (!imgs.length) return; const t0=performance.now();
+    for (const im of imgs){ im.src=thumb(im.dataset.th); im.removeAttribute('data-th'); if (performance.now()-t0>12) break; }
+    requestAnimationFrame(step); }; requestAnimationFrame(step); }
 function openBook(tab='fish'){
   const tabs=[['fish','Fish'],['bug','Bugs'],['fossil','Fossils'],['shell','Beach'],['flower','Flowers'],['furniture','Furniture']];
   const render=()=>{
@@ -6751,8 +6760,9 @@ function openBook(tab='fish'){
     for(const it of list){ const k=!!S.seen[it.id]; let sub='';
       if (it.kind==='fish'||it.kind==='bug'){ const R=S.rec[it.id]; sub = k ? `${whereText(it)} · ${monthsText(it.months)} · ${hoursText(it.hours)}${it.weather?' · rain only':''}<br>${rarityTag(it)} ${R?`Caught ${R.n} · Biggest ${it.kind==='fish'?R.l+' cm':R.l+' mm'}`:''}${S.museum.items[it.id]?' · <b>In the museum</b>':''}` : `${whereText(it)} · Not found yet`; }
       else sub = k ? 'Worth '+fmt(it.price)+' clams'+(S.museum.items[it.id]?' · <b>In the museum</b>':'') : 'Not found yet';
-      h+=`<div class="row" style="${k?'':'opacity:.72'}"><div class="slot ${k?'':'unk'}" style="width:56px;border-width:2px"><img src="${thumb(it.id)}"></div><div class="grow"><div class="nm">${k?it.name:'???'}</div><div class="sub">${sub}</div></div></div>`; }
+      h+=`<div class="row" style="${k?'':'opacity:.72'}"><div class="slot ${k?'':'unk'}" style="width:56px;border-width:2px"><img ${hasThumb(it.id)?`src="${thumb(it.id)}"`:`data-th="${it.id}"`}></div><div class="grow"><div class="nm">${k?it.name:'???'}</div><div class="sub">${sub}</div></div></div>`; }
     pBody.innerHTML=h; pBody.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>{ tab=b.dataset.t; Snd.click(); render(); pBody.scrollTop=0; });
+    fillThumbs(pBody);
   };
   openPanel('Collection Book'); render();
 }
@@ -7005,16 +7015,26 @@ class MuseumTank extends Ent {
   act(){ openTankView(this); }
   update(dt,t){ const u=this.obj.userData; if (u.update && World.inside==='museum') u.update(t,dt); }
 }
-const exhibits={}, museumTanks=[];
-function clearMuseumEnts(){ for (const id in exhibits){ exhibits[id].remove(); delete exhibits[id]; } for (const e of museumTanks) e.remove(); museumTanks.length=0; }
+const exhibits={}, museumTanks=[], exhibitQ=[]; let exhibitJob=false;
+// Fossil models are made while you're in the museum, about 8 ms of work a frame. Each one is made once a session and
+// copied after that (models.js), so later visits fill in at once.
+function queueExhibit(fn){ exhibitQ.push(fn); if (exhibitJob) return; exhibitJob=true;
+  FX.add(()=>{ if (World.inside!=='museum') return true; const t0=performance.now();
+    do { const f=exhibitQ.shift(); try { if (f) f(); } catch(e){ console.warn(e); } } while (exhibitQ.length && performance.now()-t0<8);
+    if (exhibitQ.length) return true; exhibitJob=false; return false; }); }
+function clearMuseumEnts(){ exhibitQ.length=0; for (const id in exhibits){ exhibits[id].remove(); delete exhibits[id]; } for (const e of museumTanks) e.remove(); museumTanks.length=0; }
 // Everything on display is rebuilt together (cheap, and only when something changes)
 function spawnExhibits(){ const R=museumRoom(); if (!R || !R.layout) return; clearMuseumEnts(); const LY=R.layout;
   const shown={ fish:onDisplay('fish'), bug:onDisplay('bug') };
   for (const T of LY.tanks) museumTanks.push(new MuseumTank(T, R, shown[T.kind]));
-  const fos=onDisplay('fossil');
-  LY.pedestals.forEach((p,i)=>{ const id=fos[i]||null, big=!!id && isBigFossil(id), g=buildPedestal(id, p.h, big, !!id); let m=null;
-    if (id){ m=fossilModel(id, big); m.position.y=p.h+0.05+m.userData.h/2+0.02; g.add(m); }
-    exhibits[id||('ped'+i)]=new Exhibit(id, R.ox+p.x, R.oz+p.z, g, m, 'fossil'); });
+  const fos=onDisplay('fossil'), full=!!LY.fcases, have=new Set(fos);
+  // v1.63: fossil models come in a few per frame once you're inside (80 of them would freeze a phone for seconds)
+  LY.pedestals.forEach((p,i)=>{ const id=full ? (have.has(p.id)?p.id:null) : (fos[i]||null), big=full || (!!id && isBigFossil(id)), g=buildPedestal(id, p.h, big, !!id);
+    const e=exhibits[id||('ped'+i)]=new Exhibit(id, R.ox+p.x, R.oz+p.z, g, null, 'fossil');
+    if (id) queueExhibit(()=>{ const m=fossilModel(id, big); m.position.y=p.h+0.05+m.userData.h/2+0.02; g.add(m); m.traverse(c=>{ c.userData.ent=e; }); e.spin=m; }); });
+  if (full) for (const c of LY.fcases){ const sl=fossilCaseSlots(c.len);
+    c.ids.forEach((id,i)=>{ if (!have.has(id) || !sl[i]) return; const g=new THREE.Group(), e=exhibits[id]=new Exhibit(id, R.ox+c.x+sl[i][0], R.oz+c.z+sl[i][1], g, null, 'fossil');
+      queueExhibit(()=>{ const m=caseFossilModel(id); m.position.y=FCASE_TOP+m.userData.h/2+0.005; g.add(m); m.traverse(k=>{ k.userData.ent=e; }); }); }); }
   const sl=shellSlots(LY.shells.len, LY.shells.slots); onDisplay('shell').forEach((id,i)=>{ if (!sl[i]) return; const m=shellModel(id), g=new THREE.Group(); m.position.y=0.89+m.userData.h/2; g.add(m);
     exhibits[id]=new Exhibit(id, R.ox+LY.shells.x+sl[i][0], R.oz+LY.shells.z+sl[i][1], g, null, 'shell'); }); }
 
@@ -7419,7 +7439,7 @@ function setupIslet(){
   else {   // sunken temple ruins with a fossil inside
     const g=buildTempleRuins(); g.position.set(I.x, groundY(I.x,I.z)-0.1, I.z); g.rotation.y=Math.atan2(I.x,I.z); OUT.add(g);
     for (const [x,z] of LAY.stones){ const s=mk(G.cyl(0.85,0.95,0.3,9), M(0xa8a090,{ flatShading:true }), 0,0,0); s.position.set(x, 0.22, z); s.rotation.y=x; OUT.add(s); }
-    if (!TX.templeDug) new SecretDig(I.x, I.z+0.4, ()=>true, pos=>{ TX.templeDug=true; const f=tierPick(Math.random, Object.values(ITEMS).filter(i=>i.kind==='fossil' && allowedFind(i)), i=>luckW(i,'dig'), 'dig'); setTimeout(()=>dropNear(f.id, pos, 0.3, true), 200); toast('Something old was buried in the temple floor.'); }, true);
+    if (!TX.templeDug) new SecretDig(I.x, I.z+0.4, ()=>true, pos=>{ TX.templeDug=true; const f=pickFossil(); setTimeout(()=>dropNear(f.id, pos, 0.3, true), 200); toast('Something old was buried in the temple floor.'); }, true);
     placeSign(LAY.stones[0][0]-0.2, LAY.stones[0][1]+1.6, 'Old stones', ['Stepping stones lead out to a half-sunken temple.', 'Locals say something was buried in its floor long ago.']); } }
 function setupTortoise(){
   const T=LAY.tortoise, g=buildTortoise(T); g.position.set(T.x, 0, T.z); g.rotation.y=-T.a; OUT.add(g);

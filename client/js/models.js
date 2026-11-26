@@ -7,6 +7,15 @@ import * as CR from './critters.js';
 import * as C2 from './critters2.js';
 import * as CH from './chars.js';
 const buildFossilInto=CR.buildFossilInto;
+import { buildFossil2Into } from './fossils2.js';
+// v1.63: every fossil is built once and handed out as copies that share its shapes and paints (the wave 2 ones take a few
+// milliseconds each to carve, and the museum, the bag icon and the dig drop all want one)
+const FOSSIL_TPL = new Map();
+function fossilInto(g, id, d){
+  let t=FOSSIL_TPL.get(id);
+  if (!t){ t=new THREE.Group(); if (!buildFossil2Into(t, d)) buildFossilInto(t, d); t.traverse(o=>{ if (o.geometry) o.geometry.userData.shared=true; }); FOSSIL_TPL.set(id, t); }
+  for (const c of t.children) g.add(c.clone());
+}
 import { felt, knit, eyeMat, noseMat, glintMat, threadMat, fabricMat, fishSkin, fishLook, finMat, wingTex, wingLook, clearWingMat, shellMat, fuzzMat, woodMat, glassMat, brass, ceramic, waterMat2 } from './look.js';
 
 export const MODEL = { season:'autumn', month:11 };
@@ -236,7 +245,7 @@ export function buildItemModel(id){
     else if(d.s==='glass'){ mk(G.dod(0.18), MF(d.c,{transparent:true,opacity:0.75,roughness:0.15}), 0,0.12,0,g).scale.set(1.2,0.5,1); }
     else if(d.s==='pearl'){ const a=mk(G.sph(0.28,12,6,0,TAU,0,Math.PI/2), M(d.c), 0, 0.05, 0, g); a.scale.set(1,0.4,0.9); const b=mk(G.sph(0.28,12,6), M(0xb8c0c8), -0.05, 0.25, -0.12, g); b.scale.set(1,0.25,0.9); b.rotation.x=-0.7; mk(G.sph(0.1,14,12), M(0xfdf8f0,{roughness:0.15,metalness:0.3}), 0, 0.14, 0.02, g); }
   }
-  else if (d.t==='fossil') buildFossilInto(g, d);
+  else if (d.t==='fossil') fossilInto(g, id, d);
   else if (d.t==='fish') (d.x?C2.buildFishInto:CR.buildFishInto)(g, d, id);
   else if (d.t==='bug') (d.x?C2.buildBugInto:CR.buildBugInto)(g, d, id);
   else if (d.t==='furn') FURN_BUILDERS[d.b](g);
@@ -393,6 +402,7 @@ function renderThumb(key, m){
   return thumbCache[key]=url;
 }
 export const thumb = id => thumbCache[id] || renderThumb(id, buildItemModel(id));
+export const hasThumb = id => !!thumbCache[id];   // v1.63: lets long lists draw their pictures a few at a time
 export const toolThumb = (type,tier) => thumbCache['tool:'+type+tier] || renderThumb('tool:'+type+tier, (()=>{ const g=buildTool(type,tier); g.rotation.z=-0.6; return g; })());
 
 /* ---------- Furniture ---------- */

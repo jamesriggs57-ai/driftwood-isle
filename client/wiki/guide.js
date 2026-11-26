@@ -11,7 +11,7 @@
    built in wiki.js. Writing rules: plain words, no em dashes, no emoji, only facts the code supports.
    ===================================================================== */
 
-export const GUIDE_VERSION = 'v1.62';
+export const GUIDE_VERSION = 'v1.63';
 export const GUIDE_UPDATED = '2026-11-26';
 
 const tip = s => `<div class="tip"><b>Tip</b> ${s}</div>`;
@@ -189,7 +189,7 @@ ${note('If the islander a story favor was written for doesn\'t live on your isla
 <h3>How it grows</h3>
 <p>It starts as one small room: a shared tank (8 fish), a shared terrarium (8 bugs), 3 fossil pedestals and a 4-space case of beach finds. When a section runs out of room, the donation waits in the back room and builders expand that night:</p>
 <ul><li>Fish or bugs past 8: an <b>Aquarium</b> wing (left) or <b>Insectarium</b> wing (right) with one themed tank per group. A group's tank is built the night after its first donation, so the wings get longer as you fill them. Fish groups: Pond &amp; Marsh, River Run, Coastal Shallows, Cay Bay Reef, Sandy Shallows, Reef Wonders, Rapids &amp; Riverbed, Lily Pool, Isles &amp; Far Shores, The Deep, Reef &amp; Open Ocean. Bug groups: Butterfly Garden, Garden &amp; Pond, Woodland &amp; Shore, Butterfly House, Flies, Wasps &amp; Lacewings, Beetle Hall, Creepy Crawlies, Hoppers, Mimics &amp; Shore, Moon Moths, Moths &amp; Night Lights.</li>
-<li>Fossils past 3: a <b>Fossil Hall</b> across the back; past 6, more rows.</li>
+<li>Fossils past 3: a <b>Fossil Hall</b> across the back. Past 6: the <b>full Fossil Hall</b>, the width of the whole museum, with a spot for every fossil in the game. The 16 big fossils (the skulls, the Mammoth Tusk, the Dino Egg and the like) each have their own pedestal in two rows at the back, and the other 64 sit in 8 themed glass cases of 8 in front of them: Shells of the Old Sea, Clams and Corals, Stars and Sea Lilies, Trilobites and Crawlers, Ancient Plants, Fish and Swimmers, Amber and Small Wonders, and Dinosaurs and Ice Age. An empty pedestal or an empty tray in a case means that fossil is still out there.</li>
 <li>Beach finds past 4: an 8-space case.</li></ul>
 <p>The outside building grows a step per wing. The first wing counts as "outgrowing its cottage" for the Grand Town Hall. All three wings are needed for Lantern Bluff.</p>
 <p>Click a tank (or walk up and press View) for a fullscreen view: tap a specimen for its card (where, when, your biggest).</p>
@@ -754,7 +754,7 @@ ${steps(['Talk to them and pick <b>Come and meet people</b>. They follow you for
 <h3>Isle, Starfall and trip bugs</h3>
 <p>Isle bugs only come out while you're on or right by their isle, and they always land on it. Clover Meadow: Spittlebug (flowers) and Cuckoo Wasp (flying). Old Pinewood: Longhorn Beetle and Moss Katydid (tree trunks). Sandpiper Dunes: Antlion (ground) and Mole Crab (beach). Lantern Bluff: Garden Tiger Moth (flying) and Lanternfly (tree trunks). Hollow Crags: Cave Cricket and Rock Scorpion (ground) and the Atlas Beetle (tree trunks). Starfall Isle adds the Star Plume Moth and the Ribbontail Moth to its sky bugs.</p>
 <p>Trip bugs: Orchard Isle (Shield Bug), Bloom Isle (Bee Fly), Castaway Isle (Giraffe Weevil, Atlas Moth, Golden Birdwing), Fossil Bluffs (Scorpionfly), Moonlit Isle (Moonlit Glow-worm) and Frost Isle (Ice Crawler).</p>` },
-{ id:'fossils', group:'catalog', title:'Fossils and beach finds', data:'dig', html:`<p>Dig cracks with a shovel for fossils. Beach finds wash up daily. Very rare finds come up about 0.4% of the time as a group, legendary about 1 in 5,000.</p>` },
+{ id:'fossils', group:'catalog', title:'Fossils and beach finds', data:'dig', html:`<p>Dig cracks with a shovel for fossils. There are 80 kinds. A fossil you have never found is twice as likely to turn up as one you have, so the last few come sooner. That doesn't apply to the very rare and legendary ones, which keep their own odds. Beach finds wash up daily. Very rare finds come up about 0.4% of the time as a group, legendary about 1 in 5,000.</p>` },
 { id:'fruit', group:'catalog', title:'Fruit, flowers and plants', data:'plants', html:`<p>Your island has one native fruit (100). Every other fruit sells for 250.</p>` },
 { id:'materials', group:'catalog', title:'Materials and special items', data:'materials', html:`` },
 { id:'furniture', group:'catalog', title:'Furniture', data:'furniture', html:`<p>Shop furniture sells for a quarter of its buy price. Pieces you make sell for about what went into them (see Woodworking). "Where" shows where a piece comes from.</p>` },
@@ -788,6 +788,7 @@ ${steps(['Talk to them and pick <b>Come and meet people</b>. They follow you for
 { id:'changes', group:'done', title:'What\'s changed', html:`
 <p>Recent updates, newest first.</p>
 <ul>
+<li><b>v1.63</b>: 69 new fossils, 80 in all, each with its own model: shells, corals, sea life, trilobites, ancient fish and sea reptiles, plants, amber, dinosaur skulls and bones, Ice Age mammals and more. A fossil you haven't found yet is twice as likely to turn up. Once more than 6 fossils are donated, the museum builds the full Fossil Hall with a pedestal or a glass case spot for every fossil (see The museum). New achievements for 25, 50 and all 80 fossils and for 250 and 288 museum displays; the old 11-fossil one is now called Fossil Shelf.</li>
 <li><b>v1.62</b>: The far shore now goes all the way round your island instead of off one side, so the island keeps its shape and simply grows, and Wendell's isles move out with the coast. Islands that had the one-sided far shore are moved over once; everything on the old part of the island stays put (see The far shore). Reroll in the island maker now makes a genuinely different island each time.</li>
 <li><b>v1.61</b>: Fixed signed-in islands with a town hall getting stuck on "Building the island..." the first time they loaded on a new day. Nothing on the island was lost.</li>
 <li><b>v1.60</b>: The old lighthouse on Lantern Bluff is now about two and a half times as tall and you can walk inside and climb it. It starts out broken down and gets mended step by step as the lighthouse story goes on. You now fit the lamp from the lamp room at the top.</li>

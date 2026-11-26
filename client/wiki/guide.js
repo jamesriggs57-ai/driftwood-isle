@@ -11,7 +11,7 @@
    built in wiki.js. Writing rules: plain words, no em dashes, no emoji, only facts the code supports.
    ===================================================================== */
 
-export const GUIDE_VERSION = 'v1.56';
+export const GUIDE_VERSION = 'v1.58';
 export const GUIDE_UPDATED = '2026-11-26';
 
 const tip = s => `<div class="tip"><b>Tip</b> ${s}</div>`;
@@ -54,8 +54,10 @@ ${tip('Everything unlocks quietly. Characters hint at what they want in their ow
 <tr><td>Space</td><td>Swing your tool (chop, dig, cast, catch, water)</td></tr><tr><td>Q</td><td>Switch tool</td></tr>
 <tr><td>B</td><td>Bike</td></tr><tr><td>G</td><td>Sled (winter)</td></tr><tr><td>I</td><td>Bag</td></tr><tr><td>Z / C</td><td>Turn the camera</td></tr></table>
 <p>Drag to look around. Clicking the ground walks you there (turn it off in Menu &gt; Controls). Every key can be changed in Menu &gt; Controls.</p>
+<p>Clicking one thing a tree or rock dropped (fruit, branches, wood, stone, clay, iron, and any rare find, plan or scroll from it) picks up everything else that same tree or rock dropped, as long as it fits in your bag. Pieces still falling go straight into your bag when they land. Pressing E picks up one thing at a time. Beach finds and things you dropped yourself are always picked up one at a time.</p>
 <h3>Phone and tablet</h3>
 <p>A joystick sits bottom left. The green <b>Act</b> button uses and talks; the orange <b>Swing</b> button shows whenever you hold a tool. You can switch to tap-to-walk and resize or move the controls in Menu &gt; Controls; the choice is remembered on that device.</p>
+<p>Tapping one thing a tree or rock dropped picks up the rest of that drop too, the same as clicking on a computer. The Act button picks up one at a time.</p>
 <p>The top bar keeps Bike, Build (near home), Bag and More. Book, Craft, Sled, Friends and Menu are under More.</p>
 ${tip('Menu &gt; Battery saver lowers resolution and turns off shadows if your phone gets warm.')}
 `},
@@ -142,8 +144,8 @@ ${note('Guest mode caps your wallet at 10,000 clams. Make an account to lift it.
 `},
 
 { id:'farshore', group:'island', title:'The far shore', html:`
-<p>Since v1.56 one side of your island reaches further out to sea: about half as much land again, all on that one side. It's left wild.</p>
-<ul><li><b>Which side</b>: picked once for each island, the first time it loads after v1.56, and it never moves after that. It stays clear of the dock, the river mouth, the waterfall, Wendell's isles (raised or still to come) and their bridges. Usually that is the northwest, between where Clover Meadow and Lantern Bluff rise; on an island where some isles were already up it can be another side.</li>
+<p>Since v1.58 one side of your island reaches further out to sea: about half as much land again, all on that one side. It's left wild.</p>
+<ul><li><b>Which side</b>: picked once for each island, the first time it loads after v1.58, and it never moves after that. It stays clear of the dock, the river mouth, the waterfall, Wendell's isles (raised or still to come) and their bridges. Usually that is the northwest, between where Clover Meadow and Lantern Bluff rise; on an island where some isles were already up it can be another side.</li>
 <li><b>What grows there</b>: a few low hills, grass and wild flowers, trees, fruit trees of your island's fruit, palms along its beach, and a few rocks to hit.</li>
 <li><b>What turns up</b>: bugs, dig spots, weeds and beach finds, like anywhere else on the island.</li>
 <li><b>What doesn't</b>: no paths, and nobody moves in out there. New islanders' houses, the keepers and the town's buildings all go on the old part of the island.</li>
@@ -350,14 +352,22 @@ ${tip('Making 14 <b>different</b> pieces is what starts Bramble\'s workshop stor
 { id:'isles', group:'magic', title:'Wendell\'s isles', html:`
 <p>Once the tower is up and the island is ready, Wendell starts talking about old land sunk under the sea ("You look distracted"). He raises six isles, one at a time, at least 3 days apart. He never lists requirements: he says one hint for the first thing missing, in this order: relics, then the town hall, trade (shops), the museum, a neighbor's dream, then the price.</p>
 <table class="t"><tr><th>#</th><th>Isle</th><th>Hidden requirements</th><th>Relics</th><th>Clams and materials</th><th>What's there</th></tr>
-<tr><td>1</td><td>Clover Meadow</td><td>Town Hall, one shop backed</td><td>Heartwood Acorn</td><td>60,000, 30 wood, 15 stone, 10 flowers</td><td>Grass, wildflowers, an orchard of a fruit you don't grow, an old windmill</td></tr>
-<tr><td>2</td><td>Sandpiper Dunes</td><td>Marlo backed, museum's first wing</td><td>Sunken Ley Stone</td><td>120,000, 10 beach finds, 20 branches, 6 coconuts</td><td>Sand hills, palms, a shipwreck, good beachcombing, extra coral</td></tr>
-<tr><td>3</td><td>Old Pinewood</td><td>Grand Town Hall, Pemberton backed, Bramble's workshop dream open</td><td>Frostpine Cone, Amber Sliver, Heartwood Acorn</td><td>180,000, 60 wood, 20 stone</td><td>Misty pines that grow back overnight, the Grandfather Stump, site of Bramble's workshop</td></tr>
-<tr><td>4</td><td>Lantern Bluff</td><td>All three museum wings, the workshop open</td><td>Moonsap Vial</td><td>220,000, 30 planks, 8 iron, 10 clay</td><td>Cliff-top plateau, pines, good rocks, the old lighthouse</td></tr>
-<tr><td>5</td><td>Hollow Crags</td><td>All three shops at tier 2, the reef at Teeming</td><td>Amber Sliver, Living Coral Crown</td><td>350,000, 15 iron, 30 stone, 2 fossils</td><td>Mossy stone spires, ruins, iron-rich rocks; site of Pemberton's forge</td></tr>
+<tr><td>1</td><td>Clover Meadow</td><td>Town Hall, one shop backed</td><td>Heartwood Acorn</td><td>60,000, 30 wood, 15 stone, 10 flowers</td><td>Grass and wildflower fields, an orchard of a fruit you don't grow, a fishing pond with a brook and a footbridge, low hills, an old windmill</td></tr>
+<tr><td>2</td><td>Sandpiper Dunes</td><td>Marlo backed, museum's first wing</td><td>Sunken Ley Stone</td><td>120,000, 10 beach finds, 20 branches, 6 coconuts</td><td>All sand and palms, a long spit of dunes running out to sea, a big shipwreck, the best beachcombing</td></tr>
+<tr><td>3</td><td>Old Pinewood</td><td>Grand Town Hall, Pemberton backed, Bramble's workshop dream open</td><td>Frostpine Cone, Amber Sliver, Heartwood Acorn</td><td>180,000, 60 wood, 20 stone</td><td>Big misty pines that grow back overnight, the Grandfather Stump, site of Bramble's workshop</td></tr>
+<tr><td>4</td><td>Lantern Bluff</td><td>All three museum wings, the workshop open</td><td>Moonsap Vial</td><td>220,000, 30 planks, 8 iron, 10 clay</td><td>Cliff-top plateau with raised knolls, a spring that spills over the cliff as a waterfall, sea stacks offshore, pines, good rocks, the old lighthouse</td></tr>
+<tr><td>5</td><td>Hollow Crags</td><td>All three shops at tier 2, the reef at Teeming</td><td>Amber Sliver, Living Coral Crown</td><td>350,000, 15 iron, 30 stone, 2 fossils</td><td>A quarry of iron-rich rocks, mossy stone spires, old ruins, a sunken grotto with steps down to a pool; site of Pemberton's forge</td></tr>
 <tr><td>6</td><td>Starfall Isle</td><td>The Island Charter signed and Wendell's last letter</td><td>Living Coral Crown, Starglass Shard, Moonsap Vial</td><td>500,000, and one each of: plank, honey, tea cake, iron fitting, flour, bath salts</td><td>A small isle in the sky beside Hollow Crags, up a stair of glowing stones. Always night up there, with its own bugs and the star altar</td></tr></table>
 <p>Isles never rise off the far shore (see The far shore), and nothing about the far shore moves an isle that's already up.</p>
 <p>The first isle isn't mentioned at all until the island is ready for it. The day after each isle rises, Wendell writes a letter hinting which way to look for the next. Starfall Isle is different: Wendell says nothing about it until the Island Charter is signed, and his letter the day after is the hint.</p>
+<h3>What each isle gives</h3>
+<ul><li><b>Clover Meadow</b>: the pond and the brook are fishable (pond fish and river fish). 7 fruit trees, an orchard of 12 more, and 28 other trees (was 15).</li>
+<li><b>Sandpiper Dunes</b>: 34 palms (was 12, plus 2 oaks) and nothing else grows there. Every day it has 12 shells (was 6), 5 pieces of coral (was 3) and 5 dig spots (was 3). The shipwreck is much bigger. Hazel's wreck story and the diving bell are still there.</li>
+<li><b>Old Pinewood</b>: same layout and the same 32 trees, but the pines and cedars are bigger and each gives 1 more wood when it falls (5 instead of 4 with a plain axe, 7 instead of 6 with One-Swing). They still grow back the next day.</li>
+<li><b>Lantern Bluff</b>: 5 rocks (was 3) and 34 trees (was 20).</li>
+<li><b>Hollow Crags</b>: 8 rocks (was 4, and often only 3 found room). A crags rock is iron-rich: each hit gives iron half the time (stone 30%, clay 20%), plus a 1 in 5 chance of an extra iron and a 4% chance of a fossil. That is about 2.8 iron per rock per day, against about half an iron from a rock on your island. 21 trees (was 10), ferns and boulders between the spires. The grotto pool at the bottom of the steps is fishable.</li>
+<li><b>Starfall Isle</b>: a glowing pool, a garden of glowing mushrooms and crystals, and small rocks drifting round the edge. 18 trees (was 11).</li></ul>
+<p>Trees cut on the isles grow back: Old Pinewood's the next day, the other isles' after 3 days. Isles that rose before v1.57 grow outward on their far side the next time you load; nothing you placed is moved, and new hills, ponds and rocks keep clear of it.</p>
 <h3>Starfall Isle</h3>
 <p>The stair climbs from Hollow Crags. Up top it is always night, whatever the clock says, and three bugs live nowhere else: the Sky Drifter, the Comet Beetle and the rare Nebula Moth. They're in the bug catalog under "On Starfall Isle".</p>
 <p>The <b>star altar</b> takes two of Wendell's spells. Leave the clams in the bowl:</p>
@@ -761,7 +771,9 @@ ${steps(['Talk to them and pick <b>Come and meet people</b>. They follow you for
 { id:'changes', group:'done', title:'What\'s changed', html:`
 <p>Recent updates, newest first.</p>
 <ul>
-<li><b>v1.56</b>: The far shore: one side of your island now reaches further out to sea, about half as much land again, left wild (see The far shore). Newcomers move in about a week apart, in story order, and the four keepers turn up one at a time.</li>
+<li><b>v1.58</b>: The far shore: one side of your island now reaches further out to sea, about half as much land again, left wild (see The far shore). Newcomers move in about a week apart, in story order, and the four keepers turn up one at a time.</li>
+<li><b>v1.57</b>: Wendell's isles are fuller. Hollow Crags is a quarry of iron-rich rocks with spires, ruins and a sunken grotto; Sandpiper Dunes is all sand and palms, longer, with a much bigger shipwreck and more beach finds; Old Pinewood's trees are bigger and give 1 more wood; Clover Meadow has a pond, a brook and an orchard; Lantern Bluff has a spring, a waterfall and sea stacks; Starfall has a glowing pool and garden. Isle trees now grow back. See Wendell's isles.</li>
+<li><b>v1.56</b>: Click (or tap) one thing a tree or rock dropped and you pick up everything else it dropped too, as much as fits in your bag. E and the Act button still pick up one at a time.</li>
 <li><b>v1.55</b>: Invite friends over from the Friends tab without a new link. Anyone you're already friends with who can't visit you (because only they invited you, or their one visit was used) shows under Invite a friend over, and they get a letter when you invite them.</li>
 <li><b>v1.54</b>: Fix: visiting a friend's island or going on a boat trip no longer forgets which conversations you've had with your islanders, or woodworking plans you found before you started woodworking.</li>
 <li><b>v1.53</b>: Wendell's spells are much brighter. The aurora's light now drifts across the island and the sea, with floating lights in the air, so you can see it from the normal view. Glowing paths light every path stone with a rune, run pulses of light along the paths and send up sparks. Casting either one at the star altar now has a short show.</li>

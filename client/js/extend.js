@@ -1,5 +1,5 @@
 /* =====================================================================
-   v1.56 THE FAR SHORE: one side of the main island reaches further out to sea, about half as much land again.
+   v1.58 THE FAR SHORE: one side of the main island reaches further out to sea, about half as much land again.
    The new land is all off one side, left wild: trees, rocks, flowers and critters, no buildings or paths.
    Everything here is pure maths so main.js (and a visitor's game) work out the same shape from the same save.
 

@@ -73,8 +73,8 @@ export function createEnchant(C){
     scrollPrice:itemId=>FENNICK_SCROLL_PRICE(ITEMS[itemId].ench),
     knowsScroll:itemId=>knows(S(), ITEMS[itemId].ench),
     // a scroll from an ordinary action (dig, fell, catch). at: a THREE.Vector3
-    scrollRoll(kind, at){ if (!finds() || Math.random()>=(SCROLL_ODDS[kind]||0)) return false; const id=scrollPick(S()); if (!id) return false; const p=at.clone();
-      setTimeout(()=>{ C.dropNear(id, p, 1.2); if (C.sparkle) C.sparkle(p.clone().add(new THREE.Vector3(0,1,0))); C.Snd.jingle(); C.toast('An enchanting scroll!', C.thumb(id), 'new', ENCH[ITEMS[id].ench].name); }, 1000); return true; },
+    scrollRoll(kind, at){ if (!finds() || Math.random()>=(SCROLL_ODDS[kind]||0)) return false; const id=scrollPick(S()); if (!id) return false; const p=at.clone(), g=C.dropGrp ? C.dropGrp() : undefined;   // v1.56 keeps the tree's drop group
+      setTimeout(()=>{ C.dropNear(id, p, 1.2, false, undefined, g); if (C.sparkle) C.sparkle(p.clone().add(new THREE.Vector3(0,1,0))); C.Snd.jingle(); C.toast('An enchanting scroll!', C.thumb(id), 'new', ENCH[ITEMS[id].ench].name); }, 1000); return true; },
     // picked up an escroll_ item (from learnPlan). Returns true if it was new.
     learnScroll(itemId){ const id=ITEMS[itemId].ench; if (!learn(S(), id)) return false; C.save(); C.Snd.fanfare();
       C.toast(`Enchantment learned: ${ENCH[id].name}!`, C.thumb(itemId), 'new', describe(id)+'. Put it on a tool from the Tools tab.'); return true; },

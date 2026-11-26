@@ -4910,7 +4910,8 @@ function rollDay(){
       const pl=randomPlan(rr); if (pl && rr()<RARE_ODDS.bottlePlan){ const p=beachSpot(rr); if (p) S.ground.push({ id:pl, x:p[0], z:p[1], beach:true, bottle:true }); } }
     if (S.day.peddler && plan && c<RARE_ODDS.peddlerPlan) S.day.pplan=randomPlan(rr);
     if (S.day.peddler && !TRIP && rr()<SAILCLOTH_ODDS) S.day.pstock=[...S.day.pstock, 'sailcloth'];   // v1.39 a bolt of sailcloth about 1 visit in 3
-    { const sc=EN.dailyScroll(rr); if (sc){ const p=beachSpot(rr); if (p) S.ground.push({ id:sc, x:p[0], z:p[1], beach:true, bottle:true }); } } }   // v1.40 a scroll in a bottle
+    { const sc=EN.dailyScroll(rr); if (sc){ const p=beachSpot(rr); if (p) S.ground.push({ id:sc, x:p[0], z:p[1], beach:true, bottle:true }); } }   // v1.40 a scroll in a bottle
+    if (S.day.peddler){ const ps=EN.peddlerScroll(rr); if (ps) S.day.pscroll=ps; } }   // v1.40 now and then Fennick has an enchanting scroll (rolled last, so nothing above shifts)
   // v1.38 coral fragments wash up from day one, for everyone: a cheap, ordinary beach find (1 to 3 a day). What they're for only comes out
   // later, when Gill tells you about the reef. A Coral Atoll trip is littered with them; other trips get the odd one.
   if (!VISIT){ const cr=mulberry32(hashStr(key+':coral:'+S.seed)), n = TRIP ? (TRIP_THEME==='coral' ? 15+Math.floor(cr()*6) : Math.floor(cr()*2)) : 1+Math.floor(cr()*3);
@@ -5717,7 +5718,9 @@ function openShop(which, startTab){
       if (which==='stall'){ const wp=storeWoodPlan(); if (wp){ const fid=ITEMS[wp].learns, pr=WOOD_PLAN_PRICE(fid), got=knowsWood(fid);
         h+=`<div class="notice" style="margin-bottom:10px"><b>Woodworking plan</b> <span class="muted">· one a day</span><div class="row" style="margin:8px 0 0"><img src="${thumb(fid)}"><div class="grow"><div class="nm">${ITEMS[fid].name}</div><div class="sub">${fmt(pr)} clams · teaches you to make it</div></div><button class="btn" id="buyWPlan" ${got||S.clams<pr?'disabled':''}>${got?'Known':'Buy'}</button></div></div>`; } }
       if (which==='rare' && S.day.pplan && ITEMS[S.day.pplan]){ const pl=ITEMS[S.day.pplan], known=knowsPlan(pl.learns);
-        h+=`<div class="notice" style="margin-bottom:10px"><b>Something special</b> <span class="muted">· a plan, wrapped in oilcloth</span><div class="row" style="margin:8px 0 0"><img src="${thumb(pl.learns)}"><div class="grow"><div class="nm">${pl.name} ${rarityTag(pl)}</div><div class="sub">${fmt(PLAN_PRICE)} clams · teaches you to make it. You still need the rare ingredients.</div></div><button class="btn" id="buyPlan" ${known||S.clams<PLAN_PRICE?'disabled':''}>${known?'Known':'Buy'}</button></div></div>`; } list.forEach((id,i)=>h+=buyRow(id,i,isSold(which,id,i),buyPrice(which,ITEMS[id]),ITEMS[id].buy)); }
+        h+=`<div class="notice" style="margin-bottom:10px"><b>Something special</b> <span class="muted">· a plan, wrapped in oilcloth</span><div class="row" style="margin:8px 0 0"><img src="${thumb(pl.learns)}"><div class="grow"><div class="nm">${pl.name} ${rarityTag(pl)}</div><div class="sub">${fmt(PLAN_PRICE)} clams · teaches you to make it. You still need the rare ingredients.</div></div><button class="btn" id="buyPlan" ${known||S.clams<PLAN_PRICE?'disabled':''}>${known?'Known':'Buy'}</button></div></div>`; }
+      if (which==='rare' && S.day.pscroll && ITEMS[S.day.pscroll]){ const sc=S.day.pscroll, pr=EN.scrollPrice(sc), known=EN.knowsScroll(sc);   // v1.40
+        h+=`<div class="notice" style="margin-bottom:10px"><b>Something special</b> <span class="muted">· an enchanting scroll, sealed with wax</span><div class="row" style="margin:8px 0 0"><img src="${thumb(sc)}"><div class="grow"><div class="nm">${ITEMS[sc].name}</div><div class="sub">${fmt(pr)} clams · teaches you the enchantment</div></div><button class="btn" id="buyScroll" ${known||S.clams<pr?'disabled':''}>${known?'Known':'Buy'}</button></div></div>`; } list.forEach((id,i)=>h+=buyRow(id,i,isSold(which,id,i),buyPrice(which,ITEMS[id]),ITEMS[id].buy)); }
     if (tab==='garden'){ list=S.day.garden; h+=islandRows()+'<div class="muted" style="margin-bottom:8px">Other seeds and plants change daily.</div>'; list.forEach((id,i)=>h+=buyRow(id,i,S.day.gsold[i],buyPrice(which,ITEMS[id]),ITEMS[id].buy)); }
     if (tab==='tools'){
       const outT=toolOutToday();
@@ -5763,6 +5766,7 @@ function openShop(which, startTab){
     pBody.querySelectorAll('[data-cw]').forEach(b=>b.onclick=()=>{ const id=b.dataset.cw, it=ITEMS[id], price=buyPrice(which,it); if (ownsWear(id) || S.clams<price) return; S.clams-=price; addTrade(which,price); Snd.coin(); updateHUD(); grantWear(id); save(); render(); });
     pBody.querySelectorAll('[data-hb]').forEach(b=>b.onclick=()=>{ if (buyHome(homeStock()[+b.dataset.hb])) render(); });
     const bw=pBody.querySelector('#buyWPlan'); if (bw) bw.onclick=()=>{ const wp=storeWoodPlan(); if (!wp) return; const fid=ITEMS[wp].learns, pr=WOOD_PLAN_PRICE(fid); if (knowsWood(fid) || S.clams<pr) return; S.clams-=pr; addTrade(which,pr); updateHUD(); Snd.coin(); learnPlan(wp); save(); render(); };
+    const bsc=pBody.querySelector('#buyScroll'); if (bsc) bsc.onclick=()=>{ const sc=S.day.pscroll; if (!sc || !ITEMS[sc] || noEdit()) return; const pr=EN.scrollPrice(sc); if (EN.knowsScroll(sc) || S.clams<pr) return; S.clams-=pr; updateHUD(); Snd.coin(); learnPlan(sc); save(); render(); };   // v1.40
     const bp=pBody.querySelector('#buyPlan'); if (bp) bp.onclick=()=>{ const pl=S.day.pplan; if (!pl || knowsPlan(ITEMS[pl].learns) || S.clams<PLAN_PRICE) return; S.clams-=PLAN_PRICE; updateHUD(); Snd.coin(); learnPlan(pl); save(); render(); };
     pBody.querySelectorAll('[data-ht]').forEach(b=>b.onclick=()=>{ const it=homeStock()[+b.dataset.ht];
       if (VISIT){ toast('You can try styles on your own house when you\'re home.'); return; }
@@ -7264,7 +7268,7 @@ function renderViewBar(){ const B=buildMode;
 function openBoard(){
   const render=()=>{ const d=Time.now();
     let h=`<div class="notice"><b>${S.island||'Island'} news</b><br>${d.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})}. Weather: ${World.weather}.</div>`;
-    if (S.day.peddler) h+=`<div class="notice">Fennick came through the Portal Station today and is pushing his cart around the island.${S.day.pplan&&ITEMS[S.day.pplan]&&!knowsPlan(ITEMS[S.day.pplan].learns)?' Word is he has a rare plan with him.':''}</div>`;
+    if (S.day.peddler) h+=`<div class="notice">Fennick came through the Portal Station today and is pushing his cart around the island.${S.day.pplan&&ITEMS[S.day.pplan]&&!knowsPlan(ITEMS[S.day.pplan].learns)?' Word is he has a rare plan with him.':''}${S.day.pscroll&&ITEMS[S.day.pscroll]&&!EN.knowsScroll(S.day.pscroll)?' Someone saw an enchanting scroll on his cart.':''}</div>`;
     { const rp=shopStock('stall').filter(isRarePiece); if (rp.length) h+=`<div class="notice">Pemberton has something rare on display today: ${rp.map(id=>ITEMS[id].name+' '+rarityTag(ITEMS[id])).join(', ')}.</div>`; }
     if (S.ground.some(g=>g.bottle)) h+=`<div class="notice">Someone saw a bottle wash up on the beach this morning.</div>`;
     for(const e of activeEvents()) h+=`<div class="notice">${e.notice}</div>`;

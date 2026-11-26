@@ -1,5 +1,5 @@
 /* =====================================================================
-   v1.51 THE LANTERN BLUFF LIGHTHOUSE: the old lighthouse on Wendell's bluff isle, now a proper landmark (about two and a half times
+   v1.55 THE LANTERN BLUFF LIGHTHOUSE: the old lighthouse on Wendell's bluff isle, now a proper landmark (about two and a half times
    as tall as before) that you can walk into and climb.
 
    Inside you see what years of nobody have done to it, and it gets put right as Skipper Wick's lighthouse story moves on.
@@ -49,10 +49,10 @@ const SEG = 16, segMid = i => (i+0.5)/SEG*TAU, segOf = a => Math.floor(wrap(a)/T
 const stepA = i => BT.a0+(i+0.5)*BT.dA, stepY = i => BT.base+(i+1)*BT.rise;
 const pol = (a, r, y=0) => new THREE.Vector3(Math.sin(a)*r, y, Math.cos(a)*r);
 const STAIR_LOW = 2.0;                        // the first 2 radians of stair are too low to walk under
-const A1 = wrap(BT.a1), GAP_A = A1+2.3, SCOPE_A = A1+Math.PI+0.4, GULL_A = A1+1.25;
+const A1 = wrap(BT.a1), GAP_A = A1+2.3, SCOPE_A = A1+Math.PI+0.4, GULL_A = A1+1.25;   // up top: the gap in the rail, Wick's telescope, the gull
 // the two lamp room panes boarded over until the workshop comes (stage 2), in the tower's own frame
 const LR_GAP=0.38, LR_SPAN=TAU-LR_GAP*2;
-export const BOARD_A = [2,7].map(i=>A1+LR_GAP+i/11*LR_SPAN+LR_SPAN/22);   // up top: the gap in the rail, Wick's telescope, the gull
+export const BOARD_A = [2,7].map(i=>A1+LR_GAP+i/11*LR_SPAN+LR_SPAN/22);
 export const BLUFF_STAGES = ['ruined', 'patched', 'mending', 'lit'];
 
 // the stair before anyone fixes it: treads gone outright (you hop the gap) and treads snapped short (you keep to the wall)

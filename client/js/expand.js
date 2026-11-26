@@ -11,7 +11,7 @@ import { TAU, clamp, lerp, smooth, mulberry32, hashStr, fbm, vnoise } from './ut
 import { M, mk, G, glowMat, addGlow } from './models.js';
 import { mergeStatic } from './cottage.js';
 import { buildGrandfatherStump } from './reef.js';
-import { buildBluffTower } from './bluffhouse.js';   // v1.51 the bigger, walk-in Lantern Bluff lighthouse
+import { buildBluffTower } from './bluffhouse.js';   // v1.55 the bigger, walk-in Lantern Bluff lighthouse
 
 // v1.37: Old Pinewood (Bramble's dream) rises third. Islands raised before v1.37 keep the order they rose in (S.terra.isleK).
 export const ISLE_ORDER = ['meadow', 'dunes', 'pines', 'bluff', 'crags', 'starfall'];   // v1.41 Starfall Isle floats above the crags, last of all

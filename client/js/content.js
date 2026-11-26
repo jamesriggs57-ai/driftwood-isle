@@ -26,7 +26,7 @@ export const FRUIT_REGROW_DAYS = 3;   // a picked tree grows fruit again after t
 export const NATIVE_FRUITS = ['apple','pear','peach','orange','plum','cherry','lemon'];
 
 /* ---------- Materials ---------- */
-def('wood',     {name:'Wood',           kind:'material', price:20,  model:{t:'log'}});   // v1.39: halved (was 60); v1.42: 20 (was 30), so fish and bugs clearly out-earn chopping
+def('wood',     {name:'Wood',           kind:'material', price:20,  model:{t:'log'}});   // v1.39: halved (was 60); v1.45: 20 (was 30), so fish and bugs clearly out-earn chopping
 def('softwood', {name:'Driftwood Branch',kind:'material', price:20, model:{t:'branch'}});
 def('stone',    {name:'Stone',          kind:'material', price:75,  model:{t:'stone'}});
 def('clay',     {name:'Clay',           kind:'material', price:100, model:{t:'clay'}});
@@ -51,6 +51,7 @@ relic('relic_frostpine', 'Frostpine Cone',     'frostpine', 'A pine cone covered
 relic('relic_amber',     'Amber Sliver',       'amber',     'A shard of old amber with a fern frond caught inside, from before the island had a name.');
 relic('relic_moonsap',   'Moonsap Vial',       'moonsap',   'Silvery sap from a tree that only grows by moonlight. It glows a little brighter at night.');
 relic('relic_coralcrown','Living Coral Crown', 'coralcrown','A ring of every coral on the reef, grown together around a pearl. Still alive.');
+relic('relic_starglass', 'Starglass Shard',    'starglass', 'A sliver of glass that fell out of the sky. Stars move inside it, even in daylight.');   // v1.41: only rare and legendary isles, and moonlit ones, hold one
 def('lampframe', {name:'Lamp Frame',     kind:'material', price:0, stack:1, noSell:true, noGift:true, model:{t:'lampframe'}, desc:'An iron and brass frame for the lighthouse lamp, made at the workshop.'});
 def('cutting',   {name:'Coral Cutting',  kind:'coral', price:0, stack:20, noSell:true, noGift:true, model:{t:'cutting'}, desc:'A cutting from a full-grown coral in Cay Bay, for Thistle\'s Reef Hall.'});
 def('teacake',   {name:'Honey Tea Cake', kind:'food', price:650, stack:10, model:{t:'teacake'}, desc:'One of Mabel\'s tea cakes, sticky with honey from Hollis\'s hives.'});
@@ -64,6 +65,11 @@ def('crowbar',   {name:'Crowbar',        kind:'material', price:0, stack:1, noSe
 def('wrecklens', {name:'Lantern Lens',   kind:'material', price:0, stack:1, noSell:true, noGift:true, story:true, model:{t:'wrecklens'}, desc:'A thick glass lens from Marlo that throws a lantern\'s light a long way through dark water.'});
 def('bellframe', {name:'Diving Bell Frame', kind:'material', price:0, stack:1, noSell:true, noGift:true, story:true, model:{t:'bellframe'}, desc:'A stout timber frame from the workshop, to hang Hazel\'s diving bell from.'});
 def('chartpiece',{name:'Treasure Chart Piece', kind:'relic', price:0, stack:4, noSell:true, noGift:true, story:true, model:{t:'chartpiece'}, desc:'A torn corner of an old sea chart, inked with a compass rose. Hazel says there are four.'});
+/* ---------- v1.41 story things (models in story4.js) ---------- */
+def('nookshelves',{name:'Reading Nook Shelves', kind:'material', price:0, stack:1, noSell:true, noGift:true, story:true, model:{t:'nookshelves'}, desc:'Built-in shelves and a window seat from the workshop, for the reading nook at Thistle\'s museum.'});
+def('racesign',  {name:'Race Course Sign', kind:'material', price:0, stack:1, noSell:true, noGift:true, story:true, model:{t:'racesign'}, desc:'A painted start-and-finish sign for the island bike race, made at the workshop.'});
+def('candyapple',{name:'Candy Apple',    kind:'food', price:120, buy:300, stack:10, story:true, model:{t:'candyapple'}, desc:'A crisp apple in a shell of red sugar, from a festival stall.'});
+def('festpie',   {name:'Festival Hand Pie', kind:'food', price:200, buy:480, stack:10, story:true, model:{t:'festpie'}, desc:'A warm little pie with fruit inside, from a festival stall.'});
 export const CORAL_KINDS = ['brain','staghorn','fan','table'];
 export const CORAL_NAMES = { brain:'Brain', staghorn:'Staghorn', fan:'Sea Fan', table:'Table' };
 for (const k of CORAL_KINDS){
@@ -199,6 +205,10 @@ bug('gladefly','Glade Firefly',600,'glade',range(4,10),[19,4],4,[10,16],0.0001,{
 bug('bluespark','Blue Spark',1400,'glade',range(4,10),[20,3],2.5,[8,14],0.0001,{c:0x22284a,c2:0x7ad8ff,w:'beetle',glow:true});
 bug('mossglow','Moss Glowmoth',2400,'glade',range(3,11),[20,4],1.6,[30,50],0.00004,{c:0x4a6a3a,c2:0xb8ffa0,w:'moth',glow:true});
 bug('starlantern','Starlantern Beetle',5200,'glade',range(5,9),[21,3],0.6,[20,36],0.0001,{c:0x2a1a3a,c2:0xffe9a0,w:'beetle',glow:true});
+// v1.41 Starfall Isle bugs: they live only on the floating isle above Hollow Crags, where it is always night (main.js skyBugOK)
+bug('stardrifter','Sky Drifter',1800,'starfall',ALL,null,3,[30,48],0.0001,{c:0x2a2a5a,c2:0xd8e4ff,w:'moth',glow:true});
+bug('cometbeetle','Comet Beetle',3600,'starfall',ALL,null,1.6,[18,30],0.0001,{c:0x1a1a3a,c2:0x9ad8ff,w:'beetle',glow:true});
+bug('nebulamoth','Nebula Moth',7200,'starfall',ALL,null,0.5,[60,90],0.00004,{c:0x5a3a8a,c2:0xf0a8ff,w:'moth',glow:true});
 
 /* ---------- Plants ----------
    ptype: flower | shrub | tree.  days: days to fully grow.  bloom: months a shrub flowers. */
@@ -322,6 +332,18 @@ furn('noticeboard','Village Noticeboard',3800,0.6,{shop:'story',route:'board'});
 furn('ironlantern','Iron Lantern',4800,0.4,{shop:'story',glow:true});
 furn('irongate','Iron Gate',6000,1.3,{shop:'story'});
 furn('weathervane','Weathervane',5200,0.4,{shop:'story'});
+// v1.41 the charter, the Driftwood Festival (stall goods and Clementine's keepsakes), the race cup and the flower show ribbon
+furn('charterplaque','Island Charter',9000,0.5,{shop:'story',stack:1});
+furn('festbunting','Festival Bunting',1800,0.9,{shop:'story'});
+furn('paperstar','Paper Star Lantern',2400,0.35,{shop:'story',glow:true});
+furn('fishkite','Fish Kite',2200,0.5,{shop:'story'});
+furn('pinwheel','Pinwheel Stand',1400,0.3,{shop:'story'});
+furn('fest_spring','Blossom Festival Lantern',6000,0.4,{shop:'story',glow:true,stack:1});
+furn('fest_summer','Summer Festival Drum',6000,0.45,{shop:'story',stack:1});
+furn('fest_autumn','Harvest Festival Wreath',6000,0.45,{shop:'story',stack:1});
+furn('fest_winter','Winter Festival Snow Globe',6000,0.35,{shop:'story',glow:true,stack:1});
+furn('racecup','Island Race Cup',12000,0.4,{shop:'story',stack:1});
+furn('showribbon','Flower Show Rosette',5000,0.4,{shop:'story',stack:1});
 // Fennick's cart
 furn('umbrella','Beach Umbrella',2200,0.5,{shop:'rare',...R});
 furn('campfire','Cozy Campfire',2800,0.8,{shop:'rare',glow:true,...R});
@@ -632,7 +654,7 @@ export const SHOPS = {
     perks:['', 'Bugs and flowers sell for 130%, saplings and moth lanterns', 'Bugs and flowers sell for 140%, rose arches', 'Bugs and flowers sell for 150%, garden fountains'] },
 };
 // Investing opens once you have a real house and you've done this much trade at the shop (buying plus selling).
-export const INVEST = { cost:[0,100000,200000,400000], trade:50000 };   // v1.42: was 300,000 and 800,000
+export const INVEST = { cost:[0,100000,200000,400000], trade:50000 };   // v1.45: was 300,000 and 800,000
 
 export const KEEPERS = {
   pemberton:{ id:'pemberton', acc:['beanie'], accC:0xf0c040, top:'overalls',  name:'Pemberton', species:'bear', ears:'round', fur:0x8a8a92, muzzle:0xf4f0ea, shirt:0x6a8a4a, cheek:0xe0a0a0, voice:300, stripe:true,
@@ -1173,7 +1195,7 @@ furn('beaconlamp','Lighthouse Lantern',8000,0.4,{ b:'lantern', shop:'trip', rari
 // A torn page in a bottle (opened where you find it, never kept in the bag)
 def('bottle_note', { name:'Message in a Bottle', kind:'note', price:0, stack:1, model:{ t:'ticket', c:0xc8a060 } });
 
-/* v1.42: what a crafted piece sells for follows what went into it.
+/* v1.45: what a crafted piece sells for follows what went into it.
    A piece made only from things you can gather all day (wood, branches, stone, weeds) sells for about its materials
    plus 15%, so crafting is a small bonus on top of chopping, not a money machine (3 fences from 2 wood paid 225).
    A piece that needs anything scarcer (iron, clay, stumps, planks, rare finds) keeps its old price, and never sells
@@ -1189,3 +1211,49 @@ for (const r of WOODWORK) repriceCraft(r);
 // v1.34: one Woodworking Plan item per piece that isn't a starting plan
 for (const r of WOODWORK){ if (WOOD_START.includes(r.id) || WOOD_TEN.includes(r.id) || !ITEMS[r.id]) continue;
   def('wplan_'+r.id, { name:'Woodworking Plan: '+ITEMS[r.id].name, kind:'plan', learns:r.id, wood:true, price:Math.round(ITEMS[r.id].price*0.6/10)*10+100, rarity:FR.r, stack:1, model:{t:'plan', of:r.id} }); }
+
+/* =====================================================================
+   v1.44 SHOP REWARDS: what the top two tiers of each shop unlock, and the fishing tip-offs.
+   Builders for every piece and flower here are in shoprare-models.js; the game side is in shoprare.js.
+   ===================================================================== */
+// Pemberton's back room (General Store and Grand Emporium): one piece a week, sold nowhere else
+furn('jukebox','Seashell Jukebox',32000,0.5,{ shop:'backroom', glow:true, stack:1, ...V });
+furn('sewingmachine','Treadle Sewing Machine',18000,0.55,{ shop:'backroom', stack:1, ...V });
+furn('cuckooclock','Cuckoo Clock',22000,0.4,{ shop:'backroom', stack:1, ...V });
+furn('steamtrunk','Steamer Trunk',16000,0.6,{ shop:'backroom', stack:1, ...V });
+furn('pennyfarthing','Penny-Farthing',24000,0.7,{ shop:'backroom', stack:1, ...V });
+furn('chesstable','Marble Chess Table',20000,0.55,{ shop:'backroom', stack:1, ...V });
+furn('typewriter','Old Typewriter',15000,0.45,{ shop:'backroom', stack:1, ...V });
+furn('hourglass','Grand Hourglass',28000,0.45,{ shop:'backroom', glow:true, stack:1, ...V });
+export const BACKROOM = { ids:['jukebox','sewingmachine','cuckooclock','steamtrunk','pennyfarthing','chesstable','typewriter','hourglass'],
+  minTier:2, planOdds:[0,0,0.25,0.5] };   // chance each week that a rare woodworking plan is in the back room too, by General Store tier
+// Marlo's rare shelf: one piece a day at Tidepool Aquarium (tier 3 of 4), two a day at the Grand Aquarium Hall
+furn('jellylamp','Jellyfish Lamp',6500,0.4,{ shop:'aquarium', tier:2, special:true, glow:true, ...R });
+furn('seahorsetank','Seahorse Column Tank',8800,0.45,{ shop:'aquarium', tier:2, special:true, ...R });
+furn('nautiluslamp','Nautilus Shell Lamp',5800,0.4,{ shop:'aquarium', tier:2, special:true, glow:true, ...R });
+furn('kelptank','Kelp Forest Tank',18000,1.0,{ shop:'aquarium', tier:3, special:true, ...V });
+furn('portholetank','Porthole Aquarium',14000,0.55,{ shop:'aquarium', tier:3, special:true, ...V });
+furn('octolamp','Octopus Lamp',12000,0.45,{ shop:'aquarium', tier:3, special:true, glow:true, ...V });
+// Sprig's rare seeds: rare flower colors and a hybrid at the Greenhouse (tier 3 of 4); two more hybrids and a glowing night plant at the Conservatory
+// sprig = shop tier that sells it, fk = color | hybrid | glow. story:true keeps them out of wildflowers and the everyday seed shelf.
+const SPRIG_RARE = {
+  bluerose:    { name:'Blue Rose',        days:4, colors:[0x4a7ae8], c2:0xc8dcff, shape:'bluerose',   sprig:2, fk:'color',  price:200, buy:900 },
+  blacktulip:  { name:'Black Tulip',      days:3, colors:[0x2a1a30], c2:0x8a3a6a, shape:'blacktulip', sprig:2, fk:'color',  price:200, buy:900 },
+  jadehyacinth:{ name:'Jade Hyacinth',    days:3, tall:0.5, colors:[0x3ac08a], c2:0xe8fff4, shape:'jadespike',  sprig:2, fk:'color',  price:200, buy:900 },
+  rainbowpansy:{ name:'Rainbow Pansy',    days:2, colors:[0xe8503a,0xf8c030,0x5ac06a,0x4a7ae8,0x9a5ad8], shape:'rainbow', sprig:2, fk:'color', price:220, buy:1000 },
+  starbell:    { name:'Starbell',         days:3, colors:[0x7a8af0], c2:0xffffff, shape:'starbell',   sprig:2, fk:'hybrid', price:260, buy:1200, of:'Bellflower and Lily' },
+  sunburst:    { name:'Sunburst Daisy',   days:3, colors:[0xf8d040], c2:0xf06a2a, shape:'sunburst',   sprig:3, fk:'hybrid', price:320, buy:1500, of:'Daisy and Marigold' },
+  peppermint:  { name:'Peppermint Poppy', days:2, colors:[0xffffff], c2:0xe8303a, shape:'peppermint', sprig:3, fk:'hybrid', price:320, buy:1500, of:'Poppy and Tulip' },
+  lanternbloom:{ name:'Lantern Bloom',    days:4, tall:0.62, colors:[0x9af0ff], c2:0x3a6a8a, shape:'lantern',    sprig:3, fk:'glow',   price:400, buy:2000, night:true },
+};
+for (const [id,p] of Object.entries(SPRIG_RARE)){
+  PLANTS[id] = Object.assign({ ptype:'flower', story:true }, p);
+  def(id, { name:p.name, kind:'flower', price:p.price, story:true, sprig:p.sprig, fk:p.fk, glow:p.fk==='glow'||undefined, model:{t:'flower', sp:id} });
+  def(id+'_seeds', { name:p.name+' Seeds', kind:'seed', plant:id, price:Math.round(p.buy/4), buy:p.buy, story:true, sprig:p.sprig, fk:p.fk, model:{t:'seed', sp:id} });
+}
+export const SPRIG_RARE_IDS = Object.keys(SPRIG_RARE);
+// How many of the special things are on the shelf each day, by shop tier (index = tier 0..3)
+export const RARE_SHELF = { aquarium:[0,0,1,2], garden:[0,0,2,3] };
+// Fishing tip-offs. Marlo's get sharper with Marlo's shop tier, Gill's with his boat (none, Rowboat... up to his best).
+// A fish someone tips is really biting: each new shadow in its water has this chance to be that fish instead, by rarity.
+export const TIPS = { minRarity:0.8, maxRarity:3.5, swap:{ 'Uncommon':0.12, 'Rare':0.08, 'Very rare':0.05 } };   // tip fish: uncommon to very rare (no commons, no legendaries); swap = chance a spawn becomes the tipped fish while it's biting

@@ -7,7 +7,7 @@
      20%  themed (Orchard, Bloom, Frost)
       2%  Moonlit or Castaway
     1.5%  rare islands      (Clamstone, Golden Grove, Wizard's Garden, Plan Library)
-    0.5%  legendary islands (Wishing Workshop, Starfall, Collector's Attic, Shimmer Lagoon)
+    0.5%  legendary islands (Wishing Workshop, Stardrift, Collector's Attic, Shimmer Lagoon)
    Tickets only ever go to the named themed islands; rare and legendary islands are luck only.
    Quiet and town islands also get a layout style (some of them weird), and every quiet island has a surprise.
    ===================================================================== */
@@ -76,7 +76,7 @@ export const SPECIAL = {
   wizgarden: { tier:'rare',      name:'The Wizard\'s Garden',blurb:'Wendell\'s old teacher lives here.' },
   library:   { tier:'rare',      name:'The Plan Library',   blurb:'Shelves of rare woodworking plans.' },
   workshop:  { tier:'legendary', name:'The Wishing Workshop',blurb:'An old craftsman who can make anything at all.' },
-  starfall:  { tier:'legendary', name:'Starfall Isle',      blurb:'Always night. Falling stars land as starstones.' },
+  starfall:  { tier:'legendary', name:'Stardrift Isle',      blurb:'Always night. Falling stars land as starstones.' },
   attic:     { tier:'legendary', name:'The Collector\'s Attic',blurb:'A curator with a spare of everything.' },
   shimmer:   { tier:'legendary', name:'Shimmer Lagoon',     blurb:'Only very rare and legendary fish swim here.' },
 };

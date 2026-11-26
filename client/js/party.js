@@ -221,7 +221,7 @@ export function createParty(C) {
       let best = null, bd = 2.2; for (const b of P.bots) { if (b.rag) continue; const dx = b.pos.x - player.pos.x, dz = b.pos.z - player.pos.z, d = Math.hypot(dx, dz); if (d >= bd) continue; let a = Math.atan2(dx, dz) - player.face; a = Math.atan2(Math.sin(a), Math.cos(a)); if (Math.abs(a) > 1.15 && d > 0.9) continue; best = b; bd = d; }
       const ballD = P.ball ? Math.hypot(P.ball.p.x - player.pos.x, P.ball.p.z - player.pos.z) : 99;
       if (best && bd < ballD && !(tg && tg.d !== undefined && tg.d < bd)) { const dx = best.pos.x - player.pos.x, dz = best.pos.z - player.pos.z, L = Math.hypot(dx, dz) || 1; C.swingAnim(Math.atan2(dx, dz));
-        setTimeout(() => { if (best.rag || !P) return; C.launchRag(best, dx / L, dz / L, C.S.equip ? 1 : 0.8); }, 110); return true; } }
+        setTimeout(() => { if (best.rag || !P) return; C.launchRag(best, dx / L, dz / L, (C.S.equip ? 1 : 0.8) * (C.bonk ? C.bonk() : 1)); }, 110); return true; } }
     if (!P || P.game !== 'ball' || !P.ball || !P.root || !inGame() || P.ph === 'count' || P.ph === 'end' || P.ballHold > 0 || C.World.inside) return false;
     const b = P.ball, dx = b.p.x - player.pos.x, dz = b.p.z - player.pos.z, d = Math.hypot(dx, dz);
     if (d > 2.5 || b.p.y - C.groundY(b.p.x, b.p.z) > 2.2) return false;

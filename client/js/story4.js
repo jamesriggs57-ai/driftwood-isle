@@ -181,9 +181,9 @@ export function buildAurora(R=60, seed=3, dir=null){   // v1.50 dir: center the 
   const vs=`varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }`;
   const fs=`uniform float uT; uniform float uA; uniform vec3 uC1; uniform vec3 uC2; varying vec2 vUv;
     void main(){ float w=sin(vUv.x*18.0+uT*0.7)*0.5+sin(vUv.x*7.0-uT*0.4)*0.5; float band=smoothstep(0.0,0.25,vUv.y)*(1.0-smoothstep(0.35,1.0,vUv.y));
-      float rays=0.65+0.35*sin(vUv.x*120.0+w*4.0+uT*1.3); vec3 c=mix(uC1,uC2,vUv.y+w*0.15); float edge=smoothstep(0.0,0.08,vUv.x)*(1.0-smoothstep(0.92,1.0,vUv.x));
-      gl_FragColor=vec4(c, band*rays*edge*uA*(0.55+0.45*w)); }`;
-  const cols=[[0x3affa0,0x7a5aff],[0x6affd0,0xd05aff],[0x3ad8ff,0x5affa0]];
+      float rays=0.5+0.5*sin(vUv.x*120.0+w*4.0+uT*1.3); vec3 c=mix(uC1,uC2,vUv.y+w*0.15); float edge=smoothstep(0.0,0.08,vUv.x)*(1.0-smoothstep(0.92,1.0,vUv.x));
+      gl_FragColor=vec4(c*1.3, band*rays*edge*uA*(0.75+0.25*w)); }`;
+  const cols=[[0x20ff80,0x9040ff],[0x40ffb0,0xd040ff],[0x30ff90,0x6050ff]];
   for (let i=0;i<3;i++){ const seg=64, geo=new THREE.PlaneGeometry(1,1,seg,1), pos=geo.attributes.position, arc=1.6+r()*0.8, a0=dir===null ? r()*TAU : dir-arc/2+(r()-0.5)*0.6, rr=R*(0.75+r()*0.4), h=28+r()*10;
     for (let k=0;k<pos.count;k++){ const u=pos.getX(k)+0.5, v=pos.getY(k)+0.5, a=a0+u*arc, wob=Math.sin(u*9+i)*R*0.06;
       pos.setXYZ(k, Math.cos(a)*(rr+wob), 34+i*5+v*h, Math.sin(a)*(rr+wob)); }

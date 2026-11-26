@@ -665,9 +665,9 @@ vec3 aurLight(vec2 w){ float t=uAurT;
   float n=aurN(vec2(w.x*0.045+t*0.05, w.y*0.03-t*0.035));
   float b=0.5+0.5*sin(w.x*0.55 + w.y*0.12 + n*7.0 + t*0.5); b=b*b*b*b*b*b;
   float b2=0.5+0.5*sin(w.x*0.31 - w.y*0.21 + n*5.0 - t*0.35 + 2.0); b2=b2*b2*b2*b2*b2*b2;
-  float k=aurN(vec2(w.x*0.02 - t*0.02, w.y*0.02 + t*0.01));
-  vec3 c=mix(vec3(0.25,1.0,0.6), vec3(0.65,0.35,1.0), smoothstep(0.3,0.75,k));
-  return c*(0.03 + b*0.75) + vec3(0.55,0.5,1.0)*b2*0.5; }
+  float k=aurN(vec2(w.x*0.06 - t*0.03, w.y*0.06 + t*0.015));
+  vec3 c=mix(vec3(0.15,1.0,0.5), vec3(0.7,0.25,1.0), smoothstep(0.35,0.65,k));
+  return c*(0.04 + b*0.9) + vec3(0.6,0.3,1.0)*b2*0.6; }
 `;
 let _terrainMat=null;
 function terrainMat(){ if (_terrainMat) return _terrainMat;
@@ -676,7 +676,7 @@ function terrainMat(){ if (_terrainMat) return _terrainMat;
     sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nattribute float grassy; varying float vGrassy; varying vec3 vGW;')
       .replace('#include <project_vertex>','#include <project_vertex>\nvGrassy=grassy; vGW=(modelMatrix*vec4(transformed,1.0)).xyz;');
     sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\nuniform sampler2D uGround; varying float vGrassy; varying vec3 vGW;\n'+AUR_GLSL)
-      .replace('#include <emissivemap_fragment>','#include <emissivemap_fragment>\nif (uAur>0.001) totalEmissiveRadiance += diffuseColor.rgb*aurLight(vGW.xz)*uAur*0.45;')
+      .replace('#include <emissivemap_fragment>','#include <emissivemap_fragment>\nif (uAur>0.001) totalEmissiveRadiance += diffuseColor.rgb*aurLight(vGW.xz)*uAur*0.6;')
       .replace('#include <color_fragment>',`#include <color_fragment>
       { vec4 a=texture2D(uGround, vGW.xz*0.23); vec4 b=texture2D(uGround, vGW.xz*0.055+vec2(0.37,0.11)); float gr=clamp(vGrassy,0.0,1.0);
         vec4 f=texture2D(uGround, vGW.xz*0.85+vec2(0.19,0.53));   // fine blades up close
@@ -823,8 +823,11 @@ ${AUR_GLSL}
   if (uAur > 0.001){ vec2 aw = vWPos.xz + wN*4.0;   // the aurora on the water: long streaks running toward you, broken up by the ripples
     vec3 ar = aurLight(vec2(aw.x*0.45, aw.y*0.12)) + aurLight(vec2(aw.x*0.8+40.0, aw.y*0.2))*0.6;
     float st = 0.5+0.5*sin(aw.x*1.3 + wN.x*9.0 + uAurT*1.7); float sp = smoothstep(0.62, 0.8, wNoise(aw*vec2(3.0,0.8) + vec2(uAurT*0.4, -uAurT*0.9)));
-    ar *= vec3(0.55, 1.0, 0.75); float st4 = st*st*st*st;
-    outgoingLight += ar * uAur * (0.06 + 0.55*st4 + 1.1*sp*(0.4+0.6*st)) * (0.4 + 0.6*smoothstep(0.1, 1.2, wD)) * (1.0 - wFoam*0.7); }
+    float st4 = st*st*st*st;
+    float am = clamp(0.1 + 0.45*st4 + 1.5*sp*(0.4+0.6*st), 0.0, 1.0) * (0.45 + 0.55*smoothstep(0.1, 1.2, wD)) * (1.0 - wFoam*0.7);
+    vec3 ah = ar / max(0.002, max(ar.r, max(ar.g, ar.b)));   // the aurora's own hue, green or violet
+    float al = clamp(dot(ar, vec3(0.333))*3.0, 0.0, 1.0);
+    outgoingLight = mix(outgoingLight, ah*(0.18 + 0.95*am), uAur*clamp(0.3 + 0.7*am, 0.0, 1.0)*(0.45 + 0.55*al)); }
   outgoingLight = mix(outgoingLight, uFishCol, wFish * uFishA);
   diffuseColor.a = max(diffuseColor.a, wFish * uFishA);
   #include <opaque_fragment>`);
@@ -3849,7 +3852,7 @@ function starAltarAct(lm){
 // themselves are only drawn while it's cast, the one time the view looks at the sky. Glowing paths: every path stone lit (PATH_GLOW), a line of
 // lit stones down each isle's dirt path, and sparks rising off the stones near you.
 function refreshSpells(){
-  if (!S4B.motes){ S4B.motes=S4.buildMotes(90, [0x6affb8, 0x8ae8ff, 0xb08aff, 0x6aff9a, 0xd8a0ff], 0.32); S4B.sparks=S4.buildMotes(120, [0x9ae8ff, 0xc0a0ff, 0xffffff, 0x7affd8], 0.2); OUT.add(S4B.motes, S4B.sparks); }
+  if (!S4B.motes){ S4B.motes=S4.buildMotes(170, [0x3aff9a, 0x5affd0, 0xa060ff, 0x3aff70, 0xd070ff], 0.55); S4B.sparks=S4.buildMotes(120, [0x9ae8ff, 0xc0a0ff, 0xffffff, 0x7affd8], 0.2); OUT.add(S4B.motes, S4B.sparks); }
   const gk = spellOn('paths') ? 'on:'+ISLES.length : '';
   if (gk===S4B.glowKey) return; S4B.glowKey=gk; if (S4B.glow){ OUT.remove(S4B.glow); S4B.glow=null; } S4B.isleStones=[]; if (!gk) return;
   const pts=[]; let run=0; const r=mulberry32(4146);
@@ -4200,7 +4203,7 @@ function storiesHTML4(){ const L=[];
 /* ---------- every frame ---------- */
 function story4Tick(dt, t){
   if (S4B.cast){ const C=S4B.cast; C.T+=dt; const on=C.beam.userData.tick(dt);
-    if (C.sky) C.sky.userData.tick(t, 2.4*Math.min(1, C.T/1.2)*(1-smooth(3.6, 4.6, C.T)));
+    if (C.sky) C.sky.userData.tick(t, 2.2*Math.min(1, C.T/1.2)*(1-smooth(3.6, 4.6, C.T)));
     if (!on && C.T>4.6){ OUT.remove(C.beam); if (C.sky) OUT.remove(C.sky); S4B.cast=null; } }
   const aurA = spellOn('aurora') && !World.inside && World.weather!=='rain' ? smooth(0.35,0.85,World.night||0)*(World.weather==='cloudy'?0.5:1) : 0;
   AUR.uAur.value = aurA; AUR.uAurT.value = t;
@@ -4209,8 +4212,8 @@ function story4Tick(dt, t){
   PATH_GLOW.uPG.value = pathA; PATH_GLOW.uPGT.value = t;
   if (S4B.motes && !World.inside){ const sc=renderer.domElement.height/(2*Math.tan(camera.fov*Math.PI/360)); S4B.motes.material.uniforms.uScale.value=S4B.sparks.material.uniforms.uScale.value=sc;
     const px=player.pos.x, pz=player.pos.z-6;   // the view runs north of you, so the lights do too
-    S4B.motes.userData.update(dt, t, aurA, m=>{ const a=Math.random()*TAU, d=3+Math.random()*20, x=px+Math.cos(a)*d, z=pz+Math.sin(a)*d*0.9; const gy=Math.max(0, groundY(x,z));
-      m.x=x; m.y=gy+0.4+Math.random()*3.5; m.z=z; m.vx=(Math.random()-0.5)*0.4; m.vy=0.15+Math.random()*0.35; m.vz=(Math.random()-0.5)*0.4; m.max=4+Math.random()*5; m.c=Math.floor(Math.random()*5); return true; }, 3);
+    S4B.motes.userData.update(dt, t, aurA*1.5, m=>{ const a=Math.random()*TAU, d=3+Math.random()*20, x=px+Math.cos(a)*d, z=pz+Math.sin(a)*d*0.9; const gy=Math.max(0, groundY(x,z));
+      m.x=x; m.y=gy+0.4+Math.random()*3.5; m.z=z; m.vx=(Math.random()-0.5)*0.4; m.vy=0.15+Math.random()*0.35; m.vz=(Math.random()-0.5)*0.4; m.max=4+Math.random()*5; m.c=Math.floor(Math.random()*5); return true; }, 6);
     if ((S4B.nearT=(S4B.nearT||0)-dt)<=0){ S4B.nearT=1; S4B.near=pathA>0 ? [...PATH_STONES, ...(S4B.isleStones||[])].filter(q=>Math.abs(q[0]-px)<24 && Math.abs(q[2]-pz)<22) : []; }
     const near=S4B.near||[], night=smooth(0.1,0.7,World.night||0);
     S4B.sparks.userData.update(dt, t, pathA>0 ? 0.25+0.75*night : 0, m=>{ for (let k=0;k<6;k++){ const q=near[Math.floor(Math.random()*near.length)]; if (!q) return false;
@@ -5717,7 +5720,7 @@ function updateSky(){
   clouds.forEach(c=>c.children.forEach(s=>s.material.color.setHex(0xffffff).lerp(_c1.copy(bot),0.3+World.night*0.25).lerp(_c2.setHex(0x8a94a0),dim)));
   // v1.50 under the aurora the night light turns green and violet, and the far edge of the view glows with it
   const aA=AUR.uAur.value; if (aA>0.01){ const ph=0.5+0.5*Math.sin(performance.now()/1000*0.07);
-    _c1.setHex(0x5affb0).lerp(_c2.setHex(0xa070ff), ph); hemi.color.lerp(_c1, 0.1*aA); scene.fog.color.lerp(_c1.multiplyScalar(0.4), 0.4*aA); }
+    _c1.setHex(0x5affb0).lerp(_c2.setHex(0xa070ff), ph); hemi.color.lerp(_c1, 0.2*aA); scene.fog.color.lerp(_c1.multiplyScalar(0.35), 0.3*aA); }
 }
 const fadeEl=$('#fade');
 function fade(cb){ fadeEl.classList.add('show'); setTimeout(()=>{ cb(); setTimeout(()=>fadeEl.classList.remove('show'), 60); }, 260); }
@@ -9122,7 +9125,7 @@ window.__game.v136 = { get ISLES(){ return ISLES; }, offerMove, startMagic, magi
 // v1.37 testing hooks (headless checks of the island stories)
 window.__game.v138 = { get SY(){ return SY; }, get S2B(){ return S2B; }, isleQuest, isleChoices, relicMissing, wantedRelics, rollTripRelic, hiveColors, colorFam, apiaryChoices, refreshStory2, refreshTea, refreshForge, refreshReefHall, openTeaRoom, openForge, lighthouseAct, wickChoices, teaSeatOf, storyNewDay2, wendellLetter, isleDirWord, dev138, storySpot, bayCutting, nightBay, lightLit, COMMISSIONS, STAKES, stakeOf, talkSkipperHome, talkIncome, talkWizard };
 window.__game.v139 = { get SY(){ return SY; }, get S3B(){ return S3B; }, LOGBOOK, BEATS3, STAKES, COMMISSIONS, millAct, openMill, millstoneOffer, millThistle, millWendell, routeTowns, postRoutes, routeWant, openPost, postNewDay, placeVents, digVent, bathSeatOf, bathStage, openBath, gladeConds, gladeStageOf, gladeBugOK, gladeBugSpot, gladeLook, gladeStump, gladeKnock, gladeApprove, gladeStumpDug, gladeLamps, wreckAct, makeWreckRoom, wreckOpen, rollTripChart, openLogbook, openAntiq, antiqStock, story3Stock, storyBeat3, story3Choices, storyNewDay3, story3News, storiesHTML3, storyGossip3, refreshStory3, dev139, landmark3, meadowLM, dunesLM };
-window.__game.v150 = { AUR, PATH_GLOW, PATH_STONES, castSpell4, get cine(){ return cine; }, set cine(v){ cine=v; } };   // v1.50 test hooks
+window.__game.v150 = { AUR, PATH_GLOW, PATH_STONES, castSpell4, get cast(){ return S4B.cast; }, get cine(){ return cine; }, set cine(v){ cine=v; } };   // v1.50 test hooks
 window.__game.v141 = { get SY(){ return SY; }, get S4B(){ return S4B; }, refreshStory4, dev141, dev138, dev139, openStoryMap, devRaiseAll, devTravel, devPlaces, blocked: (x,z)=>blocked(x,z,0.3), devTrip, raceStart, raceEnd, raceCourse, raceLength, raceRivals, raceMenu, openReadingRoom, openStall, festDay, festOn, festSpots, refreshFest, refreshShow, showTableAct, showEntries, storyBeat4, story4Choices, storyNewDay4, story4News, storiesHTML4, starAltarAct, skyHour, skyNear, skyIsle, refreshSpells, refreshCharter, charterReqs, charterReady, hall4Choices, newbChoices, CHARTER, get ISLE_K(){ return ISLE_K; } };   // v1.41 test hooks
 window.__game.v137 = { get S(){ return S; }, get SY(){ return SY; }, get BAYR(){ return BAYR; }, get ISLES(){ return ISLES; }, get player(){ return player; }, get residents(){ return residents; },
   reefInfo, reefStage, bayPlan, bayPopulate, enterBay, exitBay, bayAct, bayCast, bayDrop, talkGill, talkShop, talkTo, talkHall, talkWizard, talkCurator, openNursery, openWorkshop, openBoard, openHallPanel,

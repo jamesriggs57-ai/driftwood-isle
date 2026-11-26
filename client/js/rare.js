@@ -79,6 +79,15 @@ ITEM_BUILDERS.rare = (g, d) => {
     const tufts=[]; for (let i=0;i<11;i++){ const a=i*2.3, r=0.06+((i*37)%10)*0.017; const t=mk(G.sph(0.06+(i%3)*0.02,10,8), emisOwn(i%2?0x5af0c8:0x8af0a0, 0.6), Math.cos(a)*r,0.15+(i%3)*0.03,Math.sin(a)*r,g); t.scale.y=0.6; tufts.push(t); }
     motes(g, 10, 0x9affd8, { r:0.25, y0:0.2, h:0.5, size:0.05, speed:0.15 });
     anim(g,t=>tufts.forEach((m,i)=>{ m.material.emissiveIntensity=0.45+0.4*Math.max(0,Math.sin(t*1.7+i)); }));
+  } else if (d.s==='emerald'){   // v1.59 a six-sided green crystal still half in its grey stone, with a smaller one beside it
+    const rock=mk(G.dod(0.22), stoneMat(0x8a857c), 0,0.1,0,g); rock.scale.set(1.25,0.55,1.05);
+    const em=new THREE.MeshPhysicalMaterial({ color:0x1fb866, emissive:0x0c7a3a, emissiveIntensity:0.35, roughness:0.06, metalness:0.05, clearcoat:1, flatShading:true, transparent:true, opacity:0.93 });
+    const gem=(x,z,h,r,tx,tz)=>{ const c=new THREE.Group(); c.position.set(x,0.12,z); c.rotation.set(tx,0,tz); g.add(c);
+      mk(CYL(r,r,h,6), em, 0,h/2,0,c); mk(G.cone(r,r*1.4,6), em, 0,h+r*0.7,0,c); return c; };
+    gem(0.02,0,0.34,0.09,0.08,-0.22); gem(-0.11,0.06,0.2,0.06,-0.3,0.45);
+    const glints=[0,1,2].map(i=>quiet(mk(G.sph(0.016,6,4), emis(0xeaffef,2), [0.05,-0.08,0.0][i], [0.36,0.27,0.5][i], [0.06,0.09,-0.02][i], g)));
+    const h=halo(g, 0.32, 0.85, 0x3aff8a, 0.3);
+    anim(g,t=>{ em.emissiveIntensity=0.28+Math.sin(t*1.8)*0.12; h.material.opacity=0.22+Math.sin(t*1.8)*0.1; glints.forEach((p,i)=>p.scale.setScalar(0.5+0.9*Math.max(0,Math.sin(t*2.6+i*2.1)))); });
   }
 };
 

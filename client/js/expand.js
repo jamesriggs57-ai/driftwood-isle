@@ -504,8 +504,8 @@ export function buildIsleFx(I, gy, seed){
           const b=mk(G.box(1.1,h,0.6), stone, x, gy(x,z)+h/2-0.05, z, g); b.rotation.y=-a+Math.PI/2; mossCap(x, gy(x,z)+h, z, 0.4); solid.push([x,z,0.55]); }
         const fl=mk(G.cyl(R-0.2,R-0.2,0.1,14), stone2, F.x, y0+0.02, F.z, g); fl.castShadow=false;
         for (let i=0;i<4;i++){ const a=F.rot+Math.PI+(r()-0.5)*1.4, d=R+1+r()*1.6, x=F.x+Math.cos(a)*d, z=F.z+Math.sin(a)*d; const b=block(x,z,0.8,0.45,0.55,r()*TAU, stone2); b.rotation.x=(r()-0.5)*0.3; } } }
-    else if (F.t==='spire' || F.t==='grotto'){   // moss and a few ferns-like tufts on the spire tops
-      for (const [px,pz,pr,ph] of (F.spire ? [F.spire] : F.spires)){ const y=PLATEAU+ph; mossCap(px, y-0.15, pz, pr*0.85); for (let k=0;k<3;k++){ const a=r()*TAU; mossCap(px+Math.cos(a)*pr*0.9, y-0.9-r()*1.6, pz+Math.sin(a)*pr*0.9, 0.5+r()*0.3); } }
+    else if (F.t==='spire' || F.t==='grotto'){   // moss and a few ferns-like tufts on the spire tops (v1.59 bare stone tops with a patch or two of moss, was one cap over the whole top)
+      for (const [px,pz,pr,ph] of (F.spire ? [F.spire] : F.spires)){ const y=PLATEAU+ph, ca=r()*TAU, cd=pr*0.3; mossCap(px+Math.cos(ca)*cd, y-0.1, pz+Math.sin(ca)*cd, pr*0.42); mossCap(px-Math.cos(ca)*cd*1.2, y-0.1, pz-Math.sin(ca)*cd*1.2, pr*0.22); for (let k=0;k<3;k++){ const a=r()*TAU; mossCap(px+Math.cos(a)*pr*0.9, y-0.9-r()*1.6, pz+Math.sin(a)*pr*0.9, 0.5+r()*0.3); } }
       if (F.t==='grotto'){   // a still pool at the bottom, stepping stones, glowing moss on the walls
         const glow=glowMat(0x8fe0b0); for (let k=0;k<16;k++){ const a=k/16*TAU+r()*0.3, d=F.rp+1.6+r()*(F.R-F.rp-2.4), x=F.x+Math.cos(a)*d, z=F.z+Math.sin(a)*d; const m=mk(G.sph(0.22+r()*0.2,6,4), r()<0.4?glow:mossM, x, gy(x,z)+0.04, z, g); m.scale.y=0.4; m.castShadow=false; }
         for (let k=0;k<5;k++){ const a=r()*TAU, d=r()*F.rp*0.7, x=F.x+Math.cos(a)*d, z=F.z+Math.sin(a)*d; const p=mk(G.cyl(0.35+r()*0.2,0.38,0.04,10), padM, x, 0.03, z, g); p.castShadow=false; } } }

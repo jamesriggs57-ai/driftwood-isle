@@ -181,7 +181,7 @@ function onLive(m) {
     case 'pos': { const p = peers.get(m.id); if (p) { p.st = m; net.remoteUpsert(m.id, p.name, m); } break; }
     case 'emote': net.remoteEmote(m.id === myId ? 'me' : m.id, m.e); break;
     case 'game': if (m.id !== myId && m.d) { if (m.d.trip) { if (net.trip) net.trip(m.id, peers.get(m.id)?.name || 'A friend', m.d); } else net.party(m.id, m.d); } break;   // party games (v1.14), group trips (v1.34)
-    case 'bonk': if (m.id === myId) break; if (m.to === myId) net.bonked('me', m.id, +m.dx || 0, +m.dz || 0); else if (peers.has(m.to)) net.bonked(m.to, m.id, +m.dx || 0, +m.dz || 0); break;
+    case 'bonk': if (m.id === myId) break; if (m.to === myId) net.bonked('me', m.id, +m.dx || 0, +m.dz || 0, +m.p || 1); else if (peers.has(m.to)) net.bonked(m.to, m.id, +m.dx || 0, +m.dz || 0); break;
     case 'world': pullWorld(); break;   // v1.34: someone changed the island: fetch and show it live
     case 'gift': openMail(true, m.name); break;
     case 'trade-ask': askTrade(m); break;

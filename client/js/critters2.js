@@ -1,4 +1,4 @@
-// v1.50 wave 1 critters: 54 fish and 57 bugs, each with its own build (no recolors, no scaled copies).
+// v1.52 wave 1 critters: 54 fish and 57 bugs, each with its own build (no recolors, no scaled copies).
 // Same contract as critters.js: fish face +x, bugs face +z, both sit around y 0.1 to 0.35.
 // g.userData.tail wags (rotation.y), g.userData.wings flap (rotation.z, userData.side = 1 or -1).
 // New here: g.userData.idle(t) moves a species' own parts (gills, leaves, fans, a rolling ball...) and

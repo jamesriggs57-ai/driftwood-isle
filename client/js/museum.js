@@ -14,7 +14,7 @@ const GROUPS0 = {
     { id:'river', name:'River Run',         theme:'river', ids:['dace','loach','carp','smelt','trout','darter','catfish','salmon','pike','char'] },
     { id:'coast', name:'Coastal Shallows',  theme:'coast', ids:['minnow','silverbream','sardine','mackerel','flounder','snapper','cod'] },
     { id:'bay',   name:'Cay Bay Reef',      theme:'ocean', ids:['wrasse','goby','blenny','bannerfin','velvetray','parrotfish','grouper','goldseahorse','cardinal','flashlight'] },
-    // v1.50 wave 1 (before the last tank, which keeps catching anything without a group)
+    // v1.52 wave 1 (before the last tank, which keeps catching anything without a group)
     { id:'shallows', name:'Sandy Shallows',  theme:'coast', ids:['needlefish','gardeneel','sole','flyingfish','searobin','boxfish','cuttlefish','mantisshrimp'] },
     { id:'wonders',  name:'Reef Wonders',    theme:'ocean', ids:['butterflyfish','lionfish','triggerfish','mandarin','lobster','pinecone','unicornfish','humphead','seadragon','whaleshark'] },
     { id:'rapids',   name:'Rapids & Riverbed', theme:'river', ids:['sculpin','hatchetfish','mudskipper','lamprey','piranha','grayling','paddlefish','arowana','sturgeon'] },
@@ -26,7 +26,7 @@ const GROUPS0 = {
     { id:'butterfly', name:'Butterfly Garden',    theme:'meadow', ids:['sunwing','ember','bluebell','peacock','swallowtail','wanderer','leafdancer','rainwing'] },
     { id:'garden',    name:'Garden & Pond',       theme:'garden', ids:['bee','bumblebee','ladybug','mantis','orchidmantis','dragonfly','damselfly','skater','snail'] },
     { id:'wood',      name:'Woodland & Shore',    theme:'wood',   ids:['cicada','barkbeetle','treecricket','walkingstick','stag','rhino','grasshopper','cricket','pillbug','fiddler','hermit','sandhopper'] },
-    // v1.50 wave 1
+    // v1.52 wave 1
     { id:'wings2',   name:'Butterfly House',     theme:'meadow', ids:['skipper','comma','hairstreak','longwing','glasswing','morpho','birdwing'] },
     { id:'flyers',   name:'Flies, Wasps & Lacewings', theme:'garden', ids:['cranefly','hoverfly','mayfly','lacewing','paperwasp','robberfly','cuckoowasp','beefly','scorpionfly'] },
     { id:'beetles',  name:'Beetle Hall',         theme:'wood',   ids:['chafer','jewelbeetle','tortoisebeetle','weevil','tigerbeetle','dungbeetle','longhorn','atlasbeetle','giraffeweevil','divingbeetle'] },
@@ -296,7 +296,7 @@ function floorTexOf(theme){ const T=THEME[theme]; return ctex('fl:'+theme, 256, 
 /* ---------- Tank / terrarium in the hall ---------- */
 // Length runs along x, the glass faces +z. Returns a group with userData.update(t,dt).
 const SIZE_ROOM = { S:0.2, M:0.28, L:0.38, XL:0.5 };
-// v1.50 bugs have their own models (model.x) and no model.w: how they move comes from where they live, their size from how long they grow
+// v1.52 bugs have their own models (model.x) and no model.w: how they move comes from where they live, their size from how long they grow
 const MOTHS2 = new Set(['rosymaple','hawkmoth','tigermoth','plumemoth','ribbonmoth','atlasmoth']);
 const MOVE2 = { treesnail:'snail', cavecricket:'hopper', mosskatydid:'hopper', spittlebug:'hopper', treehopper:'hopper', waterscorpion:'skater' };
 export const bugMove = it => it.model.w || MOVE2[it.id] || (['air','starfall'].includes(it.move||it.where) ? (MOTHS2.has(it.id) ? 'moth' : 'fly') : 'beetle');

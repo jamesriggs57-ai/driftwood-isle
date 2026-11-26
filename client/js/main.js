@@ -4,12 +4,12 @@
    ===================================================================== */
 import * as THREE from 'three';
 import { TAU, clamp, lerp, smooth, mulberry32, hashStr, hash2, vnoise, fbm, weightedPick, inHours, inMonths, fmt, polyDist, segDist, Time, seasonOf } from './util.js';
-import { WOOD_START, WOOD_TEN, WOOD_ORDER, WOOD_MILESTONES, WOOD_PLAN_PRICE } from './content.js';
+import { WOOD_START, WOOD_TEN, WOOD_ORDER, WOOD_MILESTONES, WOOD_PLAN_PRICE, WOOD_TEN_KINDS, WOOD_TEN_MADE, WOOD_BATCH, WOOD_PER_KIND, WOOD_MS_PER_DAY } from './content.js';
 import { TICKET_THEMES } from './content.js';   // v1.39 fixes: captain's parting line
 import { ITEMS, NATIVE_FRUITS, PLANTS, TOOLS, WOODWORK, BACKPACKS, BASE_SLOTS, HOUSE_LEVELS, RESIDENTS, DIALOGUE, PEDDLER, EVENTS, rarityLabel, RARITY_COLORS, SHOPS, INVEST, KEEPERS, MUSEUM, BUILD,
   FOREIGN_FRUIT_PRICE, FRUIT_REGROW_DAYS, POTIONS, WIZARD, MAGIC, STORY, FAVOR_ASKS, CROPS, RECIPES, ARRIVE, MENTOR, islandSeedPool, ISLAND_SEED_BUY, islandFlowerPool, WILDFLOWER_SEEDS, GARDEN_FENCES, GARDEN_DECOR, FR, RARE_WORK, RARE_ODDS, PLAN_PRICE,
   WEAR_IDS, FAVOR_THEMES, DO_TASKS, ORIGINAL_RESIDENTS, LETTERS, LETTER_IDS, CORAL_KINDS, CORAL_NAMES, CORAL_FISH, NIGHT_BAY } from './content.js';
-import { whereText, BAY_MORE } from './content.js';   // v1.50 wave 1: isle, trip and late reef fish
+import { whereText, BAY_MORE } from './content.js';   // v1.52 wave 1: isle, trip and late reef fish
 import * as S2 from './story2.js';   // v1.38 phase 2 buildings and furniture
 import * as S3 from './story3.js';   // v1.39 phase 3 buildings and furniture
 import * as S4 from './story4.js';   // v1.41 phase 4 buildings, festival and Starfall spells
@@ -24,6 +24,7 @@ import * as VY from './voyage.js';
 import * as TALK from './talk.js';
 import * as ISL from './expand.js';
 import * as RF from './reef.js';
+import * as TH from './townhall.js';   // v1.49 town hall inside
 import { createEnchant } from './enchant.js';   // v1.40 tools and enchanting
 import { createBenches } from './benches.js';   // v1.40 crafting tables
 import { buildBike, MODEL, M, mk, G, outline, windowMat, glowMats, glowMat, glowSprites, addGlow, textSprite, PALETTE, buildItemModel, thumb, toolThumb, FURN_BUILDERS, MF,
@@ -914,7 +915,7 @@ const article = n => /^[aeiou]/i.test(n) ? 'an' : 'a';
 const isForever = t => { const T=S.tools[t]; return !!(T && TOOLS[t].tiers[T.tier] && TOOLS[t].tiers[T.tier].forever); };
 function useTool(t){
   const T=S.tools[t]; if(!T) return false; if (isForever(t)){ save(); return true; } T.uses--; EN.onUse(t,T);
-  if (T.uses<=0){ const nm=TOOLS[t].tiers[T.tier].name; delete S.tools[t]; if(S.equip===t) S.equip=null; Snd.breakTool(); setTimeout(()=>toast(`Your ${nm} broke!`),400); updateHeld(); }
+  if (T.uses<=0){ EN.breakTool(t); /* v1.50: it waits to be fixed at a crafting table */ if(S.equip===t) S.equip=null; Snd.breakTool(); updateHeld(); }
   else if (T.uses===5) setTimeout(()=>toast(`Your ${TOOLS[t].tiers[T.tier].name} is looking worn out.`),400);
   save(); return true;
 }
@@ -948,14 +949,14 @@ class Tree extends Ent {
     const n=this.fruitLeft();
     if (n>0){ track('shake'); S.day.fruit[this.key]=0; if (!VISIT) (S.fruitPicked=S.fruitPicked||{})[this.key]=dayNum(today()); for(let i=0;i<n;i++) setTimeout(()=>dropNear(this.fruit, this.pos, 1.6), 250+i*120); }
     else if (!S.day.branch[this.key] && Math.random()<0.7){ S.day.branch[this.key]=true; setTimeout(()=>dropNear('softwood', this.pos, 1.6), 300); }
-    const sap=(S.day.sap=S.day.sap||{}); if (!sap[this.key]){ sap[this.key]=1; if (TRIP_THEME==='grove' && !this.rec){ if (haulLeft()>0){ const p=this.pos.clone(); setTimeout(()=>{ dropNear('goldsap', p, 1.4); sparkle(p.clone().add(new THREE.Vector3(0,1.4,0))); }, 380); } else capNote(); } else rareRoll('shake', 'goldsap', this.pos); }
+    const sap=(S.day.sap=S.day.sap||{}); if (!sap[this.key]){ sap[this.key]=1; if (TRIP_THEME==='grove' && !this.rec){ const p=this.pos.clone(); setTimeout(()=>{ dropNear('goldsap', p, 1.4); sparkle(p.clone().add(new THREE.Vector3(0,1.4,0))); }, 380); } else rareRoll('shake', 'goldsap', this.pos); }
     save(); setTimeout(()=>this.refresh(),250);
   }
   chop(){
     const tier=toolTier('axe'), one=EN.oneSwing('axe'), out=EN.output('axe'); if(!useTool('axe')) return;   // v1.40
     const n=one?3:(S.day.chop[this.key]||0); S.day.chop[this.key]=n+1; S.stats.chopped++; track('chop');
     this.shake=0.7; Snd.chop(); puff(this.pos.clone().add(new THREE.Vector3(0,1,0)), 0xd8b080, 5, 0.4, 1.5, 0.8, 0.5);
-    if (n<3){ for (let k=0;k<out;k++){ dropNear('wood', this.pos, 1.6); if (tier>=2) dropNear('wood', this.pos, 1.6); } if (TRIP_THEME==='grove' && !this.rec && n===0){ if (haulLeft()>0) dropNear('heartwood', this.pos, 1.6); else capNote(); } else rareRoll('chop', 'heartwood', this.pos); }
+    if (n<3){ for (let k=0;k<out;k++){ dropNear('wood', this.pos, 1.6); if (tier>=2) dropNear('wood', this.pos, 1.6); } if (TRIP_THEME==='grove' && !this.rec && n===0) dropNear('heartwood', this.pos, 1.6); else rareRoll('chop', 'heartwood', this.pos); }
     else if (TOOLS.axe.tiers[tier].nofell && !one) toast('Too flimsy to fell it.');
     else { Snd.timber(); for (let k=0;k<(one?EN.ONE_SWING_WOOD:out);k++) dropNear('wood', this.pos, 1.6); EN.scrollRoll('fell', this.pos);
       if (this.rec){ S.plants.splice(S.plants.indexOf(this.rec),1); } else S.cut[this.key]='gone';
@@ -986,7 +987,7 @@ class Rock extends Ent {
     if (used>=4){ toast('The rock is all tapped out for today.'); return; }
     if (!useTool(t)) return; const hits=t==='shovel'&&EN.oneSwing('shovel') ? 4-used : 1, out=EN.output(t);   // v1.40: One-Swing taps the rock out at once
     for (let h=0;h<hits;h++){ const u=used+h; S.day.rock[this.idx]=u+1;
-    if (TRIP_THEME==='clamstone'){ const left=haulLeft(); if (left<=0){ capNote(); dropNear('stone', this.pos, 1.7); } else { const amt=Math.min(left, [1000,2000,4000,8000][u]); addClams(amt); Snd.coin(); toast('A pouch of '+fmt(amt)+' clams popped out!'); } }   // v1.27
+    if (TRIP_THEME==='clamstone'){ const amt=[1000,2000,4000,8000][u]; addClams(amt); Snd.coin(); toast('A pouch of '+fmt(amt)+' clams popped out!'); }   // v1.27; v1.48 no haul cap
     else if (this.idx===S.day.lucky){ const amt=[100,200,400,800][u]; addClams(amt); Snd.coin(); toast('A pouch of '+amt+' clams popped out!'); }
     else { for (let k=0;k<out;k++){ const x=Math.random(), q=this.rich?[0.35,0.6]:[0.6,0.88]; dropNear(x<q[0]?'stone':(x<q[1]?'clay':'iron'), this.pos, 1.7); } rareRoll(World.night>0.5?'rockNight':'rock', 'starstone', this.pos); } }
     save();
@@ -1384,7 +1385,7 @@ class Bug extends Ent {
       if (this.tx!==undefined){ const dx=this.tx-this.pos.x, dz=this.tz-this.pos.z, L=Math.hypot(dx,dz); if(L>0.05){ const s=Math.min(L, dt*(W==='beach'?1.2:2.5)); this.pos.x+=dx/L*s; this.pos.z+=dz/L*s; this.obj.rotation.y=Math.atan2(dx,dz)+(W==='beach'?Math.PI/2:0); } }
       this.pos.y=groundY(this.pos.x,this.pos.z)+(W==='ground'&&this.hop>1.2?Math.sin((this.hop-1.2)*10)*0.2:0)+0.02; }
     else if (W==='pond'){ const w=this.ph*0.4; this.pos.set(this.home.x+Math.sin(w)*1.5, 0.03, this.home.z+Math.cos(w*1.3)*1.5); }
-    if (this.m.userData.idle) this.m.userData.idle(t);   // v1.50 a few new bugs have their own little motion
+    if (this.m.userData.idle) this.m.userData.idle(t);   // v1.52 a few new bugs have their own little motion
     if (!this.trunk) this.obj.position.copy(this.pos);
   }
   flap(t,s){ for(const wg of (this.m.userData.wings||[])) wg.rotation.z=wg.userData.side*Math.sin(t*22*s+this.ph)*0.7*Math.min(1,s+0.1); }
@@ -1442,13 +1443,12 @@ const shadowGeo=G.sph(0.5,14,6);
 const shadowMat=new THREE.MeshBasicMaterial({ color:0x163040, transparent:true, opacity:0.5, depthWrite:false });
 const FISH_NIGHT=new THREE.Color(0x9fe0f0);   // at night fish show as a pale glow instead of a dark shadow
 const fishes=[];
-// v1.50: isle fish live only in the sea right around their isle, trip fish only on those trip islands
+// v1.52: isle fish live only in the sea right around their isle, trip fish only on those trip islands
 const isleNear = (x,z,t=1.7) => { for (const I of ISLES) if (!I.sky && ISL.isleT(I,x,z)<t) return I; return null; };
 const fishHere = (i,type,I) => i.where===type || (i.where==='isle' && type==='sea' && !!I && I.kind===i.isle) || (i.where==='trip' && TRIP && (i.trip||[]).includes(TRIP_THEME) && (i.water==='any' ? type!=='spring' : i.water===type));
 function fishPool(type, x, z){ const h=Time.hour(), m=Time.month(), I=type==='sea' && x!==undefined ? isleNear(x,z) : null; return Object.values(ITEMS).filter(i=>i.kind==='fish' && fishHere(i,type,I) && inMonths(m,i.months) && inHours(h,i.hours)); }
 function waterSpot(){ for(let k=0;k<40;k++){ const a=Math.random()*TAU, d=4+Math.random()*12; const x=player.pos.x+Math.cos(a)*d, z=player.pos.z+Math.sin(a)*d; if(isFishWater(x,z) && rawHeight(x,z)<-0.45 && !onDock(x,z) && !onBridge(x,z)) return [x,z]; } return null; }
 function spawnFish(){ const p=waterSpot(); if(!p) return; const type=waterType(p[0],p[1]);
-  if (TRIP_THEME==='shimmer' && haulLeft()<=0) return;   // v1.27: Shimmer Lagoon only holds so much
   const pool=(TRIP_THEME==='shimmer' && type!=='spring' ? Object.values(ITEMS).filter(i=>i.kind==='fish' && (i.rarity??5)<1.5) : fishPool(type, p[0], p[1])).filter(allowedFind); if(!pool.length) return; const sp=SR.tipSwap(tierPick(Math.random, pool, i=>luckW(i,'fish'), 'fish'), pool, 'marlo');   // v1.44 Marlo's tip
   // v1.26: the fish's length is decided when it spawns, and its shadow shows it: a big shadow is a big one for its species
   const meta=rollStats(sp.id), sz=(SIZE_SCALE[sp.size]||0.85)*(0.8+0.45*(meta.f||0));
@@ -1477,9 +1477,11 @@ function reel(){
   } else if (f && (f.state==='nibble'||f.state==='approach')){ toast('Too soon!'); f.state='flee'; f.t=0; Snd.splash(); }
   Fishing.state='idle'; Fishing.fish=null; bobber.visible=false; fishLine.visible=false; exclaim.visible=false; player.act=0.4;
 }
+// v1.50: fewer fish about. At most FISH_NEAR within 22 units of you and FISH_MAX in all; a new one turns up at about FISH_RATE a second while there's room (was 3, 9 and 0.3)
+const FISH_NEAR=2, FISH_MAX=5, FISH_RATE=0.15;
 function updateFishing(dt,t){
   feedFishShadows(dt); if (World.inside) return;
-  const near=fishes.filter(f=>f.m.position.distanceTo(player.pos)<22).length; if (near<3 && fishes.length<9 && Math.random()<dt*0.3) spawnFish();
+  const near=fishes.filter(f=>f.m.position.distanceTo(player.pos)<22).length; if (near<FISH_NEAR && fishes.length<FISH_MAX && Math.random()<dt*FISH_RATE) spawnFish();
   for (let i=fishes.length-1;i>=0;i--){ const f=fishes[i]; f.ph+=dt;
     if (f.state==='swim'){ if(f.m.position.distanceTo(player.pos)>45){ f.state='flee'; f.t=0.9; continue; } const x=f.home.x+Math.sin(f.ph*0.3)*1.8, z=f.home.z+Math.cos(f.ph*0.23)*1.8; if(isFishWater(x,z)){ const a=Math.atan2(z-f.m.position.z, x-f.m.position.x); f.m.position.x=x; f.m.position.z=z; f.m.rotation.y=-a; } }
     else if (f.state==='approach'){ f.hes=(f.hes||0)-dt; const d=Fishing.pt.clone().sub(f.m.position); d.y=0; const L=d.length();
@@ -1918,18 +1920,65 @@ for (const R of RESIDENTS) if (!isOrig(R.id) && R.home) KEEPOUT.push([R.home[0],
 function initTownBuildings(){ buildStoreAll(); for (const id of ['aquarium','garden']) buildShop(id); buildMuseumAll(); buildHall(); buildPlaza(); refreshSmoke(); }
 let rebuildOnExit={};   // a shop you're standing in is rebuilt when you step outside
 function rebuildPlace(id){ const room = id==='general'?'store':id; if (World.inside===room){ rebuildOnExit[id]=true; return; }
-  if (id==='general') buildStoreAll(); else if (id==='museum') buildMuseumAll(); else buildShop(id); }
+  if (id==='general') buildStoreAll(); else if (id==='museum') buildMuseumAll(); else if (id==='hall') buildHall(); else buildShop(id); }
 
 /* ---------- Town hall ---------- */
 const HALL_COST=[0,60000,220000], HALL_NEED=[null,{ house:true },{ museum:1, shops:1 }];
 let hallEnt=null, clerk=null;
 function buildHall(){
-  if (hallEnt){ hallEnt.remove(); hallEnt=null; } if (clerk){ clerk.remove(); clerk=null; } setRects('hall',[]);
+  if (World.inside==='hall'){ rebuildOnExit.hall=true; return; }   // v1.49 rebuilt when you step outside
+  if (hallEnt){ hallEnt.remove(); hallEnt=null; } if (clerk){ clerk.remove(); clerk=null; } setRects('hall',[]); clearRoom('hall');
   if (!PLACES.hall) return;
   const [hx,hz]=PLACES.hall, t=S.town.hall||0;
-  const chn=t>=1 && !TRIP && charterBuilt(); hallEnt=placeBuilding('hall', hx, hz, buildTownHall(t, chn?'Charter Hall':null), 'Read', ()=>talkHall()); hallEnt.charter=chn;   // v1.41
-  const [dx,dz]=hallEnt.doorPt; clerk=new Keeper(KEEPERS.clementine, dx+(t===0?1.9:1.6), dz-(t===0?0.6:0.3), ()=>talkHall()); clerk.rest=0; hallEnt.tier=t;
+  // v1.49 the Town Hall and the Grand Town Hall have an inside, with Clementine at her desk; the tent is still just a tent
+  const chn=t>=1 && !TRIP && charterBuilt(); hallEnt=placeBuilding('hall', hx, hz, buildTownHall(t, chn?'Charter Hall':null), t>=1?'Enter':'Read', ()=>t>=1?enterRoom('hall'):talkHall()); hallEnt.charter=chn; hallEnt.tier=t;   // v1.41 Charter Hall sign
+  if (t>=1){ buildHallInside(t); return; }
+  const [dx,dz]=hallEnt.doorPt; clerk=new Keeper(KEEPERS.clementine, dx+(t===0?1.9:1.6), dz-(t===0?0.6:0.3), ()=>talkHall()); clerk.rest=0;
 }
+/* v1.49 inside the town hall (the models are in townhall.js). Clementine sits at her desk under the island's crest.
+   The Island Records board and the portraits of everyone who lives here are on the side walls, the island's map is
+   on the table in the middle, and there are benches for town meetings. The Grand Town Hall is bigger, with columns,
+   a chandelier, a grandfather clock and a trophy case that gets a new prize for every ten achievements.
+   The boards are redrawn each time you walk in. */
+const HALL_IDX=96;
+let hallIn=null;
+function buildHallInside(t){
+  const [ox,oz]=roomOrigin(HALL_IDX), container=new THREE.Group(); container.visible=false; scene.add(container);
+  const L=TH.buildHallRoom(t, S.island); L.shell.position.set(ox,0,oz); container.add(L.shell); hallIn=L;
+  const { W, D, solid }=L;
+  ROOMS.hall={ id:'hall', ox, oz, w:W, d:D, group:container, shell:L.shell, spec:{ mood:'hall' }, entry:[ox, oz+D/2-1.2], exit:[hallEnt.doorPt[0], hallEnt.doorPt[1]+0.2], bed:[ox,oz],
+    walk:(x,z)=>{ const lx=x-ox, lz=z-oz; if (!(Math.abs(lx)<W/2-0.4 && lz>-D/2+0.4 && lz<D/2-0.05)) return false; for (const b of solid) if (lx>b[0]-0.28 && lx<b[2]+0.28 && lz>b[1]-0.28 && lz<b[3]+0.28) return false; return true; } };
+  const ck=new Keeper(KEEPERS.clementine, ox+L.clerkAt[0], oz+L.clerkAt[1], ()=>talkHall()); ck.rest=0;
+  const spot=(kind, x, z, hit, label, act)=>new Thing(kind, ox+x, oz+z, 0.4, new THREE.Group(), label, act, { solid:false, reach:1.9, hit });
+  spot('hallrec', -W/2+0.7, L.boardSpot[1], [1.0,1.6], 'Read', ()=>openRecords());
+  spot('hallpics', W/2-0.7, L.wallSpot[1], [1.0,1.6], 'Look', ()=>openIslanders());
+  spot('hallmap', L.mapAt[0], L.mapAt[1], [1.0,0.8], 'Look', ()=>openMap());
+  if (L.trophies) spot('halltro', W/2-1.0, 2.4, [0.9,1.1], 'Look', ()=>{ const n=achCount(), p=Math.min(8,Math.floor(n/10)); toast(p ? `${p} prize${p>1?'s':''} in the case: one for every ten achievements. You have ${n}.` : `The case is empty for now. Every ten achievements earn a prize. You have ${n}.`); });
+  refreshHallInside();
+}
+function hallRecords(){ const T=S.town;
+  return [['Islanders', String(T.res.length), 'live here'], ['Museum', String(donatedCount()), 'pieces donated'], ['Shops backed', `${shopsBacked()} of 3`, ''],
+    ['Things found', String(discovered()), 'in your catalog'], ['Achievements', String(achCount()), `of ${ACHIEVEMENTS.length}`], ['Best friends', String(bestFriends()), 'islanders']]; }
+const SHIRTS=[0x6a9ad8,0xe0745a,0x7cb85a,0xe8b84a,0x9a7ab8,0x4ab0a8,0xe88aa8,0x8a6a4a];
+function hallPortraits(){ return S.town.res.map(id=>RESIDENTS.find(R=>R.id===id)).filter(Boolean).map((R,i)=>({ name:R.name, shirt:SHIRTS[i%SHIRTS.length], ...TH.lookColors(CH.parseLook(resLook(R))) })); }
+function refreshHallInside(){ const L=hallIn; if (!L || !ROOMS.hall) return;
+  TH.drawRecords(L.board, hallRecords()); TH.drawPortraits(L.wall, hallPortraits()); L.crest.userData.setName(S.island);
+  drawIslandMap(L.map.userData.canvas); TH.mapRefresh(L.map); if (L.trophies) TH.setTrophies(L.trophies, Math.floor(achCount()/10)); }
+// #dev: go straight into the town hall (building it first if it's still a tent), or switch between Town Hall and Grand
+function devHall(render){ const a=$('#dvH'), b=$('#dvHg'); if (!a) return;
+  const setTier=t=>{ S.town.hall=t; S.town.hallPend=false; save(); };
+  a.onclick=()=>{ closePanel(); if ((S.town.hall||0)<1){ setTier(1); buildHall(); buildPlaza(); } if (World.inside==='hall') return; if (World.inside) exitRoom(); setTimeout(()=>enterRoom('hall'), World.inside?700:0); };
+  b.onclick=()=>{ closePanel(); const was=World.inside==='hall'; setTier((S.town.hall||0)>=2?1:2);
+    const go=()=>{ buildHall(); buildPlaza(); if (was) setTimeout(()=>enterRoom('hall'), 100); toast(`It's the ${HALL_NAMES[S.town.hall]} now.`); };
+    if (was){ exitRoom(); setTimeout(go, 700); } else go(); }; }
+function openRecords(){ openPanel(`${S.island||'Island'} records`);
+  let h=`<div class="notice"><b>${HALL_NAMES[S.town.hall||0]}</b><br>`+hallRecords().map(r=>`${r[0]}: <b>${r[1]}</b>${r[2]?' '+r[2]:''}`).join('<br>')+'</div>';
+  const st=storiesHTML(); if (st) h+=st;
+  h+=`<button class="btn" id="hrProj">Town projects</button>`; pBody.innerHTML=h; $('#hrProj').onclick=()=>{ closePanel(); setTimeout(()=>openHallPanel(), 60); }; }
+function openIslanders(){ openPanel('Our islanders');
+  const list=S.town.res.map(id=>RESIDENTS.find(R=>R.id===id)).filter(Boolean);
+  pBody.innerHTML=`<div class="notice">${list.length} islanders live on ${S.island||'the island'}.</div>`+list.map(R=>{ const L=CH.parseLook(resLook(R)), sp=(CH.SPECIES[L.sp]||{}).name||'';
+    return `<div class="notice"><b>${R.name}</b> <span class="muted">${sp}</span><br>${hearts(R.id)}</div>`; }).join(''); }
 const HALL_NAMES=['Town Tent','Town Hall','Grand Town Hall'];
 /* v1.26: nobody new moves in while the town is just a tent. Once the town hall is built, newcomers turn up every few
    days (at least MOVE_GAP days after the last one, then a coin flip each day) until 10 islanders live here.
@@ -2060,25 +2109,26 @@ function openHallPanel(){
    Each one fills up over 3 days and then waits for you. Fish come at the usual odds, so a rare one is still rare.
    ===================================================================== */
 const INC_DAYS=3, INC_UPGRADE_WAIT=7;
+// v1.48: every tier here and every stake costs about a month of what it brings in (see the wiki's passive income page)
 const INCOME = {
   boat:{ who:'Gill', voice:400, acc:['beanie'], accC:0x3a6ab0, unit:['fish','fish'], hint:'a fisherman sitting by a wrecked rowboat on the beach',
     // v1.37: Gill's boats wait on the reef in Cay Bay (talkGill). Bigger boats need planks from the workshop, and iron fittings.
-    tiers:[{ name:'Dinghy', cost:25000, per:2 }, { name:'Trawler', cost:150000, per:5, need:[['plank',40]] }, { name:'Driftwood Queen', cost:400000, per:9, need:[['plank',60],['fitting',10]] }],
+    tiers:[{ name:'Dinghy', cost:25000, per:2 }, { name:'Trawler', cost:125000, per:5, need:[['plank',40]] }, { name:'Driftwood Queen', cost:300000, per:9, need:[['plank',60],['fitting',10]] }],
     meet:['Oh, hey there. Don\'t mind me. Just sitting with what\'s left of my boat.','Storm took her right out from under me. I fished these waters my whole life.',
       'Tell you what. If you bought me a new rowboat, I\'d split the catch with you. A couple of fish a day, and I\'ll keep them in a crate right here.'],
     up:['Business is good! The rowboat\'s doing fine, but she can only carry so much.','Get me a {name} and I could bring in a lot more for you.'] },
   bees:{ who:'Hollis', voice:300, acc:['beanie'], accC:0xe8b020, unit:['honey jar','honey jars'], hint:'a beekeeper out in a quiet meadow',
-    tiers:[{ name:'Beehive', cost:20000, per:2 }, { name:'Three Hives', cost:90000, per:5 }, { name:'Apiary', cost:300000, per:9 }],
+    tiers:[{ name:'Beehive', cost:13000, per:2 }, { name:'Three Hives', cost:35000, per:5 }, { name:'Apiary', cost:60000, per:9 }],
     meet:['Shh. Careful now. The bees are deciding whether they like you.','I keep bees, or I did. My last hive got blown over and the colony moved on.',
       'Buy me a new hive and I\'ll share the honey. More flowers nearby means more honey, so plant some if you like.'],
     up:['The bees are thriving. They want more room, I think.','A {name} would mean a lot more honey for both of us.'] },
   orchard:{ who:'Russet', voice:520, acc:['headband'], accC:0x7ab04a, unit:['piece of fruit','pieces of fruit'], hint:'an orchard keeper among the fruit trees',
-    tiers:[{ name:'Fruit Ladder', cost:20000, per:4 }, { name:'Pony Cart', cost:100000, per:8 }, { name:'Cider Shed', cost:300000, per:14 }],
+    tiers:[{ name:'Fruit Ladder', cost:14000, per:4 }, { name:'Pony Cart', cost:30000, per:8 }, { name:'Cider Shed', cost:50000, per:14 }],
     meet:['Hello! Just admiring these trees. Somebody ought to be picking them properly.','I used to run an orchard back home. All I need is a good ladder.',
       'Get me one and I\'ll pick fruit while you\'re busy, and keep it in baskets for you.'],
     up:['These trees could give a lot more, you know.','With a {name}, I could get through twice the orchard.'] },
   books:{ who:'Quill', voice:640, acc:['glasses'], accC:0x2a2a2a, unit:['clam','clams'], hint:'a bookkeeper by the general store',
-    tiers:[{ name:'Ledger', cost:25000, per:800 }, { name:'Counting House', cost:120000, per:2000 }, { name:'Trading Office', cost:400000, per:4500 }],
+    tiers:[{ name:'Ledger', cost:24000, per:800 }, { name:'Counting House', cost:60000, per:2000 }, { name:'Trading Office', cost:135000, per:4500 }],
     meet:['Ah! You\'re the one who\'s been backing the shops. I\'ve been watching the numbers.','Nobody is collecting your share of the profits! It\'s a scandal.',
       'Buy me a proper ledger and I\'ll keep the books. Your cut piles up here every day, for each shop you\'ve backed.'],
     up:['The shops are doing well, and the paperwork is piling up.','A {name} and I could squeeze a lot more out of every shop you back.'] },
@@ -2214,7 +2264,7 @@ function talkIncome(k){
    - the reef: Gill lost his boat because the reef off the cays died. Sprig grows coral from fragments that wash up,
      in a nursery tank Marlo builds. You row Gill's old rowboat out to Cay Bay and drop starters on the old rubble.
      Fish come back between visits, stage by stage. Gill's boats (his stake) wait on the reef.
-   - Bramble's workshop: once you've made 10 different things at his workbench he admits he wants a real workshop.
+   - Bramble's workshop: once you've made 14 different things (v1.50; was 10) he admits he wants a real workshop.
      Wendell can raise Old Pinewood (pines that grow back overnight); Clementine runs the building project; then
      Bramble saws planks (the new mid-game material) and offers you a share.
    - helpers (friendly islanders lend a hand on a project), gossip, an Island stories page on the board,
@@ -2242,7 +2292,7 @@ function reefInfo(){
 const reefStage = () => SY.reef ? reefInfo().stage : 0;
 const bayKinds = () => { const by=reefInfo().by; return CORAL_KINDS.filter(k=>by[k]>=5); };
 const baySpecies = () => bayKinds().flatMap(k=>CORAL_FISH[k]).filter(id=>ITEMS[id]);
-const bayMore = () => BAY_MORE.filter(id=>ITEMS[id] && reefStage()>=(ITEMS[id].reef||9) && inMonths(Time.month(), ITEMS[id].months));   // v1.50 the bigger reef fish come back as the reef grows
+const bayMore = () => BAY_MORE.filter(id=>ITEMS[id] && reefStage()>=(ITEMS[id].reef||9) && inMonths(Time.month(), ITEMS[id].months));   // v1.52 the bigger reef fish come back as the reef grows
 const outerOpen = () => reefStage()>=5;
 
 /* ---------- who holds a dream (v1.26 rule: whoever it was written for, else someone who lives here) ---------- */
@@ -2258,11 +2308,12 @@ const holderName = key => { const h=dreamHolder(key); return h ? npcName(h) : DR
 const asWritten = key => dreamHolder(key)===DREAM_FOR[key];
 
 /* ---------- the day turning over ---------- */
+const SHOP_DREAM_KINDS=14;
 function storyNewDay(){
   if (VISIT || TRIP || GUEST) return; const now=sday();
   if (SY.reef && SY.reef.st==='building' && now>SY.reef.tankDay){ SY.reef.st='nursery'; SY.reef.tankNews=true; }
-  // Bramble's dream: 10 different things made at his workbench
-  if (!SY.shop && S.craft && (S.craft.kinds||[]).length>=10){ SY.shop={ st:'pending', at:now+1+(hashStr('shop:'+S.seed)%3) }; }
+  // Bramble's dream: SHOP_DREAM_KINDS different things made (v1.50: 14, was 10)
+  if (!SY.shop && S.craft && (S.craft.kinds||[]).length>=SHOP_DREAM_KINDS){ SY.shop={ st:'pending', at:now+1+(hashStr('shop:'+S.seed)%3) }; }
   if (SY.shop && SY.shop.st==='building' && now>SY.shop.bday){ SY.shop.st='open'; SY.shop.built=now; SY.shop.owner=dreamHolder('shop'); SY.shop.news=true; }
   if (SY.shop && SY.shop.order && now>SY.shop.order.day){ SY.shop.ready=(SY.shop.ready||0)+SY.shop.order.n; SY.shop.order=null; }
   // helpers: a week of help is worth a little friendship
@@ -2735,7 +2786,7 @@ function pinesRegrow(){
    ===================================================================== */
 if (!S.stakes) S.stakes={};
 const STAKES = {
-  shop:{ unit:'plank', tiers:[{ name:'A share', cost:30000, per:900, extra:1 }, { name:'Partner', cost:140000, per:2200, extra:2 }, { name:'Co-owner', cost:420000, per:4800, extra:3 }],
+  shop:{ unit:'plank', tiers:[{ name:'A share', cost:30000, per:900, extra:1 }, { name:'Partner', cost:85000, per:2200, extra:2 }, { name:'Co-owner', cost:170000, per:4800, extra:3 }],
     due:()=>SY.shop && SY.shop.st==='open' && sday()-(SY.shop.built||0)>=7 && (SY.shop.made||0)>=100,
     offer:['You raised a whole forest for me. And you keep bringing wood.','Least I can do is cut you in. Put some clams into the shop and you get a share of every plank I sell, plus a few planks.','Come by the workshop and we\'ll sort it out.'] },
 };
@@ -2862,7 +2913,7 @@ function wendellLetter(){ if (VISIT || GUEST || TRIP || !SY.wl || sday2()<=SY.wl
 
 /* ---------- Hollis's apiary ---------- */
 const BEE_COLORS=6;
-INCOME.bees.tiers.push({ name:'Grand Apiary', cost:500000, per:14, gate:()=>!!(SY.apiary && SY.apiary.st==='done') });
+INCOME.bees.tiers.push({ name:'Grand Apiary', cost:185000, per:14, gate:()=>!!(SY.apiary && SY.apiary.st==='done') });
 function colorFam(c){ const r=(c>>16&255)/255, g=(c>>8&255)/255, b=(c&255)/255, mx=Math.max(r,g,b), mn=Math.min(r,g,b), l=(mx+mn)/2, d=mx-mn;
   if (l<0.2) return 'dark'; if (d<0.12) return l>0.6 ? 'white' : 'dark';
   let h = mx===r ? ((g-b)/d)%6 : mx===g ? (b-r)/d+2 : (r-g)/d+4; h*=60; if (h<0) h+=360;
@@ -2996,7 +3047,7 @@ function lightChoicesMarlo(k, menu){
     { label:`Order it (${fmt(LENS_COST)})`, fn:()=>{ if (noEdit()) return; if (S.clams<LENS_COST){ dialog(nm, v, ['Bit short, mate. No rush.'], menu); return; } S.clams-=LENS_COST; L.lens=1; L.lensDay=sday2(); updateHUD(); save(); Snd.coin(); dialog(nm, v, ['Lovely. It\'ll be up there by morning.'], menu); } },
     { label:'Not yet', alt:true, fn:menu } ]) }]; }
 STAKES.wick={ unit:'ticket_moonlit', place:'in the night voyages', extraWord:t=>`now and then a Moonlit ticket`,
-  tiers:[{ name:'A share', cost:25000, per:800, extra:0.15 }, { name:'Partner', cost:120000, per:2000, extra:0.3 }, { name:'Co-owner', cost:400000, per:4500, extra:0.5 }],
+  tiers:[{ name:'A share', cost:25000, per:800, extra:0.15 }, { name:'Partner', cost:65000, per:2000, extra:0.3 }, { name:'Co-owner', cost:145000, per:4500, extra:0.5 }],
   due:()=>!!(SY.light && (SY.light.nv||0)>=1),
   offer:['Folks will pay for the dark. You\'ll get a cut of every fare.','Put some clams into the boat and a share of the takings is yours, with a ticket now and then.'] };
 // what Wick says about the lighthouse (called from his menu)
@@ -3013,10 +3064,10 @@ function wickChoices(go, back){
 /* ---------- Pemberton's Forge on Hollow Crags ---------- */
 const FORGE_PROJECT={ clams:200000, need:[['iron',30],['stone',30],['plank',20]] }, FIT_IRON=5, fitCap=()=>10, FORGE_FURN=[['ironlantern',4,1500],['irongate',8,2500],['weathervane',5,2000]];
 const cragsIsle = () => ISLES.find(I=>I.kind==='crags');
-STAKES.forge={ unit:'fitting', place:'in the forge', tiers:[{ name:'A share', cost:30000, per:900, extra:1 }, { name:'Partner', cost:140000, per:2200, extra:2 }, { name:'Co-owner', cost:420000, per:4800, extra:3 }],
+STAKES.forge={ unit:'fitting', place:'in the forge', tiers:[{ name:'A share', cost:30000, per:900, extra:1 }, { name:'Partner', cost:120000, per:2200, extra:2 }, { name:'Co-owner', cost:225000, per:4800, extra:3 }],
   due:()=>!!(SY.forge && SY.forge.st==='open' && (SY.forge.made||0)>=10),
   offer:['You found the iron. A share of the forge is only right.','Put some clams in and you get a cut of what it brings in, and a few fittings besides. Come by the forge.'] };
-STAKES.tea={ unit:'teacake', place:'in the tea room', tiers:[{ name:'A share', cost:25000, per:800, extra:1 }, { name:'Partner', cost:120000, per:2000, extra:2 }, { name:'Co-owner', cost:400000, per:4500, extra:3 }],
+STAKES.tea={ unit:'teacake', place:'in the tea room', tiers:[{ name:'A share', cost:25000, per:800, extra:1 }, { name:'Partner', cost:100000, per:2000, extra:2 }, { name:'Co-owner', cost:195000, per:4500, extra:3 }],
   due:()=>!!(SY.tea && SY.tea.st==='open' && sday2()-(SY.tea.built||0)>=7 && (SY.tea.nsold||0)>=30),
   offer:['The tea room\'s paying for itself already. I want you to have a slice.','Put some clams in and a share of the takings is yours, with a few cakes besides. Come by the tea room.'] };
 function forgeChoices(k, menu){
@@ -3223,7 +3274,7 @@ const dunesLM = () => { const I=ISLES.find(I=>I.kind==='dunes'); return I && I.l
 const MILL_GRIND=2, millCap = () => SY.mill && SY.mill.wheel ? 20 : 10, WHEEL_COST=15000;
 const millOpen = () => !!(SY.mill && SY.mill.st==='grain');
 const millName = () => `${npcName(SY.mill.owner||dreamHolder('mill'))}'s Mill`;
-STAKES.mill={ unit:'flour', place:'in the mill', tiers:[{ name:'A share', cost:25000, per:800, extra:2 }, { name:'Partner', cost:120000, per:2000, extra:3 }, { name:'Co-owner', cost:400000, per:4500, extra:5 }],
+STAKES.mill={ unit:'flour', place:'in the mill', tiers:[{ name:'A share', cost:25000, per:800, extra:2 }, { name:'Partner', cost:75000, per:2000, extra:3 }, { name:'Co-owner', cost:160000, per:4500, extra:5 }],
   due:()=>!!(SY.mill && SY.mill.wheel),
   offer:['Half this flour\'s yours by rights. You found the sails and the stone and the water.','Put some clams in and you get a cut of what the mill brings in, and a sack of flour or two besides. Come by the mill.'] };
 COMMISSIONS.push({ id:'millsails', need:[['plank',15],['sailcloth',3]], clams:0, days:1, gate:()=>!!(SY.mill && SY.mill.st==='sails') && !countItem('millsails') && !(SY.shop.comm && SY.shop.comm.id==='millsails') });
@@ -3297,7 +3348,7 @@ function postRoutes(){ const P=SY.post, R=(P.routes=P.routes||{}), T=routeTowns(
   for (const [town,o] of Object.entries(T)){ if (!R[town]) R[town]={ kind:o.kind, lvl:0, pal:o.pal }; else if (!S.contacts[R[town].pal]) R[town].pal=o.pal; }
   return Object.entries(R).filter(([town,r])=>S.contacts[r.pal]); }
 STAKES.post={ unit:'melon_seeds', place:'in the post office', extraWord:t=>`now and then a packet of foreign seeds`,
-  tiers:[{ name:'A share', cost:25000, per:800, extra:0.5 }, { name:'Partner', cost:120000, per:2000, extra:1 }, { name:'Co-owner', cost:400000, per:4500, extra:1.5 }],
+  tiers:[{ name:'A share', cost:25000, per:800, extra:0.5 }, { name:'Partner', cost:75000, per:2000, extra:1 }, { name:'Co-owner', cost:160000, per:4500, extra:1.5 }],
   due:()=>!!(SY.post && Object.values(SY.post.routes||{}).filter(r=>r.lvl>=2).length>=3),
   offer:['Postage adds up. Let me share it.','Put some clams in and you get a cut of every stamp, and seeds from the far towns now and then. Come by the post office.'] };
 function refreshPost(){
@@ -3340,7 +3391,7 @@ const BATH_PROJECT={ clams:100000, need:[['plank',60],['stone',20]] }, PIPE={ cl
 const BATH_UP=[{ key:'steam', clams:40000, need:[['stone',20],['plank',10]], name:'a steam room' }, { key:'rock', clams:80000, need:[['stone',30]], name:'rock pools looking out to sea' }];
 const bathOpen = () => !!(SY.bath && SY.bath.st==='open');
 const bathStage = () => !SY.bath ? 0 : SY.bath.st==='open' ? (SY.bath.rock===2 ? 4 : SY.bath.steam===2 ? 3 : 2) : ['pool','building'].includes(SY.bath.st) ? 1 : 0;
-STAKES.bath={ unit:'bathsalts', place:'in the bathhouse', tiers:[{ name:'A share', cost:25000, per:800, extra:1 }, { name:'Partner', cost:120000, per:2000, extra:2 }, { name:'Co-owner', cost:400000, per:4500, extra:3 }],
+STAKES.bath={ unit:'bathsalts', place:'in the bathhouse', tiers:[{ name:'A share', cost:25000, per:800, extra:1 }, { name:'Partner', cost:80000, per:2000, extra:2 }, { name:'Co-owner', cost:160000, per:4500, extra:3 }],
   due:()=>!!(SY.bath && SY.bath.steam===2),
   offer:['You dug the spring. You should get a cut of every soak.','Visitors pay at the door now, merchants and friends from off the island. Put some clams in and a share of that is yours, with bath salts besides. Come by the bathhouse.'] };
 // Wendell's divining: three elixirs, five vents, one of them real
@@ -3477,7 +3528,7 @@ const BELL_GLASS=20000, LENS3=8000, CROW={ iron:3, clams:1500 }, CHARTS=4;
 const wreckOpen = layer => !!(SY.wreck && (layer==='deck' ? SY.wreck.bell : (SY.wreck.layers||{})[layer]));
 COMMISSIONS.push({ id:'bellframe', need:[['plank',25]], clams:0, days:1, gate:()=>!!(SY.wreck && !SY.wreck.bell) && !countItem('bellframe') && !(SY.shop.comm && SY.shop.comm.id==='bellframe') });
 STAKES.antiq={ unit:'shiplantern', place:'in the antiques shop', extraWord:t=>'now and then a piece of salvage',
-  tiers:[{ name:'A share', cost:25000, per:800, extra:0.15 }, { name:'Partner', cost:120000, per:2000, extra:0.3 }, { name:'Co-owner', cost:400000, per:4500, extra:0.5 }],
+  tiers:[{ name:'A share', cost:25000, per:800, extra:0.15 }, { name:'Partner', cost:70000, per:2000, extra:0.3 }, { name:'Co-owner', cost:155000, per:4500, extra:0.5 }],
   due:()=>!!(SY.antiq && SY.antiq.st==='open'),
   offer:['None of this would be here without you.','Put some clams into the shop and a share of what it makes is yours, and a lantern from the wreck now and then. Come by the shop.'] };
 const LOGBOOK=[
@@ -4935,31 +4986,118 @@ function ghostOf(src, from){
   g.userData.tint=bad=>{ for (const m of mats) if (m.emissive) m.emissive.setHex(bad?0xb03a2a:0x6a4ab8); };
   g.userData.solid=()=>{ for (const [c,orig] of swaps){ c.material=orig; c.castShadow=true; } };
   return g; }
-const footprintClear = (x,z,r,self) => {
-  const msgs=[];
-  if (Math.hypot(x,z)/islandR(Math.atan2(z,x))>0.74) return 'Too close to the shore.';
-  if (Math.hypot(x,z)<r+8) return 'That\'s the plaza.';
-  if (polyDist(x,z,RIVER)<r+5 || Math.hypot(x-POND.x,z-POND.z)<POND.r+r+5) return 'Too close to the water.';
-  if (nearFall(x,z,r)) return 'Too close to the waterfall.';
-  if (XBR.some(b=>Math.hypot(x-b.a[0],z-b.a[1])<r+5)) return 'That\'s where the bridge to the new land comes ashore.';
-  if (x>DOCK.x0-r-6 && Math.abs(z-DOCK.z)<r+5) return 'That\'s the way to the dock.';
-  for (const k in PLACES){ if (k===self || k==='plaza' || k==='board') continue; const p=PLACES[k]; if (Math.hypot(x-p[0],z-p[1]) < r+footOf(k)+2.5) return 'Too close to another building.'; }
-  for (const k of INC_IDS){ const at=S.income[k] && S.income[k].at; if (!at || 'inc:'+k===self) continue; if (Math.hypot(x-at[0],z-at[1]) < r+5) return 'Too close to '+INCOME[k].who+'.'; }
-  let lo=99, hi=-99; for (let i=0;i<13;i++){ const a=i/12*TAU, rr=i===12?0:r, px=x+Math.cos(a)*rr, pz=z+Math.sin(a)*rr; if (!walkable(px,pz) && !inRects(px,pz,0) || (TERRA_ANY && terraWet(px,pz)>0)) return 'There\'s water or a cliff in the way.'; const h=rawHeight(px,pz); lo=Math.min(lo,h); hi=Math.max(hi,h); }
-  if (hi-lo>3.2) return 'The ground there is too steep.';
-  if (!walkable(x, z+r+1.5)) return 'The front door would open onto water or a cliff.';
-  const stuff=[...GCELLS.keys()].filter(k=>{ const [i,j]=k.split(',').map(Number); return Math.hypot(i*CELL-x,j*CELL-z)<r+0.5; }).length + S.plants.filter(p=>Math.hypot(p.x-x,p.z-z)<r+0.5 && !gardenAtXZ(p.x,p.z)).length + S.placed.filter(p=>p.x<500 && Math.hypot(p.x-x,p.z-z)<r+0.5).length;
-  if (stuff) return `Clear the plants, garden or furniture there first.`;
-  return null; };
-function magicPlace(x,z){
-  const M=magicMode; if (!M || M.kind!=='move') return; M.at=[+x.toFixed(1), +z.toFixed(1)];
-  M.ghost.position.set(x, groundY(x,z), z); const why=footprintClear(x,z,footOf(M.key),M.key); M.ok=!why; M.why=why;
+/* v1.49 easier moving. The old check put a big circle around every building, kept it a quarter of the island away from
+   the shore and nine meters from the river, and counted a wild flower as "furniture", so most of a crowded island showed red.
+   Now the building's own outline (its walls, or the house lot) is checked with a small gap, the message names what's in the way
+   and a red marker shows where, and a tap that's a little off slides to the nearest spot that fits. Wild flowers, stumps,
+   trees and rocks are cleared; furniture, flowers and trees you placed or planted, and things lying on the ground, are set down
+   just outside the new spot. Water, cliffs, the beach, the plaza, the dock, gardens, other buildings and their doors still block. */
+const BLD_GAP=1.0, MOVE_SNAP=3.2;
+const BLD_NAMES={ home:'your house', shop:'Pemberton\'s shop', museum:'the museum', aquarium:'the aquarium shop', garden:'Bug & Bloom', tower:'the wizard tower', hall:'the town hall', portal:'the Portal Station',
+  board:'the island board', reefhall:'the Reef Hall', forge:'the forge', tearoom:'the tea room', workshop:'the workshop', postoffice:'the post office', bathhouse:'the bathhouse', antiques:'the antiques shop' };
+const resAt = (x,z,d=1.5) => RESIDENTS.find(R=>R.home && Math.hypot(R.home[0]-x, R.home[1]-z)<d);
+function bldName(kind, e){ if (kind==='rhome' || kind==='plot'){ const R=e && resAt(e.pos.x, e.pos.z, 2.5); return R ? R.name+(kind==='plot'?'\'s plot':'\'s house') : kind==='plot'?'a neighbor\'s plot':'a neighbor\'s house'; }
+  if (BLD_NAMES[kind]) return BLD_NAMES[kind]; const R=RESIDENTS.find(R=>R.id===kind); return R ? R.name+'\'s house' : 'another building'; }
+const bldEntOf = key => { const o=bldObj(key); return o ? ents.find(e=>e.obj===o && !e.removed) || null : null; };
+// a building that can still grow is checked at its biggest size, so it never grows into a neighbor later
+const GROWS=['shop','aquarium','garden','museum','hall'], _growR={};
+function grownRects(key){ if (key in _growR) return _growR[key]; let m=null;
+  try { m = key==='shop' ? buildStore(3) : key==='aquarium'||key==='garden' ? buildShopBuilding(key,3) : key==='museum' ? buildMuseumTier(3) : key==='hall' ? buildTownHall(2) : null; } catch(e){ m=null; }
+  return (_growR[key] = m && m.userData.rects ? m.userData.rects.map(q=>q.slice(0,4)) : null); }
+// the building's outline relative to where it stands now: its wall rectangles (at their biggest), or a circle for cottages and stands
+function moveBody(key){
+  const p=placeOf(key), e=bldEntOf(key), off=q=>[q[0]-p[0], q[1]-p[1], q[2]-p[0], q[3]-p[1]];
+  const own = e && e.kind!=='rhome' && e.kind!=='plot' ? RECTS.filter(q=>q[4]===e.kind).map(off) : [];
+  if (GROWS.includes(key) && own.length) own.push(...(grownRects(key)||[]));
+  if (key==='home') own.push(off(lotRect()));   // the lot moves with the house, so it has to fit too
+  const dp = e && (e.kind==='rhome' ? doorOf(e) : e.doorPt), door = dp ? [dp[0]-p[0], dp[1]-p[1]] : [0, 3.6];
+  if (own.length) return { rects:own, door, self:e };
+  return { r: key.startsWith('inc:') ? 2.2 : key==='home' ? 2.6 : 3.4, door, self:e }; }
+// points spread over the outline (edges, corners and the inside), for checking the ground under it
+function bodyPts(B, x, z){ const pts=[];
+  if (B.rects) for (const q of B.rects){ const w=q[2]-q[0], d=q[3]-q[1], nx=Math.max(2,Math.ceil(w/1.2)), nz=Math.max(2,Math.ceil(d/1.2));
+    for (let i=0;i<=nx;i++) for (let j=0;j<=nz;j++) pts.push([x+q[0]+w*i/nx, z+q[1]+d*j/nz]); }
+  else { pts.push([x,z]); for (const [rr,n] of [[B.r/2,6],[B.r,14]]) for (let i=0;i<n;i++){ const a=i/n*TAU; pts.push([x+Math.cos(a)*rr, z+Math.sin(a)*rr]); } }
+  return pts; }
+// how far a point is from the outline (0 inside it)
+function bodyDist(B, x, z, px, pz){ if (!B.rects) return Math.max(0, Math.hypot(px-x, pz-z)-B.r);
+  let best=1e9; for (const q of B.rects){ const dx=Math.max(x+q[0]-px, 0, px-(x+q[2])), dz=Math.max(z+q[1]-pz, 0, pz-(z+q[3])); best=Math.min(best, Math.hypot(dx,dz)); } return best; }
+function bodyRectDist(B, x, z, r){ if (!B.rects){ const dx=Math.max(r[0]-x, 0, x-r[2]), dz=Math.max(r[1]-z, 0, z-r[3]); return Math.max(0, Math.hypot(dx,dz)-B.r); }
+  let best=1e9; for (const q of B.rects){ const dx=Math.max(r[0]-(x+q[2]), 0, (x+q[0])-r[2]), dz=Math.max(r[1]-(z+q[3]), 0, (z+q[1])-r[3]); best=Math.min(best, Math.hypot(dx,dz)); } return best; }
+// what will be set down beside the new spot (and what simply goes, like wild flowers)
+function underBody(B, x, z, pad=0.4){ const near=(px,pz)=>px<500 && bodyDist(B,x,z,px,pz)<pad;
+  return { placed:S.placed.filter(p=>near(p.x,p.z)), plants:S.plants.filter(p=>!p.wild && !gardenAtXZ(p.x,p.z) && near(p.x,p.z)), wild:S.plants.filter(p=>p.wild && near(p.x,p.z)),
+    ground:S.ground.filter(g=>near(g.x,g.z)), stumps:(S.stumps||[]).filter(p=>near(p.x,p.z)) }; }
+// Is the spot OK? Returns null, or { why, at:[x,z] } with what's in the way and where
+function moveProblem(x, z, key, B=moveBody(key)){
+  const no=(why,px,pz)=>({ why, at:[px,pz] });
+  if (x>DOCK.x0-4 && Math.abs(z-DOCK.z)<5) return no('That\'s the way to the dock.', x, z);
+  const rw=(LAY.riverW||1.7)+0.8;
+  let lo=99, hi=-99;
+  for (const [px,pz] of bodyPts(B,x,z)){
+    if (rawHeight(px,pz)<0.3 || Math.hypot(px,pz)/islandR(Math.atan2(pz,px))>0.97) return no('Part of it would stand in the sea.', px, pz);
+    if (isBeach(px,pz)) return no('That\'s the beach. Buildings need firmer ground.', px, pz);
+    if (polyDist(px,pz,RIVER)<rw || Math.hypot(px-POND.x,pz-POND.z)<POND.r+1 || (TERRA_ANY && terraWet(px,pz)>0) || ((XW.length||POOLS.length) && xWaterNear(px,pz,0.8))) return no('Part of it would stand in the water.', px, pz);
+    if (FALLS.length && (nearFall(px,pz,-4) || inFallPool(px,pz))) return no('Too close to the waterfall.', px, pz);
+    if (onWall(px,pz)) return no('Part of it would hang over a cliff.', px, pz);
+    if (onBridge(px,pz) || onDock(px,pz)) return no('That\'s a bridge.', px, pz);
+    if (XBR.some(b=>Math.hypot(px-b.a[0],pz-b.a[1])<3.5)) return no('That\'s where the bridge to the new land comes ashore.', px, pz);
+    if (Math.hypot(px,pz)<6.4) return no('That\'s the plaza.', px, pz);
+    const g=gardenAtXZ(px,pz); if (g) return no('Your garden is in the way.', px, pz);
+    const h=rawHeight(px,pz); lo=Math.min(lo,h); hi=Math.max(hi,h); }
+  if (hi-lo>2.6) return no('The ground there is too uneven. Try flatter ground, or ask Wendell to shape the land.', x, z);
+  // other buildings: their walls (plus a small gap) and the ground in front of their doors
+  const mine=B.self, myKind = mine && mine.kind!=='rhome' && mine.kind!=='plot' ? mine.kind : null;
+  for (const q of RECTS){ if (q[4]===myKind) continue; if (bodyRectDist(B,x,z,q)<BLD_GAP){ const e=ents.find(e=>!e.removed && e.kind===q[4]); return no(`Too close to ${bldName(q[4], e)}.`, (q[0]+q[2])/2, (q[1]+q[3])/2); } }
+  for (const k of GROWS){ const pk=PLACES[k], G0=pk && k!==key && grownRects(k); if (!G0) continue;
+    for (const q of G0){ const r=[q[0]+pk[0], q[1]+pk[1], q[2]+pk[0], q[3]+pk[1]]; if (bodyRectDist(B,x,z,r)<BLD_GAP){ const e=bldEntOf(k); return no(`Too close to ${bldName(k==='shop'?'shop':k, e)}. It needs that room when it grows.`, (r[0]+r[2])/2, (r[1]+r[3])/2); } } }
+  for (const e of ents){ if (e.removed || e===mine || !(e instanceof Building) || e.pos.x>500) continue;
+    const hasR=RECTS.some(q=>q[4]===e.kind && e.kind!=='rhome' && e.kind!=='plot');
+    if (!hasR && bodyDist(B,x,z,e.pos.x,e.pos.z) < (e.kind==='rhome'?3.2:e.kind==='plot'?2.6:e.r+0.6)+BLD_GAP) return no(`Too close to ${bldName(e.kind, e)}.`, e.pos.x, e.pos.z);
+    const d = e.kind==='rhome' ? doorOf(e) : e.doorPt; if (d && bodyDist(B,x,z,d[0],d[1])<1.4) return no(`That would block the door of ${bldName(e.kind, e)}.`, d[0], d[1]); }
+  for (const k of INC_IDS){ const at=S.income[k] && S.income[k].at; if (!at || 'inc:'+k===key) continue; if (bodyDist(B,x,z,at[0],at[1])<2.4) return no('Too close to '+INCOME[k].who+'.', at[0], at[1]); }
+  // the new front door has to open onto ground you can walk on
+  const dx=x+B.door[0], dz=z+B.door[1]+1.2;
+  if (!walkable(dx,dz) || (TERRA_ANY && terraWet(dx,dz)>0)) return no('The front door would open onto water or a cliff.', dx, dz);
+  if (inRects(dx,dz,0.3)) return no('The front door would open into another building.', dx, dz);
+  return null; }
+const footprintClear = (x,z,r,self) => { const p=moveProblem(x,z,self); return p ? p.why : null; };   // older callers
+// the nearest spot within a few meters that fits (so a tap that's a little off still works)
+function snapSpot(x, z, key, B){ for (let d=0.6; d<=MOVE_SNAP; d+=0.6){ const n=Math.max(8, Math.round(d*5));
+    for (let k=0;k<n;k++){ const a=k/n*TAU, px=x+Math.cos(a)*d, pz=z+Math.sin(a)*d; if (!moveProblem(px,pz,key,B)) return [px,pz]; } } return null; }
+function magicPlace(x,z,exact){
+  const M=magicMode; if (!M || M.kind!=='move') return;
+  const B=M.body||(M.body=moveBody(M.key)); let prob=moveProblem(x,z,M.key,B); M.nudged=false;
+  if (prob && !exact){ const s=snapSpot(x,z,M.key,B); if (s){ x=s[0]; z=s[1]; prob=null; M.nudged=true; } }
+  M.at=[+x.toFixed(1), +z.toFixed(1)]; M.ok=!prob; M.why=prob && prob.why;
+  M.ghost.position.set(x, groundY(x,z), z);
   M.ghost.userData.ring.material.color.setHex(M.ok?0x9a7ad8:0xe2604d);
   if (M.bghost){ M.bghost.position.set(x, groundY(x,z), z); M.bghost.userData.tint(!M.ok); }
+  // a red marker on whatever is in the way
+  if (!M.badMark){ const g=new THREE.Group(), m=new THREE.MeshBasicMaterial({ color:0xe2604d, transparent:true, opacity:0.85, depthTest:false });
+    const ring=new THREE.Mesh(new THREE.TorusGeometry(0.9,0.12,8,32), m); ring.rotation.x=Math.PI/2; ring.renderOrder=6; g.add(ring);
+    const pin=new THREE.Mesh(new THREE.ConeGeometry(0.35,0.9,12), m); pin.rotation.x=Math.PI; pin.position.y=2.2; pin.renderOrder=6; g.add(pin); g.userData.pin=pin; scene.add(g); M.badMark=g;
+    FX.add((dt)=>{ if (magicMode!==M){ scene.remove(g); return false; } pin.position.y=2.2+Math.sin(performance.now()/180)*0.25; return true; }); }
+  M.badMark.visible=!M.ok; if (prob){ const [bx,bz]=prob.at; M.badMark.position.set(bx, Math.max(groundY(bx,bz),0)+0.15, bz); }
+  M.under = M.ok ? underBody(B, M.at[0], M.at[1]) : null;
   // trees and rocks under the new spot won't be there afterwards, so the preview leaves them out too
-  const rr=footOf(M.key)+0.6; for (const e of [...trees, ...rocks]) if (!e.removed){ const under=Math.hypot(e.pos.x-x, e.pos.z-z)<rr; if (under) (M.hid=M.hid||new Set()).add(e); e.obj.visible=!under; }
+  for (const e of [...trees, ...rocks]) if (!e.removed){ const under=bodyDist(B,x,z,e.pos.x,e.pos.z)<0.6; if (under) (M.hid=M.hid||new Set()).add(e); e.obj.visible=!under; }
   renderMagicBar();
 }
+// when the spell lands: furniture, plants and finds under the new spot are set down just outside it; wild flowers and stumps go
+function clearUnder(key, at){
+  const B=moveBody(key), [x,z]=at, U=underBody(B,x,z), taken=[], fail=[];
+  const ok=(px,pz,r)=>bodyDist(B,x,z,px,pz)>r+0.5 && !gardenAtXZ(px,pz) && !taken.some(([a,b,c])=>Math.hypot(a-px,b-pz)<c+r) && !(TERRA_ANY && terraWet(px,pz)>0);
+  const put=(rec, r)=>{ for (let d=bodyDist(B,x,z,rec.x,rec.z)+r+0.6, n=0; n<60; d+=0.5, n++){ const m=Math.max(10, Math.round(d*4)), a0=Math.atan2(rec.z-z, rec.x-x);
+      for (let k=0;k<m;k++){ const a=a0+(k%2?1:-1)*Math.ceil(k/2)/m*TAU, px=x+Math.cos(a)*d, pz=z+Math.sin(a)*d;
+        if (walkable(px,pz) && !blocked(px,pz,r) && !(r>1 && inRects(px,pz,r)) && ok(px,pz,r)){ rec.x=+px.toFixed(2); rec.z=+pz.toFixed(2); taken.push([px,pz,r]); return true; } } } return false; };
+  for (const p of U.placed){ const it=ITEMS[p.id]||{}; if (!put(p, it.r||0.6)) fail.push(p); }
+  for (const p of U.plants){ const P=PLANTS[p.sp]||{}; put(p, P.ptype==='tree'?1.3:0.5); }
+  for (const g of U.ground) put(g, 0.3);
+  if (U.wild.length) S.plants=S.plants.filter(p=>!U.wild.includes(p));
+  if (U.stumps.length) S.stumps=S.stumps.filter(p=>!U.stumps.includes(p));
+  for (const p of fail){ if (canAdd(p.id) && !hasStore(p)){ S.placed.splice(S.placed.indexOf(p),1); addItem(p.id); } }   // nowhere to put it: into your bag
+  return U.placed.length+U.plants.length+U.ground.length; }
 // Land: grid of TC cells around the camera, and markers for planned changes
 function drawGrid(){ const M=magicMode; if(!M||M.kind!=='land') return; const g=M.grid; while(g.children.length) g.remove(g.children[0]);
   const ci=Math.floor(M.camT.x/TC), cj=Math.floor(M.camT.z/TC), R=11, pts=[];
@@ -5030,11 +5168,15 @@ function landTap(x,z){
   if (Object.keys(pend).length) M.pend[k]=pend; else delete M.pend[k];
   Snd.pop(); drawMarks(); renderMagicBar();
 }
+// v1.49 what else the move does, under the 'Looks good!' line
+function moveNote(M){ const U=M.under, n=U ? U.placed.length+U.plants.length+U.ground.length : 0, L=[];
+  if (M.nudged) L.push('Moved over a little to fit.'); if (n) L.push(`${n===1?'One thing':n+' things'} there will be set down beside it.`);
+  return L.length ? `<br><span class="muted">${L.join(' ')}</span>` : ''; }
 function renderMagicBar(){
   const M=magicMode, bar=$('#magicBar'); if(!M) return; bar.classList.add('show');
   if (M.kind==='move'){ const full=moveCost(M), cost=full-voucherOff(full), go=M.who ? 'Move it here' : `Cast ${fmt(cost)}`;
     bar.innerHTML=`<div><b>Move: ${moveName(M.key)}</b></div>
-      <div class="row2"><div class="msg">${M.ok?(cost?`Looks good! ${fmt(cost)} clams.`:'Looks good! This one\'s free.'):`<span style="color:#c0503a">${M.why||'Pick a spot.'}</span>`}</div><button class="btn alt" id="mgNo">Cancel</button><button class="btn" id="mgOk" ${!M.ok||S.clams<cost?'disabled':''}>${go}</button></div>`; }
+      <div class="row2"><div class="msg">${M.ok?(cost?`Looks good! ${fmt(cost)} clams.`:'Looks good! This one\'s free.')+moveNote(M):`<span style="color:#c0503a">${M.why||'Pick a spot.'}</span>`}</div><button class="btn alt" id="mgNo">Cancel</button><button class="btn" id="mgOk" ${!M.ok||S.clams<cost?'disabled':''}>${go}</button></div>`; }
   else { const n=Object.keys(M.pend).length, cost=pendCost()-voucherOff(pendCost());
     const tools=[['raise','Raise'],['lower','Lower'],['pond','Pond'],['river','River'],['fill','Fill water'],...(landMagicOK()?[['land','New land'],['sea','Back to sea']]:[]),['undo','Undo']];
     bar.innerHTML=`<div class="tools">${tools.map(([k,l])=>`<button class="tool${M.tool===k?' on':''}" data-tl="${k}">${l}</button>`).join('')}</div>
@@ -5067,7 +5209,7 @@ function castMagic(){
   const P = M.kind==='move' ? { kind:'move', key:M.key, at:M.at.slice(), crew:!!M.who, after:M.after } : Object.assign({ kind:'land', pend:M.pend }, pendBounds());
   if (off) S.rare.voucher-=off;
   if (M.kind==='move' && M.key.startsWith('inc:')){ moveIncome(M); return; }   // v1.36 the people you fund just pick up and walk over
-  if (M.kind==='move'){ S.clams-=cost; track('moved'); (S.terra.moved=S.terra.moved||{})[M.key]=M.at.slice(); if (M.key==='tower') S.magic.at=M.at.slice(); if (M.after) M.after(); }
+  if (M.kind==='move'){ S.clams-=cost; track('moved'); clearUnder(M.key, M.at); (S.terra.moved=S.terra.moved||{})[M.key]=M.at.slice(); if (M.key==='tower') S.magic.at=M.at.slice(); if (M.after) M.after(); }
   else { S.clams-=cost; track('terra', Object.keys(M.pend).length);
     for (const [k,p] of Object.entries(M.pend)){ const c=Object.assign({}, TERRA[k]||{}); if (p.d) c.d=(c.d||0)+p.d; if (c.d===0) delete c.d; if (p.w!==undefined){ if (p.w) c.w=p.w; else delete c.w; } if (p.L!==undefined){ if (p.L) c.L=1; else delete c.L; } if (Object.keys(c).length) TERRA[k]=c; else delete TERRA[k]; }
     S.terra.cells=TERRA; }
@@ -5338,7 +5480,7 @@ const ISLE_TREES = {
 const ISLE_ROCKS = { meadow:1, dunes:0, bluff:3, crags:4, pines:2, starfall:2 };
 // the meadow grows a fruit the main island doesn't, the same one every time
 const isleFruit = () => { const pool=NATIVE_FRUITS.filter(f=>f!==S.nativeFruit); return pool[hashStr('isleFruit:'+S.seed)%pool.length]; };
-function isleSpot(I, r, minH, maxH, rad, keep=true){   // v1.50 keep=false only looks, so a passing bug doesn't hold the spot (or shift where the isle's trees go)
+function isleSpot(I, r, minH, maxH, rad, keep=true){   // v1.52 keep=false only looks, so a passing bug doesn't hold the spot (or shift where the isle's trees go)
   for (let k=0;k<90;k++){ const a=r()*TAU, d=Math.sqrt(r())*I.r*0.95, x=I.cx+Math.cos(a)*d, z=I.cz+Math.sin(a)*d, h=rawHeight(x,z);
     if (h<minH || h>maxH || ISL.isleSlope(I,x,z)>0.7 || islePathDist(I,x,z)<2.3) continue;
     if (Math.hypot(x-I.mark[0],z-I.mark[1])<7.5 || onBridge(x,z) || XBR.some(b=>Math.hypot(x-b.a[0],z-b.a[1])<4.5 || Math.hypot(x-b.b[0],z-b.b[1])<4.5)) continue;
@@ -5583,7 +5725,7 @@ function updateSnow(dt){
 }
 
 function bugPool(){ const h=Time.hour(), m=Time.month(); return Object.values(ITEMS).filter(i=>i.kind==='bug' && inMonths(m,i.months) && inHours(h,i.hours) && (!i.weather || i.weather===World.weather) && !(World.weather==='rain' && !i.weather && i.where==='air' && i.hours && i.hours[0]<12) && (i.where!=='glade' || gladeBugOK(i.id)) && (i.where!=='starfall' || skyBugOK()) && (i.where!=='isle' || isleBugNear(i.isle)) && (i.where!=='trip' || (TRIP && (i.trip||[]).includes(TRIP_THEME)))); }
-// v1.50 isle bugs only turn up while you're on or right by their isle
+// v1.52 isle bugs only turn up while you're on or right by their isle
 const isleBugNear = kind => { const I=isleNear(player.pos.x, player.pos.z, 1.3); return !!I && I.kind===kind; };
 let bugT=0; const BUG_CAP=3, BUG_ROLL=0.28;
 function updateBugs(dt){
@@ -5594,7 +5736,7 @@ function updateBugs(dt){
   const okPool=pool.filter(allowedFind); if(!okPool.length) return; const sp=tierPick(Math.random,okPool,i=>luckW(i,'bug'),'bug'); const near=[player.pos.x,player.pos.z,22]; let p=null, extra={};
   const isleI = sp.where==='isle' ? isleNear(player.pos.x, player.pos.z, 1.3) : null;
   for (let tries=0; tries<(sp.where==='isle'?4:1) && !p; tries++){ extra={};
-  if (isleI && (sp.move==='air' || sp.move==='ground')){ p=isleSpot(isleI, Math.random, SAND_H+0.1, isleI.sky?20:14, 0.5, false); continue; }   // v1.50 anywhere on the isle, not just where the main island's land is
+  if (isleI && (sp.move==='air' || sp.move==='ground')){ p=isleSpot(isleI, Math.random, SAND_H+0.1, isleI.sky?20:14, 0.5, false); continue; }   // v1.52 anywhere on the isle, not just where the main island's land is
   switch(sp.where==='isle'||sp.where==='trip' ? sp.move : sp.where){
     case 'air': case 'ground': p=randLand(Math.random,SAND_H+0.1,9,0.5,30,near); break;
     case 'flower': { const spots=[...wildFlowerSpots, ...S.plants.filter(q=>PLANTS[q.sp].ptype==='flower'&&q.stage===3).map(q=>[q.x,q.z])].filter(s=>Math.hypot(s[0]-player.pos.x,s[1]-player.pos.z)<26&&Math.hypot(s[0]-player.pos.x,s[1]-player.pos.z)>5); if(spots.length){ const s=spots[Math.floor(Math.random()*spots.length)]; p=[s[0]+(Math.random()-0.5),s[1]+(Math.random()-0.5)]; } break; }
@@ -5605,7 +5747,7 @@ function updateBugs(dt){
     case 'starfall': p=skyBugSpot(); break;   // v1.41 only up on Starfall Isle
   }
   if (!p && isleI && sp.move==='flower' && tries===3) p=isleSpot(isleI, Math.random, SAND_H+0.1, 14, 0.5, false);   // no flowers out there yet: it sits in the grass
-  if (p && sp.where==='isle'){ const I=isleAt(p[0],p[1]); if (!I || I.kind!==sp.isle) p=null; } }   // v1.50 an isle bug has to land on its own isle
+  if (p && sp.where==='isle'){ const I=isleAt(p[0],p[1]); if (!I || I.kind!==sp.isle) p=null; } }   // v1.52 an isle bug has to land on its own isle
   if (p) new Bug(sp.id, p[0], p[1], extra);
 }
 
@@ -5649,6 +5791,7 @@ function fade(cb){ fadeEl.classList.add('show'); setTimeout(()=>{ cb(); setTimeo
 function enterRoom(id){
   if (id==='store') storeVisit++;
   if (id==='portal') setTimeout(()=>refreshPortals(), 400);
+  if (id==='hall') refreshHallInside();   // v1.49
   fade(()=>{ const R=ROOMS[id]; World.inside=id; camYaw=0; OUT.visible=false; for(const k in ROOMS) ROOMS[k].group.visible=(k===id);
     if (Fishing.state!=='idle') reel(); stopMove(); player.pos.set(R.entry[0],0,R.entry[1]); player.face=Math.PI; player.obj.rotation.y=Math.PI; camTarget.copy(player.pos); updateSky(); updateCamera(1);
     const res=residents.find(r=>r.spec.id===id); if (res && res.loc==='in' && !res.asleep){ const P=DIALOGUE[res.spec.personality]; setTimeout(()=>dialog(res.spec.name,res.spec.voice,[fill(P.home[Math.floor(Math.random()*P.home.length)],{c:res.spec.catch})]),350); } });
@@ -5888,7 +6031,7 @@ const scrim=$('#scrim'), pTitle=$('#pTitle'), pBody=$('#pBody'), pFoot=$('#pFoot
 let panelClose=null;
 function openPanel(title, onClose){ pTitle.textContent=title; pBody.innerHTML=''; setFoot(''); scrim.classList.add('show'); panelClose=onClose||null; Snd.click(); pBody.scrollTop=0; }
 function setFoot(html){ pFoot.innerHTML=html; pFoot.style.display=html?'':'none'; }
-function closePanel(){ const f=panelClose; panelClose=null; scrim.classList.remove('show'); coolPopup(); if(f) f(); }
+function closePanel(){ const f=panelClose; panelClose=null; scrim.classList.remove('show'); hideInvTip(); coolPopup(); if(f) f(); }
 $('#pClose').onclick=()=>closePanel();
 scrim.addEventListener('pointerdown', e=>{ if(e.target===scrim) closePanel(); });
 function dropToast(t){ if (t.dataset.gone) return; t.dataset.gone='1'; t.style.transition='opacity .25s'; t.style.opacity=0; setTimeout(()=>t.remove(),260); }
@@ -5922,8 +6065,29 @@ const kindName = k => ({veg:'Vegetable',herb:'Herb',berry:'Berry',food:'Food',ge
 const canPlant = it => it.kind==='seed' || it.kind==='sapling' || (it.kind==='fruit' && it.plant);
 
 /* Bag: tap an item and its actions appear in the bar pinned to the bottom of the panel */
-function invGrid(sel, dim){ let h='<div class="grid">'; const N=slotsMax(); for(let i=0;i<N;i++){ const s=S.inv[i]; if(!s){ h+='<div class="slot empty"></div>'; continue; } h+=`<div class="slot${sel===i?' sel':''}" data-i="${i}" style="${dim&&dim(s)?'opacity:.35':''}"><img src="${thumb(s.id)}" alt="">${s.n>1?`<span class="n">${s.n}</span>`:''}</div>`; } return h+'</div>'; }
-function itemDetail(s){ const it=ITEMS[s.id]; let sub=kindName(it.kind); if(s.m) sub+=` · ${statText(s.id,s.m)}`; if(it.rarity && (it.kind==='fish'||it.kind==='bug'||it.kind==='furniture'||it.rare)) sub+=' '+rarityTag(it); if (it.rare) sub+=`<br>${it.how}`; return `<img src="${thumb(s.id)}"><div class="grow"><div class="nm">${it.name}${s.n>1?` x${s.n}`:''}</div><div class="sub">${sub}</div><div class="sub">Sells for ${fmt(entryPrice(s))} clams</div></div>`; }
+// tip: what the mouse-hover label says for a slot (v1.51). Defaults to the best price any shop pays today.
+function invGrid(sel, dim, tip=bagValue){ let h='<div class="grid">'; const N=slotsMax(); for(let i=0;i<N;i++){ const s=S.inv[i]; if(!s){ h+='<div class="slot empty"></div>'; continue; } h+=`<div class="slot${sel===i?' sel':''}" data-i="${i}" data-tip="${escAttr(ITEMS[s.id].name+(s.n>1?' x'+s.n:'')+'|'+tip(s).replace(/<[^>]+>/g,''))}" style="${dim&&dim(s)?'opacity:.35':''}"><img src="${thumb(s.id)}" alt="">${s.n>1?`<span class="n">${s.n}</span>`:''}</div>`; } return h+'</div>'; }
+const escAttr = x => String(x).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+/* v1.51: what a bag entry is worth, using the same prices the shops pay (sellPrice), so it matches what you get.
+   Pemberton buys anything; Marlo, Sprig and the tea room pay more for their things, so name them when they pay the most. */
+function bagValue(s){
+  if (ITEMS[s.id].noSell) return 'Can\'t be sold';
+  let best=sellPrice(s,'stall'), who='general';
+  for (const id of ['aquarium','garden']){ const p=sellPrice(s,id); if (p!==null && p>best){ best=p; who=KEEPERS[SHOPS[id].keeper].name; } }
+  if (teaOpen()){ const p=teaPrice(s); if (p!==null && p>best){ best=p; who=npcName(SY.tea.owner||dreamHolder('tea')); } }   // the tea room, once it's open
+  if (!best) return 'Not worth any clams';
+  return `Sells for <b>${fmt(best)}</b> clams${s.n>1?' each':''}${who==='general'?'':' to '+who}`; }
+function itemDetail(s, value){ const it=ITEMS[s.id]; let sub=kindName(it.kind); if(s.m) sub+=` · ${statText(s.id,s.m)}`; if(it.rarity && (it.kind==='fish'||it.kind==='bug'||it.kind==='furniture'||it.rare)) sub+=' '+rarityTag(it); if (it.rare) sub+=`<br>${it.how}`; return `<img src="${thumb(s.id)}"><div class="grow"><div class="nm">${it.name}${s.n>1?` x${s.n}`:''}</div><div class="sub">${sub}</div><div class="sub">${value||bagValue(s)}</div></div>`; }
+/* v1.51: hovering a bag slot with a mouse shows its name and value. Touch screens skip this: a tap selects the slot
+   and the same name and value show in the bar at the bottom of the panel, so tapping works as before. */
+const invTip = document.createElement('div'); invTip.id='invTip'; document.body.appendChild(invTip);
+const hideInvTip = () => { invTip.style.display='none'; };
+pBody.addEventListener('pointerover', e=>{ if (e.pointerType!=='mouse') return; const el=e.target.closest&&e.target.closest('.slot[data-tip]'); if (!el){ hideInvTip(); return; }
+  const [nm,val]=el.dataset.tip.split('|'); invTip.innerHTML=`<b></b><span></span>`; invTip.firstChild.textContent=nm; invTip.lastChild.textContent=val; invTip.style.display='block';
+  const r=el.getBoundingClientRect(), w=invTip.offsetWidth, h=invTip.offsetHeight;
+  invTip.style.left=Math.max(6, Math.min(innerWidth-w-6, r.left+r.width/2-w/2))+'px'; invTip.style.top=(r.top-h-8<6 ? r.bottom+8 : r.top-h-8)+'px'; });
+pBody.addEventListener('pointerout', e=>{ if (!e.relatedTarget || !e.relatedTarget.closest || !e.relatedTarget.closest('.slot[data-tip]')) hideInvTip(); });
+pBody.addEventListener('scroll', hideInvTip); pBody.addEventListener('click', hideInvTip);
 function openBag(mode='view', onPick, onCancel){
   let sel=-1;
   const render=()=>{
@@ -6030,10 +6194,14 @@ const recipeOut = r => r.out||1;
 const kindsMade = () => S.craft ? (S.craft.kinds||[]).length : 0;
 /* v1.34 woodworking pace (see WOOD_* in content.js). S.craft.known = plans you know, S.craft.ms = milestones passed,
    S.craft.studied = the day you last studied a piece. Plans learned before woodworking wait in S.woodLater. */
-function woodInit(){ const C=S.craft; if (!C) return; C.kinds=C.kinds||[];
+/* v1.50 variety points: each different piece counts for up to WOOD_PER_KIND of the times you've made it. S.craft.per = { id: times made, capped }.
+   Saves from before v1.50 only know which pieces were made, so each one starts at its share of everything made (at least 1, at most the cap). */
+function woodPer(C){ if (!C.per || typeof C.per!=='object'){ const k=(C.kinds||[]).length, each=k ? Math.max(1, Math.min(WOOD_PER_KIND, Math.floor((C.made||0)/k))) : 0; C.per={}; for (const id of C.kinds||[]) C.per[id]=each; } return C.per; }
+const woodScore = C => Object.values(woodPer(C)).reduce((a,n)=>a+Math.min(WOOD_PER_KIND, n|0), 0);
+function woodInit(){ const C=S.craft; if (!C) return; C.kinds=C.kinds||[]; woodPer(C);
   if (!C.known){   // islands from before v1.34 keep every plan they have actually made, plus the starting ones
     C.known=[...new Set([...WOOD_START, ...(C.made>=10?WOOD_TEN:[]), ...C.kinds])].filter(id=>WOODWORK.some(r=>r.id===id));
-    C.ms=WOOD_MILESTONES.filter(m=>m<=C.made).length; }
+    C.ms=WOOD_MILESTONES.filter(m=>m<=woodScore(C)).length; }   // v1.50: milestones count variety points
   if (S.woodLater && S.woodLater.length){ for (const id of S.woodLater) if (!C.known.includes(id)) C.known.push(id); S.woodLater=[]; }
   C.ms=C.ms||0; }
 woodInit();
@@ -6044,11 +6212,16 @@ function learnWood(id, how){ if (!S.craft){ S.woodLater=S.woodLater||[]; if (S.w
 // what's still to learn, in the order milestone batches hand it out
 if (!VISIT && !TRIP) BN.progress();   // v1.40: islands that have already made enough different things know the bigger tables
 const woodUnknown = () => [...WOOD_START, ...WOOD_TEN, ...WOOD_ORDER].filter(id=>!knowsWood(id) && !(S.woodLater||[]).includes(id));
-// After crafting: the 10-made batch, and a batch of 4 or 5 at each milestone
-function woodProgress(){ const C=S.craft, got=[];
-  if (C.made>=10) for (const id of WOOD_TEN) if (learnWood(id)) got.push(id);
-  while (C.ms<WOOD_MILESTONES.length && C.made>=WOOD_MILESTONES[C.ms]){ const n=C.ms%2?5:4; C.ms++;
-    for (const id of woodUnknown().slice(0,n)) if (learnWood(id)) got.push(id); }
+// After crafting (and when the day turns over): the first batch (3 different starting pieces, 10 things in all), then a batch at each
+// variety milestone, at most WOOD_MS_PER_DAY a day. C.ms counts milestones passed; C.msDay / C.msToday track today's.
+// Saves from before v1.50 keep their milestone count and every plan they already know.
+const woodTenDue = C => C.made>=WOOD_TEN_MADE && WOOD_START.filter(id=>(C.kinds||[]).includes(id)).length>=WOOD_TEN_KINDS;
+const woodWaiting = () => { const C=S.craft; return !!C && C.ms<WOOD_MILESTONES.length && woodScore(C)>=WOOD_MILESTONES[C.ms] && C.msDay===today() && (C.msToday||0)>=WOOD_MS_PER_DAY; };
+function woodProgress(){ const C=S.craft, got=[]; if (!C) return got; const score=woodScore(C);
+  if (woodTenDue(C)) for (const id of WOOD_TEN) if (learnWood(id)) got.push(id);
+  if (C.msDay!==today()){ C.msDay=today(); C.msToday=0; }
+  while (C.ms<WOOD_MILESTONES.length && score>=WOOD_MILESTONES[C.ms] && C.msToday<WOOD_MS_PER_DAY){ C.ms++; C.msToday++;
+    for (const id of woodUnknown().slice(0,WOOD_BATCH)) if (learnWood(id)) got.push(id); }
   save(); return got; }
 // Studying a piece you own teaches its plan. One a day. The piece stays yours.
 const studyToday = () => !!S.craft && S.craft.studied===today();
@@ -6078,11 +6251,12 @@ function doCraft(r, k){
   const before=kindsMade(); S.craft.made+=k; track('craft',k); S.craft.kinds=S.craft.kinds||[];
   if (r.plan){ S.rare.made+=k; save(); Snd.chop(); setTimeout(()=>Snd.fanfare(),200); sparkle(player.pos.clone().add(new THREE.Vector3(0,2.2,0)));
     toast(`You made the ${ITEMS[r.id].name}!`, thumb(r.id), 'new', `${rarityTag(ITEMS[r.id])} It's in your bag.`); return true; }
-  if(!S.craft.kinds.includes(r.id)) S.craft.kinds.push(r.id); save();
+  if(!S.craft.kinds.includes(r.id)) S.craft.kinds.push(r.id); const per=woodPer(S.craft); per[r.id]=Math.min(WOOD_PER_KIND, (per[r.id]||0)+k); save();   // v1.50 variety points
   Snd.chop(); setTimeout(()=>Snd.jingle(),140);
   toast(`${isNew?'New! ':''}You made ${n>1?n+' ':''}${n>1?ITEMS[r.id].name+(ITEMS[r.id].name.endsWith('s')?'':'s'):article(ITEMS[r.id].name)+' '+ITEMS[r.id].name}!`, thumb(r.id), isNew?'new':'');
   const fresh=[...woodProgress(), ...BN.progress()];   // v1.40: bigger crafting tables and their pieces
   if (fresh.length) setTimeout(()=>{ Snd.fanfare(); toast('New woodworking plans!', thumb(fresh[0]), 'new', fresh.map(x=>ITEMS[x].name).join(', ')); }, 900);
+  else if (woodWaiting() && S.craft.msHint!==today()){ S.craft.msHint=today(); save(); setTimeout(()=>toast('Your head\'s full of ideas.', null, '', 'Sleep on it. New plans will come to you tomorrow.'), 900); }   // v1.50: one batch a day
   return true;
 }
 // v1.13: rare plans sit at the top of Woodworking. Unfound ones show as silhouettes.
@@ -6099,6 +6273,7 @@ function rareCraftSection(){
   return h+'</div>'; }
 function openCraft(start){
   if (!S.craft && !S.cook) return;
+  if (S.craft && !VISIT && !TRIP){ const got=woodProgress(); if (got.length) setTimeout(()=>{ Snd.fanfare(); toast('You slept on it: new woodworking plans!', thumb(got[0]), 'new', got.map(x=>ITEMS[x].name).join(', ')); }, 300); }   // v1.50: a milestone held over from yesterday
   let filter='all', tab = start || (S.craft ? 'wood' : 'cook'); const qty={};
   const render=()=>{
     const tabsH = (S.craft && S.cook) || EN.hasTab() ? '<div class="tabs">'+[...(S.craft?[['wood','Woodworking']]:[]),...(S.cook?[['cook','Cooking']]:[]),...(EN.hasTab()?[['tools','Tools']]:[])].map(([k,n])=>`<button class="tab${k===tab?' on':''}" data-ct="${k}">${n}</button>`).join('')+'</div>' : '';
@@ -6110,7 +6285,10 @@ function openCraft(start){
     // v1.24: no progress bar or locked plans. New plans just turn up as you make things.
     let h=tabsH+BN.banner()+`<div class="notice"><b>Woodworking</b> <span class="muted">· ${(S.craft.known||[]).length} plans known · ${fmt(S.craft.made)} crafted</span>`;
     h+= left ? '' : `<br><span class="muted">You know every plan. Bramble would be proud.</span>`;
+    if (left && woodWaiting()) h+=`<br><span class="muted">Your head's full of ideas. New plans will come to you tomorrow.</span>`;   // v1.50
+    else if (left) h+=`<br><span class="muted">New plans come from making lots of <b>different</b> things. Making the same piece over and over won't teach you anything new.</span>`;
     h+=`<div class="muted" style="margin-top:6px">Your materials: ${Object.keys(MAT_NAMES).map(m=>`${MAT_NAMES[m]} ${countItem(m)}`).join(' · ')}</div></div>`;
+    h+=EN.fixNote();   // v1.50: broken or nearly worn-out tools, with a jump to the Tools tab
     h+=rareCraftSection();
     // v1.34: study a piece you own to work out its plan
     const st=studyable();
@@ -6323,7 +6501,8 @@ function openShop(which, startTab){
       const outT=toolOutToday();
       for (const [t,T] of Object.entries(TOOLS)){ const own=S.tools[t];
         if (own && t===outT){ h+=`<div class="notice"><b>${T.name}</b> <span class="muted">· ${T.does}</span><br><span class="muted">You have: ${T.tiers[own.tier].name}, ${T.tiers[own.tier].forever?'never breaks':own.uses+' uses left'}</span><div class="muted" style="margin-top:6px">${T.name}s are sold out today. More on tomorrow's boat.</div></div>`; continue; }
-        h+=`<div class="notice"><b>${T.name}</b> <span class="muted">· ${T.does}</span><br><span class="muted">${own?`You have: ${T.tiers[own.tier].name}, ${T.tiers[own.tier].forever?'never breaks':own.uses+' uses left'}`:'You don\'t have one yet.'}</span>`;
+        const brk=EN.broken(t);   // v1.50
+        h+=`<div class="notice"><b>${T.name}</b> <span class="muted">· ${T.does}</span><br><span class="muted">${own?`You have: ${T.tiers[own.tier].name}, ${T.tiers[own.tier].forever?'never breaks':own.uses+' uses left'}`:brk?'':'You don\'t have one yet.'}${brk?`${own?'. ':''}Your broken ${T.tiers[brk.tier].name} can be fixed at a crafting table.`:''}</span>`;
         // v1.23: better tools stay off the shelf until Pemberton offers them to you in person (see toolPitch)
         const ever=Math.max(own?own.tier:-1, S.toolEver[t]??-1), offered=S.toolOffer[t]??-1; let hidden=0;
         T.tiers.forEach((tr,k)=>{ const ok=reqMet(t,k), keep=own&&T.tiers[own.tier].forever&&k<=own.tier;
@@ -6340,10 +6519,10 @@ function openShop(which, startTab){
         h+=`<div class="row"><div class="slot" style="width:56px;border-width:2px;font-weight:700">${p.slots}</div><div class="grow"><div class="nm">${p.name}${next?' <span style="color:#d08a10;font-weight:600">New!</span>':''}</div><div class="sub">${p.slots} slots · ${fmt(p.cost)} clams</div></div>${owned?'<span class="muted">Owned</span>':`<button class="btn" data-pack="${i}" ${S.clams<p.cost?'disabled':''}>Buy</button>`}</div>`; }); }
     if (tab==='sell'){
       const sh=SHOPS[sid]; const pays = which==='rare' ? '' : sh.buys ? `${KEEPERS[sh.keeper].name} pays <b>${Math.round(sh.sell[shopTier(sid)]*100)}%</b> for ${buysText(sh)}. Nothing else.` : `Pemberton buys anything${shopTier('general')?` at <b>${Math.round(sh.sell[shopTier('general')]*100)}%</b>`:''}. Specialists pay more for their thing.`;
-      h+=`<div class="muted" style="margin-bottom:8px">${pays} Bigger catches are worth more.</div>`+invGrid(sel, s=>sellPrice(s,which)===null);
+      h+=`<div class="muted" style="margin-bottom:8px">${pays} Bigger catches are worth more.</div>`+invGrid(sel, s=>sellPrice(s,which)===null, s=>{ const p=sellPrice(s,which); return p===null ? (ITEMS[s.id].noSell?'Can\'t be sold':'Not bought here') : `Sells here for ${fmt(p)} clams${s.n>1?' each':''}`; });
       const s=S.inv[sel]; if(s){ const it=ITEMS[s.id], pr=sellPrice(s,which); const same=S.inv.filter(x=>x.id===s.id && !x.m).reduce((a,x)=>a+x.n,0);
         if (pr===null) setFoot(`<div class="detail">${itemDetail(s)}<div class="acts muted" style="max-width:220px">${KEEPERS[SHOPS[sid].keeper].refuse}</div></div>`);
-        else { setFoot(`<div class="detail">${itemDetail(s).replace(/Sells for [\d,]+ clams/, `Sells here for <b>${fmt(pr)}</b> clams`)}<div class="acts"><button class="btn" id="s1">Sell 1</button>${!s.m&&same>1?`<button class="btn alt" id="sA">Sell all ${fmt(pr*same)}</button>`:''}</div></div>`);
+        else { setFoot(`<div class="detail">${itemDetail(s, `Sells here for <b>${fmt(pr)}</b> clams${s.n>1?' each':''}`)}<div class="acts"><button class="btn" id="s1">Sell 1</button>${!s.m&&same>1?`<button class="btn alt" id="sA">Sell all ${fmt(pr*same)}</button>`:''}</div></div>`);
           pFoot.querySelector('#s1').onclick=()=>{ if(!walletOK(pr)) return; removeAt(sel,1); addClams(pr); addTrade(which,pr); track('sold'); track('earned',pr); Snd.coin(); if(!S.inv[sel]||S.inv[sel].id!==s.id) sel=-1; render(); };
           const sa=pFoot.querySelector('#sA'); if(sa) sa.onclick=()=>{ if(!walletOK(pr*same)) return; removeItem(s.id,same); addClams(pr*same); addTrade(which,pr*same); track('sold',same); track('earned',pr*same); Snd.coin(); sel=-1; render(); }; }
       } else setFoot('');
@@ -6657,14 +6836,13 @@ const OWN = TRIP ? (BOOT.own || {}) : S;   // your own island's save, even while
 const tripRand = k => mulberry32(hashStr(S.seed+':v127:'+k));
 const atNight = () => { const h=Time.hour(); return h>=19.5 || h<5; };
 
-/* ---- haul cap for rare and legendary islands: clams plus the sell value of what you've gathered here ---- */
+/* ---- what you've gathered on this island: clams plus the sell value of what you picked up (gifts don't count).
+   v1.48: rare and legendary islands no longer stop at 200,000; your bag is the limit. Kept for the #dev tools. ---- */
 if (TRIP && TX.clams0===undefined){ TX.clams0=S.clams; save(); }
 function haulValue(){
   const t=BOOT.trip||{}, start=t.start||{}, now=invCounts(), gift=(TX&&TX.gifted)||{}; let v=Math.max(0, S.clams-(TX.clams0??S.clams));
   for (const [id,n] of Object.entries(now)){ const d=n-(start[id]||0)-(gift[id]||0); if (d>0 && ITEMS[id]) v+=d*(ITEMS[id].price||0); }
   return v; }
-const haulLeft = () => SPECIAL_ISLE ? VY.HAUL_CAP-haulValue() : 1e12;
-function capNote(){ if (TX.capTold) return; TX.capTold=true; save(); toast('This island has given all it has to give.', null, '', `You've gathered ${fmt(VY.HAUL_CAP)} clams' worth here. Gifts don't count.`); }
 const noteGift = (id, n=1) => { if (!TX) return; (TX.gifted=TX.gifted||{})[id]=((TX.gifted||{})[id]||0)+n; save(); };
 
 /* ---- small models ---- */
@@ -7009,7 +7187,7 @@ function setupSpecial(){
   const th=TRIP_THEME, nearDock=(d=6)=>openSpotNear(DOCK.x0-4, DOCK.z, 3, d, tripRand('sign'));
   const sp=nearDock(); const lines={ clamstone:['Clamstone Isle','Every rock on this island has clams in it. Hit them all!'], grove:['Golden Grove','Shake a tree for golden sap. Chop one for heartwood.'],
     starfall:['Stardrift Isle','The stars fall here every night. Pick them up before the tide takes them.'], shimmer:['Shimmer Lagoon','Only the rarest fish swim in these waters. Bring a good rod.'] }[th];
-  if (sp && lines) placeSign(sp[0], sp[1], lines[0], [lines[1], `(There's only so much on any island. About ${fmt(VY.HAUL_CAP)} clams' worth, then it's spent.)`]);
+  if (sp && lines) placeSign(sp[0], sp[1], lines[0], [lines[1]]);
   const H=HOSTS[th]; if (H && LAY.host){ const [hx,hz]=LAY.host; clearPatch(hx,hz,6);
     const obj=buildCottage('host_'+th, { roofC:H.roof, accent:0xe8c070 }); const b=placeCottage('host', hx, hz, obj, 'Knock', ()=>{ Snd.door(); toast(`${H.name} is outside.`); });
     const d=b.doorPt, p=openSpotNear(d[0], d[1], 1.4, 3, tripRand('host'))||d;
@@ -7051,8 +7229,10 @@ function talkLibrary(H){ const v=H.voice, nm=H.name;
     openPanel('Choose a plan'); pBody.innerHTML=u.map(r=>`<div class="row"><img src="${thumb(r.id)}"><div class="grow"><div class="nm">${ITEMS[r.id].name}</div><div class="sub">Needs ${Object.entries(r.mats).map(([k,n])=>n+' '+ITEMS[k].name).join(', ')}</div></div><button class="btn" data-p="${r.plan}">Take</button></div>`).join('');
     pBody.querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>{ TX.libPlan=b.dataset.p; save(); panelClose=null; closePanel(); learnPlan(b.dataset.p); }); }); }
 let starT=20;
-function starfallTick(dt){ if (TRIP_THEME!=='starfall' || World.inside) return; starT-=dt; if (starT>0) return; starT=25+Math.random()*30;
-  if (haulLeft()<=0) return capNote(); const p=openSpotNear(player.pos.x, player.pos.z, 4, 14, Math.random); if (!p) return;
+const STARFALL_SHOWER=100, STAR_GAP=[10,14];   // v1.48: with no haul cap, one visit's shower is 100 falling stars (plus the 22 already lying about), one every 10 to 14 seconds, so about 20 minutes for all of them
+function starfallTick(dt){ if (TRIP_THEME!=='starfall' || World.inside) return; starT-=dt; if (starT>0) return; starT=STAR_GAP[0]+Math.random()*(STAR_GAP[1]-STAR_GAP[0]);
+  if ((TX.fell||0)>=STARFALL_SHOWER){ if (!TX.showerTold){ TX.showerTold=1; save(); toast('The star shower is over.', null, '', 'Whatever fell is yours. Pick up the last of them before you sail home.'); } return; }
+  const p=openSpotNear(player.pos.x, player.pos.z, 4, 14, Math.random); if (!p) return; TX.fell=(TX.fell||0)+1; save();
   const s=buildStar(), y0=26, from=new THREE.Vector3(p[0]+14, y0, p[1]-10), to=new THREE.Vector3(p[0], groundY(p[0],p[1])+0.3, p[1]); s.position.copy(from); scene.add(s); let t=0;
   FALLING.push(dt=>{ t+=dt/1.4; s.position.lerpVectors(from, to, Math.min(1,t)); if (Math.random()<0.6) puff(s.position.clone(), 0xfff4b0, 1, 0.2, 0, 0.8, 0.5); if (t>=1){ scene.remove(s); Snd.jingle(); puff(to.clone(), 0xfff4b0, 10, 1, 2, 1, 0.8); dropNear('starstone', to, 0.2, true); return true; } return false; }); }
 const FALLING=[];
@@ -7919,7 +8099,7 @@ function openMenu(){
     <div class="notice"><b>Testing tools</b><br><span class="muted">The game runs on your real clock. These preview other times and weather.</span>
       <label class="f">Preview time: <span id="mOffT"></span></label><input type="range" id="mOff" min="-23" max="23" step="1" value="${Time.offsetH}">
       <label class="f">Weather <select id="mW"><option value="">Today's weather</option><option>sunny</option><option>cloudy</option><option>rain</option><option>snow</option></select></label>
-      ${DEV?`<div style="margin-top:8px"><b>Shortcuts</b> <span class="muted">(only on this device)</span><div class="muted" style="margin:6px 0 2px">Story map</div><button class="btn" id="dvMap">Story map: isles, stories, places</button><div class="muted" style="margin:6px 0 2px">Isles and stories</div><button class="btn alt" id="dvT">${S.magic.tower?'Tower is up':'Raise the wizard tower'}</button> ${!GUEST&&!VISIT&&nextIsleKind()?'<button class="btn alt" id="dvI">Raise the next isle</button>':''} <button class="btn alt" id="dvM">${S.devMagic?'Wizard needs requirements again':'Skip wizard requirements'}</button> <button class="btn alt" id="dvRl">Relics for the next isle</button> <button class="btn alt" id="dvSt">Phase 2: next story</button> <button class="btn alt" id="dvS3">Phase 3: next story</button><div class="muted" style="margin:6px 0 2px">Town and island</div><button class="btn alt" id="dvC">+50,000 clams</button> <button class="btn alt" id="dvF">New favors now</button> <button class="btn alt" id="dvD">Town: skip a day</button> <button class="btn alt" id="dvR">Rare kit</button> <button class="btn alt" id="dvRf">Reef: skip to the rowboat</button> <button class="btn alt" id="dvRg">Reef: grow 12 coral</button> <button class="btn alt" id="dvWs">Workshop: skip ahead</button><div class="muted" style="margin:6px 0 2px">Shops and fishing</div><button class="btn alt" id="dvSh3">Shops to tier 3 of 4</button> <button class="btn alt" id="dvSh4">Shops to the top tier</button> <button class="btn alt" id="dvBk">Back room: next week</button> <button class="btn alt" id="dvGb">Gill: next boat</button><div class="muted" style="margin:6px 0 2px">Lighthouse</div><button class="btn alt" id="dvLp">Go to Lighthouse Point</button> <button class="btn alt" id="dvLt">Lighthouse top, with the keeper</button><div class="muted" style="margin:6px 0 2px">Enchanting and tables</div><button class="btn alt" id="dvEnL">Learn every enchantment</button> <button class="btn alt" id="dvEnT">${S.rare&&S.rare.ench&&S.rare.ench.twin?'Two-enchantment trick learned':'Learn the two-enchantment trick'}</button> <button class="btn alt" id="dvEnI">+20 of each ingredient</button> <button class="btn alt" id="dvEnK">A Sturdy tool of each kind</button> ${!VISIT&&!TRIP?'<button class="btn alt" id="dvB1">Workbench here</button> <button class="btn alt" id="dvB2">Carpenter\'s Bench here</button> <button class="btn alt" id="dvB3">Master Workbench here</button>':''} <button class="btn alt" id="dvBA">${BN.dev.any?'Tables work normally again':'Count as a Master Workbench anywhere'}</button> <button class="btn alt" id="dvEn">All of it at once</button><br><button class="btn alt" id="dvOff">Hide shortcuts</button></div>`:''}
+      ${DEV?`<div style="margin-top:8px"><b>Shortcuts</b> <span class="muted">(only on this device)</span><div class="muted" style="margin:6px 0 2px">Story map</div><button class="btn" id="dvMap">Story map: isles, stories, places</button><div class="muted" style="margin:6px 0 2px">Isles and stories</div><button class="btn alt" id="dvT">${S.magic.tower?'Tower is up':'Raise the wizard tower'}</button> ${!GUEST&&!VISIT&&nextIsleKind()?'<button class="btn alt" id="dvI">Raise the next isle</button>':''} <button class="btn alt" id="dvM">${S.devMagic?'Wizard needs requirements again':'Skip wizard requirements'}</button> <button class="btn alt" id="dvRl">Relics for the next isle</button> <button class="btn alt" id="dvSt">Phase 2: next story</button> <button class="btn alt" id="dvS3">Phase 3: next story</button><div class="muted" style="margin:6px 0 2px">Town and island</div><button class="btn alt" id="dvC">+50,000 clams</button> <button class="btn alt" id="dvF">New favors now</button> <button class="btn alt" id="dvD">Town: skip a day</button> <button class="btn alt" id="dvR">Rare kit</button> <button class="btn alt" id="dvRf">Reef: skip to the rowboat</button> <button class="btn alt" id="dvRg">Reef: grow 12 coral</button> <button class="btn alt" id="dvWs">Workshop: skip ahead</button><div class="muted" style="margin:6px 0 2px">Shops and fishing</div><button class="btn alt" id="dvSh3">Shops to tier 3 of 4</button> <button class="btn alt" id="dvSh4">Shops to the top tier</button> <button class="btn alt" id="dvBk">Back room: next week</button> <button class="btn alt" id="dvGb">Gill: next boat</button><div class="muted" style="margin:6px 0 2px">Lighthouse</div><button class="btn alt" id="dvLp">Go to Lighthouse Point</button> <button class="btn alt" id="dvLt">Lighthouse top, with the keeper</button><div class="muted" style="margin:6px 0 2px">Enchanting and tables</div><button class="btn alt" id="dvEnL">Learn every enchantment</button> <button class="btn alt" id="dvEnT">${S.rare&&S.rare.ench&&S.rare.ench.twin?'Two-enchantment trick learned':'Learn the two-enchantment trick'}</button> <button class="btn alt" id="dvEnI">+20 of each ingredient</button> <button class="btn alt" id="dvEnK">A Sturdy tool of each kind</button> <button class="btn alt" id="dvBrk">Break the tool in hand</button> ${!VISIT&&!TRIP?'<button class="btn alt" id="dvB1">Workbench here</button> <button class="btn alt" id="dvB2">Carpenter\'s Bench here</button> <button class="btn alt" id="dvB3">Master Workbench here</button>':''} <button class="btn alt" id="dvBA">${BN.dev.any?'Tables work normally again':'Count as a Master Workbench anywhere'}</button> <button class="btn alt" id="dvEn">All of it at once</button>${PLACES.hall?`<div class="muted" style="margin:6px 0 2px">Town hall</div><button class="btn alt" id="dvH">Into the town hall</button> <button class="btn alt" id="dvHg">${(S.town.hall||0)>=2?'Make it the Town Hall':'Make it the Grand Town Hall'}</button>`:''}<br><button class="btn alt" id="dvOff">Hide shortcuts</button></div>`:''}
     </div>
     <button class="btn warn" id="mReset">Start a new island</button>${saveOK?'':'<div class="muted" style="margin-top:8px">Saving isn\'t available in this browser.</div>'}`;
     $('#mParty').onclick=()=>{ closePanel(); setTimeout(()=>PARTY.open(), 50); };
@@ -7954,6 +8134,7 @@ function openMenu(){
         on('dvEnL', ()=>toast(`Learned ${EN.dev.learnEnch()} enchantments.`));
         on('dvEnT', ()=>{ EN.dev.learnTwin(); toast('Learned the two-enchantment trick. Binding a second one needs a Master Workbench.'); openMenu(); });
         on('dvEnI', ()=>toast('20 of each enchanting, tool and repair ingredient.'+bag(EN.dev.kit())));
+        on('dvBrk', ()=>{ const t=S.equip; if (!t || !S.tools[t]) { toast('Hold a tool first.'); return; } if (isForever(t)) { toast('Heirloom tools never break.'); return; } EN.dev.breakIt(t); updateToolBtn(); });   // v1.50
         on('dvEnK', ()=>{ sturdy(); toast('A Sturdy tool of each kind you were missing.'); });
         on('dvB1', ()=>table(1)); on('dvB2', ()=>table(2)); on('dvB3', ()=>table(3));
         on('dvBA', ()=>{ const k=BN.dev.anywhere(BN.dev.any?0:3); toast(k?'Anywhere counts as a Master Workbench until you reload.':'Tables work normally again.'); openMenu(); });
@@ -7973,6 +8154,7 @@ function openMenu(){
       $('#dvD').onclick=()=>{ S.town.devDays=(S.town.devDays||0)+1; townNewDay(dayKeyOf(dayNum(today())+S.town.devDays)); applyTown(); toast(`Town moved ahead ${S.town.devDays} day${S.town.devDays>1?'s':''}: ${S.town.res.length} islanders${S.town.next?', '+S.town.next.id+' moving in next':''}.`); };
       $('#dvF').onclick=()=>{ Q.rolledFor=null; Q.offers={}; rollFavors(Math.random); Q.rolledFor=S.day.key; save(); toast('Islanders have new favors to ask.'); };
       $('#dvOff').onclick=()=>{ try{ localStorage.removeItem('dwDev'); }catch(e){} toast('Shortcuts hidden. Open the game with #dev at the end of the address to bring them back.'); render(); }; }
+    if (DEV) devHall(render);   // v1.49
     const w=$('#mW'); w.value=weatherOverride||''; w.onchange=()=>{ weatherOverride=w.value||null; World.weather=weatherOverride||S.day.weather; updateSky(); updateHUD(); };
     $('#mReset').onclick=()=>{
       if (VISIT){ pBody.innerHTML=`<p>You're visiting a friend's island. Go back to your own island to start a new one.</p><button class="btn alt" id="rN">OK</button>`; $('#rN').onclick=render; return; }
@@ -8493,10 +8675,11 @@ canvas.addEventListener('pointermove', e=>{ const p=ptrs.get(e.pointerId); if(!p
   if (magicMode && ptrs.size===1){ const py=p.py??p.sy; p.py=e.clientY; if (Math.hypot(p.x-p.sx,p.y-p.sy)>8){
       // moving a building: drag the ghost if you grabbed it, otherwise look around
       if (p.mg===undefined){ const g0=groundAtScreen(p.sx,p.sy), M=magicMode; p.mg = M.kind==='move' && g0 && M.at && Math.hypot(g0.x-M.at[0], g0.z-M.at[1]) < footOf(M.key)+1.5; }
-      if (p.mg){ const g=groundAtScreen(e.clientX,e.clientY); if(g) magicPlace(g.x,g.z); } else magicPan(e.clientX-px, e.clientY-py); p.held=true; } return; }
+      if (p.mg){ const g=groundAtScreen(e.clientX,e.clientY); if(g) magicPlace(g.x,g.z,true); } else magicPan(e.clientX-px, e.clientY-py); p.held=true; } return; }
   if (e.pointerType==='mouse' && ptrs.size===1 && !(placing && placing.drag) && Math.hypot(p.x-p.sx,p.y-p.sy)>5){ camYaw-=(e.clientX-px)*0.008; lookDragT=performance.now(); p.held=true; return; }   // computer: drag to look around
   if (placing && placing.drag && placing.drag.id===e.pointerId && Math.hypot(p.x-p.sx,p.y-p.sy)>4){ const g=groundAtScreen(e.clientX,e.clientY); if(g){ const x=g.x+placing.drag.ox, z=g.z+placing.drag.oz; placing.m.position.set(x, World.inside?0:groundY(x,z), z); placing.dragged=true; p.held=true; checkPlace(); } } });
-function endPtr(e){ const p=ptrs.get(e.pointerId); if(!p) return; ptrs.delete(e.pointerId); const moved=Math.hypot(p.x-p.sx,p.y-p.sy), dt=performance.now()-p.t;
+function endPtr(e){ const p=ptrs.get(e.pointerId); if(!p) return; ptrs.delete(e.pointerId); if (p.mg && magicMode && magicMode.at) magicPlace(magicMode.at[0], magicMode.at[1]);   // v1.49 a drag that ends a little off slides to a spot that fits
+  const moved=Math.hypot(p.x-p.sx,p.y-p.sy), dt=performance.now()-p.t;
   const tap = ptrs.size===0 && !p.held && moved<14 && dt<450 && !layoutMode;
   if (tap && dlgState){ if (!dlgChoices.children.length) advanceDialog(); }
   else if (tap && dismissCards()){}
@@ -9034,14 +9217,14 @@ function runWorldSync(){
 window.__game = { v140:EN.dev, v140b:BN.dev, v123:{ toolPitch, pitchTool, buyTool, talkShop, get storeVisit(){ return storeVisit; } }, v120:{ track, checkAch, achValue, grantWear, ownsWear, openAchievements, makeFavor, rollFavors, favorChoices, npcOf, clothesStock, wardrobeOwned, get Q(){ return Q; } }, party:PARTY, v119:{ tierPick, openChest, townCap:()=>townCap() }, v13:{ shopStock:w=>shopStock(w), learnPlan, rareRoll, knowsPlan, unfoundPlans, stockWeight, RARE_WORK, GroundItem, ShopItem, Furniture }, v1:{ scene, camera, OUT, updateSky, updateHUD, snowPass, SNOW_U, townNewDay, applyTown, talkHall, openHallPanel, buildPlaza, refreshStoreItems, buildStoreAll, buildShop, buildMuseumAll, spawnExhibits, mentorMoment, teachWoodworking, openCraft, doCook, nearStation, toggleSled, setSled, get sledding(){ return sledding; }, sledV, eatFood, Plant, fullBagCatch, KB, landSeaTap, terraLand, LAMPS:()=>LAMPS, hasUpstairs, ShopItem, Stairs, get exhibits(){ return exhibits; }, onDisplay, museumNeeds, museumExpand, museumFitState, museumTanks, renderer, nearestEnt:()=>nearestEnt(), doAction:()=>doAction(), openTankView, closeTankView, get tankView(){ return tankView; }, KEEPOUT, dayKeyOf, World, startPlacing, checkPlace, get placing(){ return placing; }, FX, homeStock, buyHome, draftUnowned, get homeRack(){ return homeRack; }, openShop, openBuild:(o)=>openBuild(o), closeBuild, get buildMode(){ return buildMode; }, ents, Tree, Stump, Weed, Bug, bugs, player, interact, layoutBar, pickNote, itemToast, reel, Fishing, fishes, spawnFish, WU, relayout, enterRoom:(id)=>enterRoom(id), trees }, get S(){ return S; }, dbg:{ setCine:(c)=>{ cine=c; }, showChoices:(t,c)=>showChoices(t,c), dialog:(...a)=>dialog(...a), setRiding:(v)=>setRiding(v), enterRoom:(id)=>enterRoom(id), openBuild:()=>openBuild(), rooms:()=>Object.keys(ROOMS), get yaw(){ return camYaw; }, set yaw(v){ camYaw=v; }, get riding(){ return riding; }, get snow(){ return SNOW_U.value; }, setWeather:(w)=>{ weatherOverride=w; World.weather=w; snowT=0; }, get dlg(){ return !!dlgState; } }, walkable, blocked, groundY, launchRag, ragdolls, swing, meBody, refreshPortals, portalArches, get portalEnt(){ return portalEnt; }, enterRoom, PLACES, net:{ party:(id,d)=>PARTY.onNet(id,d), trip:(id,name,d)=>onTripNet(id,name,d), bonked, visibleRemotes:()=>[...remotes.values()].filter(r=>r.obj.visible).map(r=>[r.name,+r.pos.x.toFixed(1),+r.pos.z.toFixed(1)]), remoteUpsert, remotePos, remoteLeave, remoteEmote, playerState, setInventory, toast:(m)=>toast(m), updateHUD:()=>updateHUD(), get started(){ return started; } }, ITEMS, itemThumb:(id)=>thumb(id), layoutInfo:()=>({ id:LAYOUT_ID, PLACES, PATHS, LOT, rects:RECTS.map(r=>r.slice(0,4)), lot:lotRect() }), terrainH:(x,z)=>rawHeight(x,z), terrainSlope:(x,z)=>hillSlope(x,z), interact, spawnBug:(id,x,z)=>new Bug(id,x,z), tapOdds:()=>Object.fromEntries(Object.keys(TAP_BASE).map(k=>[k, +tapChance({rarity:k}).toFixed(2)])), placingObj:()=>placing&&placing.m, toScreen:v=>{ const p=v.clone().project(camera); return [(p.x*0.5+0.5)*innerWidth, (-p.y*0.5+0.5)*innerHeight]; }, rebuildHome:()=>{ buildPlayerHouse(); rebuildHomeRoom(); }, openBuild, closeBuild, get buildMode(){ return buildMode; }, talkShop, openDonate, talkCurator, spawnMossby, onFelled, findPath, startPlacing, LOT, RECTS, shopEnts, museumEnt, houseEnt:()=>houseEnt, Time, player, ents, ITEMS, residents, World, ROOMS, goTo, handleTap, doAction, updateSky, rollDay, spawnDaily, castAt, Fishing, fishes, bugs, openBag, openBook, openShop, openBoard, openMenu, openCraft, doCraft, WOODWORK, enterRoom, exitRoom, equip, startLayout, endLayout, trees, applyControls, magic:{ startMagic, endMagic, landTap, magicPlace, castMagic, get mode(){ return magicMode; }, raiseTower, talkWizard, drinkPotion, potionOn, luckW, rollFavors, Q, favorChoices, findTowerSpot, get tower(){ return towerEnt; }, PLACES, TERRA, FALLS } };
 window.__game.net.applyWorld = applyWorld;
 window.__game.v144 = Object.assign({ SR, shopStock:w=>shopStock(w), talkGill:()=>talkGill(), spawnFish:()=>spawnFish(), baySpawnShadow:()=>baySpawnShadow(), bayPool:()=>bayPool(), fishPool, incOf }, SR.dev);   // v1.44 tests   // v1.34 live island sync (online.js)
-// v1.50 test hooks: where the new fish and bugs turn up
+// v1.52 test hooks: where the new fish and bugs turn up
 window.__game.v145 = { fishPool, bugPool, isleNear, isleAt, bayMore, bayTipIds, bayPool:()=>bayPool(), waterType, isleSpot, get trees(){ return trees; }, get bugs(){ return bugs; }, newBug:(id,x,z,e)=>new Bug(id,x,z,e||{}), updateBugs:dt=>{ bugT=0; updateBugs(dt||3); }, spawnFish:()=>spawnFish(), get fishes(){ return fishes; },
   openDonate:()=>openDonate(), museumExpand:()=>museumExpand(), buildMuseumAll:()=>buildMuseumAll(), enterRoom:id=>enterRoom(id), tanks:()=>ents.filter(e=>e instanceof MuseumTank), openTankView:e=>openTankView(e), closeTankView:()=>closeTankView(), get tankView(){ return tankView; } };
 // v1.26 test hooks
 window.__game.v126 = { townNewDay, applyTown, findHomeSpot, claimHomeSpot, townCap, incomeNewDay, refreshIncome, talkIncome, incCollect, incOf, INCOME, incEnts, openMap, talkSkipperHome, talkSkipperTrip, tripGoHome, tripRecap, storyWho, askToLeave, canAskToLeave, pitchOnBuy, merchantDay, get peddler(){ return peddler; }, get skipper(){ return skipper; }, newSquares, LOAN_MAX_SQ, TRIP, TRIP_THEME, residents, residentHomes, plotEnts, KEEPOUT, Q, PATHS, camTarget, updateCamera, set camDist(v){ camDist=v; }, get camDist(){ return camDist; }, set camYaw(v){ camYaw=v; } };
 window.__game.LETTERS = LETTERS;
 window.__game.v147 = { makeTowerRooms, towerFloor, towerHello, openEyepiece, refreshTowerLook, outdoors, get towerL(){ return towerL; }, get topL(){ return topL; }, get wizard(){ return wizard; }, get tower(){ return towerEnt; }, TW };   // v1.47 test hooks
-window.__game.v127 = { roleMenu, folkMenu, smugglerShop, openNoticeBoard, shellGame, talkWorkshop, talkAttic, talkWizGarden, talkLibrary, anglerWants, get perch(){ return PERCH; }, setupTown, get PLAN(){ return PLAN; }, get TX(){ return TX; }, LAY, haulValue, haulLeft, openContacts, deliverReplies, sendLetter, addContact, canInvite, invitePenpal, readTreasureMap, bottleLetter, openNote, contactPerson, XW, POOLS, lowTide, BRIDGES, DOCK, waterType, VY, Thing };
+window.__game.v127 = { roleMenu, folkMenu, smugglerShop, openNoticeBoard, shellGame, talkWorkshop, talkAttic, talkWizGarden, talkLibrary, anglerWants, get perch(){ return PERCH; }, setupTown, get PLAN(){ return PLAN; }, get TX(){ return TX; }, LAY, haulValue, openContacts, deliverReplies, sendLetter, addContact, canInvite, invitePenpal, readTreasureMap, bottleLetter, openNote, contactPerson, XW, POOLS, lowTide, BRIDGES, DOCK, waterType, VY, Thing };
 // v1.25 test hooks for the house builder
 window.__game.house = { LT, previewBuild:(w)=>previewBuild(w), renderBuild:(k)=>renderBuild(k), homeBlocked, planIssue, setBuildView:(v)=>setBuildView(v), mossPaintAt, buildMossLayer, roofHit, houseFrame, rebuildFloor, HOME_IDS, get houseEnt(){ return houseEnt; }, edgeTap, stairsTap, landProblem, closeBuild };
 window.__game.farm = { openPlantPanel, startGridPlacing, plantGrid, checkGrid, openGarden, rebuildGardens, gardenAtXZ, islandSeeds, islandFlowers, harvestRec, perimeter, get fenceSegs(){ return FENCE_SEGS; }, fenceHit, get placing(){ return placing; }, plantEnts, gardenEnts, CELL };

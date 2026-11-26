@@ -51,7 +51,7 @@ const FISH_LOOK = {
   wrasse:{ pat:'rainbow', iri:0.7 }, goby:{ pat:'spots', mark:0x2a9ae0, n:26 }, blenny:{ pat:'bands', bands:[0.3,0.6], band:0xf2c040, edge:0x2a1a5a },
   bannerfin:{ pat:'bands', bands:[0.18,0.55], band:0x1a1a1a, edge:0x1a1a1a, fin:0xf6dc50 }, velvetray:{ pat:'spots', mark:0xf4f4ff, n:70 },
   parrotfish:{ pat:'scales', big:true, iri:0.8 }, grouper:{ pat:'spots', mark:0x2a8ae0, n:80 }, goldseahorse:{ pat:'rings', mark:0xc88010 },
-  // v1.50 wave 1
+  // v1.52 wave 1
   needlefish:{ pat:'line', iri:0.9 }, gardeneel:{ pat:'speck', mark:0x1a1a1a, n:90 }, sole:{ pat:'speck', mark:0x6a5236, n:160 }, flyingfish:{ pat:'counter', iri:0.9 },
   butterflyfish:{ pat:'eyespot', mark:0x1a1a1a }, searobin:{ pat:'mottle', mark:0x6a2a1a }, cuttlefish:{ pat:'tiger', mark:0x4a2a1a }, lionfish:{ pat:'zebra', mark:0xf8f0e8 },
   angler:{ pat:'mottle', mark:0x2a2a2a }, swordfish:{ pat:'counter', iri:0.6 }, frilledshark:{ pat:'counter' }, oarfish:{ pat:'dash', mark:0x3a4a5a, iri:1, pearl:true }, hammerhead:{ pat:'counter' },
@@ -133,7 +133,7 @@ const WING_LOOK = {
   peacock:{ eye:[0x4a6ad8,0xf0e0a0,0x1a1a2a], border:0.1, vein:true }, swallowtail:{ band:0x9af0c0, border:0.22, tails:true, vein:true }, wanderer:{ border:0.12, vein:'heavy', spots:'white' },
   leafdancer:{ leaf:true }, rainwing:{ grad:0xe0f8ff, border:0.18, drops:true, vein:true }, moth:{ fuzz:true, line:true }, snowmoth:{ fuzz:true, frost:true }, frostmoth:{ fuzz:true, frost:true, line:true },
   starmoth:{ stars:true, fuzz:true },
-  // v1.50 wave 1
+  // v1.52 wave 1
   skipper:{ grad:0xf0a040, border:0.1, vein:true }, comma:{ dots:0x3a2210, border:0.1, vein:true }, hairstreak:{ grad:0xa8b0bc, line:true, eye:[0x1a1a1a,0xf06a2a,0x1a1a1a], eyeS:0.4, eyeAt:[0.72,0.82] },
   longwing:{ stripes:[0xfff2b0,3] }, rosymaple:{ grad:0xf8e060, band:0xf080a0, fuzz:true }, glasswing:{ glass:true, border:0.12, spots:'white' }, hawkmoth:{ fuzz:true, line:true }, hawkmothh:{ fuzz:true, border:0.25 },
   morpho:{ grad:0x3a9aff, border:0.14, spots:'white' }, tigermoth:{ maze:0xf4efe4, fuzz:true }, tigermothh:{ dots:0x1a2a4a, fuzz:true }, lanternfly:{ grad:0xc8b890, dots:0x1a1a1a, fuzz:true },

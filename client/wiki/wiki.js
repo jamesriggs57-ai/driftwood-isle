@@ -5,7 +5,7 @@ import { ITEMS, rarityLabel, RARITY_COLORS, RESIDENTS, TOOLS, BACKPACKS, CROPS, 
 import { ACHIEVEMENTS, ACH_GROUPS } from '../js/achieve.js';
 // v1.40: these add the new tables, table pieces and Enchanting Scrolls to ITEMS/WOODWORK, and hold the enchanting rules (no DOM, no THREE)
 import { benchFor, toolBench, BENCH_IDS, NEW_BENCHES, BENCH_PIECES } from '../js/benches-core.js';
-import { ENCH, FAMILIES, WORDS, CRAFT, REPAIR, toolsText, describe } from '../js/enchant-core.js';
+import { ENCH, FAMILIES, WORDS, CRAFT, REPAIR, BROKEN_MULT, toolsText, describe } from '../js/enchant-core.js';
 import { PAGES, GROUPS, GUIDE_VERSION, GUIDE_UPDATED } from './guide.js';
 
 const $ = s => document.querySelector(s);
@@ -42,7 +42,7 @@ function table(id, rows, cols, opts={}){
 const TABLES = {};
 
 const WHERE = { sea:'Sea', river:'River', pond:'Pond', bay:'Cay Bay', air:'Flying', flower:'On flowers', trunk:'Tree trunks', ground:'Ground', beach:'Beach', glade:'Lumi\'s glade', starfall:'Starfall Isle' };
-// v1.50 isle and trip critters (and the late reef fish) say exactly where: 'Sea off Hollow Crags', 'Castaway Isle trips, flying'
+// v1.52 isle and trip critters (and the late reef fish) say exactly where: 'Sea off Hollow Crags', 'Castaway Isle trips, flying'
 const whereOf = r => (r.where==='isle'||r.where==='trip'||r.reef) ? whereText(r) : (WHERE[r.where]||r.where);
 const SIZE = { S:'Small', M:'Medium', L:'Large', XL:'Huge' };
 const items = k => Object.values(ITEMS).filter(i=>i.kind===k);
@@ -65,7 +65,7 @@ const TABLE_NAME = ['Anywhere', 'Workbench', 'Carpenter\'s Bench', 'Master Workb
 function woodLearn(r, start, ten){
   const b=NEW_BENCHES.find(x=>x.id===r.id); if (b) return `After ${b.kinds} different things made${b.after?`, one a ${esc(name(b.after))}`:''}`;
   const p=BENCH_PIECES.find(x=>x.id===r.id); if (p) return `Build a ${esc(name(BENCH_IDS[p.bench-1]))}`;
-  return start.has(r.id)?'Known from the start':ten.has(r.id)?'After 10 things made':'Milestone, plan or study';
+  return start.has(r.id)?'Known from the start':ten.has(r.id)?'After 3 starting pieces and 10 things made':'Milestone, plan or study';
 }
 
 const DATA = {
@@ -91,7 +91,7 @@ const DATA = {
       ['Make it at', r=>TABLE_NAME[toolBench(r.tier)], r=>toolBench(r.tier)]], { filters:[['','All'], ...Object.values(TOOLS).map(t=>[t.name,t.name])], tag:r=>r.tool });
     h += '<h3>Repair materials</h3><p>For a fully worn tool. A part-worn one needs that share of it, at least 1 of each. Heirloom tools never need fixing.</p>'
       + table('tRepair', [['Flimsy tools and the basic Watering Can', 0], ['Sturdy tools', 1], ['Golden tools and the Golden Can', 2]].map(([n,k])=>({ n, k })),
-        [['Tier', r=>`<b>${esc(r.n)}</b>`], ['Materials', r=>mats(Object.fromEntries(REPAIR[r.k]))]]);
+        [['Tier', r=>`<b>${esc(r.n)}</b>`], ['Materials', r=>mats(Object.fromEntries(REPAIR[r.k]))], ['Fix if broken (at a crafting table)', r=>mats(Object.fromEntries(REPAIR[r.k].map(([m,n])=>[m,n*BROKEN_MULT])))]]);
     h += '<h3>Backpacks</h3><p>You start with 20 bag slots.</p>';
     h += table('tBags', BACKPACKS, [['Bag', r=>`<b>${esc(r.name)}</b>`], ['Slots', r=>r.slots], ['Price', r=>fmt(r.cost)], ['Needs', r=>esc(r.req ? r.req.desc : '')]]);
     return h;

@@ -5,28 +5,29 @@
 
    KEEP THIS UP TO DATE. Whenever a game change touches something a player would look up (a new character,
    quest step, unlock requirement, price that lives in main.js, island type, odds, feature), update the matching
-   page here in the same commit and bump GUIDE_VERSION. See CLAUDE.md at the repo root.
+   page here in the same commit. See CLAUDE.md at the repo root.
+   This is a player's guide: state how the game works now, matter of fact. No version numbers, no "was X",
+   no "since v1.xx", no notes about old saves, no changelog.
 
    Each page: { id, group, title, html }. A page may also have data:'<table id>' to append a live table
    built in wiki.js. Writing rules: plain words, no em dashes, no emoji, only facts the code supports.
    ===================================================================== */
 
-export const GUIDE_VERSION = 'v1.66';
-export const GUIDE_UPDATED = '2026-11-26';
 
 const tip = s => `<div class="tip"><b>Tip</b> ${s}</div>`;
 const note = s => `<div class="note">${s}</div>`;
 const steps = a => `<ol class="steps">${a.map(s=>`<li>${s}</li>`).join('')}</ol>`;
 
+/* [id, full name, short tab label, one line for the home page] */
 export const GROUPS = [
-  ['start', 'Getting started'],
-  ['island', 'Life on your island'],
-  ['magic', 'Wendell and new land'],
-  ['away', 'Trips, friends and mail'],
-  ['money', 'Income and investing'],
-  ['stories', 'Island stories (quests)'],
-  ['catalog', 'Catalog'],
-  ['done', 'Completing the game'],
+  ['start', 'Getting started', 'Start', 'Controls, clams, time and your first days'],
+  ['island', 'Life on your island', 'Island', 'House, town, shops, tools, crafting and gardening'],
+  ['magic', 'Wendell and new land', 'Wendell', 'The wizard, his isles and relics'],
+  ['away', 'Trips, friends and mail', 'Trips & friends', 'Boat trips, island types, pen pals, visiting friends'],
+  ['money', 'Income and investing', 'Money', 'Passive income and thank-you stakes'],
+  ['stories', 'Island stories (quests)', 'Stories', 'Every islander\'s dream, step by step'],
+  ['catalog', 'Catalog', 'Catalog', 'Every fish, bug, fossil, plant, item and piece of furniture'],
+  ['done', 'Completing the game', '100%', 'The full checklist'],
 ];
 
 export const PAGES = [
@@ -34,7 +35,7 @@ export const PAGES = [
 /* ============================== GETTING STARTED ============================== */
 { id:'welcome', group:'start', title:'Welcome to Driftwood Isle', html:`
 <p>Driftwood Isle is a cozy island life game you play in the browser at <a href="/">vinatix.com</a>. You arrive with a tent, a few neighbors and a lot of open beach. From there you fish, catch bugs, dig fossils, grow gardens, build a house, fill a museum, grow a town, and eventually help every islander chase a dream of their own.</p>
-<p>This guide covers everything in the current build (${GUIDE_VERSION}). Catalog pages (fish, bugs, furniture and so on) are read straight from the game's own data, so their prices and seasons always match the live game.</p>
+<p>Catalog pages (fish, bugs, furniture and so on) are read straight from the game's own data, so their prices and seasons always match the game.</p>
 <h3>Your first days</h3>
 ${steps([
  'Pick up what is lying around: branches, fruit, beach finds. Shake trees for fruit and sometimes a surprise.',
@@ -145,20 +146,13 @@ ${note('Guest mode caps your wallet at 10,000 clams. Make an account to lift it.
 `},
 
 { id:'farshore', group:'island', title:'The far shore', html:`
-<p>Your island reaches further out to sea all the way round: about half as much land again, left wild. Since v1.62 the new land goes round the whole coast (from v1.58 to v1.61 it was all on one side).</p>
+<p>Your island reaches further out to sea all the way round: about half as much land again, left wild.</p>
 <ul><li><b>How far</b>: the coast moves out by different amounts in different places, so the island keeps its own shape with a gentle wobble. On average that is about 11 metres on a Village, Spread out or Highlands island (often 8 to 14 metres) and about 16 metres on an island from the island maker (often 11 to 20 metres). The wobble is picked once for each island and never changes.</li>
 <li><b>What grows there</b>: up to 6 low hills (kept away from the dock, the river mouth and the directions Wendell's isles rise), grass and wild flowers, trees, fruit trees of your island's fruit, palms along the beach, and a few rocks to hit.</li>
 <li><b>What turns up</b>: bugs, dig spots, weeds and beach finds, like anywhere else on the island.</li>
-<li><b>The dock and the river</b>: the dock sits out on the new beach and the path to it runs straight on out from where the dock used to be. The river runs on through the new land to the sea.</li>
+<li><b>The dock and the river</b>: the dock sits out on the new beach, at the end of a straight path. The river runs on through the new land to the sea.</li>
 <li><b>What doesn't</b>: no other paths, and nobody moves in out there. New islanders' houses, the keepers and the town's buildings all go on the old part of the island.</li>
 <li>It's still yours to use: place furniture, plant, have Wendell move a building out there, or shape the land.</li></ul>
-<h3>Islands that had the one-sided far shore</h3>
-<p>The first time such an island loads after v1.62 it is moved over to the new shore, once:</p>
-<ul><li>Everything on the old part of the island stays exactly where it was: buildings, paths, trees, rocks, gardens, placed furniture and plants.</li>
-<li>The one-sided far shore goes back under the sea and the new land goes all round instead. Anything you placed, planted or dropped out on that land is moved in onto the new shore on the same side, in the same order (what was further out stays further out). The wild trees and rocks that grew out there are replaced by the new shore's own.</li>
-<li>Wendell's isles move straight out, in the same directions, about as far as the coast grew there. Everything on them moves with them, and their bridges reach out to the new shore.</li>
-<li>Gill's fishing boat stays the same distance in from the coast, so it moves out with it.</li></ul>
-${note('Islands that never loaded with the one-sided far shore get the even shore straight away. On the old beach, now inland, a few things sit a little higher or lower than before.')}
 `},
 
 { id:'islanders', group:'island', title:'Islanders and friendship', data:'residents', html:`
@@ -383,7 +377,7 @@ ${tip('Your saved designs are kept, so making a matching set of chairs is quick:
 { id:'wendell', group:'magic', title:'Wendell the wizard', html:`
 <p>Wendell is a semi-retired wizard whose tower appears near the plaza after Lumi's wish (2 starfish and a sand dollar).</p>
 <h3>Inside the tower</h3>
-<p>Wendell works inside his tower (before v1.47 he stood by the door). Walk up to the door and press Enter. The first time you go in, he introduces himself if you haven't met yet, or says hello and tells you where things are if you have.</p>
+<p>Wendell works inside his tower. Walk up to the door and press Enter. The first time you go in, he introduces himself if you haven't met yet, or says hello and tells you where things are if you have.</p>
 <p><b>Downstairs, the workroom:</b></p>
 <ul><li><b>Wendell</b>, by his cauldron. Talk to him for everything on this page: potions, enchanting lessons, moving buildings, shaping land and the isles.</li>
 <li><b>The cauldron</b>: tap it to go straight to the potion shop.</li>
@@ -420,16 +414,16 @@ ${tip('Your saved designs are kept, so making a matching set of chairs is quick:
 <tr><td>4</td><td>Lantern Bluff</td><td>All three museum wings, the workshop open</td><td>Moonsap Vial</td><td>220,000, 30 planks, 8 iron, 10 clay</td><td>Cliff-top plateau with raised knolls, a spring that spills over the cliff as a waterfall, sea stacks offshore, pines, good rocks, the old lighthouse</td></tr>
 <tr><td>5</td><td>Hollow Crags</td><td>All three shops at tier 2, the reef at Teeming</td><td>Amber Sliver, Living Coral Crown</td><td>350,000, 15 iron, 30 stone, 2 fossils</td><td>Bare stone and gravel, a quarry of iron-rich rocks (and now and then an emerald), boulders, scree and rock outcrops, stone spires, old ruins, a sunken grotto with steps down to a pool; site of Pemberton's forge</td></tr>
 <tr><td>6</td><td>Starfall Isle</td><td>The Island Charter signed and Wendell's last letter</td><td>Living Coral Crown, Starglass Shard, Moonsap Vial</td><td>500,000, and one each of: plank, honey, tea cake, iron fitting, flour, bath salts</td><td>A small isle in the sky beside Hollow Crags, up a stair of glowing stones. Always night up there, with its own bugs and the star altar</td></tr></table>
-<p>Each isle rises off the new coast (see The far shore). On islands made in the island maker since v1.62, the directions the isles rise in are picked for that island, so they're not in the same places on every island. Older islands keep the usual directions. Since v1.62 Wendell names the direction an isle will rise in when he first brings it up.</p>
+<p>Each isle rises off the new coast (see The far shore). On islands from the island maker, the directions the isles rise in are picked for that island, so they're not in the same places on every island. Wendell tells you which direction an isle will rise in when he first brings it up.</p>
 <p>The first isle isn't mentioned at all until the island is ready for it. The day after each isle rises, Wendell writes a letter hinting which way to look for the next. Starfall Isle is different: Wendell says nothing about it until the Island Charter is signed, and his letter the day after is the hint.</p>
 <h3>What each isle gives</h3>
-<ul><li><b>Clover Meadow</b>: the pond and the brook are fishable (pond fish and river fish). 7 fruit trees, an orchard of 12 more, and 28 other trees (was 15).</li>
-<li><b>Sandpiper Dunes</b>: 34 palms (was 12, plus 2 oaks) and nothing else grows there. Every day it has 12 shells (was 6), 5 pieces of coral (was 3) and 5 dig spots (was 3). The shipwreck is much bigger. Hazel's wreck story and the diving bell are still there.</li>
-<li><b>Old Pinewood</b>: same layout and the same 32 trees, but the pines and cedars are bigger and each gives 1 more wood when it falls (5 instead of 4 with a plain axe, 7 instead of 6 with One-Swing). They still grow back the next day.</li>
-<li><b>Lantern Bluff</b>: 5 rocks (was 3) and 34 trees (was 20).</li>
-<li><b>Hollow Crags</b>: 12 rocks (8 in v1.57, 4 before that). A crags rock is iron-rich: each hit gives iron half the time (stone 30%, clay 20%), plus a 1 in 5 chance of an extra iron, a 4% chance of a fossil and a 2% chance of an <b>emerald</b>. That is about 2.8 iron per rock per day, against about half an iron from a rock on your island, and about 1 emerald a day if you tap out all 12 rocks (4 hits each). Emeralds come from nowhere else. They are very rare, sell for 2,500 clams, and land in the same pile as the rest of that rock's drops, so one click picks them up. The ground is bare stone and gravel now, with grass and ferns only in a few mossy hollows, loose boulders and scree everywhere, and a few solid rock outcrops you walk round. 7 trees (21 in v1.57). The grotto pool at the bottom of the steps is fishable.</li>
-<li><b>Starfall Isle</b>: a glowing pool, a garden of glowing mushrooms and crystals, and small rocks drifting round the edge. 18 trees (was 11).</li></ul>
-<p>Trees cut on the isles grow back: Old Pinewood's the next day, the other isles' after 3 days. Isles that rose before v1.57 grow outward on their far side the next time you load; nothing you placed is moved, and new hills, ponds and rocks keep clear of it.</p>
+<ul><li><b>Clover Meadow</b>: the pond and the brook are fishable (pond fish and river fish). 7 fruit trees, an orchard of 12 more, and 28 other trees.</li>
+<li><b>Sandpiper Dunes</b>: 34 palms and nothing else grows there. Every day it has 12 shells, 5 pieces of coral and 5 dig spots. The shipwreck is big. Hazel's wreck story and the diving bell are there.</li>
+<li><b>Old Pinewood</b>: 32 big pines and cedars. Each gives 5 wood when it falls with a plain axe, 7 with One-Swing. They grow back the next day.</li>
+<li><b>Lantern Bluff</b>: 5 rocks and 34 trees.</li>
+<li><b>Hollow Crags</b>: 12 rocks. A crags rock is iron-rich: each hit gives iron half the time (stone 30%, clay 20%), plus a 1 in 5 chance of an extra iron, a 4% chance of a fossil and a 2% chance of an <b>emerald</b>. That is about 2.8 iron per rock per day, against about half an iron from a rock on your island, and about 1 emerald a day if you tap out all 12 rocks (4 hits each). Emeralds come from nowhere else. They are very rare, sell for 2,500 clams, and land in the same pile as the rest of that rock's drops, so one click picks them up. The ground is bare stone and gravel, with grass and ferns only in a few mossy hollows, loose boulders and scree everywhere, and a few solid rock outcrops you walk round. 7 trees. The grotto pool at the bottom of the steps is fishable.</li>
+<li><b>Starfall Isle</b>: a glowing pool, a garden of glowing mushrooms and crystals, and small rocks drifting round the edge. 18 trees.</li></ul>
+<p>Trees cut on the isles grow back: Old Pinewood's the next day, the other isles' after 3 days.</p>
 <h3>Starfall Isle</h3>
 <p>The stair climbs from Hollow Crags. Up top it is always night, whatever the clock says, and three bugs live nowhere else: the Sky Drifter, the Comet Beetle and the rare Nebula Moth. They're in the bug catalog under "On Starfall Isle".</p>
 <p>The <b>star altar</b> takes two of Wendell's spells. Leave the clams in the bowl:</p>
@@ -437,8 +431,7 @@ ${tip('Your saved designs are kept, so making a matching set of chairs is quick:
 <li><b>Glowing paths</b> (50,000): every stone on every path lights up, each with a rune in it and its own color, and pulses of light run along the paths. Sparks rise off the stones near you. A line of glowing stones also runs down each isle's path. It's brightest at night, and you can just see it in the daytime.</li></ul>
 <p>When you cast one, a beam of light goes up from the altar and the view swings out over your island so you can see the sky for a moment.</p>
 <p>Both are for looks only. You can lift either one at the altar and bring it back later for free.</p>
-${note('Stardrift Isle, the legendary trip island, is a different place. It was called Starfall Isle before v1.41.')}
-${note('Islands that raised isles before v1.37 keep their old order (meadow, dunes, bluff, crags) and get Old Pinewood next.')}
+${note('Stardrift Isle, the legendary trip island, is a different place.')}
 `},
 
 { id:'relics', group:'magic', title:'Relics', html:`
@@ -567,7 +560,7 @@ ${note('Relics can\'t be sold, gifted, mailed or traded. A storage chest holds t
 { id:'income', group:'money', title:'Passive income', html:`
 <p>Four characters turn up once you've progressed. Fund them and they work while you're away. Each fills over <b>3 days</b> and then waits for you to collect. Upgrades are offered after a tier has run a week.</p>
 <table class="t"><tr><th>Who</th><th>Appears when</th><th>Tiers (cost, per day)</th></tr>
-<tr><td>Gill the fisherman, on a beach</td><td>Town Hall built and 40 fish caught. Now tied to the reef story.</td><td>Dinghy 25,000; Trawler 125,000 + 40 planks; Driftwood Queen 300,000 + 60 planks + 10 iron fittings. Catch scales with the reef.</td></tr>
+<tr><td>Gill the fisherman, on a beach</td><td>Town Hall built and 40 fish caught (part of the reef story).</td><td>Dinghy 25,000; Trawler 125,000 + 40 planks; Driftwood Queen 300,000 + 60 planks + 10 iron fittings. Catch scales with the reef.</td></tr>
 <tr><td>Hollis the beekeeper, in a meadow</td><td>Town Hall and 5 planted flowers (or 45 things discovered)</td><td>Beehive 13,000 (2 honey); Three Hives 35,000 (5); Apiary 60,000 (9); Grand Apiary 185,000 (14) after his story</td></tr>
 <tr><td>Russet the orchard keeper</td><td>Town Hall, 10 days on the island, a fruit tree</td><td>Fruit Ladder 14,000 (4 fruit); Pony Cart 30,000 (8); Cider Shed 50,000 (14)</td></tr>
 <tr><td>Quill the bookkeeper, by the general store</td><td>One shop backed</td><td>Ledger 24,000 (800 clams per shop backed); Counting House 60,000 (2,000); Trading Office 135,000 (4,500)</td></tr></table>
@@ -795,10 +788,6 @@ ${steps(['Talk to them and pick <b>Come and meet people</b>. They follow you for
 <p>Visit every stall on a festival day and Clementine gives you that season's keepsake: a Blossom Festival Lantern, Summer Festival Drum, Harvest Festival Wreath or Winter Festival Snow Globe.</p>
 `},
 
-{ id:'later', group:'stories', title:'Still to come', html:`
-<p>Pen pals visiting in person isn't built yet. This page will change when it lands.</p>
-`},
-
 /* ============================== CATALOG (live) ============================== */
 { id:'fish', group:'catalog', title:'Fish', data:'fish', html:`<p>Sea fish are caught from the beach, river fish in the river, pond fish in ponds, and bay fish only in Cay Bay. A fish's shadow shows its size. Hours are 24-hour. Sell to Marlo for more. Marlo and Gill can tell you what's biting today (see Shops and investing).</p>
 <h3>Isle and trip fish</h3>
@@ -817,7 +806,7 @@ ${steps(['Talk to them and pick <b>Come and meet people</b>. They follow you for
 
 /* ============================== DONE ============================== */
 { id:'checklist', group:'done', title:'100% checklist', html:`
-<p>There's no credits screen. Here's everything there is to finish in ${GUIDE_VERSION}:</p>
+<p>There's no credits screen. Here's everything there is to finish:</p>
 <ul class="check">
 <li>Every fish, bug, fossil and beach find in the museum (including bay and glade species)</li>
 <li>All three museum wings and the Reef Hall</li>
@@ -840,41 +829,68 @@ ${steps(['Talk to them and pick <b>Come and meet people</b>. They follow you for
 <li>All 160 achievements</li></ul>
 `},
 
-{ id:'changes', group:'done', title:'What\'s changed', html:`
-<p>Recent updates, newest first.</p>
-<ul>
-<li><b>v1.66</b>: The map has its own button at the top left of the screen, under the clock, so it is one tap away (it used to be in the tool picker). Pickup notes, potions and the party list now sit a little lower on the left to make room.</li>
-<li><b>v1.65</b>: 69 new fossils, 80 in all, each with its own model: shells, corals, sea life, trilobites, ancient fish and sea reptiles, plants, amber, dinosaur skulls and bones, Ice Age mammals and more. A fossil you haven't found yet is twice as likely to turn up. Once more than 6 fossils are donated, the museum builds the full Fossil Hall with a pedestal or a glass case spot for every fossil (see The museum). New achievements for 25, 50 and all 80 fossils and for 250 and 288 museum displays; the old 11-fossil one is now called Fossil Shelf.</li>
-<li><b>v1.64</b>: Sewing. Buy a Sewing Machine from Pemberton (12,000), place it and use it to make rugs and clothes and paint them pixel by pixel; the more you sew, the finer the grid and the stranger the alterations (up to glowing trim, orbiting stars and little wings).</li>
-<li><b>v1.63</b>: Custom furniture. Design your own chairs, tables, beds, shelves, lamps and dressers part by part, find sketches, and make pieces islanders ask for.</li>
-<li><b>v1.62</b>: The far shore now goes all the way round your island instead of off one side, so the island keeps its shape and simply grows, and Wendell's isles move out with the coast. Islands that had the one-sided far shore are moved over once; everything on the old part of the island stays put (see The far shore). Reroll in the island maker now makes a genuinely different island each time.</li>
-<li><b>v1.61</b>: Fixed signed-in islands with a town hall getting stuck on "Building the island..." the first time they loaded on a new day. Nothing on the island was lost.</li>
-<li><b>v1.60</b>: The old lighthouse on Lantern Bluff is now about two and a half times as tall and you can walk inside and climb it. It starts out broken down and gets mended step by step as the lighthouse story goes on. You now fit the lamp from the lamp room at the top.</li>
-<li><b>v1.59</b>: Hollow Crags is rocky: bare stone and gravel ground, boulders, scree and outcrops, 7 trees (was 21), and 12 rocks to mine (was 8). New item: the Emerald, a very rare gem (2% per hit on a crags rock, sells for 2,500).</li>
-<li><b>v1.58</b>: The far shore: one side of your island now reaches further out to sea, about half as much land again, left wild (see The far shore). Newcomers move in about a week apart, in story order, and the four keepers turn up one at a time.</li>
-<li><b>v1.57</b>: Wendell's isles are fuller. Hollow Crags is a quarry of iron-rich rocks with spires, ruins and a sunken grotto; Sandpiper Dunes is all sand and palms, longer, with a much bigger shipwreck and more beach finds; Old Pinewood's trees are bigger and give 1 more wood; Clover Meadow has a pond, a brook and an orchard; Lantern Bluff has a spring, a waterfall and sea stacks; Starfall has a glowing pool and garden. Isle trees now grow back. See Wendell's isles.</li>
-<li><b>v1.56</b>: Click (or tap) one thing a tree or rock dropped and you pick up everything else it dropped too, as much as fits in your bag. E and the Act button still pick up one at a time.</li>
-<li><b>v1.55</b>: Invite friends over from the Friends tab without a new link. Anyone you're already friends with who can't visit you (because only they invited you, or their one visit was used) shows under Invite a friend over, and they get a letter when you invite them.</li>
-<li><b>v1.54</b>: Fix: visiting a friend's island or going on a boat trip no longer forgets which conversations you've had with your islanders, or woodworking plans you found before you started woodworking.</li>
-<li><b>v1.53</b>: Wendell's spells are much brighter. The aurora's light now drifts across the island and the sea, with floating lights in the air, so you can see it from the normal view. Glowing paths light every path stone with a rune, run pulses of light along the paths and send up sparks. Casting either one at the star altar now has a short show.</li>
-<li><b>v1.52</b>: 54 new fish and 57 new bugs, so there are now 100 of each, every one with its own model. New homes: the sea around each of Wendell's isles, the isles themselves, Starfall Isle, the boat trip islands, and six bigger reef fish that come back to Cay Bay as the reef grows. The museum gets new tanks for them, and there are new achievement tiers for 60 and 100 kinds of fish or bugs and 150 and 200 museum displays.</li>
-<li><b>v1.51</b>: Hover over an item in your bag (or tap it on a phone) to see its name and what it sells for, and who pays the most for it. Story items say they can't be sold instead of showing 0.</li>
-<li><b>v1.50</b>: Fewer fish swimming about (at most 2 near you and 5 on the island, turning up about half as often). Broken tools aren't gone: fix them at any crafting table, enchantments and all. New woodworking plans now come from making lots of different things (making the same piece over and over no longer counts), at most one batch a day. The Carpenter's Bench now needs 16 different things made, the Master Workbench 30, and Bramble's workshop story 14.</li>
-<li><b>v1.49</b>: The Town Hall has an inside, with Clementine's desk, the Island Records and the islanders' portraits. Moving a building is much more forgiving and says what's in the way.</li>
-<li><b>v1.48</b>: Less grind. Wood sells for 20. Pieces made only from wood, branches, stone and weeds sell for about their materials plus 15% (no more fence fortunes); pieces with iron, clay, stumps or planks never sell below their materials. Shop investing costs 100,000, 200,000 and 400,000. Every passive income and stake tier pays itself back in about a month, and the Heirloom tools (50,000, the can 40,000) and the Grand Expedition Pack (200,000) cost less. Rare and legendary trip islands no longer stop at 200,000; your bag is the limit, and Stardrift Isle's star shower drops a star every 10 to 14 seconds until 100 have fallen.</li>
-<li><b>v1.47</b>: You can go inside Wendell's tower. He works at his cauldron in a round workroom full of books, candles and a scrying bowl, and a stair leads up to an observatory with a telescope. See Wendell the wizard.</li>
-<li><b>v1.44</b>: Shop rewards and fishing tips. At the top two tiers Pemberton opens his back room (one piece a week, sometimes a rare plan), Marlo adds a rare shelf and Sprig sells rare flower colors, hybrids and the glowing Lantern Bloom. Marlo and Gill tell you what's biting, more exactly as their shop and boat grow.</li>
-<li><b>v1.41</b>: Juniper's reading nook, Otis's race course, Marigold's flower show and a spring show every April, the newcomer, the Island Charter and Charter Hall, the Driftwood Festival every season, and Starfall Isle with its own bugs and Wendell's two spells. The legendary trip island Starfall Isle is now called Stardrift Isle.</li>
-<li><b>v1.40</b>: Repair, make and enchant your tools. Pippa and Wendell teach enchantments, and scrolls turn up now and then (Fennick sometimes sells one). Two bigger crafting tables, the Carpenter's Bench and the Master Workbench, with pieces of their own. Most woodworking now needs a table nearby.</li>
-<li><b>v1.39.1</b>: Darker nights. Lamps, windows, fireflies, the lighthouse beam and night fish now stand out. Menu &gt; Brightness lifts the whole scene if it's too dark for you.</li>
-<li><b>v1.39 fixes</b>: Climb the lighthouse on Lighthouse Point and meet the keeper at the top. Mossby stays on your home island. Skipper Wick's goodbye no longer says you can never come back.</li>
-<li><b>v1.39</b>: Barley's mill, Wren's trade routes, Tobin's bathhouse, Lumi's firefly glade, Hazel's wreck. Wood now sells for 30.</li>
-<li><b>v1.38</b>: Relics for Wendell's isles, Hollis's apiary, Mabel's tea room, the lighthouse and night voyages, Pemberton's forge, the Reef Hall, workshop commissions.</li>
-<li><b>v1.37</b>: The reef and Cay Bay, Bramble's workshop and Old Pinewood, thank-you stakes, helpers.</li>
-<li><b>v1.36</b>: Wendell's new isles, free moves after investing, shopkeeper chat, thinner shops.</li>
-<li><b>v1.35</b>: Group boat trips, orchard planting, slower woodworking unlocks, much more to talk about.</li>
-<li><b>v1.34</b>: Live sync between players on one island.</li>
-<li><b>v1.27</b>: Weird trip islands, surprises, small towns, rare islands, pen pals.</li>
-<li><b>v1.26</b>: Boat trips, passive income, a bigger town, the map.</li></ul>
-`},
+
 ];
+
+/* one line per page for the cards on each tab: what the page covers */
+export const SUMS = {
+  welcome: "What the game is and what to do in your first days",
+  controls: "Keys, clicks and touch controls",
+  clams: "How money works and where to sell for the best price",
+  time: "The clock, days, seasons and weather",
+  guest: "Playing as a guest versus with an account",
+  house: "Building, extending and decorating your home",
+  town: "Clementine, loans and growing the Town Hall",
+  farshore: "The wild land round the edge of your island",
+  islanders: "Who can move in, gifts and friendship",
+  favors: "Errands islanders ask for and the Island Board",
+  museum: "Donating to Professor Thistle and the museum wings",
+  shops: "Every shop, what it sells and backing shopkeepers",
+  tools: "Tool tiers, how long they last, bags and the bike",
+  enchanting: "Every enchantment, its cost and what it does",
+  garden: "Planting, watering, crops and flowers",
+  crafting: "Learning woodworking and every plan",
+  tables: "Crafting table tiers and what each adds",
+  custom: "Designing your own furniture part by part",
+  sewing: "The Sewing Machine, pixel-painted rugs and clothes",
+  cooking: "Learning to cook and every recipe",
+  style: "Changing your look and wearing clothes",
+  wendell: "How Wendell arrives and what he does in his tower",
+  isles: "All six isles, what they need and what they hold",
+  relics: "Where to find each relic and what it is for",
+  trips: "Skipper Wick's boat trips and how they work",
+  tripislands: "Every kind of island a trip can land on",
+  special: "The rarest trip islands and what makes them special",
+  fennick: "The traveling merchant who comes through the portal",
+  penpals: "Writing letters and what pen pals send back",
+  portal: "Visiting friends and having them over",
+  party: "Games to play with friends, and how to win them",
+  income: "Gill, Hollis, Russet and Quill: costs and daily returns",
+  stakes: "A share in each island-story business",
+  stories: "How dreams open and how stories move along",
+  reef: "Growing the reef and Cay Bay, step by step",
+  workshop: "Bramble's story and the workshop on Old Pinewood",
+  apiary: "Hollis's bees and Mabel's tea room",
+  lighthouse: "Lighting the lighthouse and sailing at night",
+  forge: "Pemberton's forge on Hollow Crags",
+  reefhall: "Marlo's giant tank and Thistle's living exhibit",
+  mill: "Getting the old windmill on Clover Meadow working",
+  post: "Wren's trade routes",
+  bathhouse: "Tobin's bathhouse, step by step",
+  glade: "Lumi's ring of stones and what it needs each night",
+  wreck: "Hazel's wreck and the diving bell",
+  nook: "Juniper's reading nook beside the museum",
+  race: "A bike race right round the island",
+  flowershow: "Marigold's flower show, step by step",
+  newcomer: "Helping a new islander meet people",
+  charter: "Signing the charter and the festival",
+  fish: "Every fish: where, when, rarity and price",
+  bugs: "Every bug: where, when, rarity and price",
+  fossils: "Every fossil, shell, coral and beach find",
+  fruit: "Fruit, flowers, saplings and wild plants",
+  materials: "Wood, stone, iron and every special item",
+  furniture: "Every piece of furniture and where to get it",
+  clothes: "Every piece of clothing and where to get it",
+  achievements: "Every achievement and how to earn it",
+  checklist: "Everything there is to finish",
+};

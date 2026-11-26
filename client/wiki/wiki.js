@@ -6,7 +6,7 @@ import { ACHIEVEMENTS, ACH_GROUPS } from '../js/achieve.js';
 // v1.40: these add the new tables, table pieces and Enchanting Scrolls to ITEMS/WOODWORK, and hold the enchanting rules (no DOM, no THREE)
 import { benchFor, toolBench, BENCH_IDS, NEW_BENCHES, BENCH_PIECES } from '../js/benches-core.js';
 import { ENCH, FAMILIES, WORDS, CRAFT, REPAIR, BROKEN_MULT, toolsText, describe } from '../js/enchant-core.js';
-import { PAGES, GROUPS, GUIDE_VERSION, GUIDE_UPDATED } from './guide.js';
+import { PAGES, GROUPS, SUMS } from './guide.js';
 
 const $ = s => document.querySelector(s);
 const fmt = n => (n==null || n==='') ? '' : Number(n).toLocaleString('en-US');
@@ -184,23 +184,53 @@ const DATA = {
   },
 };
 
-/* ---------- page rendering ---------- */
+/* ---------- page rendering: tabs (one per group), a page list for the open tab, a home page of cards ---------- */
 const byId = Object.fromEntries(PAGES.map(p=>[p.id,p]));
-function nav(){
-  $('#nav').innerHTML = GROUPS.map(([g,label])=>`<div class="ng"><div class="ngt">${esc(label)}</div>${PAGES.filter(p=>p.group===g).map(p=>`<a href="#${p.id}" data-id="${p.id}">${esc(p.title)}</a>`).join('')}</div>`).join('');
+const GR = Object.fromEntries(GROUPS.map(([id,name,short,blurb])=>[id,{ id, name, short, blurb, pages:PAGES.filter(p=>p.group===id) }]));
+const slug = t => t.toLowerCase().replace(/<[^>]+>/g,'').replace(/&[a-z]+;/g,'').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
+/* one line about a page for the cards: its first sentence, or the first table it builds */
+const blurb = p => { const t=plain(p.html.split(/<h3|<table|<ul|<ol/)[0]).replace(/\$\{[^}]*\}/g,'').replace(/\s+/g,' ').trim(); const m=t.match(/^.{20,150}?[.!?](\s|$)/); return m ? m[0].trim() : t.length>150 ? t.slice(0,147).replace(/\s\S*$/,'')+'...' : t || (p.data ? 'The full list, with prices.' : ''); };
+const card = p => `<a class="card" href="#${p.id}"><b>${esc(p.title)}</b><span>${esc(SUMS[p.id] || blurb(p))}</span></a>`;
+
+function tabs(cur){
+  $('#tabs').innerHTML = `<a href="#home" class="${cur==='home'?'on':''}">Home</a>` + GROUPS.map(([g,,short])=>`<a href="#tab-${g}" class="${cur===g?'on':''}" data-g="${g}">${esc(short)}</a>`).join('');
+  const on=$('#tabs a.on'); if (on) on.scrollIntoView({ block:'nearest', inline:'center' });
+}
+function side(g, id){
+  if (!g){ $('#nav').innerHTML=''; document.body.classList.add('wide'); return; }
+  document.body.classList.remove('wide');
+  $('#nav').innerHTML = `<div class="ngt">${esc(GR[g].name)}</div>` + GR[g].pages.map(p=>`<a href="#${p.id}" class="${p.id===id?'on':''}">${esc(p.title)}</a>`).join('');
+  const on=$('#nav a.on'); if (on && innerWidth<=860) on.scrollIntoView({ block:'nearest', inline:'center' });
+}
+function home(){
+  tabs('home'); side(null);
+  $('#page').innerHTML = `<h1>Driftwood Isle Wiki</h1><p class="lead">Everything in the game, by topic. Pick a tab, or search above for any fish, bug, item or character.</p>
+    <div class="quick">${[['fish','Fish'],['bugs','Bugs'],['furniture','Furniture'],['shops','Shops'],['isles','Wendell\'s isles'],['trips','Boat trips'],['stories','Island stories'],['checklist','100% checklist']].map(([id,t])=>`<a href="#${id}">${t}</a>`).join('')}</div>
+    <div class="groups">${GROUPS.map(([g,name,,b])=>`<a class="gcard" href="#tab-${g}"><b>${esc(name)}</b><span>${esc(b)}</span><small>${GR[g].pages.length} page${GR[g].pages.length>1?'s':''}</small></a>`).join('')}</div>`;
+  document.title='Driftwood Isle Wiki'; done();
+}
+function tabPage(g){
+  const G=GR[g]; tabs(g); side(g, null);
+  $('#page').innerHTML = `<div class="crumb">${esc(G.short)}</div><h1>${esc(G.name)}</h1><p class="lead">${esc(G.blurb)}.</p><div class="cards">${G.pages.map(card).join('')}</div>`;
+  document.title=`${G.name} - Driftwood Isle Wiki`; done();
 }
 function show(id){
-  const p = byId[id] || PAGES[0];
-  const gi = GROUPS.findIndex(g=>g[0]===p.group), list = PAGES, i = list.indexOf(p);
-  const prev = list[i-1], next = list[i+1];
-  let h = `<div class="crumb">${esc(GROUPS[gi][1])}</div><h1>${esc(p.title)}</h1>${p.html}`;
-  if (p.data && DATA[p.data]){ try { h += DATA[p.data](); } catch(e){ h += `<p class="muted">This table couldn't be built (${esc(e.message)}).</p>`; } }
-  h += `<div class="pn">${prev?`<a href="#${prev.id}">&larr; ${esc(prev.title)}</a>`:'<span></span>'}${next?`<a href="#${next.id}">${esc(next.title)} &rarr;</a>`:''}</div>`;
-  $('#page').innerHTML = h;
-  document.querySelectorAll('#nav a').forEach(a=>a.classList.toggle('on', a.dataset.id===p.id));
+  if (!id || id==='home') return home();
+  if (id.startsWith('tab-') && GR[id.slice(4)]) return tabPage(id.slice(4));
+  const p = byId[id]; if (!p) return home();
+  const G=GR[p.group], list=G.pages, i=list.indexOf(p), prev=list[i-1], next=list[i+1];
+  tabs(p.group); side(p.group, p.id);
+  let body = p.html;
+  if (p.data && DATA[p.data]){ try { body += DATA[p.data](); } catch(e){ body += `<p class="muted">This table couldn't be built (${esc(e.message)}).</p>`; } }
+  const hs=[]; body = body.replace(/<h3>([\s\S]*?)<\/h3>/g, (m,t)=>{ const k=slug(t)||'s'+hs.length; hs.push([k,t]); return `<h3 id="${k}">${t}</h3>`; });
+  const toc = hs.length>=2 ? `<div class="toc"><span>On this page</span>${hs.map(([k,t])=>`<a href="#${p.id}" data-jump="${k}">${t}</a>`).join('')}</div>` : '';
+  $('#page').innerHTML = `<div class="crumb"><a href="#tab-${G.id}">${esc(G.name)}</a></div><h1>${esc(p.title)}</h1>${toc}${body}`
+    + `<div class="pn">${prev?`<a href="#${prev.id}">&larr; ${esc(prev.title)}</a>`:'<span></span>'}${next?`<a href="#${next.id}">${esc(next.title)} &rarr;</a>`:''}</div>`;
   document.title = `${p.title} - Driftwood Isle Wiki`;
-  bindTables(); document.body.classList.remove('menu'); window.scrollTo(0,0);
+  bindTables(); done();
 }
+const done = () => { document.body.classList.remove('menu'); window.scrollTo(0,0); };
+document.addEventListener('click', e=>{ const a=e.target.closest('[data-jump]'); if (!a) return; e.preventDefault(); const h=document.getElementById(a.dataset.jump); if (h) window.scrollTo({ top:h.getBoundingClientRect().top+scrollY-($('#top').offsetHeight+14), behavior:'smooth' }); });
 
 function bindTables(){
   document.querySelectorAll('.chips').forEach(c=>c.onclick=e=>{ const b=e.target.closest('.chip'); if (!b) return;
@@ -236,12 +266,9 @@ function highlight(q){
   if (tr){ tr.hidden=false; tr.classList.add('hl'); tr.scrollIntoView({ block:'center' }); }
 }
 
-nav();
-$('#ver').textContent = `Game ${GUIDE_VERSION} · updated ${GUIDE_UPDATED}`;
 $('#q').addEventListener('input', e=>search(e.target.value));
 $('#results').addEventListener('click', e=>{ const a=e.target.closest('a'); if (!a) return; $('#results').hidden=true;
   if (a.dataset.hl){ e.preventDefault(); const id=a.getAttribute('href').slice(1); if (location.hash!=='#'+id) location.hash=id; else show(id); setTimeout(()=>highlight(a.dataset.hl), 30); } });
 document.addEventListener('click', e=>{ if (!e.target.closest('.search')) $('#results').hidden=true; });
-$('#menuBtn').onclick=()=>document.body.classList.toggle('menu');
 window.addEventListener('hashchange', ()=>show(location.hash.slice(1)));
 show(location.hash.slice(1));

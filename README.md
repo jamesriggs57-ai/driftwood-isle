@@ -499,3 +499,11 @@ Code: `textile-core.js` (palette, levels, options, codes, prices; no THREE, the 
 - Sewn rugs and custom furniture don't count toward discoveries, furniture achievements or the catalog.
 - Save: `S.craft.sew` (made, rugs, clothes, closet, sold, bonusDay); no new keys.
 - Test hooks (#dev): `window.__game.sew`.
+
+## v1.65: 69 new fossils (80 in all) and the full Fossil Hall
+Code: `fossils2.js` (the 69 new fossil builders and their rocks, `buildFossil2Into`), `models.js` (each fossil is built once and handed out as copies that share its shapes), `museum.js` (`FOSSIL_HALL`, the full hall layout, `buildFossilCase`, `fossilCaseSlots`, `caseFossilModel`). Hooks in main.js (search `v1.65`).
+- **Items.** 69 new fossils in content.js at rarity 1.5 to 5 and prices 300 to 4,000, so none are Very rare or Legendary and the Mammoth Tusk and Dino Egg keep their odds. A fossil you have never found is twice as likely to turn up as one you have.
+- **Full Fossil Hall.** Past 6 donated fossils the second hall becomes the full Fossil Hall, as wide as the museum: 16 big fossils on pedestals in two rows at the back, and 64 small ones in 8 themed glass cases of 8 trays. Every fossil has its own spot, and an empty pedestal or tray shows what is still out there.
+- **Loading.** Fossil models and Collection Book pictures come in a few per frame (about 8 ms) so 80 fossils don't freeze a phone.
+- **Achievements.** 25, 50 and 80 fossils, and 250 and 288 museum displays. The old 11-fossil achievement keeps its id and is now called Fossil Shelf.
+- Save: no new keys.

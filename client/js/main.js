@@ -7037,8 +7037,8 @@ function talkLibrary(H){ const v=H.voice, nm=H.name;
     openPanel('Choose a plan'); pBody.innerHTML=u.map(r=>`<div class="row"><img src="${thumb(r.id)}"><div class="grow"><div class="nm">${ITEMS[r.id].name}</div><div class="sub">Needs ${Object.entries(r.mats).map(([k,n])=>n+' '+ITEMS[k].name).join(', ')}</div></div><button class="btn" data-p="${r.plan}">Take</button></div>`).join('');
     pBody.querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>{ TX.libPlan=b.dataset.p; save(); panelClose=null; closePanel(); learnPlan(b.dataset.p); }); }); }
 let starT=20;
-const STARFALL_SHOWER=40;   // v1.48: with no haul cap, one visit's shower is 40 falling stars (plus the 22 already lying about)
-function starfallTick(dt){ if (TRIP_THEME!=='starfall' || World.inside) return; starT-=dt; if (starT>0) return; starT=25+Math.random()*30;
+const STARFALL_SHOWER=100, STAR_GAP=[10,14];   // v1.48: with no haul cap, one visit's shower is 100 falling stars (plus the 22 already lying about), one every 10 to 14 seconds, so about 20 minutes for all of them
+function starfallTick(dt){ if (TRIP_THEME!=='starfall' || World.inside) return; starT-=dt; if (starT>0) return; starT=STAR_GAP[0]+Math.random()*(STAR_GAP[1]-STAR_GAP[0]);
   if ((TX.fell||0)>=STARFALL_SHOWER){ if (!TX.showerTold){ TX.showerTold=1; save(); toast('The star shower is over.', null, '', 'Whatever fell is yours. Pick up the last of them before you sail home.'); } return; }
   const p=openSpotNear(player.pos.x, player.pos.z, 4, 14, Math.random); if (!p) return; TX.fell=(TX.fell||0)+1; save();
   const s=buildStar(), y0=26, from=new THREE.Vector3(p[0]+14, y0, p[1]-10), to=new THREE.Vector3(p[0], groundY(p[0],p[1])+0.3, p[1]); s.position.copy(from); scene.add(s); let t=0;

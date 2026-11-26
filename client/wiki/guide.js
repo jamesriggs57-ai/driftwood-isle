@@ -409,7 +409,7 @@ ${note('Relics can\'t be sold, gifted, mailed or traded. A storage chest holds t
 `},
 
 { id:'special', group:'away', title:'Rare and legendary islands', html:`
-<p>Pure luck on a 2,000-clam trip (1.5% rare, 0.5% legendary). There is no cap on what you gather; how much you can carry home is the limit. Clamstone Isle's rocks and Golden Grove's trees each pay once, and Stardrift Isle's star shower ends after 40 falling stars (on top of the 22 lying about when you land).</p>
+<p>Pure luck on a 2,000-clam trip (1.5% rare, 0.5% legendary). There is no cap on what you gather; how much you can carry home is the limit. Clamstone Isle's rocks and Golden Grove's trees each pay once, and Stardrift Isle's star shower drops a star every 10 to 14 seconds and ends after 100 falling stars (on top of the 22 lying about when you land), about 20 minutes of falling.</p>
 <table class="t"><tr><th>Island</th><th>Tier</th><th>What happens</th></tr>
 <tr><td>Clamstone Isle</td><td>Rare</td><td>Every rock pays clams</td></tr>
 <tr><td>Golden Grove</td><td>Rare</td><td>Golden sap from every shake, heartwood from every first chop</td></tr>
@@ -724,7 +724,7 @@ ${steps(['Talk to them and pick <b>Come and meet people</b>. They follow you for
 { id:'changes', group:'done', title:'What\'s changed', html:`
 <p>Recent updates, newest first.</p>
 <ul>
-<li><b>v1.48</b>: Less grind. Wood sells for 20. Pieces made only from wood, branches, stone and weeds sell for about their materials plus 15% (no more fence fortunes); pieces with iron, clay, stumps or planks never sell below their materials. Shop investing costs 100,000, 200,000 and 400,000. Every passive income and stake tier pays itself back in about a month, and the Heirloom tools (50,000, the can 40,000) and the Grand Expedition Pack (200,000) cost less. Rare and legendary trip islands no longer stop at 200,000; your bag is the limit, and Stardrift Isle's star shower ends after 40 stars.</li>
+<li><b>v1.48</b>: Less grind. Wood sells for 20. Pieces made only from wood, branches, stone and weeds sell for about their materials plus 15% (no more fence fortunes); pieces with iron, clay, stumps or planks never sell below their materials. Shop investing costs 100,000, 200,000 and 400,000. Every passive income and stake tier pays itself back in about a month, and the Heirloom tools (50,000, the can 40,000) and the Grand Expedition Pack (200,000) cost less. Rare and legendary trip islands no longer stop at 200,000; your bag is the limit, and Stardrift Isle's star shower drops a star every 10 to 14 seconds until 100 have fallen.</li>
 <li><b>v1.47</b>: You can go inside Wendell's tower. He works at his cauldron in a round workroom full of books, candles and a scrying bowl, and a stair leads up to an observatory with a telescope. See Wendell the wizard.</li>
 <li><b>v1.44</b>: Shop rewards and fishing tips. At the top two tiers Pemberton opens his back room (one piece a week, sometimes a rare plan), Marlo adds a rare shelf and Sprig sells rare flower colors, hybrids and the glowing Lantern Bloom. Marlo and Gill tell you what's biting, more exactly as their shop and boat grow.</li>
 <li><b>v1.41</b>: Juniper's reading nook, Otis's race course, Marigold's flower show and a spring show every April, the newcomer, the Island Charter and Charter Hall, the Driftwood Festival every season, and Starfall Isle with its own bugs and Wendell's two spells. The legendary trip island Starfall Isle is now called Stardrift Isle.</li>

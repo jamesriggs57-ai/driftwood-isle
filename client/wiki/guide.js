@@ -127,10 +127,21 @@ ${note('Guest mode caps your wallet at 10,000 clams. Make an account to lift it.
 <tr><td>Grand Town Hall</td><td>220,000</td><td>Museum outgrows its cottage, one shop backed</td><td>Fountain, Old Pinewood (with other conditions)</td></tr></table>
 <h3>Islanders moving in and out</h3>
 <ul><li>New islands start with <b>Pippa, Bramble and Mabel</b>.</li>
-<li>Nobody moves in while the town is a tent. After the Town Hall, a newcomer arrives every few days (at least 2 days apart, then a coin flip each day) until 10 live there. A "Moving in!" sign and boxes appear the day before.</li>
+<li>Nobody moves in while the town is a tent. After the Town Hall, newcomers come about a week apart: nobody new for 5 days after the last arrival, then a 40% chance each day, until 10 live there. A "Moving in!" sign and boxes appear the day before. A keeper turning up (see Passive income) also resets the 5 days.</li>
+<li>Who comes: Lumi, Otis, Clover and Juniper first, in that order. Then Barley, Wren, Tobin, Hazel and Marigold, in that order (anyone among them whose dream has already stirred jumps ahead), so their stories start one at a time. Anyone else after that.</li>
 <li>Ask someone to leave with "Ever think about moving?". They pack overnight. At least 5 always stay, and anyone who left won't come back for 30 days.</li>
 <li>Good pen pals from trip towns can be invited to move in (see Pen pals).</li></ul>
 <p>Clementine also runs every big building project in the island stories (the workshop, tea room, post office, bathhouse).</p>
+`},
+
+{ id:'farshore', group:'island', title:'The far shore', html:`
+<p>Since v1.45 one side of your island reaches further out to sea: about half as much land again, all on that one side. It's left wild.</p>
+<ul><li><b>Which side</b>: picked once for each island, the first time it loads after v1.45, and it never moves after that. It stays clear of the dock, the river mouth, the waterfall, Wendell's isles (raised or still to come) and their bridges. Usually that is the northwest, between where Clover Meadow and Lantern Bluff rise; on an island where some isles were already up it can be another side.</li>
+<li><b>What grows there</b>: a few low hills, grass and wild flowers, trees, fruit trees of your island's fruit, palms along its beach, and a few rocks to hit.</li>
+<li><b>What turns up</b>: bugs, dig spots, weeds and beach finds, like anywhere else on the island.</li>
+<li><b>What doesn't</b>: no paths, and nobody moves in out there. New islanders' houses, the keepers and the town's buildings all go on the old part of the island.</li>
+<li>It's still yours to use: place furniture, plant, have Wendell move a building out there, or shape the land.</li></ul>
+${note('Everything you had keeps its place. On that one side the old beach is now inland, so a few trees and things near it sit a little higher or lower than before.')}
 `},
 
 { id:'islanders', group:'island', title:'Islanders and friendship', data:'residents', html:`
@@ -329,6 +340,7 @@ ${tip('Making 10 <b>different</b> pieces is what starts Bramble\'s workshop stor
 <tr><td>4</td><td>Lantern Bluff</td><td>All three museum wings, the workshop open</td><td>Moonsap Vial</td><td>220,000, 30 planks, 8 iron, 10 clay</td><td>Cliff-top plateau, pines, good rocks, the old lighthouse</td></tr>
 <tr><td>5</td><td>Hollow Crags</td><td>All three shops at tier 2, the reef at Teeming</td><td>Amber Sliver, Living Coral Crown</td><td>350,000, 15 iron, 30 stone, 2 fossils</td><td>Mossy stone spires, ruins, iron-rich rocks; site of Pemberton's forge</td></tr>
 <tr><td>6</td><td>Starfall Isle</td><td>The Island Charter signed and Wendell's last letter</td><td>Living Coral Crown, Starglass Shard, Moonsap Vial</td><td>500,000, and one each of: plank, honey, tea cake, iron fitting, flour, bath salts</td><td>A small isle in the sky beside Hollow Crags, up a stair of glowing stones. Always night up there, with its own bugs and the star altar</td></tr></table>
+<p>Isles never rise off the far shore (see The far shore), and nothing about the far shore moves an isle that's already up.</p>
 <p>The first isle isn't mentioned at all until the island is ready for it. The day after each isle rises, Wendell writes a letter hinting which way to look for the next. Starfall Isle is different: Wendell says nothing about it until the Island Charter is signed, and his letter the day after is the hint.</p>
 <h3>Starfall Isle</h3>
 <p>The stair climbs from Hollow Crags. Up top it is always night, whatever the clock says, and three bugs live nowhere else: the Sky Drifter, the Comet Beetle and the rare Nebula Moth. They're in the bug catalog under "On Starfall Isle".</p>
@@ -469,6 +481,7 @@ ${note('Relics can\'t be sold, gifted, mailed or traded. A storage chest holds t
 <tr><td>Hollis the beekeeper, in a meadow</td><td>Town Hall and 5 planted flowers (or 45 things discovered)</td><td>Beehive 20,000 (2 honey); Three Hives 90,000 (5); Apiary 300,000 (9); Grand Apiary 500,000 (14) after his story</td></tr>
 <tr><td>Russet the orchard keeper</td><td>Town Hall, 10 days on the island, a fruit tree</td><td>Fruit Ladder 20,000 (4 fruit); Pony Cart 100,000 (8); Cider Shed 300,000 (14)</td></tr>
 <tr><td>Quill the bookkeeper, by the general store</td><td>One shop backed</td><td>Ledger 25,000 (800 clams per shop backed); Counting House 120,000 (2,000); Trading Office 400,000 (4,500)</td></tr></table>
+<p>Keepers turn up one at a time: at least 3 days after anyone new arrived (an islander or another keeper), and never while someone is about to move in. If two are ready, the second waits.</p>
 <p>More flowers near Hollis's hives give a little more honey. Hollis, Russet and Quill offer to move their spot for free after you fund or upgrade them.</p>
 `},
 
@@ -724,6 +737,7 @@ ${steps(['Talk to them and pick <b>Come and meet people</b>. They follow you for
 <p>Recent updates, newest first.</p>
 <ul>
 <li><b>v1.47</b>: You can go inside Wendell's tower. He works at his cauldron in a round workroom full of books, candles and a scrying bowl, and a stair leads up to an observatory with a telescope. See Wendell the wizard.</li>
+<li><b>v1.45</b>: The far shore: one side of your island now reaches further out to sea, about half as much land again, left wild (see The far shore). Newcomers move in about a week apart, in story order, and the four keepers turn up one at a time.</li>
 <li><b>v1.44</b>: Shop rewards and fishing tips. At the top two tiers Pemberton opens his back room (one piece a week, sometimes a rare plan), Marlo adds a rare shelf and Sprig sells rare flower colors, hybrids and the glowing Lantern Bloom. Marlo and Gill tell you what's biting, more exactly as their shop and boat grow.</li>
 <li><b>v1.41</b>: Juniper's reading nook, Otis's race course, Marigold's flower show and a spring show every April, the newcomer, the Island Charter and Charter Hall, the Driftwood Festival every season, and Starfall Isle with its own bugs and Wendell's two spells. The legendary trip island Starfall Isle is now called Stardrift Isle.</li>
 <li><b>v1.40</b>: Repair, make and enchant your tools. Pippa and Wendell teach enchantments, and scrolls turn up now and then (Fennick sometimes sells one). Two bigger crafting tables, the Carpenter's Bench and the Master Workbench, with pieces of their own. Most woodworking now needs a table nearby.</li>

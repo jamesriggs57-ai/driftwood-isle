@@ -26,7 +26,7 @@ export const FRUIT_REGROW_DAYS = 3;   // a picked tree grows fruit again after t
 export const NATIVE_FRUITS = ['apple','pear','peach','orange','plum','cherry','lemon'];
 
 /* ---------- Materials ---------- */
-def('wood',     {name:'Wood',           kind:'material', price:30,  model:{t:'log'}});   // v1.39: halved (was 60); regrowing pines made clear-cutting pay too well
+def('wood',     {name:'Wood',           kind:'material', price:20,  model:{t:'log'}});   // v1.39: halved (was 60); v1.48: 20 (was 30), so fish and bugs clearly out-earn chopping
 def('softwood', {name:'Driftwood Branch',kind:'material', price:20, model:{t:'branch'}});
 def('stone',    {name:'Stone',          kind:'material', price:75,  model:{t:'stone'}});
 def('clay',     {name:'Clay',           kind:'material', price:100, model:{t:'clay'}});
@@ -209,6 +209,154 @@ bug('starlantern','Starlantern Beetle',5200,'glade',range(5,9),[21,3],0.6,[20,36
 bug('stardrifter','Sky Drifter',1800,'starfall',ALL,null,3,[30,48],0.0001,{c:0x2a2a5a,c2:0xd8e4ff,w:'moth',glow:true});
 bug('cometbeetle','Comet Beetle',3600,'starfall',ALL,null,1.6,[18,30],0.0001,{c:0x1a1a3a,c2:0x9ad8ff,w:'beetle',glow:true});
 bug('nebulamoth','Nebula Moth',7200,'starfall',ALL,null,0.5,[60,90],0.00004,{c:0x5a3a8a,c2:0xf0a8ff,w:'moth',glow:true});
+
+/* ---------- v1.52 wave 1: 54 more fish and 57 more bugs ----------
+   Every one has its own model (critters2.js, picked by model.x). New places they can live:
+   where:'isle' with isle:<kind> (water:'sea' for fish, move:<air|flower|trunk|ground|beach|pond> for bugs) = only on or around that isle.
+   where:'trip' with trip:[themes] (water:<sea|river|pond|any> or move) = only on those trip islands.
+   Bay fish with reef:N only show once the Cay Bay reef has reached stage N (they are not coral fish, so Reef Hall doesn't wait for them). */
+export const ISLE_NAMES = { meadow:'Clover Meadow', pines:'Old Pinewood', dunes:'Sandpiper Dunes', bluff:'Lantern Bluff', crags:'Hollow Crags', starfall:'Starfall Isle' };
+const TRIP_NAMES = { frost:'Frost Isle', moonlit:'Moonlit Isle', castaway:'Castaway Isle', coral:'Coral Atoll', fossil:'Fossil Bluffs', shipwreck:'Shipwreck Cove', bloom:'Bloom Isle', orchard:'Orchard Isle' };
+const WHERE_TEXT = { bay:'Cay Bay', sea:'Sea', river:'River', pond:'Pond', air:'Flying', flower:'On flowers', trunk:'On tree trunks', ground:'On the ground', beach:'On the beach', glade:'In Lumi\'s glade', starfall:'On Starfall Isle' };
+const MOVE_TEXT = { air:'flying', flower:'on flowers', trunk:'on tree trunks', ground:'on the ground', beach:'on the beach', pond:'by the water' };
+export function whereText(it){
+  if (!it) return '';
+  if (it.where==='isle'){ const n=ISLE_NAMES[it.isle]||'an isle'; return it.kind==='fish' ? 'Sea off '+n : n+', '+(MOVE_TEXT[it.move]||'around'); }
+  if (it.where==='trip'){ const n=(it.trip||[]).map(t=>TRIP_NAMES[t]||t).join(' or ')+' trips'; return it.kind==='fish' ? n+' ('+({ sea:'sea', river:'river', pond:'pond' }[it.water]||'any water')+')' : n+', '+(MOVE_TEXT[it.move]||'around'); }
+  if (it.where==='bay' && it.reef) return 'Cay Bay, once the reef is back';
+  return WHERE_TEXT[it.where]||it.where; }
+const isleFish = (isle, f) => Object.assign(f, { isle, water:'sea' });
+const tripFish = (trip, water, f) => Object.assign(f, { trip, water });
+const reefFish = (reef, f) => Object.assign(f, { reef });
+const isleBug = (isle, move, b) => Object.assign(b, { isle, move });
+const tripBug = (trip, move, b) => Object.assign(b, { trip, move });
+const X = (c, c2, l, o={}) => Object.assign({ x:1, c, c2, l }, o);
+// Sea
+fish('needlefish','Needlefish',180,'sea','S',range(5,10),[6,18],5,[30,60],0.002,X(0x5a92b0,0xeaf4f8,1.0));
+fish('gardeneel','Garden Eel',260,'sea','S',range(4,10),[7,18],4.5,[30,50],0.002,X(0xf0e6d0,0xe8dcc0,0.7));
+fish('sole','Fringed Sole',300,'sea','M',ALL,null,4,[20,40],0.011,X(0x8a7556,0xf2ead8,0.9));
+fish('flyingfish','Glider Fish',340,'sea','S',range(5,9),[8,18],4,[18,30],0.01,X(0x2f5f9a,0xe2ecf6,0.8));
+fish('butterflyfish','Eyespot Butterflyfish',380,'sea','S',range(5,10),[7,17],4,[10,18],0.02,X(0xf6d24a,0xffffff,0.7));
+fish('searobin','Sea Robin',450,'sea','M',range(3,8),null,3.2,[20,40],0.012,X(0xb8543a,0xf6dcc8,0.9));
+fish('boxfish','Yellow Boxfish',600,'sea','S',range(5,10),[8,17],2.2,[8,18],0.04,X(0xf2cf28,0x2a2a2a,0.6));
+fish('cuttlefish','Cuttlefish',750,'sea','M',ALL,[6,20],2.4,[15,40],0.02,X(0xa8806a,0xf0e2d6,0.9));
+fish('lionfish','Ruffle Lionfish',1100,'sea','M',range(6,11),[16,6],1.6,[20,38],0.015,X(0xc8442e,0xfff2e6,0.9));
+fish('mantisshrimp','Peacock Mantis Shrimp',1200,'sea','S',range(4,10),[7,17],1.2,[8,18],0.03,X(0x2fae7a,0xf0603a,0.6));
+fish('angler','Deep Angler',1400,'sea','M',[11,12,1,2,3],[20,4],0.9,[20,50],0.03,X(0x3a2e2a,0x6a5048,0.8));
+fish('swordfish','Broadbill Swordfish',2800,'sea','XL',range(6,9),[5,18],0.8,[150,300],0.007,X(0x2c4a6a,0xe6ecf2,1.7));
+fish('frilledshark','Frilled Shark',2600,'sea','L',[12,1,2,3],[20,5],0.85,[100,200],0.004,X(0x5a4a44,0x8a786e,1.5));
+fish('oarfish','Ribbon Oarfish',5000,'sea','XL',[12,1,2],[21,4],0.35,[300,600],0.0008,X(0xd8dee6,0xe8384a,1.9));
+fish('hammerhead','Hammerhead',6500,'sea','XL',range(7,10),[17,5],0.3,[200,400],0.006,X(0x6e7c86,0xeef2f4,1.8));
+// River
+fish('sculpin','Bullhead Sculpin',180,'river','S',ALL,null,5,[6,15],0.015,X(0x6a5e40,0xd8ccaa,0.7));
+fish('hatchetfish','Hatchetfish',360,'river','S',ALL,[17,5],4,[3,6],0.02,X(0xb8c2c8,0xf4f8fa,0.5));
+fish('mudskipper','Mudskipper',420,'river','S',range(5,9),[8,17],3.5,[8,18],0.012,X(0x7a6a50,0xd8cfb8,0.7));
+fish('lamprey','Brook Lamprey',500,'river','M',[3,4,5,6],[19,5],3,[15,30],0.002,X(0x6a6052,0xc8beaa,1.0));
+fish('piranha','Red-belly Piranha',700,'river','S',range(6,9),[9,17],2.2,[15,30],0.03,X(0x7a848a,0xd8402a,0.7));
+fish('grayling','Sail Grayling',900,'river','M',[3,4,5,9,10],[5,10],1.8,[25,45],0.012,X(0x7a8494,0xe6e2ea,1.0));
+fish('paddlefish','Paddlefish',1600,'river','L',range(4,7),null,0.9,[80,150],0.008,X(0x5c6a74,0xe2e6e8,1.5));
+fish('arowana','Jade Arowana',2400,'river','L',range(6,9),[8,16],0.8,[60,90],0.01,X(0x4a9a6a,0xdff0d8,1.4));
+fish('sturgeon','Old Sturgeon',4200,'river','XL',[4,5,6,9,10],[4,9],0.5,[100,250],0.009,X(0x5a5448,0xd8d2c0,1.7));
+// Pond
+fish('frog','Pond Frog',150,'pond','S',range(4,9),null,5.5,[5,10],0.06,X(0x5a9a3a,0xe8e8b0,0.5));
+fish('stickleback','Stickleback',160,'pond','S',range(3,10),null,5,[4,8],0.01,X(0x6a7a4a,0xd84a3a,0.5));
+fish('glassfish','Glass Perchlet',500,'pond','S',ALL,[19,5],3,[4,8],0.012,X(0xd8e8e0,0xf8fcff,0.55));
+fish('angelfish','Pond Angelfish',650,'pond','S',range(4,10),[8,17],2.4,[8,15],0.02,X(0xe8e4d8,0x2a2a2a,0.6));
+fish('betta','Veiltail Betta',800,'pond','S',ALL,[9,18],2,[5,8],0.02,X(0x2a3ac8,0xd8304a,0.55));
+fish('elephantnose','Elephantnose',1100,'pond','S',range(5,9),[18,4],1.5,[15,25],0.01,X(0x3a3036,0xd8d0c8,0.75));
+fish('lungfish','Lungfish',1200,'pond','L',range(6,9),[16,8],1.3,[60,120],0.008,X(0x6a6248,0xc8b890,1.4));
+fish('axolotl','Axolotl',2600,'pond','S',[12,1,2,3],[18,6],0.6,[15,25],0.02,X(0xf4c4c8,0xd8506a,0.7));
+// Cay Bay (once the reef has grown back far enough)
+reefFish(2, fish('triggerfish','Picasso Triggerfish',1300,'bay','S',ALL,[7,18],4,[15,25],0.02,X(0xeadfc8,0x2a5ab8,0.7)));
+reefFish(2, fish('mandarin','Mandarin Dragonet',2600,'bay','S',ALL,[17,22],2,[5,8],0.02,X(0x2a6ad8,0xf0802a,0.5)));
+reefFish(3, fish('lobster','Spiny Lobster',1500,'bay','M',ALL,[18,6],3,[25,45],0.02,X(0xb84a2a,0xf2c890,0.9)));
+reefFish(3, fish('pinecone','Pinecone Fish',1900,'bay','S',ALL,[19,5],2.5,[8,14],0.025,X(0xf0c040,0x6a3a10,0.6)));
+reefFish(4, fish('seadragon','Leafy Seadragon',9000,'bay','S',ALL,null,0.7,[20,35],0.004,X(0xc8a040,0x8aa84a,0.8)));
+reefFish(6, fish('whaleshark','Whale Shark',40000,'bay','XL',[5,6,7,8],null,0.25,[400,1000],0.003,X(0x3e5468,0xeef2f4,2.0)));
+// The isles: only in the sea right around that isle
+isleFish('meadow', fish('batfish','Red-lipped Batfish',1400,'isle','S',range(4,10),[7,18],1.5,[15,25],0.03,X(0xa89a86,0xe0343a,0.6)));
+isleFish('dunes', fish('moray','Spotted Moray',1300,'isle','L',ALL,[17,7],2,[60,120],0.003,X(0xe8dca8,0xd8c890,1.5)));
+isleFish('dunes', fish('stargazer','Stargazer',1600,'isle','M',range(4,10),[19,5],1.4,[20,35],0.02,X(0x8a8a7a,0xf0ece0,0.8)));
+isleFish('pines', fish('ratfish','Ghost Ratfish',1800,'isle','M',[9,10,11,12,1,2,3],[18,6],1.2,[40,80],0.006,X(0xa8a4b4,0xe8e4f0,1.2)));
+isleFish('bluff', fish('lumpsucker','Lumpsucker',700,'isle','S',[11,12,1,2,3,4],null,3,[10,20],0.05,X(0x6a9a5a,0xd8e0a0,0.6)));
+isleFish('bluff', fish('wolffish','Wolffish',2200,'isle','L',[10,11,12,1,2,3],null,1.2,[60,120],0.009,X(0x6a7078,0xc8ccd0,1.4)));
+isleFish('crags', fish('blindfish','Hollow Blindfish',900,'isle','S',ALL,null,3,[6,12],0.012,X(0xf4c8c4,0xfff0ee,0.6)));
+isleFish('crags', fish('coelacanth','Coelacanth',9500,'isle','XL',ALL,[20,4],0.3,[100,180],0.012,X(0x2a3a5a,0x8a9ab8,1.7)));
+// Trip islands
+tripFish(['castaway'],'any', fish('foureyes','Four-eyed Fish',1200,'trip','S',ALL,[7,18],3,[15,30],0.01,X(0xa8a278,0xece8d0,0.8)));
+tripFish(['coral'],'sea', fish('unicornfish','Unicornfish',1500,'trip','M',ALL,[6,18],3,[30,50],0.016,X(0x7a8a9a,0xd8e0e8,1.0)));
+tripFish(['frost'],'any', fish('icefish','Icefish',1700,'trip','M',ALL,null,2.5,[25,50],0.008,X(0xe8eef2,0xffffff,1.1)));
+tripFish(['fossil'],'any', fish('bichir','Dragon Bichir',2000,'trip','M',ALL,null,2,[30,60],0.008,X(0x6a6a3a,0xd8d0a0,1.2)));
+tripFish(['moonlit'],'sea', fish('viperfish','Viperfish',2400,'trip','S',ALL,null,1.6,[20,35],0.006,X(0x2a3448,0x7a8aa8,0.8)));
+tripFish(['coral'],'sea', fish('humphead','Humphead Wrasse',3800,'trip','XL',ALL,[7,17],1,[100,200],0.016,X(0x3a8a8a,0x9ad0b0,1.5)));
+tripFish(['moonlit'],'sea', fish('gulper','Gulper Eel',6000,'trip','L',ALL,null,0.5,[60,100],0.001,X(0x1a1a24,0x3a3448,1.4)));
+tripFish(['shipwreck'],'sea', fish('barreleye','Barreleye',7000,'trip','S',ALL,null,0.4,[10,16],0.01,X(0x3a4048,0x9aa0a8,0.7)));
+export const BAY_MORE = ['triggerfish','mandarin','lobster','pinecone','seadragon','whaleshark'];
+
+// Flying
+bug('cranefly','Crane Fly',130,'air',range(4,10),[16,22],5.5,[15,30],0.00001,X(0x8a7a5a,0xd8d0c0,0.8,{w2:'cranefly'}));
+bug('skipper','Skipper',140,'air',range(5,9),[8,18],5.5,[12,20],0.00003,X(0xd89030,0x5a3a18,0.6,{w2:'skipper'}));
+bug('hoverfly','Hoverfly',180,'air',range(4,9),[9,17],5,[10,14],0.00004,X(0xf0c030,0x1a1a1a,0.6,{w2:'hoverfly'}));
+bug('mayfly','Mayfly',200,'air',[5,6],[16,21],4.5,[10,25],0.00001,X(0xe8d8a8,0xf8f4e8,0.7,{w2:'mayfly'}));
+bug('comma','Comma Butterfly',240,'air',range(3,10),[8,17],4,[25,35],0.00002,X(0xd87a2a,0x3a2210,0.8,{w2:'comma'}));
+bug('lacewing','Green Lacewing',260,'air',range(5,9),[19,1],4,[10,20],0.00001,X(0x7ad85a,0xd8ffd0,0.7,{w2:'lacewing'}));
+bug('hairstreak','Hairstreak',300,'air',range(5,8),[9,16],3.5,[15,25],0.00002,X(0x8a96a8,0xf06a2a,0.6,{w2:'hairstreak'}));
+bug('paperwasp','Paper Wasp',380,'air',range(5,9),[9,17],3.2,[15,25],0.00004,X(0x3a2a1a,0xf0c020,0.7,{w2:'paperwasp'}));
+bug('longwing','Zebra Longwing',420,'air',range(5,10),[9,17],3,[35,50],0.00002,X(0x1a1a1a,0xfff2b0,0.9,{w2:'longwing'}));
+bug('rosymaple','Rosy Maple Moth',450,'air',range(5,8),[20,3],2.8,[30,45],0.00004,X(0xf08ab0,0xf8e060,0.8,{w2:'rosymaple'}));
+bug('robberfly','Robber Fly',550,'air',range(6,9),[9,17],2.4,[20,35],0.00004,X(0x5a4a3a,0xd8c8a0,0.8,{w2:'robberfly'}));
+bug('glasswing','Glasswing Butterfly',700,'air',range(4,9),[8,16],2,[25,35],0.00002,X(0x3a2418,0xf07a3a,0.8,{w2:'glasswing'}));
+bug('hawkmoth','Hummingbird Hawk Moth',1400,'air',range(6,9),[8,17],1.2,[40,50],0.0001,X(0x7a6a5a,0xe8803a,0.8,{w2:'hawkmoth'}));
+bug('morpho','Blue Morpho',3000,'air',[6,7,8],[9,15],0.5,[100,140],0.00002,X(0x2a7af0,0x1a1410,1.2,{w2:'morpho'}));
+// On flowers
+bug('weevil','Acorn Weevil',250,'flower',range(5,10),[9,17],4,[8,14],0.0002,X(0x8a5a30,0xc89a60,0.6,{w2:'weevil'}));
+bug('crabspider','Crab Spider',330,'flower',range(4,9),[8,17],3.6,[6,10],0.0002,X(0xf8f0a0,0xe85a7a,0.6,{w2:'crabspider'}));
+bug('chafer','Flower Chafer',400,'flower',range(5,8),[9,17],3,[15,25],0.0002,X(0x3ab05a,0xd8c040,0.7,{w2:'chafer'}));
+bug('assassin','Assassin Bug',520,'flower',range(6,10),[9,17],2.5,[15,25],0.00005,X(0x3a2a20,0xe84a2a,0.7,{w2:'assassin'}));
+bug('treehopper','Thorn Treehopper',900,'flower',range(6,9),[8,17],1.8,[8,12],0.0002,X(0x7a9a3a,0xe8d04a,0.6,{w2:'treehopper'}));
+bug('tortoisebeetle','Golden Tortoise Beetle',1600,'flower',range(6,8),[9,15],1,[6,10],0.0002,X(0xf0c030,0xfff2c0,0.6,{w2:'tortoisebeetle'}));
+// On tree trunks
+bug('jewelbeetle','Jewel Beetle',900,'trunk',range(6,9),[9,16],1.8,[25,40],0.0001,X(0x2aa080,0xd83a8a,0.8,{w2:'jewelbeetle'}));
+bug('treesnail','Candy Tree Snail',1100,'trunk',ALL,null,1.5,[30,45],0.0004,X(0xf8e8c0,0xe85a8a,0.8,{w2:'treesnail'}),'rain');
+bug('leafinsect','Leaf Insect',1300,'trunk',range(6,10),null,1.2,[60,90],0.00003,X(0x6ab04a,0xa8d870,0.9,{w2:'leafinsect'}));
+// On the ground
+bug('earwig','Earwig',150,'ground',ALL,[19,6],5,[10,20],0.0001,X(0x6a3a20,0xc8904a,0.7,{w2:'earwig'}));
+bug('leafcutter','Leafcutter Ant',180,'ground',range(4,10),[8,18],5.2,[8,14],0.0001,X(0x8a3a1a,0x6ab04a,0.6,{w2:'leafcutter'}));
+bug('dungbeetle','Dung Beetle',220,'ground',range(5,9),[8,18],4.5,[15,25],0.0002,X(0x1a1a1a,0x7a5a3a,0.7,{w2:'dungbeetle'}));
+bug('centipede','Stone Centipede',280,'ground',ALL,[18,6],3.8,[30,60],0.00005,X(0xa84a1a,0xf0a050,0.9,{w2:'centipede'}));
+bug('tigerbeetle','Tiger Beetle',350,'ground',range(4,9),[9,16],3.4,[10,16],0.0001,X(0x2ab05a,0xfff0d0,0.7,{w2:'tigerbeetle'}));
+bug('molecricket','Mole Cricket',450,'ground',range(4,8),[19,4],2.8,[30,45],0.0001,X(0x7a5a3a,0xc8a070,0.8,{w2:'molecricket'}));
+bug('millipede','Giant Millipede',600,'ground',range(4,10),null,2.5,[80,150],0.0001,X(0x3a2a24,0xe0602a,1.0,{w2:'millipede'}),'rain');
+bug('velvetant','Velvet Ant',750,'ground',range(6,9),[10,17],1.9,[15,25],0.0001,X(0xe8402a,0x1a1a1a,0.6,{w2:'velvetant'}));
+bug('peacockspider','Peacock Spider',1800,'ground',range(4,7),[9,16],0.9,[4,6],0.0002,X(0x2a2a3a,0x3ad0d8,0.6,{w2:'peacockspider'}));
+bug('tarantula','Red-knee Tarantula',3600,'ground',range(6,10),[20,4],0.55,[60,90],0.0002,X(0x2a2420,0xe8602a,1.0,{w2:'tarantula'}));
+// Beach and pond
+bug('horseshoe','Horseshoe Crab',900,'beach',range(5,8),[19,5],1.7,[150,500],0.0002,X(0x6a5a3a,0xb8a070,1.2,{w2:'horseshoe'}));
+bug('divingbeetle','Diving Beetle',420,'pond',range(4,10),null,3,[25,35],0.0002,X(0x2a3020,0xd8b040,0.7,{w2:'divingbeetle'}));
+bug('waterscorpion','Water Scorpion',650,'pond',range(5,9),[9,18],2.2,[30,45],0.00005,X(0x6a5a3a,0x9a8a60,0.9,{w2:'waterscorpion'}));
+// The isles
+isleBug('meadow','flower', bug('spittlebug','Spittlebug',300,'isle',range(4,7),null,4,[5,10],0.0002,X(0x6aa83a,0xf8f8f0,0.6,{w2:'spittlebug'})));
+isleBug('meadow','air', bug('cuckoowasp','Cuckoo Wasp',1500,'isle',range(5,8),[9,16],1.3,[8,12],0.0001,X(0x2ad0b0,0xd83a8a,0.6,{w2:'cuckoowasp'})));
+isleBug('pines','trunk', bug('longhorn','Longhorn Beetle',1100,'isle',range(6,9),[18,4],1.6,[30,50],0.0001,X(0x1a1a20,0xe8e8f0,0.9,{w2:'longhorn'})));
+isleBug('pines','trunk', bug('mosskatydid','Moss Katydid',1800,'isle',ALL,[19,5],0.9,[40,60],0.00005,X(0x5a7a3a,0x9ac06a,0.9,{w2:'mosskatydid'})));
+isleBug('dunes','ground', bug('antlion','Antlion',700,'isle',ALL,null,2.5,[8,15],0.0002,X(0x9a8460,0xd8c8a0,0.6,{w2:'antlion'})));
+isleBug('dunes','beach', bug('molecrab','Mole Crab',400,'isle',range(5,10),null,3.6,[20,35],0.0003,X(0xd8ccb0,0xf8f0e0,0.7,{w2:'molecrab'})));
+isleBug('bluff','air', bug('tigermoth','Garden Tiger Moth',650,'isle',range(6,8),[20,4],2.5,[45,65],0.00004,X(0x6a4a2a,0xf07a2a,0.9,{w2:'tigermoth'})));
+isleBug('bluff','trunk', bug('lanternfly','Lanternfly',1600,'isle',range(7,10),[19,4],1.3,[40,70],0.00005,X(0x6a7a4a,0xe8302a,0.9,{w2:'lanternfly', glow:true})));
+isleBug('crags','ground', bug('cavecricket','Cave Cricket',500,'isle',ALL,null,3.2,[15,30],0.00008,X(0xb8a080,0xe8dcc8,0.8,{w2:'cavecricket'})));
+isleBug('crags','ground', bug('scorpion','Rock Scorpion',1400,'isle',ALL,[19,5],1.4,[40,80],0.0002,X(0x5a4a30,0xa8905a,0.9,{w2:'scorpion'})));
+isleBug('crags','trunk', bug('atlasbeetle','Atlas Beetle',4800,'isle',range(6,9),[19,4],0.5,[60,110],0.0001,X(0x2a3a20,0x8a9a50,1.1,{w2:'atlasbeetle'})));
+bug('plumemoth','Star Plume Moth',2400,'starfall',ALL,null,2,[20,30],0.00002,X(0xe8e4ff,0x9ad8ff,0.8,{w2:'plumemoth', glow:true}));
+bug('ribbonmoth','Ribbontail Moth',4200,'starfall',ALL,null,1,[60,90],0.00003,X(0x3a2a6a,0xffd88a,1.0,{w2:'ribbonmoth', glow:true}));
+// Trip islands
+tripBug(['orchard'],'flower', bug('shieldbug','Shield Bug',500,'trip',ALL,[8,18],4,[10,15],0.0002,X(0x5a8a3a,0xe8c03a,0.6,{w2:'shieldbug'})));
+tripBug(['bloom'],'air', bug('beefly','Bee Fly',700,'trip',ALL,[8,17],3.5,[8,12],0.0001,X(0xd8b070,0x3a2a1a,0.6,{w2:'beefly'})));
+tripBug(['castaway'],'trunk', bug('giraffeweevil','Giraffe Weevil',1200,'trip',ALL,[8,18],2.2,[20,25],0.0001,X(0x1a1a1a,0xd8302a,0.8,{w2:'giraffeweevil'})));
+tripBug(['fossil'],'air', bug('scorpionfly','Scorpionfly',1300,'trip',ALL,[8,18],2.5,[15,25],0.00003,X(0xf0b030,0x3a2a1a,0.7,{w2:'scorpionfly'})));
+tripBug(['moonlit'],'ground', bug('glowworm','Moonlit Glow-worm',1500,'trip',ALL,null,2.5,[15,25],0.0001,X(0x3a3428,0xd8ff7a,0.6,{w2:'glowworm', glow:true})));
+tripBug(['frost'],'ground', bug('icecrawler','Ice Crawler',1900,'trip',ALL,null,2,[20,30],0.00005,X(0xe8e8d8,0xa8c8e0,0.7,{w2:'icecrawler'})));
+tripBug(['castaway'],'air', bug('atlasmoth','Atlas Moth',2800,'trip',ALL,[19,5],1,[200,250],0.00003,X(0xa8402a,0xf0d8b0,1.4,{w2:'atlasmoth'})));
+tripBug(['castaway'],'air', bug('birdwing','Golden Birdwing',6500,'trip',ALL,[8,16],0.45,[150,200],0.00002,X(0x1a1a14,0xf8d030,1.4,{w2:'birdwing'})));
 
 /* ---------- Plants ----------
    ptype: flower | shrub | tree.  days: days to fully grow.  bloom: months a shrub flowers. */
@@ -435,26 +583,26 @@ export const TOOLS = {
     { name:'Flimsy Net',   cost:400,   uses:30,  bonus:0 },
     { name:'Sturdy Net',   cost:2500,  uses:90,  bonus:0.12, req:{ tool:0, desc:'Own a Flimsy Net first' } },
     { name:'Golden Net',   cost:20000, uses:500, bonus:0.25, req:{ tool:1, stat:40, desc:'Catch 40 bugs' } },
-    { name:'Heirloom Net', cost:120000, uses:0, forever:true, bonus:0.25, req:{ tool:2, stat:120, desc:'Own a Golden Net and catch 120 bugs' } } ] },
+    { name:'Heirloom Net', cost:50000, uses:0, forever:true, bonus:0.25, req:{ tool:2, stat:120, desc:'Own a Golden Net and catch 120 bugs' } } ] },
   rod:    { name:'Fishing Rod',  does:'Catch fish', stat:'fish', tiers:[
     { name:'Flimsy Rod',   cost:400,   uses:30,  bonus:0 },
     { name:'Sturdy Rod',   cost:2500,  uses:90,  bonus:0.12, req:{ tool:0, desc:'Own a Flimsy Rod first' } },
     { name:'Golden Rod',   cost:20000, uses:500, bonus:0.25, req:{ tool:1, stat:40, desc:'Catch 40 fish' } },
-    { name:'Heirloom Rod', cost:120000, uses:0, forever:true, bonus:0.25, req:{ tool:2, stat:120, desc:'Own a Golden Rod and catch 120 fish' } } ] },
+    { name:'Heirloom Rod', cost:50000, uses:0, forever:true, bonus:0.25, req:{ tool:2, stat:120, desc:'Own a Golden Rod and catch 120 fish' } } ] },
   shovel: { name:'Shovel',       does:'Dig fossils, plant saplings, dig up plants and stumps', stat:'dug', tiers:[
     { name:'Flimsy Shovel',cost:500,   uses:30,  bonus:0 },
     { name:'Sturdy Shovel',cost:2500,  uses:90,  bonus:0.15, req:{ tool:0, desc:'Own a Flimsy Shovel first' } },
     { name:'Golden Shovel',cost:20000, uses:500, bonus:0.3, req:{ tool:1, stat:30, desc:'Dig up 30 things' } },
-    { name:'Heirloom Shovel',cost:120000, uses:0, forever:true, bonus:0.3, req:{ tool:2, stat:100, desc:'Own a Golden Shovel and dig up 100 things' } } ] },
+    { name:'Heirloom Shovel',cost:50000, uses:0, forever:true, bonus:0.3, req:{ tool:2, stat:100, desc:'Own a Golden Shovel and dig up 100 things' } } ] },
   axe:    { name:'Axe',          does:'Chop wood. Sturdy and Golden axes can cut trees down', stat:'chopped', tiers:[
     { name:'Flimsy Axe',   cost:600,   uses:30,  bonus:0, nofell:true },
     { name:'Sturdy Axe',   cost:3000,  uses:90,  bonus:0, req:{ tool:0, desc:'Own a Flimsy Axe first' } },
     { name:'Golden Axe',   cost:20000, uses:500, bonus:1, req:{ tool:1, stat:60, desc:'Chop 60 times' } },
-    { name:'Heirloom Axe', cost:120000, uses:0, forever:true, bonus:1, req:{ tool:2, stat:180, desc:'Own a Golden Axe and chop 180 times' } } ] },
+    { name:'Heirloom Axe', cost:50000, uses:0, forever:true, bonus:1, req:{ tool:2, stat:180, desc:'Own a Golden Axe and chop 180 times' } } ] },
   can:    { name:'Watering Can', does:'Water plants so they grow faster', stat:'watered', tiers:[
     { name:'Watering Can', cost:500,   uses:40,  bonus:0 },
     { name:'Golden Can',   cost:20000, uses:500, bonus:1, req:{ tool:0, stat:40, desc:'Water 40 times' } },
-    { name:'Heirloom Can', cost:90000, uses:0, forever:true, bonus:1, req:{ tool:1, stat:120, desc:'Own a Golden Can and water 120 times' } } ] },
+    { name:'Heirloom Can', cost:40000, uses:0, forever:true, bonus:1, req:{ tool:1, stat:120, desc:'Own a Golden Can and water 120 times' } } ] },
 };
 
 /* ---------- Backpacks: each one is harder to get ---------- */
@@ -463,7 +611,7 @@ export const BACKPACKS = [
   { name:'Canvas Backpack',       slots:30, cost:5000 },
   { name:'Explorer Pack',         slots:40, cost:30000,  req:{ caught:25, desc:'Catch 25 fish or bugs' } },
   { name:'Voyager Pack',          slots:50, cost:100000,  req:{ caught:80, discovered:60, desc:'Catch 80 critters and discover 60 items' } },
-  { name:'Grand Expedition Pack', slots:60, cost:300000, req:{ caught:200, discovered:110, bestFriends:3, desc:'Catch 200 critters, discover 110 items and become best friends with 3 islanders' } },
+  { name:'Grand Expedition Pack', slots:60, cost:200000, req:{ caught:200, discovered:110, bestFriends:3, desc:'Catch 200 critters, discover 110 items and become best friends with 3 islanders' } },
 ];
 
 /* ---------- Home upgrades (pay into the Island Board at your own pace). room = interior size [w,d] ---------- */
@@ -654,7 +802,7 @@ export const SHOPS = {
     perks:['', 'Bugs and flowers sell for 130%, saplings and moth lanterns', 'Bugs and flowers sell for 140%, rose arches', 'Bugs and flowers sell for 150%, garden fountains'] },
 };
 // Investing opens once you have a real house and you've done this much trade at the shop (buying plus selling).
-export const INVEST = { cost:[0,100000,300000,800000], trade:50000 };
+export const INVEST = { cost:[0,100000,200000,400000], trade:50000 };   // v1.48: was 300,000 and 800,000
 
 export const KEEPERS = {
   pemberton:{ id:'pemberton', acc:['beanie'], accC:0xf0c040, top:'overalls',  name:'Pemberton', species:'bear', ears:'round', fur:0x8a8a92, muzzle:0xf4f0ea, shirt:0x6a8a4a, cheek:0xe0a0a0, voice:300, stripe:true,
@@ -877,10 +1025,12 @@ for (const r of RECIPES){
 def('sled', { name:'Wooden Sled', kind:'gear', price:500, buy:3000, stack:1, model:{t:'furn', b:'sled'} });
 // a campfire is now something you can build yourself
 WOODWORK.push({ id:'campfire', mats:{ stone:4, wood:3, softwood:2 }, unlock:2 });
-/* v1.34 woodworking pace. You start knowing 4 plans. Making 10 things in all teaches 6 more (10 known).
-   After that plans come three ways: a new batch of 4 or 5 at each crafting milestone (WOOD_MILESTONES, total things
-   made), plans you find or buy (one Woodworking Plan item per piece, WOOD_PLAN_PRICE), and studying a piece you
-   own (from a shop or found) at the workbench, once a day. WOOD_ORDER is the order milestone batches come in. */
+/* v1.34 woodworking pace. You start knowing 4 plans. v1.50: making 3 of them (any 3, so a missing stump can't hold you up)
+   and 10 things in all teaches 6 more (10 known). After that plans come three ways: a batch of WOOD_BATCH at each milestone,
+   plans you find or buy (one Woodworking Plan item per piece, WOOD_PLAN_PRICE), and studying a piece you own
+   (from a shop or found) at the workbench, once a day. WOOD_ORDER is the order milestone batches come in.
+   v1.50 milestones count VARIETY, not volume: each different piece counts for up to WOOD_PER_KIND of the times you make it
+   (making 3 fences counts 3; making 300 fences still counts 3). At most WOOD_MS_PER_DAY milestone batches a day. */
 WOODWORK.push(
   { id:'sidetable',    mats:{ wood:4, softwood:2 } },
   { id:'birdfeeder',   mats:{ wood:3, softwood:2 } },
@@ -898,7 +1048,14 @@ export const WOOD_START = ['stool','fence','logpile','stumpstool'];
 export const WOOD_TEN = ['signpost','birdhouse','crate','bench','workbench','campfire'];
 export const WOOD_ORDER = ['planterbox','stumptable','table','sidetable','driftchair','stumpbench','chest','birdfeeder','mailbox','bookshelf','desk','stumpplanter',
   'rodrack','dresser','arbor','rocker','easel','stumplamp','pottingbench','hammock','bed','porchswing','flowercart','grandfather'];
-export const WOOD_MILESTONES = [25, 50, 100, 150, 250, 400, 600, 850, 1150];
+// v1.50: milestones are variety points (was total things made: 25, 50, 100, 150, 250, 400, 600, 850, 1150, with 4 or 5 plans each).
+// Each sits 6 points (two pieces made 3 times) below the most you could have from plans the milestones alone hand out,
+// so you make nearly everything you know, a few times each, before more comes.
+export const WOOD_TEN_KINDS = 3, WOOD_TEN_MADE = 10;   // different starting pieces made, and things made in all
+export const WOOD_PER_KIND = 3;
+export const WOOD_MILESTONES = [24, 33, 42, 51, 60, 69, 78, 87];
+export const WOOD_BATCH = 3;
+export const WOOD_MS_PER_DAY = 1;
 export const WOOD_PLAN_PRICE = id => Math.round((1200 + ITEMS[id].price*3)/100)*100;
 // (the Woodworking Plan items are made at the end of this file, once every furniture piece exists)
 ITEMS.campfire.shop='rare';
@@ -1187,13 +1344,28 @@ export const LETTERS = {
   weather:{ label:'How\'s the weather', text:['Dear {to},','How\'s the weather out your way? Here it\'s the kind of day that makes you want to sit outside and do nothing at all.','Lazily, {p}'] },
   cheer:  { label:'Cheer up',           text:['Dear {to},','Just in case today was a long one: you\'re doing great. Really.','Cheering for you, {p}'] },
   gift:   { label:'A little something', text:['Dear {to},','I tucked a little something in with this letter. I hope it makes you smile.','Warmly, {p}'] },
+  // v1.55: sent by the server when a friend invites you over from their Friends tab. sys letters can't be picked or mailed by players.
+  invited:{ label:'You\'re invited', sys:true, text:['Dear {to},','I just invited you over to {isle}! Open Friends and tap Visit next to my island, or step through my arch in the Portal Station, whenever you like.','See you soon, {p}'] },
 };
-export const LETTER_IDS = Object.keys(LETTERS);
+export const LETTER_IDS = Object.keys(LETTERS).filter(k => !LETTERS[k].sys);
 
 // The lighthouse keeper's thank-you (only found on boat trips)
 furn('beaconlamp','Lighthouse Lantern',8000,0.4,{ b:'lantern', shop:'trip', rarity:FR.r, glow:true });
 // A torn page in a bottle (opened where you find it, never kept in the bag)
 def('bottle_note', { name:'Message in a Bottle', kind:'note', price:0, stack:1, model:{ t:'ticket', c:0xc8a060 } });
+
+/* v1.48: what a crafted piece sells for follows what went into it.
+   A piece made only from things you can gather all day (wood, branches, stone, weeds) sells for about its materials
+   plus 15%, so crafting is a small bonus on top of chopping, not a money machine (3 fences from 2 wood paid 225).
+   A piece that needs anything scarcer (iron, clay, stumps, planks, rare finds) keeps its old price, and never sells
+   for less than its materials plus 15%. */
+export const MASS_MATS = ['wood','softwood','stone','weed'];
+export const CRAFT_MARKUP = 1.15;
+export const matsValue = r => Object.entries(r.mats).reduce((a,[m,n])=>a+(ITEMS[m]?ITEMS[m].price:0)*n, 0) / (r.out||1);
+export function repriceCraft(r){ const it=ITEMS[r.id]; if (!it || it.legendary) return;
+  const v=matsValue(r)*CRAFT_MARKUP, mass=Object.keys(r.mats).every(m=>MASS_MATS.includes(m));
+  it.price = mass ? Math.max(5, Math.round(v/5)*5) : Math.max(it.price, Math.round(v/10)*10); }
+for (const r of WOODWORK) repriceCraft(r);
 
 // v1.34: one Woodworking Plan item per piece that isn't a starting plan
 for (const r of WOODWORK){ if (WOOD_START.includes(r.id) || WOOD_TEN.includes(r.id) || !ITEMS[r.id]) continue;

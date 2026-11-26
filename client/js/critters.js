@@ -578,3 +578,5 @@ function _buildBug(g, d, id){
       return; }
   }
 }
+// v1.52: the shared building blocks, for the wave 1 species in critters2.js
+export { V3, once, mesh, vcMat, vcPhys, col, n3, fbm, clamp, smooth, segD, setColors, displace, welded, tube, curve, leg, sixLegs, compoundEye, antennae, mergeStatic, rayFin, finMaterial, fishEye, wingGeoHi, bugWings, bodySegments, WING };

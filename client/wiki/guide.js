@@ -11,7 +11,7 @@
    built in wiki.js. Writing rules: plain words, no em dashes, no emoji, only facts the code supports.
    ===================================================================== */
 
-export const GUIDE_VERSION = 'v1.60';
+export const GUIDE_VERSION = 'v1.61';
 export const GUIDE_UPDATED = '2026-11-26';
 
 const tip = s => `<div class="tip"><b>Tip</b> ${s}</div>`;
@@ -780,6 +780,7 @@ ${steps(['Talk to them and pick <b>Come and meet people</b>. They follow you for
 { id:'changes', group:'done', title:'What\'s changed', html:`
 <p>Recent updates, newest first.</p>
 <ul>
+<li><b>v1.61</b>: Fixed signed-in islands with a town hall getting stuck on "Building the island..." the first time they loaded on a new day. Nothing on the island was lost.</li>
 <li><b>v1.60</b>: The old lighthouse on Lantern Bluff is now about two and a half times as tall and you can walk inside and climb it. It starts out broken down and gets mended step by step as the lighthouse story goes on. You now fit the lamp from the lamp room at the top.</li>
 <li><b>v1.59</b>: Hollow Crags is rocky: bare stone and gravel ground, boulders, scree and outcrops, 7 trees (was 21), and 12 rocks to mine (was 8). New item: the Emerald, a very rare gem (2% per hit on a crags rock, sells for 2,500).</li>
 <li><b>v1.58</b>: The far shore: one side of your island now reaches further out to sea, about half as much land again, left wild (see The far shore). Newcomers move in about a week apart, in story order, and the four keepers turn up one at a time.</li>

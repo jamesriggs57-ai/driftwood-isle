@@ -104,7 +104,7 @@ export function planIsles(kinds, o){
   return out;
 }
 
-/* ---------- v1.56 RICHER ISLES ----------
+/* ---------- v1.57 RICHER ISLES ----------
    Each isle grows out on the side away from its bridges (I.gr: a radius multiplier for each of 72 directions), and carries a list
    of features (I.fxPlan) planned from the seed in the isle's own frame: hills, a pond and its brook, a spring with a waterfall,
    sea stacks, more spires, a sunken grotto, old ruins, an orchard, flower fields. main.js settles them once per save with
@@ -282,7 +282,7 @@ function isleBase(I, x, z){
   const rim=t+(fbm(sx*2.2,sz*2.2)-0.5)*0.09;
   let top=PLATEAU + smooth(0.86,0.5,rim)*(K==='bluff' ? quant(ISLE_OFF+1.2*smooth(0.35,0.8,fbm(sx,sz)))-ISLE_OFF : 0.55*Math.floor(2*smooth(0.3,0.85,fbm(sx*1.7,sz*1.7))));
   if (K==='bluff' && I.mark){ const d=Math.hypot(x-I.mark[0],z-I.mark[1]); top=Math.max(top, lerp(top, PLATEAU+ISLE_STEP*2, smooth(9,5,d))); }
-  if (L>0) top=quant(top+L*smooth(0.9,0.6,rim), 0.3);   // v1.56 knolls: a terrace or two up
+  if (L>0) top=quant(top+L*smooth(0.9,0.6,rim), 0.3);   // v1.57 knolls: a terrace or two up
   let h = lerp(-2.7, top, smooth(0.985, 0.93, rim));
   for (const S of [I.spires, I.fxSpires]) if (S) for (const [px,pz,pr,ph] of S){ const d=Math.hypot(x-px,z-pz)/(pr*(1+0.18*Math.sin(Math.atan2(z-pz,x-px)*5+px))); if (d<1.25) h=Math.max(h, PLATEAU+ph*smooth(1.08,0.82,d)); }
   if (I.fxStacks) for (const [px,pz,pr,ph] of I.fxStacks){ const d=Math.hypot(x-px,z-pz)/(pr*(1+0.2*Math.sin(Math.atan2(z-pz,x-px)*4+pz))); if (d<1.3) h=Math.max(h, lerp(-2.7, PLATEAU*ph, smooth(1.12,0.9,d))); }   // sea stacks off the bluff
@@ -418,7 +418,7 @@ export function buildLandmark(kind, seed){
     g.userData.setMill({ sails:false });
     g.userData.rects=[[-2.3,-2.3,3.3,2.3]]; }
   if (kind==='dunes'){ // a shipwreck half buried in the sand
-    const WS=2.3, hull=new THREE.Group(); hull.rotation.z=0.22; hull.rotation.y=0.3; hull.position.y=2.9; hull.scale.setScalar(WS); g.add(hull);   // v1.56 a much bigger ship, the Saltwren as she was   // the keel sits just under the sand, the ribs stick up out of it
+    const WS=2.3, hull=new THREE.Group(); hull.rotation.z=0.22; hull.rotation.y=0.3; hull.position.y=2.9; hull.scale.setScalar(WS); g.add(hull);   // v1.57 a much bigger ship, the Saltwren as she was   // the keel sits just under the sand, the ribs stick up out of it
     for (let i=0;i<9;i++){ const x=-4+i*1.0, s=Math.sin((i+0.5)/9*Math.PI); const rib=mk(new THREE.TorusGeometry(1.6*s+0.4, 0.12, 6, 14, Math.PI), dark, x, 0.2, 0, hull); rib.rotation.y=Math.PI/2; rib.rotation.x=Math.PI; }
     for (let k=0;k<5;k++){ const pl=mk(G.box(7.2,0.12,0.5), wood, 0, -0.3-k*0.32+0.1, (k%2?1:-1)*(1.6-k*0.25), hull); pl.rotation.x=(k%2?1:-1)*(0.5+k*0.12); }
     const mast=mk(G.cyl(0.16,0.2,4.6,8), dark, 0.6, 0.6, 0.1, hull); mast.rotation.z=-0.5; mk(G.box(1.8,0.12,0.12), dark, 1.4, 2.0, 0.1, hull).rotation.z=0.4;
@@ -466,7 +466,7 @@ export function buildLandmark(kind, seed){
   return g;
 }
 
-/* ---------- v1.56 what the features look like ----------
+/* ---------- v1.57 what the features look like ----------
    gy(x,z) is the ground height. Returns a group; userData.rects are solid boxes (world [x0,z0,x1,z1]) for the ruins,
    userData.tick(dt,t) moves the waterfall and the glowing things, userData.solid lists [x,z,r] for round solid bits. */
 let _fallTex=null;

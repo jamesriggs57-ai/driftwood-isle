@@ -11,7 +11,7 @@
    built in wiki.js. Writing rules: plain words, no em dashes, no emoji, only facts the code supports.
    ===================================================================== */
 
-export const GUIDE_VERSION = 'v1.56';
+export const GUIDE_VERSION = 'v1.57';
 export const GUIDE_UPDATED = '2026-11-26';
 
 const tip = s => `<div class="tip"><b>Tip</b> ${s}</div>`;
@@ -54,8 +54,10 @@ ${tip('Everything unlocks quietly. Characters hint at what they want in their ow
 <tr><td>Space</td><td>Swing your tool (chop, dig, cast, catch, water)</td></tr><tr><td>Q</td><td>Switch tool</td></tr>
 <tr><td>B</td><td>Bike</td></tr><tr><td>G</td><td>Sled (winter)</td></tr><tr><td>I</td><td>Bag</td></tr><tr><td>Z / C</td><td>Turn the camera</td></tr></table>
 <p>Drag to look around. Clicking the ground walks you there (turn it off in Menu &gt; Controls). Every key can be changed in Menu &gt; Controls.</p>
+<p>Clicking one thing a tree or rock dropped (fruit, branches, wood, stone, clay, iron, and any rare find, plan or scroll from it) picks up everything else that same tree or rock dropped, as long as it fits in your bag. Pieces still falling go straight into your bag when they land. Pressing E picks up one thing at a time. Beach finds and things you dropped yourself are always picked up one at a time.</p>
 <h3>Phone and tablet</h3>
 <p>A joystick sits bottom left. The green <b>Act</b> button uses and talks; the orange <b>Swing</b> button shows whenever you hold a tool. You can switch to tap-to-walk and resize or move the controls in Menu &gt; Controls; the choice is remembered on that device.</p>
+<p>Tapping one thing a tree or rock dropped picks up the rest of that drop too, the same as clicking on a computer. The Act button picks up one at a time.</p>
 <p>The top bar keeps Bike, Build (near home), Bag and More. Book, Craft, Sled, Friends and Menu are under More.</p>
 ${tip('Menu &gt; Battery saver lowers resolution and turns off shadows if your phone gets warm.')}
 `},
@@ -353,7 +355,7 @@ ${tip('Making 14 <b>different</b> pieces is what starts Bramble\'s workshop stor
 <li><b>Lantern Bluff</b>: 5 rocks (was 3) and 34 trees (was 20).</li>
 <li><b>Hollow Crags</b>: 8 rocks (was 4, and often only 3 found room). A crags rock is iron-rich: each hit gives iron half the time (stone 30%, clay 20%), plus a 1 in 5 chance of an extra iron and a 4% chance of a fossil. That is about 2.8 iron per rock per day, against about half an iron from a rock on your island. 21 trees (was 10), ferns and boulders between the spires. The grotto pool at the bottom of the steps is fishable.</li>
 <li><b>Starfall Isle</b>: a glowing pool, a garden of glowing mushrooms and crystals, and small rocks drifting round the edge. 18 trees (was 11).</li></ul>
-<p>Trees cut on the isles grow back: Old Pinewood's the next day, the other isles' after 3 days. Isles that rose before v1.56 grow outward on their far side the next time you load; nothing you placed is moved, and new hills, ponds and rocks keep clear of it.</p>
+<p>Trees cut on the isles grow back: Old Pinewood's the next day, the other isles' after 3 days. Isles that rose before v1.57 grow outward on their far side the next time you load; nothing you placed is moved, and new hills, ponds and rocks keep clear of it.</p>
 <h3>Starfall Isle</h3>
 <p>The stair climbs from Hollow Crags. Up top it is always night, whatever the clock says, and three bugs live nowhere else: the Sky Drifter, the Comet Beetle and the rare Nebula Moth. They're in the bug catalog under "On Starfall Isle".</p>
 <p>The <b>star altar</b> takes two of Wendell's spells. Leave the clams in the bowl:</p>
@@ -756,7 +758,8 @@ ${steps(['Talk to them and pick <b>Come and meet people</b>. They follow you for
 { id:'changes', group:'done', title:'What\'s changed', html:`
 <p>Recent updates, newest first.</p>
 <ul>
-<li><b>v1.56</b>: Wendell's isles are fuller. Hollow Crags is a quarry of iron-rich rocks with spires, ruins and a sunken grotto; Sandpiper Dunes is all sand and palms, longer, with a much bigger shipwreck and more beach finds; Old Pinewood's trees are bigger and give 1 more wood; Clover Meadow has a pond, a brook and an orchard; Lantern Bluff has a spring, a waterfall and sea stacks; Starfall has a glowing pool and garden. Isle trees now grow back. See Wendell's isles.</li>
+<li><b>v1.57</b>: Wendell's isles are fuller. Hollow Crags is a quarry of iron-rich rocks with spires, ruins and a sunken grotto; Sandpiper Dunes is all sand and palms, longer, with a much bigger shipwreck and more beach finds; Old Pinewood's trees are bigger and give 1 more wood; Clover Meadow has a pond, a brook and an orchard; Lantern Bluff has a spring, a waterfall and sea stacks; Starfall has a glowing pool and garden. Isle trees now grow back. See Wendell's isles.</li>
+<li><b>v1.56</b>: Click (or tap) one thing a tree or rock dropped and you pick up everything else it dropped too, as much as fits in your bag. E and the Act button still pick up one at a time.</li>
 <li><b>v1.55</b>: Invite friends over from the Friends tab without a new link. Anyone you're already friends with who can't visit you (because only they invited you, or their one visit was used) shows under Invite a friend over, and they get a letter when you invite them.</li>
 <li><b>v1.54</b>: Fix: visiting a friend's island or going on a boat trip no longer forgets which conversations you've had with your islanders, or woodworking plans you found before you started woodworking.</li>
 <li><b>v1.53</b>: Wendell's spells are much brighter. The aurora's light now drifts across the island and the sea, with floating lights in the air, so you can see it from the normal view. Glowing paths light every path stone with a rune, run pulses of light along the paths and send up sparks. Casting either one at the star altar now has a short show.</li>

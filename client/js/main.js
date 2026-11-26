@@ -100,7 +100,7 @@ if (!S.terra) S.terra = { cells:{}, moved:{} };   // wizard work: reshaped land,
 if (!S.magic) S.magic = {};                       // wizard tower (unlocked by a quest) and where it stands
 // v1.40 tools and enchanting (enchant.js). Everything is reached through lambdas, so the order of definitions below doesn't matter.
 const EN = createEnchant({ S:()=>S, toast:(...a)=>toast(...a), Snd, save:()=>save(), countItem:id=>countItem(id), removeItem:(id,n)=>removeItem(id,n), addItem:id=>addItem(id), canAdd:id=>canAdd(id),
-  dropNear:(...a)=>dropNear(...a), sparkle:p=>sparkle(p), thumb:id=>thumb(id), toolThumb:(t,k)=>toolThumb(t,k), fmt:n=>fmt(n), dialog:(...a)=>dialog(...a), openPanel:(...a)=>openPanel(...a),
+  dropNear:(...a)=>dropNear(...a), dropGrp:()=>DROP_GRP, sparkle:p=>sparkle(p), thumb:id=>thumb(id), toolThumb:(t,k)=>toolThumb(t,k), fmt:n=>fmt(n), dialog:(...a)=>dialog(...a), openPanel:(...a)=>openPanel(...a),
   pBody:()=>pBody, pTitle:()=>pTitle, closePanel:()=>closePanel(), reqMet:(t,k)=>reqMet(t,k), friend:id=>S.friend[id]||0, updateHeld:()=>updateHeld(), updateHUD:()=>updateHUD(), equip:t=>equip(t),
   noEdit:()=>noEdit(), GUEST:()=>GUEST, VISIT:()=>VISIT, addClams:n=>addClams(n), bench:()=>BN.tier(), benchBanner:()=>BN.banner() });
 // v1.40 crafting tables (benches.js): crafting tables in reach, as [id, distance, size]
@@ -308,7 +308,7 @@ function hillSample(arr, x, z){ const fx=(x-HG.x0)/HG.step, fz=(z-HG.z0)/HG.step
   const i=Math.floor(fx), j=Math.floor(fz), u=fx-i, v=fz-j, n=HG.n, k=j*n+i; return (arr[k]*(1-u)+arr[k+1]*u)*(1-v) + (arr[k+n]*(1-u)+arr[k+n+1]*u)*v; }
 function rawHeight(x, z){ const h=baseHeight(x,z); return HG.h ? h+hillSample(HG.h,x,z) : h; }
 const isleAt = (x,z) => { for (const I of ISLES) if (ISL.inBox(I,x,z) && ISL.isleT(I,x,z)<1.12) return I; return null; };
-const isleWet = (x,z) => { if (!ISLES.length) return false; for (const I of ISLES) if (I.fxOn && I.fxOn.length && ISL.inBox(I,x,z) && ISL.fxWet(I,x,z)) return true; return false; };   // v1.56 raised pools you can't walk into
+const isleWet = (x,z) => { if (!ISLES.length) return false; for (const I of ISLES) if (I.fxOn && I.fxOn.length && ISL.inBox(I,x,z) && ISL.fxWet(I,x,z)) return true; return false; };   // v1.57 raised pools you can't walk into
 const hillSlope = (x,z) => { const s=HG.s ? hillSample(HG.s,x,z) : 0; if (!ISLES.length) return s; const I=isleAt(x,z); return I ? Math.max(s, ISL.isleSlope(I,x,z)) : s; };
 const MAX_SLOPE = TERRAIN_STYLE==='tiers' ? 2.2 : 0.9;   // steeper than this is a wall you walk around (terrace edges are low enough to step up)
 const SAND_H = 0.62;
@@ -354,8 +354,8 @@ function groundY(x,z){ if (x>500) return 0; const b=onBridge(x,z); if(b) return 
 const onWall = (x,z) => { if (!HG.wall) return false; const i=Math.round((x-HG.x0)/HG.step), j=Math.round((z-HG.z0)/HG.step); return i>=0&&j>=0&&i<HG.n&&j<HG.n && HG.wall[j*HG.n+i]===1; };   // sheer bluff edges
 function walkable(x,z){ if (x>500){ const R=roomAt(x,z); return !!R && roomWalk(R,x,z); } return onDock(x,z) || !!onBridge(x,z) || (rawHeight(x,z) > 0.1 && hillSlope(x,z) < MAX_SLOPE && !(FALLS.length && inFallPool(x,z)) && !onWall(x,z) && !isleWet(x,z) && !(LAY.bar && !lowTide() && onBar(x,z) && !(_plr && onBar(_plr.pos.x,_plr.pos.z)))); }
 function isFishWater(x,z){ return x<500 && !walkable(x,z) && rawHeight(x,z) < -0.15; }
-function waterType(x,z){ if (Math.hypot(x-POND.x,z-POND.z)<POND.r+1.5) return 'pond'; if (ISLES.length){ const I=isleAt(x,z); const w=I && ISL.fxWater(I,x,z); if (w) return w; }   /* v1.56 the isles' ponds, brook and sunken pool */ { const xt=(XW.length||POOLS.length) && xWaterNear(x,z,1.5); if (xt) return xt; } const c=TERRA_ANY && terraAt(x,z); if (c && c.w) return c.w===2?'river':'pond'; const r=Math.hypot(x,z), t=r/islandR(Math.atan2(z,x)); if (polyDist(x,z,RIVER)<(LAY.riverW||1.7)+1.5 && t<1.0) return LAY.riverType||'river'; return 'sea'; }
-const isBeach = (x,z) => { const h=rawHeight(x,z); if (ISLES.length){ const I=isleAt(x,z); if (I) return h>0.15 && (h<SAND_H || (I.sand && h<4.5)); }   /* v1.56 the dunes are sand from end to end */ const t=Math.hypot(x,z)/islandR(Math.atan2(z,x)); return h>0.15 && h<SAND_H && t>0.88; };
+function waterType(x,z){ if (Math.hypot(x-POND.x,z-POND.z)<POND.r+1.5) return 'pond'; if (ISLES.length){ const I=isleAt(x,z); const w=I && ISL.fxWater(I,x,z); if (w) return w; }   /* v1.57 the isles' ponds, brook and sunken pool */ { const xt=(XW.length||POOLS.length) && xWaterNear(x,z,1.5); if (xt) return xt; } const c=TERRA_ANY && terraAt(x,z); if (c && c.w) return c.w===2?'river':'pond'; const r=Math.hypot(x,z), t=r/islandR(Math.atan2(z,x)); if (polyDist(x,z,RIVER)<(LAY.riverW||1.7)+1.5 && t<1.0) return LAY.riverType||'river'; return 'sea'; }
+const isBeach = (x,z) => { const h=rawHeight(x,z); if (ISLES.length){ const I=isleAt(x,z); if (I) return h>0.15 && (h<SAND_H || (I.sand && h<4.5)); }   /* v1.57 the dunes are sand from end to end */ const t=Math.hypot(x,z)/islandR(Math.atan2(z,x)); return h>0.15 && h<SAND_H && t>0.88; };
 
 /* Layout: where buildings sit. Door is in front (+z).
    PLACES0 is the island as first made (trees and rocks are placed around it, so saved trees keep their spots).
@@ -625,7 +625,7 @@ function rimFrom(I, toward){ // the last flat spot on a plateau before the cliff
   return [last[0]-ux*1.6, last[1]-uz*1.6]; }
 const islePathDist = (I,x,z) => { let m=1e9; for (const p of (I.paths||[])) m=Math.min(m, polyDist(x,z,p)); return m; };
 if (ISLE_N){
-  const FXS = S.terra.isleFx || {};   // v1.56 each isle's grown shape and where its features went, kept once settled
+  const FXS = S.terra.isleFx || {};   // v1.57 each isle's grown shape and where its features went, kept once settled
   ISLES = ISL.planIsles(ISLE_K, { seed:S.seed|0, SC, shore:a=>islandR(a)*1.03, ok:landingOK, angles:S.terra.isleA||[], grow:Object.fromEntries(Object.entries(FXS).map(([k,v])=>[k, v && v.g])) });   // saved angles keep an isle where it rose even if buildings move later
   for (const I of ISLES){
     const cliff = I.kind==='bluff' || I.kind==='crags', need = I.sky ? ISL.SKY-0.08 : cliff ? ISL.PLATEAU-0.08 : I.sand ? 0.45 : SAND_H+0.25;
@@ -635,12 +635,12 @@ if (ISLE_N){
     const Bp=isleLanding(I, A, [I.cx,I.cz], need), yb=ISL.isleRaw(I,Bp[0],Bp[1]);
     I.bridge=ISL.makeIsleBridge(I.br.type, A, Bp, ya+0.03, yb+0.03, I.br.w); XBR.push(I.bridge);
     // a dirt path from the bridge to the landmark
-    const mfd = I.kind==='dunes' ? 11 : 4.2, mf=[I.mark[0]+Math.cos(I.mark[2]+Math.PI)*mfd, I.mark[1]+Math.sin(I.mark[2]+Math.PI)*mfd];   // v1.56 the wreck is bigger: the path stops at its bow
+    const mfd = I.kind==='dunes' ? 11 : 4.2, mf=[I.mark[0]+Math.cos(I.mark[2]+Math.PI)*mfd, I.mark[1]+Math.sin(I.mark[2]+Math.PI)*mfd];   // v1.57 the wreck is bigger: the path stops at its bow
     const mid=[(Bp[0]+mf[0])/2+(I.cz-Bp[1])*0.12, (Bp[1]+mf[1])/2-(I.cx-Bp[0])*0.12];
     I.paths=[[Bp, mid, mf]];
     if (I.from!=='main') (ISLES[I.from].paths=ISLES[I.from].paths||[]).push([A, ISLES[I.from].paths[0][2]]);
   }
-  /* v1.56 settle each isle's features: ponds, a brook, the bluff's spring, sea stacks, spires, ruins, the crags' sunken pool.
+  /* v1.57 settle each isle's features: ponds, a brook, the bluff's spring, sea stacks, spires, ruins, the crags' sunken pool.
      A feature takes the first of its spots that keeps clear of the bridges, the paths, the landmark, the workshop or forge, and
      anything you've placed, planted or left lying there; the choice is saved, so it never moves after that. */
   const ST=S.story||{}, keep={};
@@ -749,7 +749,7 @@ function buildTerrain(o={}){
         if (sl>1.5) c.lerp(CLIFF_ROCK, smooth(1.5,2.6,sl)*0.9).offsetHSL(0,0,(vnoise(x*1.7,z*1.7)-0.5)*0.06);
         if (I.kind==='crags'){ c.lerp(new THREE.Color(0x8a9a78), 0.3*vnoise(x*0.3,z*0.3)); gw[i]*=0.8; }
         if (I.kind==='pines'){ c.lerp(new THREE.Color(0x4f7a3a), 0.38+0.2*vnoise(x*0.2,z*0.2)); c.lerp(new THREE.Color(0x7a6a4a), 0.18*smooth(0.55,0.8,vnoise(x*0.5+3,z*0.5))); gw[i]*=0.85; }   // dark, mossy, needle-strewn
-        if (I.sand){ c.lerp(SAND, 0.94).offsetHSL(0,0,(vnoise(x*0.9,z*0.9)-0.5)*0.05+(vnoise(x*0.07,z*0.07)-0.5)*0.05); gw[i]=0; } }   // v1.56 the dunes are all sand
+        if (I.sand){ c.lerp(SAND, 0.94).offsetHSL(0,0,(vnoise(x*0.9,z*0.9)-0.5)*0.05+(vnoise(x*0.07,z*0.07)-0.5)*0.05); gw[i]=0; } }   // v1.57 the dunes are all sand
       else if (HG.h && TERRAIN_STYLE==='tiers'){ const sl=hillSample(HG.s,x,z); if (sl>0.18 && pd>1.4) c.lerp(TIER_EDGE, smooth(0.18,0.6,sl)*0.75);
         if (sl>1.5 || onWall(x,z)) c.lerp(CLIFF_ROCK, Math.max(smooth(1.5,2.6,sl), onWall(x,z)?0.85:0)*0.9).offsetHSL(0,0,(vnoise(x*1.7,z*1.7)-0.5)*0.06); }   // sheer faces show bare rock
       if (!I && LAY.sand && !inland){ c.lerp(SAND, 0.9).offsetHSL(0,0,(vnoise(x*0.9,z*0.9)-0.5)*0.06); gw[i]*=0.15; }   // v1.27 Dune Isle: sand all the way up
@@ -1011,7 +1011,7 @@ function updateHeld(){
 }
 
 /* ---------- Trees and stumps ---------- */
-// v1.56 Old Pinewood's trees are bigger than anywhere else (and give one more wood when they fall)
+// v1.57 Old Pinewood's trees are bigger than anywhere else (and give one more wood when they fall)
 const bigPine = (key, type) => { const m=/^x(\d+)_/.exec(key), I=m && ISLES[+m[1]]; return I && I.kind==='pines' && (type==='pine' || type==='cedar') ? 1.4 : 0; };
 class Tree extends Ent {
   constructor(key, x, z, type, fruit, rec){ super('tree',x,z,0.6); this.key=key; this.big=bigPine(key, type); if (this.big) this.r=0.75; this.type=type; this.fruit=fruit; this.rec=rec||null; this.solid=true; this.reach=1.9; this.shake=0; this.attach(this.model()); this.obj.rotation.y=mulberry32(hashStr(key))()*TAU; this.refresh(); }
@@ -1023,7 +1023,8 @@ class Tree extends Ent {
     const v=S.day.fruit[this.key]; return v===undefined?3:v; }
   refresh(){ const n=this.fruitLeft(), fr=this.obj.userData.fruits||[], per=fr.length>3?2:1; fr.forEach((m,i)=>m.visible=i<n*per); }
   label(){ if (S.equip==='axe' && this.stage>=2) return 'Chop'; if (S.equip==='shovel' && this.stage<=1) return 'Dig up'; if (S.equip==='can' && this.stage<3 && this.rec && this.rec.watered!==today()) return 'Water'; return this.stage>=2 ? 'Shake' : 'Look'; }
-  act(){
+  act(){ return dropGroup('tree:'+this.key, ()=>this.act0()); }   // v1.56 one click picks up everything this tree drops
+  act0(){
     const lab=this.label();
     if ((lab==='Chop'||lab==='Dig up'||lab==='Water') && noEdit()) return;
     if (lab==='Chop') return this.chop();
@@ -1032,9 +1033,9 @@ class Tree extends Ent {
     if (lab==='Look') return;
     this.shake=1; Snd.rustle(); const tp=this.pos.clone(); tp.y+=2.8; puff(tp, World.season==='winter'?0xffffff:0x6cc050, 6, 0.8, 1, 1.2, 1);
     const n=this.fruitLeft();
-    if (n>0){ track('shake'); S.day.fruit[this.key]=0; if (!VISIT) (S.fruitPicked=S.fruitPicked||{})[this.key]=dayNum(today()); for(let i=0;i<n;i++) setTimeout(()=>dropNear(this.fruit, this.pos, 1.6), 250+i*120); }
-    else if (!S.day.branch[this.key] && Math.random()<0.7){ S.day.branch[this.key]=true; setTimeout(()=>dropNear('softwood', this.pos, 1.6), 300); }
-    const sap=(S.day.sap=S.day.sap||{}); if (!sap[this.key]){ sap[this.key]=1; if (TRIP_THEME==='grove' && !this.rec){ const p=this.pos.clone(); setTimeout(()=>{ dropNear('goldsap', p, 1.4); sparkle(p.clone().add(new THREE.Vector3(0,1.4,0))); }, 380); } else rareRoll('shake', 'goldsap', this.pos); }
+    if (n>0){ track('shake'); S.day.fruit[this.key]=0; if (!VISIT) (S.fruitPicked=S.fruitPicked||{})[this.key]=dayNum(today()); const g=DROP_GRP; for(let i=0;i<n;i++) setTimeout(()=>dropNear(this.fruit, this.pos, 1.6, false, undefined, g), 250+i*120); }
+    else if (!S.day.branch[this.key] && Math.random()<0.7){ S.day.branch[this.key]=true; const g=DROP_GRP; setTimeout(()=>dropNear('softwood', this.pos, 1.6, false, undefined, g), 300); }
+    const sap=(S.day.sap=S.day.sap||{}); if (!sap[this.key]){ sap[this.key]=1; if (TRIP_THEME==='grove' && !this.rec){ const p=this.pos.clone(), g=DROP_GRP; setTimeout(()=>{ dropNear('goldsap', p, 1.4, false, undefined, g); sparkle(p.clone().add(new THREE.Vector3(0,1.4,0))); }, 380); } else rareRoll('shake', 'goldsap', this.pos); }
     save(); setTimeout(()=>this.refresh(),250);
   }
   chop(){
@@ -1043,9 +1044,9 @@ class Tree extends Ent {
     this.shake=0.7; Snd.chop(); puff(this.pos.clone().add(new THREE.Vector3(0,1,0)), 0xd8b080, 5, 0.4, 1.5, 0.8, 0.5);
     if (n<3){ for (let k=0;k<out;k++){ dropNear('wood', this.pos, 1.6); if (tier>=2) dropNear('wood', this.pos, 1.6); } if (TRIP_THEME==='grove' && !this.rec && n===0) dropNear('heartwood', this.pos, 1.6); else rareRoll('chop', 'heartwood', this.pos); }
     else if (TOOLS.axe.tiers[tier].nofell && !one) toast('Too flimsy to fell it.');
-    else { Snd.timber(); for (let k=0;k<(one?EN.ONE_SWING_WOOD:out)+(this.big?1:0);k++) dropNear('wood', this.pos, 1.6); EN.scrollRoll('fell', this.pos);   // v1.56 Old Pinewood's big trees give one more
+    else { Snd.timber(); for (let k=0;k<(one?EN.ONE_SWING_WOOD:out)+(this.big?1:0);k++) dropNear('wood', this.pos, 1.6); EN.scrollRoll('fell', this.pos);   // v1.57 Old Pinewood's big trees give one more
       if (this.rec){ S.plants.splice(S.plants.indexOf(this.rec),1); } else S.cut[this.key]='gone';
-      const pin=/^x(\d+)_/.exec(this.key), pines=pin && ISLES[+pin[1]] && ISLES[+pin[1]].kind==='pines'; if (pin && ISLES[+pin[1]]) (S.pinesCut=S.pinesCut||{})[this.key]={ x:+this.pos.x.toFixed(2), z:+this.pos.z.toFixed(2), type:this.type, day:today(), ...(this.fruit?{ fruit:this.fruit }:{}) };   // v1.56 every isle's wild trees grow back (Old Pinewood's overnight, the rest in 3 days)
+      const pin=/^x(\d+)_/.exec(this.key), pines=pin && ISLES[+pin[1]] && ISLES[+pin[1]].kind==='pines'; if (pin && ISLES[+pin[1]]) (S.pinesCut=S.pinesCut||{})[this.key]={ x:+this.pos.x.toFixed(2), z:+this.pos.z.toFixed(2), type:this.type, day:today(), ...(this.fruit?{ fruit:this.fruit }:{}) };   // v1.57 every isle's wild trees grow back (Old Pinewood's overnight, the rest in 3 days)
       rareRoll('fell', 'heartwood', this.pos); woodPlanRoll(0.01, this.pos); const st={ key:this.key, x:this.pos.x, z:this.pos.z }; S.stumps.push(st); new Stump(st); FX.fell(this.obj, this.pos.clone(), this.type); this.remove(true); if (!pines) onFelled(this.pos.clone()); }
     save();
   }
@@ -1061,7 +1062,7 @@ if (!S.stumps) S.stumps=[];
 
 /* ---------- Rocks, dig spots, items, weeds ---------- */
 function buildRockModel(r){ const g=new THREE.Group(); const c=[0x9aa1a8,0x8a9198,0xa8afb5]; mk(G.dod(0.75), M(c[0],{flatShading:true}), 0,0.45,0,g).scale.set(1.1,0.8,1); mk(G.dod(0.45), M(c[1],{flatShading:true}), 0.6,0.25,0.3,g); mk(G.dod(0.35), M(c[2],{flatShading:true}), -0.5,0.2,0.35,g); const moss=mk(G.sph(0.35,10,6), M(0x6a9a4a), -0.1,0.78,0.05,g); moss.scale.set(1.2,0.25,1); g.rotation.y=r()*TAU; return g; }
-// v1.56 a Hollow Crags rock, each hit: iron half the time (stone 30%, clay 20%), a 20% chance of a second iron, and a 4% chance of a fossil.
+// v1.57 a Hollow Crags rock, each hit: iron half the time (stone 30%, clay 20%), a 20% chance of a second iron, and a 4% chance of a fossil.
 // Four hits a day comes to about 2.8 iron a rock, against about 0.5 from a rock on the main island.
 const CRAG_ROCK = { stone:0.3, clay:0.2, bonus:0.2, fossil:0.04 };
 function buildRichRock(r){ const g=new THREE.Group(), c=[0x8e8a84,0x7e7a74,0x9a948c], rust=M(0xa0562e,{flatShading:true, roughness:0.6, metalness:0.25}), rust2=M(0xc0703a,{flatShading:true, roughness:0.5, metalness:0.3});
@@ -1071,7 +1072,8 @@ function buildRichRock(r){ const g=new THREE.Group(), c=[0x8e8a84,0x7e7a74,0x9a9
 class Rock extends Ent {
   constructor(idx,x,z,r,rich=false){ super('rock',x,z,0.95); this.idx=idx; this.rich=rich; this.solid=true; this.reach=1.9; this.hit=0; this.attach(rich ? buildRichRock(r) : buildRockModel(r)); }
   label(){ return 'Hit'; }
-  act(){
+  act(){ return dropGroup('rock:'+this.idx, ()=>this.act0()); }   // v1.56 one click picks up everything this rock drops
+  act0(){
     const t = (S.equip==='shovel'||S.equip==='axe') ? S.equip : (hasTool('shovel')?'shovel':(hasTool('axe')?'axe':null));
     if (!t){ toast('Needs a shovel or an axe.'); Snd.fail(); return; }
     if (S.equip!==t) equip(t);
@@ -1081,7 +1083,7 @@ class Rock extends Ent {
     for (let h=0;h<hits;h++){ const u=used+h; S.day.rock[this.idx]=u+1;
     if (TRIP_THEME==='clamstone'){ const amt=[1000,2000,4000,8000][u]; addClams(amt); Snd.coin(); toast('A pouch of '+fmt(amt)+' clams popped out!'); }   // v1.27; v1.48 no haul cap
     else if (this.idx===S.day.lucky){ const amt=[100,200,400,800][u]; addClams(amt); Snd.coin(); toast('A pouch of '+amt+' clams popped out!'); }
-    else if (this.rich){ for (let k=0;k<out;k++){ const x=Math.random(); dropNear(x<CRAG_ROCK.stone?'stone':(x<CRAG_ROCK.stone+CRAG_ROCK.clay?'clay':'iron'), this.pos, 1.7); if (Math.random()<CRAG_ROCK.bonus) dropNear('iron', this.pos, 1.7); }   // v1.56 the crags' iron-heavy rock
+    else if (this.rich){ for (let k=0;k<out;k++){ const x=Math.random(); dropNear(x<CRAG_ROCK.stone?'stone':(x<CRAG_ROCK.stone+CRAG_ROCK.clay?'clay':'iron'), this.pos, 1.7); if (Math.random()<CRAG_ROCK.bonus) dropNear('iron', this.pos, 1.7); }   // v1.57 the crags' iron-heavy rock
       if (Math.random()<CRAG_ROCK.fossil){ const f=tierPick(Math.random, Object.values(ITEMS).filter(i=>i.kind==='fossil' && allowedFind(i)), i=>luckW(i,'dig'), 'dig'); if (f){ dropNear(f.id, this.pos, 1.4); toast('Something was pressed into the stone!'); } }
       rareRoll(World.night>0.5?'rockNight':'rock', 'starstone', this.pos); }
     else { for (let k=0;k<out;k++){ const x=Math.random(), q=[0.6,0.88]; dropNear(x<q[0]?'stone':(x<q[1]?'clay':'iron'), this.pos, 1.7); } rareRoll(World.night>0.5?'rockNight':'rock', 'starstone', this.pos); } }
@@ -1107,14 +1109,23 @@ class GroundItem extends Ent {
   constructor(rec){ super('item',rec.x,rec.z,0.35); this.rec=rec; this.reach=1.2; const it=ITEMS[rec.id]; const m=rec.bottle?buildBottle(rec.id):buildItemModel(rec.id); m.scale.setScalar(it.kind==='furniture'?0.6:0.95); const g=new THREE.Group(); g.add(m);
     if (it.rare || it.kind==='plan') this.aura=addAura(g, RARITY_COLORS[rarityLabel(it.rarity)], 0.35, 1.3); this.attach(g); this.hitSphere(0.45,0.3); this.spin=Math.random()*TAU; this.bounce=rec.fresh?1:0; delete rec.fresh; }
   label(){ return 'Pick up'; }
-  act(){ if (this.rec.note){ const i=S.ground.indexOf(this.rec); if (i>=0) S.ground.splice(i,1); this.remove(); save(); Snd.pop(); openNote(this.rec); return; }   // v1.27 bottles with a map or a letter
-    if (!this.rec.beach && noEdit()) return; const id=this.rec.id;
+  act(mode){ if (this.rec.note){ const i=S.ground.indexOf(this.rec); if (i>=0) S.ground.splice(i,1); this.remove(); save(); Snd.pop(); openNote(this.rec); return; }   // v1.27 bottles with a map or a letter
+    if (!this.rec.beach && noEdit()) return;
+    if (!this.take()){ toast('Your bag is full. Sell or drop something first.'); return; }
+    // v1.56: a click or tap (not the keys or the Act button) also picks up the rest of what the same tree or rock dropped
+    if (mode==='tap' && this.rec.g){ const g=this.rec.g; DROP_CLAIMED.set(g, performance.now()+CLAIM_MS);
+      for (const e of groundGroup(this)){ if (!e.take(true)){ DROP_CLAIMED.delete(g); toast('Your bag is full, so the rest is still on the ground.'); break; } } } }
+  // into the bag; false if it won't fit. quiet: no pop sound (the first item of a group already made one)
+  take(quiet){ const id=this.rec.id;
     if (ITEMS[id].kind==='plan'){ const fresh=learnPlan(id); if (!fresh){ addClams(ITEMS[id].price); toast(`You already know that plan. Pemberton gave you ${fmt(ITEMS[id].price)} clams for the paper.`); }
-      Snd.pop(); const i=S.ground.indexOf(this.rec); if(i>=0) S.ground.splice(i,1); this.remove(); save(); return; }
-    const res=addItem(id, this.rec.m); if(!res){ toast('Your bag is full. Sell or drop something first.'); return; }
-    for (let k=1;k<(this.rec.n||1);k++){ if (!addItem(id)) break; pickNote(id,'Picked up'); } Snd.pop(); const i=S.ground.indexOf(this.rec); if(i>=0) S.ground.splice(i,1); if (VISIT && this.rec.beach){ (S.day.vpicked=S.day.vpicked||[]).push(Math.round(this.rec.x*10)+','+Math.round(this.rec.z*10)); } this.remove(); { const kd=ITEMS[id].kind; if (kd==='fruit') track('fruit', this.rec.n||1); else if (kd==='shell') track('shell', this.rec.n||1); } save(); itemToast(id, res==='new', 'Picked up'); craftNudge(id); }
+      if (!quiet) Snd.pop(); const i=S.ground.indexOf(this.rec); if(i>=0) S.ground.splice(i,1); this.remove(); save(); return true; }
+    const res=addItem(id, this.rec.m); if(!res) return false;
+    for (let k=1;k<(this.rec.n||1);k++){ if (!addItem(id)) break; pickNote(id,'Picked up'); } if (!quiet) Snd.pop(); const i=S.ground.indexOf(this.rec); if(i>=0) S.ground.splice(i,1); if (VISIT && this.rec.beach){ (S.day.vpicked=S.day.vpicked||[]).push(Math.round(this.rec.x*10)+','+Math.round(this.rec.z*10)); } this.remove(); { const kd=ITEMS[id].kind; if (kd==='fruit') track('fruit', this.rec.n||1); else if (kd==='shell') track('shell', this.rec.n||1); } save(); itemToast(id, res==='new', 'Picked up'); craftNudge(id); return true; }
   update(dt,t){ if (this.aura) this.aura(t,dt); this.obj.children[0].rotation.y=this.spin+Math.sin(t*1.5+this.spin)*0.2; if(this.bounce>0){ this.bounce=Math.max(0,this.bounce-dt*2.2); this.obj.position.y=this.pos.y+Math.abs(Math.sin(this.bounce*Math.PI*2))*this.bounce*1.4; } }
 }
+// v1.56: the other things on the ground from the same drop as e (same tree or rock), nearest first
+function groundGroup(e){ const g=e.rec.g; if (!g) return []; const d=o=>Math.hypot(o.pos.x-e.pos.x, o.pos.z-e.pos.z);
+  return ents.filter(o=>o!==e && o instanceof GroundItem && !o.removed && o.rec.g===g && !o.rec.note && d(o)<8 && Math.abs(o.pos.y-e.pos.y)<4).sort((a,b)=>d(a)-d(b)); }
 class Weed extends Ent {
   constructor(i,x,z){ super('weed',x,z,0.5); this.i=i; this.reach=1.4; const g=buildWeedClump(hashStr(today()+':'+i)%9973+1, 1.45); g.rotation.y=i*1.7; this.attach(g); this.hitSphere(0.6,0.35); }
   label(){ return 'Pull'; }
@@ -1714,13 +1725,21 @@ function hiddenSpot(x,z){
   for (const r of rocks){ if (r.removed) continue; const dz=r.pos.z-z; if (dz>-0.3 && dz<1.7 && Math.abs(r.pos.x-x)<1.15) return true; }
   if (inRects(x, z+1.4, 0.2) || inRects(x, z+2.8, 0.2)) return true;
   return false; }
-function dropNear(id, at, rad=1.4, exact=false, meta){
+/* v1.56: things a tree or rock drops share a group (rec.g). Clicking or tapping one picks up the rest of its group too. */
+var DROP_GRP=null;   // var, not let: dropNear can run before this line does
+// A group that was just clicked: pieces of it still falling (fruit, a rare find, a scroll) go straight into the bag when they land.
+// Hitting, shaking or chopping the same tree or rock again ends that, so the new drop lands on the ground as usual.
+var DROP_CLAIMED=new Map();   // group -> performance.now() until which its late pieces are taken
+const CLAIM_MS=2500;   // longer than the slowest delayed drop (fruit, plans and scrolls land within about 1.2 s)
+function dropGroup(g, fn){ DROP_CLAIMED.delete(g); const o=DROP_GRP; DROP_GRP=g; try { return fn(); } finally { DROP_GRP=o; } }
+function dropNear(id, at, rad=1.4, exact=false, meta, grp=DROP_GRP){
   let x=at.x, z=at.z, fallback=null;
   // look for open ground on the camera's side first, and never tuck it behind a tree, rock or building
   for(let k=0;k<40;k++){ const a = k<20 ? Math.random()*Math.PI : Math.random()*TAU, d=exact?0:(rad*0.7+Math.random()*rad*0.6)*(k<30?1:1.6); const tx=at.x+Math.cos(a)*d, tz=at.z+Math.sin(a)*d;
     if(walkable(tx,tz) && !blocked(tx,tz,0.3)){ if (!hiddenSpot(tx,tz)){ x=tx; z=tz; fallback=null; break; } if (!fallback) fallback=[tx,tz]; } }
   if (fallback){ x=fallback[0]; z=fallback[1]; }
-  const rec={ id, x, z, fresh:true }; if(meta) rec.m=meta; S.ground.push(rec); new GroundItem(rec); Snd.pop(); save();
+  const rec={ id, x, z, fresh:true }; if(meta) rec.m=meta; if(grp) rec.g=grp; S.ground.push(rec); const gi=new GroundItem(rec); Snd.pop(); save();
+  if (grp && DROP_CLAIMED.get(grp)>performance.now() && !gi.take(true)){ DROP_CLAIMED.delete(grp); toast('Your bag is full, so the rest is still on the ground.'); }
 }
 /* Part 3: building the island, rooms, daily reset, sky, dialogue, UI, input, main loop */
 
@@ -2821,7 +2840,7 @@ let workshopEnt=null, workshopKey='';
 const pinesIsle = () => ISLES.find(I=>I.kind==='pines');
 // a flat spot near where the bridge lands, beside the path, with the doors facing south
 function workshopSpot(I){
-  if (I.wsAt) return I.wsAt;   // v1.56 settled before the isle's features were
+  if (I.wsAt) return I.wsAt;   // v1.57 settled before the isle's features were
   const [bx,bz]=I.bridge.b, tx=I.cx-bx, tz=I.cz-bz, L=Math.hypot(tx,tz), ux=tx/L, uz=tz/L;
   for (let d=8; d<22; d+=1.5) for (const side of [1,-1]) for (const off of [6,7.5,9]){
     const x=bx+ux*d-uz*side*off, z=bz+uz*d+ux*side*off; if (ISL.isleT(I,x,z)>0.8) continue;
@@ -2868,7 +2887,7 @@ function bindShopProject(render){
   const m=pBody.querySelector('#wfMat'); if (m) m.onclick=()=>{ if (noEdit() || !SHOP_PROJECT.need.every(x=>haveNeed(x))) return; takeFor(SHOP_PROJECT.need); SY.shop.mats=true; save(); Snd.thunk(); render(); };
   const g=pBody.querySelector('#wfGo'); if (g) g.onclick=()=>{ if (noEdit()) return; SY.shop.st='building'; SY.shop.bday=sday(); save(); Snd.fanfare(); toast('The builders start tonight!', null, 'new', `${holderName('shop')}'s Workshop will be ready tomorrow.`); refreshWorkshop(); render(); }; }
 // Old Pinewood: the pines grow back overnight
-// v1.56 every isle's wild trees grow back: Old Pinewood's the next day, the others after 3 days. Trees felled before v1.56 come back 3 days after this update.
+// v1.57 every isle's wild trees grow back: Old Pinewood's the next day, the others after 3 days. Trees felled before v1.57 come back 3 days after this update.
 const ISLE_REGROW_DAYS = 3;
 function pinesRegrow(){
   if (VISIT || TRIP || S.pinesDay===today()) return; S.pinesDay=today(); const PC=(S.pinesCut=S.pinesCut||{});
@@ -3366,7 +3385,7 @@ function landmark3(kind, lm){
   if (kind==='meadow' && lm.userData.setMill){ const M0=SY.mill; lm.userData.setMill({ sails:!!(M0 && M0.sails), wheel:!!(M0 && M0.wheel) }); }
   if (kind==='dunes' && SY.wreck && SY.wreck.bell) addBell(lm); }
 function addBell(lm){ if (lm.userData.bell3) return; const b=S3.buildDivingBell(), at=lm.userData.bellAt||[3.6,4.3]; b.position.set(at[0],0,at[1]); b.rotation.y=-0.5; lm.add(b); lm.userData.bell3=b; bellOnGround(lm); }
-// v1.56 the bell stands out on the sand beside the bigger wreck, so it sits on the ground there
+// v1.57 the bell stands out on the sand beside the bigger wreck, so it sits on the ground there
 function bellOnGround(lm){ const b=lm.userData.bell3; if (!b || !lm.parent) return; lm.updateMatrixWorld(true); const p=lm.localToWorld(new THREE.Vector3(b.position.x,0,b.position.z)); b.position.y=rawHeight(p.x,p.z)-p.y; }
 const meadowLM = () => { const I=ISLES.find(I=>I.kind==='meadow'); return I && I.lmObj; };
 const dunesLM = () => { const I=ISLES.find(I=>I.kind==='dunes'); return I && I.lmObj; };
@@ -4488,7 +4507,7 @@ const unfoundPlans = () => RARE_WORK.filter(r=>!knowsPlan(r.id));
 const rareChance = (k, potion) => RARE_ODDS[k]*(potion && potionOn(potion) ? 2 : 1)*EN.rareMult(k);
 function rareRoll(k, id, at, potion){
   if (GUEST || Math.random()>=rareChance(k, potion)) return false;
-  const p=at.clone(); setTimeout(()=>{ dropNear(id, p, 1.4); sparkle(p.clone().add(new THREE.Vector3(0,1.4,0))); Snd.jingle(); toast('Rare find!', thumb(id), 'new', `${ITEMS[id].name} ${rarityTag(ITEMS[id])}`); }, 450);
+  const p=at.clone(), g=DROP_GRP; setTimeout(()=>{ dropNear(id, p, 1.4, false, undefined, g); sparkle(p.clone().add(new THREE.Vector3(0,1.4,0))); Snd.jingle(); toast('Rare find!', thumb(id), 'new', `${ITEMS[id].name} ${rarityTag(ITEMS[id])}`); }, 450);
   return true; }
 function learnPlan(planId){ if (ITEMS[planId].ench) return EN.learnScroll(planId); const fid=ITEMS[planId].learns;
   if (ITEMS[planId].wood){ if (!learnWood(fid)) return false; Snd.fanfare(); toast(`Woodworking plan: ${ITEMS[fid].name}!`, thumb(fid), 'new', S.craft ? 'It\'s in Woodworking now.' : 'Once Bramble teaches you woodworking, you can make it.'); return true; }
@@ -4497,8 +4516,8 @@ function learnPlan(planId){ if (ITEMS[planId].ench) return EN.learnScroll(planId
   return true; }
 // v1.34: a Woodworking Plan for something you don't know yet (not the starting ones)
 const randomWoodPlan = (r=Math.random) => { const u=woodUnknown().filter(id=>ITEMS['wplan_'+id]); return u.length ? 'wplan_'+u[Math.floor(r()*u.length)] : null; };
-function woodPlanRoll(chance, at){ if (!S.craft || Math.random()>=chance) return false; const pl=randomWoodPlan(); if (!pl) return false; const p=at.clone();
-  setTimeout(()=>{ dropNear(pl, p, 1.2); sparkle(p.clone().add(new THREE.Vector3(0,1,0))); Snd.jingle(); toast('A rolled-up woodworking plan!', thumb(ITEMS[pl].learns), 'new', ITEMS[ITEMS[pl].learns].name); }, 1000); return true; }
+function woodPlanRoll(chance, at){ if (!S.craft || Math.random()>=chance) return false; const pl=randomWoodPlan(); if (!pl) return false; const p=at.clone(), g=DROP_GRP;
+  setTimeout(()=>{ dropNear(pl, p, 1.2, false, undefined, g); sparkle(p.clone().add(new THREE.Vector3(0,1,0))); Snd.jingle(); toast('A rolled-up woodworking plan!', thumb(ITEMS[pl].learns), 'new', ITEMS[ITEMS[pl].learns].name); }, 1000); return true; }
 const randomPlan = (r=Math.random) => { const u=unfoundPlans(); return u.length ? u[Math.floor(r()*u.length)].plan : null; };
 function beachSpot(r){ for(let k=0;k<40;k++){ const a=r()*TAU, d=(40+r()*16)*SC; const x=Math.cos(a)*d, z=Math.sin(a)*d; if(isBeach(x,z) && !onDock(x,z)) return [x,z]; } return null; }
 // v1.13: daily stock is rolled by rarity. Investing in a shop makes rare and very rare pieces more likely.
@@ -5614,16 +5633,16 @@ const COVER_CHUNKS=OUT.children.slice(COVER0).filter(o=>o.isInstancedMesh && o.b
 /* ---------- v1.36 NEW LAND: building an isle when you come near, hiding it when you go away ----------
    Building happens a piece per frame (ground, bridge, landmark, trees, rocks, grass, today's finds) so there's no long stall. */
 const ISLE_IN=70, ISLE_OUT=105;
-// v1.56 more trees everywhere but Old Pinewood (its layout stays as it was); the dunes are palms only. The meadow also has an orchard (its own keys).
+// v1.57 more trees everywhere but Old Pinewood (its layout stays as it was); the dunes are palms only. The meadow also has an orchard (its own keys).
 const ISLE_TREES = {
   meadow:[['fruittree',7],['blossom',5],['birch',4],['oak',4],['maple',2],['blossom2',4],['birch2',3],['oak2',3],['maple2',3]], dunes:[['palm',34]],
   bluff:[['pine',10],['cedar',8],['birch',2],['pine2',6],['cedar2',5],['birch2',3]], crags:[['cedar',6],['pine',4],['cedar2',6],['pine2',5]], pines:[['pine',24],['cedar',8]], starfall:[['birch',5],['blossom',6],['birch2',3],['blossom2',4]] };
-const ISLE_ROCKS = { meadow:2, dunes:0, bluff:5, crags:8, pines:2, starfall:2 };   // v1.56 the crags are a proper quarry now
+const ISLE_ROCKS = { meadow:2, dunes:0, bluff:5, crags:8, pines:2, starfall:2 };   // v1.57 the crags are a proper quarry now
 // the meadow grows a fruit the main island doesn't, the same one every time
 const isleFruit = () => { const pool=NATIVE_FRUITS.filter(f=>f!==S.nativeFruit); return pool[hashStr('isleFruit:'+S.seed)%pool.length]; };
 function isleSpot(I, r, minH, maxH, rad, keep=true){   // v1.52 keep=false only looks, so a passing bug doesn't hold the spot (or shift where the isle's trees go)
   const markR = I.kind==='dunes' ? 13 : 7.5, mine=(p)=>String(p.key||'').startsWith('x'+I.k+'_');
-  // v1.56 a second, looser look when the first finds nothing (the crags used to lose a rock or two that way). Not on Old Pinewood, so its trees stay put.
+  // v1.57 a second, looser look when the first finds nothing (the crags used to lose a rock or two that way). Not on Old Pinewood, so its trees stay put.
   for (let pass=0; pass<(I.kind==='pines'?1:2); pass++) for (let k=0;k<(pass?160:90);k++){ const a=r()*TAU, d=Math.sqrt(r())*I.r*0.95*ISL.growAt(I,a), x=I.cx+Math.cos(a)*d, z=I.cz+Math.sin(a)*d, h=rawHeight(x,z);
     if (h<minH || h>maxH || ISL.isleSlope(I,x,z)>(pass?1.0:0.7) || islePathDist(I,x,z)<(pass?1.7:2.3)) continue;
     if (Math.hypot(x-I.mark[0],z-I.mark[1])<markR || onBridge(x,z) || XBR.some(b=>Math.hypot(x-b.a[0],z-b.a[1])<4.5 || Math.hypot(x-b.b[0],z-b.b[1])<4.5)) continue;
@@ -5636,7 +5655,7 @@ function isleSpot(I, r, minH, maxH, rad, keep=true){   // v1.52 keep=false only 
 function isleCover(I, grp){
   const r=mulberry32((S.seed|0)+I.k*313+7), dummy=new THREE.Object3D(), col=new THREE.Color(), [x0,z0,x1,z1]=I.box, W=x1-x0, rx=()=>x0+r()*W, rz=()=>z0+r()*W;
   const ok=(x,z,pd=1.3)=>{ if (ISL.isleT(I,x,z)>1.02) return false; const h=rawHeight(x,z); if (h<SAND_H+0.15 || ISL.isleSlope(I,x,z)>1.3 || islePathDist(I,x,z)<pd || onBridge(x,z)) return false;
-    if (I.sand) return false;   // v1.56 the dunes are bare sand
+    if (I.sand) return false;   // v1.57 the dunes are bare sand
     if ([I.spires, I.fxSpires].some(L=>L && L.some(([px,pz,pr])=>Math.hypot(x-px,z-pz)<pr*1.05))) return false; if (I.fxOn && I.fxOn.length && (ISL.fxBlock(I,x,z,0.2) || ISL.fxWet(I,x,z))) return false; return true; };
   const grow=I.gr ? I.gr.reduce((a,v)=>a+v*v,0)/I.gr.length : 1, frac=(I.r*I.r*grow)/(2500*SC*SC), mul={ meadow:1.25, dunes:0.35, bluff:0.9, crags:0.7, pines:0.75, starfall:0.8 }[I.kind];
   const add=im=>{ im.castShadow=false; im.receiveShadow=true; im.computeBoundingSphere(); grp.add(im); };
@@ -5652,14 +5671,14 @@ function isleCover(I, grp){
   if (PAL.flower.length && I.kind!=='dunes'){ const drifts=Math.round((I.kind==='meadow'?70:I.kind==='bluff'?20:I.kind==='pines'?6:I.kind==='crags'?14:10)*grow)+ISL.fxSpots(I,'field').length*14, fN=drifts*7, sm=GC.swayMat({ height:0.36, amp:0.03, rough:0.8 }), pm=GC.swayMat({ height:0.36, amp:0.03, rough:0.55 });
     const stems=new THREE.InstancedMesh(GC.flowerStemGeo(), sm, fN), daisy=new THREE.InstancedMesh(GC.petalsDaisyGeo(), pm, fN), cup=new THREE.InstancedMesh(GC.petalsCupGeo(), pm, fN), ctr=new THREE.InstancedMesh(GC.flowerCenterGeo(), pm, fN);
     daisy.count=cup.count=0; let m=0;
-    const beds=[...ISL.fxSpots(I,'field'), ...ISL.fxSpots(I,'garden')];   // v1.56 the meadow's flower fields: thick drifts in a few places
+    const beds=[...ISL.fxSpots(I,'field'), ...ISL.fxSpots(I,'garden')];   // v1.57 the meadow's flower fields: thick drifts in a few places
     for (let k=0;k<drifts*3 && m<fN;k++){ const B=k<beds.length*14 ? beds[k%beds.length] : null, ba=r()*TAU, bd=B ? Math.sqrt(r())*B.r : 0, px=B ? B.x+Math.cos(ba)*bd : rx(), pz=B ? B.z+Math.sin(ba)*bd : rz(); if (!ok(px,pz,1.6)) continue; const fc=new THREE.Color(PAL.flower[Math.floor(r()*PAL.flower.length)]), isCup=r()<0.35; wildFlowerSpots.push([px,pz]);
       for (let j=0;j<7&&m<fN;j++){ const x=px+(r()-0.5)*1.7, z=pz+(r()-0.5)*1.7; if (!ok(x,z,1.2)) continue;
         dummy.position.set(x,rawHeight(x,z)-0.02,z); dummy.rotation.set((r()-0.5)*0.15,r()*TAU,(r()-0.5)*0.15); dummy.scale.setScalar(1.15+r()*0.55); dummy.updateMatrix();
         stems.setMatrixAt(m,dummy.matrix); ctr.setMatrixAt(m,dummy.matrix); const hm=isCup?cup:daisy; hm.setMatrixAt(hm.count,dummy.matrix); hm.setColorAt(hm.count, col.copy(fc).offsetHSL(0,0,(r()-0.5)*0.06)); hm.count++; m++; } }
     stems.count=ctr.count=m; [stems,daisy,cup,ctr].forEach(add); GC.tickWind(stems); }
   // v1.37 Old Pinewood: ferns under the pines, mossy boulders, and low mist that drifts through in the mornings
-  if (I.kind==='pines' || I.kind==='crags'){ const NF=I.kind==='pines'?520:260, fm=new THREE.MeshStandardMaterial({ color:0xffffff, side:THREE.DoubleSide, roughness:0.85 }), ferns=new THREE.InstancedMesh(RF.fernGeo(), fm, NF); let n=0;   // v1.56 ferns in the crags' shady corners too
+  if (I.kind==='pines' || I.kind==='crags'){ const NF=I.kind==='pines'?520:260, fm=new THREE.MeshStandardMaterial({ color:0xffffff, side:THREE.DoubleSide, roughness:0.85 }), ferns=new THREE.InstancedMesh(RF.fernGeo(), fm, NF); let n=0;   // v1.57 ferns in the crags' shady corners too
     for (let k=0;k<4000 && n<NF;k++){ const x=rx(), z=rz(); if (!ok(x,z,1.5) || vnoise(x*0.12+9,z*0.12) < 0.45) continue; dummy.position.set(x, rawHeight(x,z)-0.02, z); dummy.rotation.set(0, r()*TAU, 0); dummy.scale.setScalar(0.8+r()*0.9); dummy.updateMatrix(); ferns.setMatrixAt(n, dummy.matrix); ferns.setColorAt(n, col.setHex(0x4f8a3a).offsetHSL((r()-0.5)*0.04,0,(r()-0.5)*0.1)); n++; }
     ferns.count=n; add(ferns);
     const mossM=M(0x6a9a48), rockM=MF(0x8a8a80);
@@ -5673,7 +5692,7 @@ function isleCover(I, grp){
 }
 function isleDaily(I){
   if (!S.day) return; const D=(S.day.isl=S.day.isl||{}); if (D[I.k]) return; D[I.k]=1;
-  const r=mulberry32(hashStr(today()+':isle'+I.k+':'+(S.seed|0))), nD={ meadow:3, dunes:5, bluff:2, crags:3, pines:2, starfall:2 }[I.kind], nW={ meadow:3, dunes:0, bluff:1, crags:1, pines:2, starfall:0 }[I.kind], nS={ meadow:1, dunes:12, bluff:0, crags:0, pines:0, starfall:0 }[I.kind];   // v1.56 the longer dunes: twice the shells, more to dig
+  const r=mulberry32(hashStr(today()+':isle'+I.k+':'+(S.seed|0))), nD={ meadow:3, dunes:5, bluff:2, crags:3, pines:2, starfall:2 }[I.kind], nW={ meadow:3, dunes:0, bluff:1, crags:1, pines:2, starfall:0 }[I.kind], nS={ meadow:1, dunes:12, bluff:0, crags:0, pines:0, starfall:0 }[I.kind];   // v1.57 the longer dunes: twice the shells, more to dig
   const spot=(minH,maxH,rad)=>{ for (let k=0;k<60;k++){ const a=r()*TAU, d=Math.sqrt(r())*I.r*0.95*ISL.growAt(I,a), x=I.cx+Math.cos(a)*d, z=I.cz+Math.sin(a)*d, h=rawHeight(x,z);
     if (h<minH || h>maxH || !walkable(x,z) || blocked(x,z,rad) || onBridge(x,z) || islePathDist(I,x,z)<1.2) continue; return [x,z]; } return null; };
   for (let i=0;i<nD;i++){ const p=spot(SAND_H+0.15, I.sky?20:12, 1.2); if (!p) continue; S.day.digs.push({ x:p[0], z:p[1], dug:false }); dailyEnts.push(new DigSpot(S.day.digs.length-1, p[0], p[1])); }
@@ -5699,18 +5718,18 @@ function loadIsle(I, now){
     ()=>{ if (I.kind==='pines'){ const at=SY.pinesAt||workshopSpot(I); if (!SY.pinesAt && !VISIT){ SY.pinesAt=at; save(); } I.taken.push([at[0], at[1], 6.5]); }
       if (I.kind==='crags'){ const at=SY.cragsAt||workshopSpot(I); if (!SY.cragsAt && !VISIT){ SY.cragsAt=at; save(); } I.taken.push([at[0], at[1], 6]); } },   // v1.38 room for the forge
     ()=>{ const [mx,mz,ma]=I.mark, lm=ISL.buildLandmark(I.kind, (S.seed|0)+I.k), f=[Math.cos(ma+Math.PI), Math.sin(ma+Math.PI)];
-      if (I.kind==='dunes' || I.kind==='crags') mergeStatic(lm);   // v1.56 the wreck and the arch have no moving parts: fewer draw calls
+      if (I.kind==='dunes' || I.kind==='crags') mergeStatic(lm);   // v1.57 the wreck and the arch have no moving parts: fewer draw calls
       I.lmObj=lm; if (lm.userData.setLit) lm.userData.setLit(lightLit()); landmark3(I.kind, lm);   // v1.39 the mill's sails and wheel, the diving bell by the wreck
       const th=new Thing('landmark', mx, mz, I.kind==='dunes'?3.3:2.5, lm, 'Look', ()=> I.kind==='bluff' ? lighthouseAct(lm) : I.kind==='meadow' ? millAct(lm) : I.kind==='dunes' ? wreckAct(lm) : I.kind==='starfall' ? starAltarAct(lm) : dialog(ISL.ISLE_INFO[I.kind].name, 420, [lm.userData.desc]), { reach:lm.userData.hull ? 10.5 : 3.6 }); th.obj.rotation.y=Math.atan2(f[0], f[1]);
-      if (lm.userData.hull){ const ry=th.obj.rotation.y, c=Math.cos(ry), s=Math.sin(ry);   // v1.56 the bigger wreck's hull is solid all along
+      if (lm.userData.hull){ const ry=th.obj.rotation.y, c=Math.cos(ry), s=Math.sin(ry);   // v1.57 the bigger wreck's hull is solid all along
         setRects('wreckhull', lm.userData.hull.map(([lx,lz,hw])=>{ const x=mx+lx*c+lz*s, z=mz-lx*s+lz*c; return [x-hw*0.75, z-hw*0.75, x+hw*0.75, z+hw*0.75]; })); bellOnGround(lm); } },
-    // v1.56 the features: ruins, pools, the waterfall, the grotto's moss, Starfall's glowing garden and drifting rocks
+    // v1.57 the features: ruins, pools, the waterfall, the grotto's moss, Starfall's glowing garden and drifting rocks
     ()=>{ if (!I.fxOn || !I.fxOn.length) return; const fx=ISL.buildIsleFx(I, (x,z)=>rawHeight(x,z), (S.seed|0)+I.k*53); grp.add(fx); I.fxTick=fx.userData.tick;
       const R=fx.userData.rects.slice(); for (const [x,z,rr] of fx.userData.solid) R.push([x-rr,z-rr,x+rr,z+rr]); setRects('islefx'+I.k, R);
       for (const b of (I.footBr||[])) grp.add(ISL.buildIsleBridge(b, rawHeight)); mergeStatic(fx, fx.userData.keep||[]); },
     ...ISLE_TREES[I.kind].map(([kind,n])=>()=>{ const type=kind.replace(/2$/,''); for (let i=0;i<n;i++){ const key='x'+I.k+'_'+kind+i, palm=type==='palm', p=isleSpot(I, r, palm?0.25:SAND_H+0.2, palm?(I.sand?4.6:2.4):I.sky?20:14, 2.6); if (!p || S.cut[key]==='gone') continue;   // one kind of tree per frame
         trees.push(new Tree(key, p[0], p[1], type, type==='fruittree'?isleFruit():palm?'coconut':null)); } }),
-    ()=>{ for (const F of ISL.fxSpots(I,'orchard')) F.trees.forEach(([x,z],i)=>{ const key='x'+I.k+'_orch'+i; I.taken.push([x,z,2.2]); if (S.cut[key]==='gone') return; trees.push(new Tree(key, x, z, 'fruittree', isleFruit())); }); },   // v1.56 the meadow's orchard, in rows
+    ()=>{ for (const F of ISL.fxSpots(I,'orchard')) F.trees.forEach(([x,z],i)=>{ const key='x'+I.k+'_orch'+i; I.taken.push([x,z,2.2]); if (S.cut[key]==='gone') return; trees.push(new Tree(key, x, z, 'fruittree', isleFruit())); }); },   // v1.57 the meadow's orchard, in rows
     ()=>{ for (let i=0;i<ISLE_ROCKS[I.kind];i++){ const p=isleSpot(I, r, SAND_H+0.1, I.sky?20:14, 2.2) || isleSpot(I, r, SAND_H+0.1, I.sky?20:14, 1.3); if (!p) continue; const rk=new Rock(200+I.k*10+i, p[0], p[1], r, I.kind==='crags'); rocks.push(rk); } },
     ()=>{ isleCover(I, grp); },
     ()=>{ isleDaily(I); I.ready=true; if (I.kind==='pines'){ workshopKey=''; refreshWorkshop(); } if (I.kind==='crags'){ S2B.forgeKey=''; refreshForge(); } isleShown(I, I.shown); },
@@ -5723,7 +5742,7 @@ function updateStreaming(dt,t){
   for (const I of ISLES){ if (I.queue && I.queue.length){ I.queue.shift()(); break; } }   // one piece of one isle per frame
   for (const I of ISLES) if (I.shown && I.lmObj){ const u=I.lmObj.userData; if (u.spin) u.spin.rotation.z-=dt*0.5*(u.spinRate??1); if (u.wheel && u.wheel.parent.visible) u.wheel.rotation.x+=dt*0.8;
       if (u.beam){ u.beam.rotation.y+=dt*0.6; u.beamMat.opacity=0.22*World.night; } }
-  for (const I of ISLES) if (I.shown && I.fxTick) I.fxTick(dt,t);   // v1.56 the waterfall, Starfall's drifting rocks
+  for (const I of ISLES) if (I.shown && I.fxTick) I.fxTick(dt,t);   // v1.57 the waterfall, Starfall's drifting rocks
   for (const I of ISLES) if (I.shown && I.mist){ const h=Time.hour(), k=(1-smooth(9,12,h))*smooth(4,6.5,h)*0.75+0.18; for (const sp of I.mist.children){ sp.material.opacity=k*(0.5+0.5*Math.sin(t*0.1+sp.userData.ph)); sp.position.x+=Math.sin(t*0.05+sp.userData.ph)*dt*0.4; } }
   for (const I of ISLES) if (I.shown && I.swing){ const onIt=!!onBridge(player.pos.x,player.pos.z) && onBridge(player.pos.x,player.pos.z)===I.bridge; I.swingA=lerp(I.swingA||0.015, onIt?0.05:0.015, Math.min(1,dt*2)); I.swing.rotation.x=Math.sin(t*1.3)*I.swingA; }
   if ((streamT-=dt)>0) return; streamT=0.35;

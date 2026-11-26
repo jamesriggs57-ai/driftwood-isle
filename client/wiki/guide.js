@@ -136,7 +136,7 @@ ${note('Guest mode caps your wallet at 10,000 clams. Make an account to lift it.
 <ul><li><b>Island Records</b> board: islanders, museum donations, shops backed, things found, achievements and best friends. Read it for the island stories so far and a shortcut to Town projects.</li>
 <li><b>Our islanders</b>: a portrait of everyone who lives here. Look at it for each islander's friendship hearts.</li>
 <li>A table with a <b>map of the island</b> (Look opens the full map), and benches for town meetings.</li>
-<li>The <b>Grand Town Hall</b> is bigger, with columns, a chandelier, a grandfather clock and a trophy case that gets a prize for every 10 achievements (up to 8).</li></ul>
+<li>The <b>Grand Town Hall</b> is bigger, with columns, two chandeliers, a grandfather clock and a trophy case that gets a prize for every 10 achievements (up to 8).</li></ul>
 `},
 
 { id:'islanders', group:'island', title:'Islanders and friendship', data:'residents', html:`
@@ -250,6 +250,7 @@ ${tip('Making 10 <b>different</b> pieces is what starts Bramble\'s workshop stor
 <h3>Moving buildings</h3>
 <p>Needs a house with 16 floor squares and 2 shops backed. Your house 30,000, anything else 50,000. You see a see-through preview before paying. (Keepers you've invested in will also move their own buildings for free.)</p>
 <p>The check uses the building's real outline, so buildings can stand about a step apart. If a spot is a little off, the preview slides over to the nearest spot that fits. When it can't fit, it says what is in the way (the sea, the beach, a river or pond, a cliff, a bridge, the plaza, a garden, ground that's too uneven, or which building is too close) and a red marker shows where.</p>
+<p>Shop stands, the museum and the town hall are checked at the size they grow to, so there is always room for the next upgrade. That also means other buildings can't go where one of those will grow.</p>
 <p>Things you placed or planted where it lands (furniture, flowers, saplings, dropped items) are set down beside it; if there is no room anywhere near, furniture goes to your bag. Wild flowers and stumps there are cleared.</p>
 <h3>Shaping land</h3>
 <p>Needs a house with 24 squares and all 3 shops backed. Raise or lower terraces, dig ponds and rivers, fill them in, priced per square. A preview shows the plan first.</p>

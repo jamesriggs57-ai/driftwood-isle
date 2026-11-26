@@ -147,7 +147,7 @@ export function buildHallRoom(tier, island){
   if (big){
     add(runner(D-3.2), 0, 0, 1.0);
     for (const sx of [-1,1]) for (const z of [-D/2+3.4, D/2-1.2]){ add(column(3.2), sx*(W/2-2.0), 0, z); box(sx*(W/2-2.0), z, 0.62, 0.62); }
-    for (const cz of [-D/2+3.4, D/2-1.2]) add(chandelier(), 0, 2.95, cz);
+    for (const cx of [-W/4, W/4]) add(chandelier(), cx, 2.95, 0.6);   // over the benches, clear of the desk and the map table
     const gf=new THREE.Group(); FURN_BUILDERS.grandfather(gf); add(gf, -W/2+0.55, 0, 2.2, Math.PI/2); box(-W/2+0.55, 2.2, 0.7, 0.8);
     trophies=trophyCase(); add(trophies, W/2-0.5, 0, 2.4, -Math.PI/2); box(W/2-0.5, 2.4, 0.7, 1.9);
     const gl=new THREE.Group(); FURN_BUILDERS.globe(gl); add(gl, -2.0, 0, deskZ+0.1); box(-2.0, deskZ+0.1, 0.6, 0.6);

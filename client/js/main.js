@@ -4385,10 +4385,16 @@ const resAt = (x,z,d=1.5) => RESIDENTS.find(R=>R.home && Math.hypot(R.home[0]-x,
 function bldName(kind, e){ if (kind==='rhome' || kind==='plot'){ const R=e && resAt(e.pos.x, e.pos.z, 2.5); return R ? R.name+(kind==='plot'?'\'s plot':'\'s house') : kind==='plot'?'a neighbor\'s plot':'a neighbor\'s house'; }
   if (BLD_NAMES[kind]) return BLD_NAMES[kind]; const R=RESIDENTS.find(R=>R.id===kind); return R ? R.name+'\'s house' : 'another building'; }
 const bldEntOf = key => { const o=bldObj(key); return o ? ents.find(e=>e.obj===o && !e.removed) || null : null; };
-// the building's outline relative to where it stands now: its wall rectangles, or a circle for cottages and stands
+// a building that can still grow is checked at its biggest size, so it never grows into a neighbor later
+const GROWS=['shop','aquarium','garden','museum','hall'], _growR={};
+function grownRects(key){ if (key in _growR) return _growR[key]; let m=null;
+  try { m = key==='shop' ? buildStore(3) : key==='aquarium'||key==='garden' ? buildShopBuilding(key,3) : key==='museum' ? buildMuseumTier(3) : key==='hall' ? buildTownHall(2) : null; } catch(e){ m=null; }
+  return (_growR[key] = m && m.userData.rects ? m.userData.rects.map(q=>q.slice(0,4)) : null); }
+// the building's outline relative to where it stands now: its wall rectangles (at their biggest), or a circle for cottages and stands
 function moveBody(key){
   const p=placeOf(key), e=bldEntOf(key), off=q=>[q[0]-p[0], q[1]-p[1], q[2]-p[0], q[3]-p[1]];
   const own = e && e.kind!=='rhome' && e.kind!=='plot' ? RECTS.filter(q=>q[4]===e.kind).map(off) : [];
+  if (GROWS.includes(key) && own.length) own.push(...(grownRects(key)||[]));
   if (key==='home') own.push(off(lotRect()));   // the lot moves with the house, so it has to fit too
   const dp = e && (e.kind==='rhome' ? doorOf(e) : e.doorPt), door = dp ? [dp[0]-p[0], dp[1]-p[1]] : [0, 3.6];
   if (own.length) return { rects:own, door, self:e };
@@ -4429,6 +4435,8 @@ function moveProblem(x, z, key, B=moveBody(key)){
   // other buildings: their walls (plus a small gap) and the ground in front of their doors
   const mine=B.self, myKind = mine && mine.kind!=='rhome' && mine.kind!=='plot' ? mine.kind : null;
   for (const q of RECTS){ if (q[4]===myKind) continue; if (bodyRectDist(B,x,z,q)<BLD_GAP){ const e=ents.find(e=>!e.removed && e.kind===q[4]); return no(`Too close to ${bldName(q[4], e)}.`, (q[0]+q[2])/2, (q[1]+q[3])/2); } }
+  for (const k of GROWS){ const pk=PLACES[k], G0=pk && k!==key && grownRects(k); if (!G0) continue;
+    for (const q of G0){ const r=[q[0]+pk[0], q[1]+pk[1], q[2]+pk[0], q[3]+pk[1]]; if (bodyRectDist(B,x,z,r)<BLD_GAP){ const e=bldEntOf(k); return no(`Too close to ${bldName(k==='shop'?'shop':k, e)}. It needs that room when it grows.`, (r[0]+r[2])/2, (r[1]+r[3])/2); } } }
   for (const e of ents){ if (e.removed || e===mine || !(e instanceof Building) || e.pos.x>500) continue;
     const hasR=RECTS.some(q=>q[4]===e.kind && e.kind!=='rhome' && e.kind!=='plot');
     if (!hasR && bodyDist(B,x,z,e.pos.x,e.pos.z) < (e.kind==='rhome'?3.2:e.kind==='plot'?2.6:e.r+0.6)+BLD_GAP) return no(`Too close to ${bldName(e.kind, e)}.`, e.pos.x, e.pos.z);

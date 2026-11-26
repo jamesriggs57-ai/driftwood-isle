@@ -61,7 +61,7 @@ export const SKY_CUT = SKY - 4;
 
 /* ---------- Where they go ----------
    o: { seed, SC, shore(a) -> main island shore radius at angle a, ok(a) -> can a bridge land on the main island there,
-        clear(x,z,r,k) -> optional, is isle k clear of the main island's far shore there (v1.54) }
+        clear(x,z,r,k) -> optional, is isle k clear of the main island's far shore there (v1.56) }
    Meadow, dunes and bluff each hang off the main island at their own angle; the crags hang off the bluff. */
 export function planIsles(kinds, o){
   if (typeof kinds==='number') kinds=OLD_ORDER.slice(0,kinds);
@@ -84,7 +84,7 @@ export function planIsles(kinds, o){
       const B=out.find(J=>J.kind==='bluff'); if (!B) break;
       // out past the bluff, turned away from the main island so it never comes back toward it
       let a=Math.atan2(B.cz, B.cx) + 0.75; const tryAt=aa=>[B.cx+Math.cos(aa)*(B.r*0.97+I.br.gap+I.r*0.97), B.cz+Math.sin(aa)*(B.r*0.97+I.br.gap+I.r*0.97)];
-      const crowded=(x,z)=>out.some(J=>J!==B && Math.hypot(x-J.cx,z-J.cz)<J.r+I.r+20) || (o.clear && !o.clear(x,z,I.r,k));   // v1.54 also clear of the main island's far shore
+      const crowded=(x,z)=>out.some(J=>J!==B && Math.hypot(x-J.cx,z-J.cz)<J.r+I.r+20) || (o.clear && !o.clear(x,z,I.r,k));   // v1.56 also clear of the main island's far shore
       let [x,z]=tryAt(a); if (crowded(x,z)){ a=Math.atan2(B.cz,B.cx)-0.75; [x,z]=tryAt(a); }
       I.a=a; I.dir=[Math.cos(a), Math.sin(a)]; I.from=out.indexOf(B); I.cx=x; I.cz=z;
     } else {   // v1.41 Starfall: up a stair from the crags, further out again, clear of everything else

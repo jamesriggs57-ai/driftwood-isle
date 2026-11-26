@@ -23,7 +23,7 @@ import { LAYOUTS, DEFAULT_SHAPE, islandRadius, generateLayout, bluffD, generateT
 import * as VY from './voyage.js';
 import * as TALK from './talk.js';
 import * as ISL from './expand.js';
-import * as XT from './extend.js';   // v1.54 the far shore: one side of the island reaches further out
+import * as XT from './extend.js';   // v1.56 the far shore: one side of the island reaches further out
 import * as RF from './reef.js';
 import * as TH from './townhall.js';   // v1.49 town hall inside
 import { createEnchant } from './enchant.js';   // v1.40 tools and enchanting
@@ -273,10 +273,10 @@ let _plr=null;   // the player, once it exists (walkable() is used before then)
 const lowTide = () => ((Date.now()/60000)%30) < 12;
 const tideMinutes = () => { const m=(Date.now()/60000)%30; return m<12 ? Math.ceil(12-m) : Math.ceil(30-m); };
 const onBar = (x,z) => !!LAY.bar && polyDist(x,z,LAY.bar)<2.0 && Math.hypot(x-LAY.islet.x,z-LAY.islet.z)>LAY.islet.r-0.4 && Math.hypot(x,z)/islandRadius(LAY, Math.atan2(z,x))>0.97;
-function islandR0(a){ return islandRadius(LAY, a); }   // the coast as it was before v1.54 (town spots and the original trees are still placed by it)
+function islandR0(a){ return islandRadius(LAY, a); }   // the coast as it was before v1.56 (town spots and the original trees are still placed by it)
 // v1.37: which isles have risen, in the order they rose (Old Pinewood joined the list; older islands keep the v1.36 order)
 const ISLE_K = (TRIP || GUEST) ? [] : (Array.isArray(S.terra.isleK) && S.terra.isleK.length===(S.terra.isles|0) ? S.terra.isleK.filter(k=>ISL.ISLE_INFO[k]) : ISL.OLD_ORDER.slice(0, clamp((S.terra.isles|0), 0, 4)));
-/* v1.54 THE FAR SHORE: about half as much land again, all off one side and left wild (extend.js has the shape).
+/* v1.56 THE FAR SHORE: about half as much land again, all off one side and left wild (extend.js has the shape).
    The side is picked once, clear of every isle (raised, or still to come in its usual place), their bridges, the dock and the
    river mouth, and kept in S.terra.ext so it never moves. Trip islands stay as they are. */
 let EXT=null;
@@ -299,7 +299,7 @@ const islandT = (x,z) => EXT && !extOff ? XT.extT(islandR0, EXT, x, z) : Math.hy
 const EXT_BOX = EXT ? XT.extBox(islandR0, EXT, 0) : null;   // the island and its new land, edge to edge
 // Cliff coast direction: c > 0 on the cliff side (for the preset Highlands this is the old cos(angle) on the west)
 const cliffC = a => LAY.cliff ? -Math.cos(a - LAY.cliff.a) : 0;
-function baseHeightOld(x,z){ extOff=true; const h=baseHeight(x,z); extOff=false; return h; }   // v1.54 the island as the original trees knew it (before the far shore)
+function baseHeightOld(x,z){ extOff=true; const h=baseHeight(x,z); extOff=false; return h; }   // v1.56 the island as the original trees knew it (before the far shore)
 function baseHeight(x, z){
   const a=Math.atan2(z,x), t=islandT(x,z);
   let h = -2.4 + 2.75*smooth(1.13, 0.99, t) + 0.95*smooth(0.96, 0.88, t);
@@ -325,10 +325,10 @@ function baseHeight(x, z){
    'hills': the earlier smooth-hills test. 'flat': the original island.
    Trees and rocks are still placed using the original heights, so every saved tree keeps its spot. */
 const TERRAIN_STYLE='tiers';   // gentle terraces are the island's terrain (decided 2026-11-22)
-const MOUNDS = EXT ? [...(LAY.mounds||[]), ...XT.extMounds(islandR0, EXT, SC)] : LAY.mounds;   // tier style (v1.54: a few low hills out on the new land)
+const MOUNDS = EXT ? [...(LAY.mounds||[]), ...XT.extMounds(islandR0, EXT, SC)] : LAY.mounds;   // tier style (v1.56: a few low hills out on the new land)
 const TIER = { step:0.55, off:0.85, riser:0.2 };   // terrace height, lowest terrace, share of each step used by the slope between terraces
 const HGR = Math.ceil(62*SC);   // the height grid covers the whole island (bigger for generated islands)
-// v1.54: a box, grown on the new land's side only (same 0.5 m cells, lined up with the old ones)
+// v1.56: a box, grown on the new land's side only (same 0.5 m cells, lined up with the old ones)
 const HGB = [-HGR, -HGR, HGR, HGR]; if (EXT_BOX){ const pad=12*SC; HGB[0]=Math.min(HGB[0], Math.floor(EXT_BOX[0]-pad)); HGB[1]=Math.min(HGB[1], Math.floor(EXT_BOX[1]-pad)); HGB[2]=Math.max(HGB[2], Math.ceil(EXT_BOX[2]+pad)); HGB[3]=Math.max(HGB[3], Math.ceil(EXT_BOX[3]+pad)); }
 const HG = { x0:HGB[0], z0:HGB[1], step:0.5, nx:Math.round((HGB[2]-HGB[0])*2)+1, nz:Math.round((HGB[3]-HGB[1])*2)+1, h:null, s:null };
 function hillSample(arr, x, z){ const fx=(x-HG.x0)/HG.step, fz=(z-HG.z0)/HG.step; if(fx<0||fz<0||fx>=HG.nx-1||fz>=HG.nz-1) return 0;
@@ -504,7 +504,7 @@ function genPathsRouted(P){
 const BLOCK_R = k => k==='portal'?2.4 : k==='museum'?6.4 : k==='home'?0 : k==='aquarium'||k==='garden'?4.0 : k==='shop'?3.4 : k==='tower'?3.0 : k==='hall'?HALL_FOOT-0.4 : 2.9;
 function genPathsGrid(P, only){
   const ST=1.25, R0=Math.ceil(66*SC), n0=Math.ceil(R0*2/ST);
-  // v1.54: the grid grows whole cells toward the new land, so the old cells (and the paths through them) stay where they were
+  // v1.56: the grid grows whole cells toward the new land, so the old cells (and the paths through them) stay where they were
   const gL=EXT_BOX?Math.max(0,Math.ceil((-R0-EXT_BOX[0]-4)/ST)):0, gT=EXT_BOX?Math.max(0,Math.ceil((-R0-EXT_BOX[1]-4)/ST)):0, gR=EXT_BOX?Math.max(0,Math.ceil((EXT_BOX[2]+4-(n0*ST-R0))/ST)):0, gB=EXT_BOX?Math.max(0,Math.ceil((EXT_BOX[3]+4-(n0*ST-R0))/ST)):0;
   const n=n0+gL+gR, nz=n0+gT+gB, N=n*nz, X=i=>-R0+(i-gL+0.5)*ST, Z=j=>-R0+(j-gT+0.5)*ST;
   const blk=new Uint8Array(N), near=new Float32Array(N);
@@ -615,7 +615,7 @@ const newPathDist = (x,z) => { let m=1e9; for(const p of PATHS_NEW) m=Math.min(m
         let fin=Math.max(cur, s);
         if (((u-4)/2.7)**2+(v/2.1)**2<1) fin=F.top-0.65;   // the pool
         h[j*n+i]=fin-b; } }
-    /* v1.54 the island's original trees and rocks are laid out on the ground as it was before the far shore,
+    /* v1.56 the island's original trees and rocks are laid out on the ground as it was before the far shore,
        so the same trees come up in the same places. Only the old shore on that side is different; work it out there again. */
     if (EXT){ hOld=h.slice(); for(let j=0;j<nz;j++) for(let i=0;i<n;i++){ const x=HG.x0+i*HG.step, z=HG.z0+j*HG.step, a=Math.atan2(z,x);
         if (!extNear(a) || Math.hypot(x,z)<islandR0(a)*0.6) continue;
@@ -643,14 +643,14 @@ function visPathDistH(x,z){ let m=1e9; for(const p of PATHS) m=Math.min(m, polyD
 // v1.37: which isles have risen, in the order they rose (Old Pinewood joined the list; older islands keep the v1.36 order)
 const ISLE_N = ISLE_K.length;
 const angDiff = (a,b) => Math.abs(Math.atan2(Math.sin(a-b), Math.cos(a-b)));
-// v1.54 is a spot clear of the far shore (for the crags and Starfall, which hang off other isles; isles already raised stay put)
+// v1.56 is a spot clear of the far shore (for the crags and Starfall, which hang off other isles; isles already raised stay put)
 const extClear = (x,z,r,k) => !EXT || k<ISLE_K.length || XT.clearance(EXT, { R0:islandR0, SC, isles:[{ cx:x, cz:z, r }], bridges:[], avoid:[] })>=4*SC;
 function mainLanding(a){ const ux=Math.cos(a), uz=Math.sin(a), R0=islandR(a); let d=R0*1.25;
   for (; d>R0*0.55; d-=0.35) if (rawHeight(ux*d, uz*d)>SAND_H+0.2) break;
   d-=1.8; return [ux*d, uz*d]; }
 function landingOK(a){ const [x,z]=mainLanding(a), ux=Math.cos(a), uz=Math.sin(a);
   if (LAY.cliff && cliffC(a)>-0.25) return false;   // not off the sea cliffs
-  if (EXT && angDiff(a, EXT.a)<EXT.W+0.45) return false;   // v1.54 not off the far shore (an isle there would crowd it)
+  if (EXT && angDiff(a, EXT.a)<EXT.W+0.45) return false;   // v1.56 not off the far shore (an isle there would crowd it)
   if (!walkable(x,z) || !walkable(x-ux*3, z-uz*3) || hillSlope(x,z)>1.2 || rawHeight(x,z)>3.2) return false;
   if (polyDist(x,z,RIVER)<9 || (FALLS.length && nearFall(x,z,4))) return false;
   if (x>DOCK.x0-16 && Math.abs(z-DOCK.z)<13) return false;
@@ -737,7 +737,7 @@ function buildTerrain(o={}){
   const I=o.isle||null; let ox=I?o.cx:0, oz=I?o.cz:0;
   const SZ=o.size||132*SC, N=o.N||(SC>1 ? (isMobile?320:400) : (isMobile?245:290));
   let SX=SZ, SZZ=SZ, NX=N, NZ=N;
-  if (!I && EXT_BOX){ const sp=SZ/N, pad=8*SC, x0=Math.min(-SZ/2, EXT_BOX[0]-pad), x1=Math.max(SZ/2, EXT_BOX[2]+pad), z0=Math.min(-SZ/2, EXT_BOX[1]-pad), z1=Math.max(SZ/2, EXT_BOX[3]+pad);   // v1.54 reach out over the new land, same detail
+  if (!I && EXT_BOX){ const sp=SZ/N, pad=8*SC, x0=Math.min(-SZ/2, EXT_BOX[0]-pad), x1=Math.max(SZ/2, EXT_BOX[2]+pad), z0=Math.min(-SZ/2, EXT_BOX[1]-pad), z1=Math.max(SZ/2, EXT_BOX[3]+pad);   // v1.56 reach out over the new land, same detail
     NX=Math.ceil((x1-x0)/sp); NZ=Math.ceil((z1-z0)/sp); SX=NX*sp; SZZ=NZ*sp; ox=x0+SX/2; oz=z0+SZZ/2; }
   const g = new THREE.PlaneGeometry(SX, SZZ, NX, NZ); g.rotateX(-Math.PI/2);
   const pos=g.attributes.position, cols=new Float32Array(pos.count*3), gw=new Float32Array(pos.count), c=new THREE.Color();
@@ -1734,7 +1734,7 @@ for (const R of RESIDENTS) if (PLACES0[R.id]) reserve(PLACES0[R.id][0],PLACES0[R
 reserve(DOCK.x0-2,DOCK.z-3,4); reserve(DOCK.x0,DOCK.z,3);
 for (const [px,pz,pr] of (LAY.pads||[])) reserve(px,pz,pr+1.5);   // v1.27 trip towns and surprises
 if (LAY.islet) reserve(LAY.islet.x, LAY.islet.z, LAY.islet.r+1); for(const b of BRIDGES){ reserve(...bEnd(b,1),2.5); reserve(...bEnd(b,-1),2.5); }
-/* v1.54 the far shore: a random spot out on the new land, beyond a disc (sq false) or a square (sq true) of half-size lim,
+/* v1.56 the far shore: a random spot out on the new land, beyond a disc (sq false) or a square (sq true) of half-size lim,
    spread evenly. EXT_SHARE says how much of the land outside that disc or square the new land is, so daily finds,
    flowers, grass and critters reach it as thickly as the rest of the island. */
 const EXT_RMAX = EXT ? Math.max(...[...Array(41)].map((_,i)=>islandR(EXT.a-EXT.W+i/40*2*EXT.W))) : 0;
@@ -1754,7 +1754,7 @@ const rawHeightOld = (x,z) => { const b=baseHeightOld(x,z), g=hOld||HG.h; return
 function onOldGround(fn){ if (!EXT) return fn(); const h=HG.h, sl=HG.s; extOff=true; if (hOld) HG.h=hOld; if (sOld) HG.s=sOld; try { return fn(); } finally { extOff=false; HG.h=h; HG.s=sl; } }   // the island as it was before the far shore
 function randLand(r, minH, maxH, rad, tries=60, near){
   for(let k=0;k<tries;k++){ let x,z; if(near){ const a=r()*TAU, d=4+r()*near[2]; x=near[0]+Math.cos(a)*d; z=near[1]+Math.sin(a)*d; }
-    else if (EXT && !layoutPhase && r()<EXT_SHARE){ const p=extPt(r, false, 56*SC); if (!p) continue; [x,z]=p; }   // v1.54 out on the far shore now and then
+    else if (EXT && !layoutPhase && r()<EXT_SHARE){ const p=extPt(r, false, 56*SC); if (!p) continue; [x,z]=p; }   // v1.56 out on the far shore now and then
     else { const a=r()*TAU, d=Math.sqrt(r())*56*SC; x=Math.cos(a)*d; z=Math.sin(a)*d; }
     const h=layoutPhase?baseHeightOld(x,z):rawHeight(x,z); if(h>minH && h<maxH && isFree(x,z,rad) && pathDist(x,z)>1.6 && !onDock(x,z) && !onBridge(x,z) && polyDist(x,z,RIVER)>4.6 && Math.hypot(x-POND.x,z-POND.z)>7.5 && !((XW.length||POOLS.length) && xWaterNear(x,z,3.2)) && !(LAY.tortoise && Math.hypot(x-LAY.tortoise.x,z-LAY.tortoise.z)<LAY.tortoise.r+1.2) && (layoutPhase || (!inRects(x,z,rad+0.5) && !inLotZone(x,z,rad)))) return [x,z]; }
   return null;
@@ -2100,10 +2100,10 @@ const HALL_NAMES=['Town Tent','Town Hall','Grand Town Hall'];
 /* v1.26: nobody new moves in while the town is just a tent. Once the town hall is built, newcomers turn up every few
    days (at least MOVE_GAP days after the last one, then a coin flip each day) until 10 islanders live here.
    You can ask an islander to move away as long as at least MIN_RES stay. Someone who left won't come back for a month. */
-// v1.54 newcomers come more slowly (was at least 2 days apart, a 1 in 2 chance a day after that): about one a week now
+// v1.56 newcomers come more slowly (was at least 2 days apart, a 1 in 2 chance a day after that): about one a week now
 const MOVE_GAP=5, MOVE_DAILY=0.4, TOWN_MAX=10, MIN_RES=5, RETURN_DAYS=30;
-const KEEPER_GAP=3;   // v1.54 a keeper (Gill, Hollis, Russet, Quill) turns up at least this many days after anyone new, one at a time
-// v1.54 after the first neighbors, the story's newcomers come in story order; anyone whose dream is already stirring comes first
+const KEEPER_GAP=3;   // v1.56 a keeper (Gill, Hollis, Russet, Quill) turns up at least this many days after anyone new, one at a time
+// v1.56 after the first neighbors, the story's newcomers come in story order; anyone whose dream is already stirring comes first
 const STORY_ORDER=['barley','wren','tobin','hazel','marigold'];
 const lastNewDay = () => { const T=S.town; return Math.max(T.lastNew ?? -1e9, T.last ? dayNum(T.last) : -1e9); };
 const townCap = () => (S.town.hall||0)>=1 ? TOWN_MAX : Math.max(START_RES.length, Math.min(TOWN_MAX, S.town.res.length));
@@ -2111,7 +2111,7 @@ const townCap = () => (S.town.hall||0)>=1 ? TOWN_MAX : Math.max(START_RES.length
 function findHomeSpot(id){
   const r=mulberry32(hashStr(id+':home:'+S.seed)), FOOT=3.6;
   for (let k=0;k<3000;k++){ const a=r()*TAU, d=(12+r()*30)*Math.min(SC,1.3)+k*0.004, x=Math.cos(a)*d, z=Math.sin(a)*d;
-    if (Math.hypot(x,z)/islandR0(a)>0.74 || polyDist(x,z,RIVER)<8 || Math.hypot(x-POND.x,z-POND.z)<POND.r+7 || nearFall(x,z,5)) continue;   // v1.54 newcomers live on the old island, never out on the far shore
+    if (Math.hypot(x,z)/islandR0(a)>0.74 || polyDist(x,z,RIVER)<8 || Math.hypot(x-POND.x,z-POND.z)<POND.r+7 || nearFall(x,z,5)) continue;   // v1.56 newcomers live on the old island, never out on the far shore
     if (x>DOCK.x0-12 && Math.abs(z-DOCK.z)<10) continue;
     if (Math.abs(x-LOT.x)<BUILD.LW*BUILD.EC/2+6 && Math.abs(z-LOT.z)<BUILD.LD*BUILD.EC/2+7) continue;
     if (Object.entries(PLACES).some(([kk,p])=>p && kk!=='board' && Math.hypot(x-p[0],z-p[1]) < (kk==='plaza'?10:kk==='museum'?10.5:kk==='hall'?HALL_FOOT+5.5:8.5))) continue;
@@ -2145,7 +2145,7 @@ function townNewDay(key){
   if (T.hallPend){ T.hall=Math.min(2,(T.hall||0)+1); T.hallPend=false; T.fund=0; T.hallNews=true; T.moveOffer=true; }
   if (S.museum.grow){ const plans=museumExpand(); S.museum.grow=0; if (plans.length){ S.museum.grewNews=plans; S.museum.moveOffer=true; } }
   if (T.next && T.res.length>=townCap()) T.next=null;   // saves from before v1.19 may have someone booked without room
-  const ref = Math.max(dayNum(T.day0), T.last ? dayNum(T.last) : 0, T.lastNew ?? 0);   // v1.54 a keeper turning up counts too
+  const ref = Math.max(dayNum(T.day0), T.last ? dayNum(T.last) : 0, T.lastNew ?? 0);   // v1.56 a keeper turning up counts too
   if (!T.next && T.res.length<townCap() && now-ref>=MOVE_GAP && mulberry32(hashStr(key+':movein:'+S.seed))()<MOVE_DAILY){
     const free=x=>!T.res.includes(x) && !(T.left[x]!==undefined && now-T.left[x]<RETURN_DAYS) && !(T.leaving && T.leaving.id===x);
     const stirring=x=>Object.keys(DREAM_FOR).some(k=>DREAM_FOR[k]===x && SY[k]);
@@ -2330,7 +2330,7 @@ function refreshIncome(){
   if (VISIT || GUEST) return;
   for (const k of INC_IDS){ const I=incOf(k);
     if (!I.met && !I.seen && !incUnlocked(k)) continue;
-    if (!I.at){ const T=S.town, now=dayNum(today()); if (T.next || now-lastNewDay()<KEEPER_GAP) continue;   // v1.54 one newcomer at a time, a few days apart
+    if (!I.at){ const T=S.town, now=dayNum(today()); if (T.next || now-lastNewDay()<KEEPER_GAP) continue;   // v1.56 one newcomer at a time, a few days apart
       const p=incSpot(k); if (!p) continue; I.at=p; I.seen=true; T.lastNew=now; save(); setTimeout(()=>toast(`Someone new is on the island: ${INCOME[k].hint}.`, null, 'new'), 3600); }
     const E=incEnts[k]; if (E && E.tier===I.tier){ if (E.props.userData.crate) E.props.userData.crate.visible=(I.acc||0)>0; continue; }
     if (E){ OUT.remove(E.props); E.keeper.remove(); }
@@ -4416,7 +4416,7 @@ function devTrip(theme, kind){
   closePanel(); save(); try { sessionStorage.setItem('dw-trip', JSON.stringify(trip)); sessionStorage.removeItem('dw-trip-world'); } catch(e){}
   toast(`Sailing to ${trip.name}...`); (async()=>{ try { if (BOOT.flush) await BOOT.flush(); } catch(e){} location.reload(); })(); }
 const TOWN_KIND_NAMES = { hamlet:'Hamlet', monastery:'Abbey', circus:'Circus camp', lighthouse:'Lighthouse Point', smugglers:'Smugglers\' cove' };
-// v1.54 dev: everyone at once (newcomers normally come about a week apart, keepers a few days after anyone new)
+// v1.56 dev: everyone at once (newcomers normally come about a week apart, keepers a few days after anyone new)
 function devEveryone(){ const T=S.town, now=dayNum(today()); let n=0;
   for (const R of RESIDENTS){ if (T.res.includes(R.id) || (T.leaving && T.leaving.id===R.id)) continue;
     if (!R.home){ const sp=findHomeSpot(R.id); if (!sp) continue; claimHomeSpot(R, sp); }
@@ -5465,7 +5465,7 @@ async function magicExit(P){
   try { if (BOOT.flush) await BOOT.flush(); } catch(e){}
   setTimeout(()=>location.reload(), 700);
 }
-function magicPan(dx,dy){ const M=magicMode; const k=M.dist/innerHeight*1.5; M.camT.x-=dx*k; M.camT.z-=dy*k; const r=60*SC; M.camT.x=clamp(M.camT.x,Math.min(-r,HG.x0+6),Math.max(r,HG.x0+HG.nx*HG.step-6)); M.camT.z=clamp(M.camT.z,Math.min(-r,HG.z0+6),Math.max(r,HG.z0+HG.nz*HG.step-6));   // v1.54 out over the far shore too M.camT.y=groundY(M.camT.x,M.camT.z);
+function magicPan(dx,dy){ const M=magicMode; const k=M.dist/innerHeight*1.5; M.camT.x-=dx*k; M.camT.z-=dy*k; const r=60*SC; M.camT.x=clamp(M.camT.x,Math.min(-r,HG.x0+6),Math.max(r,HG.x0+HG.nx*HG.step-6)); M.camT.z=clamp(M.camT.z,Math.min(-r,HG.z0+6),Math.max(r,HG.z0+HG.nz*HG.step-6));   // v1.56 out over the far shore too M.camT.y=groundY(M.camT.x,M.camT.z);
   if (M.kind==='land'){ const ci=Math.floor(M.camT.x/TC), cj=Math.floor(M.camT.z/TC); if (!M.gridAt || Math.abs(ci-M.gridAt[0])>3 || Math.abs(cj-M.gridAt[1])>3) drawGrid(); } }
 function magicTap(cx,cy){ const g=groundAtScreen(cx,cy); if(!g) return; if (magicMode.kind==='move'){ magicPlace(g.x,g.z); magicMode.camT.set(g.x, groundY(g.x,g.z), g.z); } else landTap(g.x,g.z); }
 // after the wizard's spell the page reloads behind a lilac shimmer: this is where you were and what changed
@@ -5543,7 +5543,7 @@ const changedSpot = p => { const [x,z]=p;
 const clearForNew = p => !!inRects(p[0],p[1],2.4) || newPathDist(p[0],p[1])<2.3 || inLotZone(p[0],p[1],1.4) || ['museum','aquarium','garden'].some(k=>Math.hypot(p[0]-PLACES[k][0], p[1]-PLACES[k][1]-(k==='museum'?6:4))<3.2)
   || ((ALTERED || REROUTED || !!PLACES.hall || !!PLACES.portal) && changedSpot(p)) || keptOut(p[0],p[1]);
 { const r=mulberry32(S.seed); let idx=0, TS=(LAY.treeMul||1)>2?0.55:1; const add=(type,fruit,minH,maxH)=>{ const p=randLand(r,minH,maxH,2.8*TS); if(!p) return; reserve(p[0],p[1],2.3*TS); const key='n'+(idx++);
-    if (typeof type==='function') type=type(p); if(S.cut[key]==='gone' || (EXT ? onOldGround(()=>clearForNew(p)) : clearForNew(p))){ return; } trees.push(new Tree(key,p[0],p[1],type,fruit)); };   // v1.54 judged on the ground as it was, so old trees stay exactly as they were
+    if (typeof type==='function') type=type(p); if(S.cut[key]==='gone' || (EXT ? onOldGround(()=>clearForNew(p)) : clearForNew(p))){ return; } trees.push(new Tree(key,p[0],p[1],type,fruit)); };   // v1.56 judged on the ground as it was, so old trees stay exactly as they were
   if (!LAY.gen){
     for(let i=0;i<14;i++) add('fruittree',S.nativeFruit,SAND_H+0.2,9);
     const kinds=['oak','oak','birch','maple','blossom','cedar','pine','pine'];
@@ -5559,11 +5559,11 @@ const clearForNew = p => !!inRects(p[0],p[1],2.4) || newPathDist(p[0],p[1])<2.3 
   }
   const nRocks = LAY.trip ? (TRIP_THEME==='fossil' ? 8 : TRIP_THEME==='clamstone' ? 14 : 4) : LAY.gen ? (LAY.terrain==='mountainous'||LAY.terrain==='cliffs' ? 16 : 12) : 9;
   for(let i=0;i<nRocks;i++){ const p=randLand(r,SAND_H+0.1,12,2.2); if(!p) continue; reserve(p[0],p[1],2);
-    // v1.54 judged on the ground as it was, so old rocks stay exactly as they were
+    // v1.56 judged on the ground as it was, so old rocks stay exactly as they were
     if (EXT ? onOldGround(()=>clearForNew(p)) : clearForNew(p)) continue; rocks.push(new Rock(i,p[0],p[1],r)); }
 }
 layoutPhase=false;
-/* v1.54 the far shore grows its own trees and rocks: about half the island's again, as the new land is half its size.
+/* v1.56 the far shore grows its own trees and rocks: about half the island's again, as the new land is half its size.
    They have their own keys ('e' trees, rocks from 300), so nothing about the old trees changes. */
 if (EXT){ const r=mulberry32((S.seed|0)+4545), gen=!!LAY.gen, F=LAY.flora||{ fruit:1, palms:1, trees:null }; let idx=0;
   const spot=(minH,maxH,rad)=>{ for (let k=0;k<60;k++){ const p=extPt(r, false, 0, 0.97); if (!p) continue; const [x,z]=p, h=rawHeight(x,z);
@@ -8406,7 +8406,7 @@ function mapThumb(){ if (_mapThumb) return _mapThumb; const cv=document.createEl
   x.strokeStyle='rgba(139,107,80,.6)'; x.lineWidth=1.5; x.beginPath(); x.moveTo(-7,-22); x.lineTo(-7,18); x.moveTo(8,-18); x.lineTo(8,22); x.stroke();
   x.fillStyle='#7cbf5a'; x.beginPath(); x.ellipse(0,0,13,10,0.3,0,TAU); x.fill(); x.strokeStyle='#e2483d'; x.lineWidth=2.5; x.beginPath(); x.moveTo(3,-3); x.lineTo(9,3); x.moveTo(9,-3); x.lineTo(3,3); x.stroke();
   return _mapThumb=cv.toDataURL(); }
-// v1.54 the map frames the island, its far shore and the isles (no longer always centred on the plaza)
+// v1.56 the map frames the island, its far shore and the isles (no longer always centred on the plaza)
 function mapExtent(){ let x0=1e9, z0=1e9, x1=-1e9, z1=-1e9; const grow=(x,z)=>{ x0=Math.min(x0,x); x1=Math.max(x1,x); z0=Math.min(z0,z); z1=Math.max(z1,z); };
   for (let i=0;i<128;i++){ const a=i/128*TAU, r=islandR(a)*1.12; grow(Math.cos(a)*r, Math.sin(a)*r); }
   for (const I of ISLES){ grow(I.cx-I.r*1.1, I.cz-I.r*1.1); grow(I.cx+I.r*1.1, I.cz+I.r*1.1); }
@@ -9430,7 +9430,7 @@ window.__game.v138 = { get SY(){ return SY; }, get S2B(){ return S2B; }, isleQue
 window.__game.v139 = { get SY(){ return SY; }, get S3B(){ return S3B; }, LOGBOOK, BEATS3, STAKES, COMMISSIONS, millAct, openMill, millstoneOffer, millThistle, millWendell, routeTowns, postRoutes, routeWant, openPost, postNewDay, placeVents, digVent, bathSeatOf, bathStage, openBath, gladeConds, gladeStageOf, gladeBugOK, gladeBugSpot, gladeLook, gladeStump, gladeKnock, gladeApprove, gladeStumpDug, gladeLamps, wreckAct, makeWreckRoom, wreckOpen, rollTripChart, openLogbook, openAntiq, antiqStock, story3Stock, storyBeat3, story3Choices, storyNewDay3, story3News, storiesHTML3, storyGossip3, refreshStory3, dev139, landmark3, meadowLM, dunesLM };
 window.__game.v150 = { AUR, PATH_GLOW, PATH_STONES, castSpell4, get cast(){ return S4B.cast; }, get cine(){ return cine; }, set cine(v){ cine=v; } };   // v1.53 test hooks
 window.__game.v141 = { get SY(){ return SY; }, get S4B(){ return S4B; }, refreshStory4, dev141, dev138, dev139, openStoryMap, devRaiseAll, devTravel, devPlaces, blocked: (x,z)=>blocked(x,z,0.3), devTrip, raceStart, raceEnd, raceCourse, raceLength, raceRivals, raceMenu, openReadingRoom, openStall, festDay, festOn, festSpots, refreshFest, refreshShow, showTableAct, showEntries, storyBeat4, story4Choices, storyNewDay4, story4News, storiesHTML4, starAltarAct, skyHour, skyNear, skyIsle, refreshSpells, refreshCharter, charterReqs, charterReady, hall4Choices, newbChoices, CHARTER, get ISLE_K(){ return ISLE_K; } };   // v1.41 test hooks
-window.__game.v154 = { get EXT(){ return EXT; }, EXT_BOX, rawHeightOld, baseHeightOld, baseHeight, islandR, islandR0, islandT, HG, devEveryone, mapExtent, townNewDay, refreshIncome, randLand, get extOff(){ return extOff; } };   // v1.54 test hooks
+window.__game.v156 = { get EXT(){ return EXT; }, EXT_BOX, rawHeightOld, baseHeightOld, baseHeight, islandR, islandR0, islandT, HG, devEveryone, mapExtent, townNewDay, refreshIncome, randLand, get extOff(){ return extOff; } };   // v1.56 test hooks
 window.__game.v137 = { get S(){ return S; }, get SY(){ return SY; }, get BAYR(){ return BAYR; }, get ISLES(){ return ISLES; }, get player(){ return player; }, get residents(){ return residents; },
   reefInfo, reefStage, bayPlan, bayPopulate, enterBay, exitBay, bayAct, bayCast, bayDrop, talkGill, talkShop, talkTo, talkHall, talkWizard, talkCurator, openNursery, openWorkshop, openBoard, openHallPanel,
   refreshNurseryTank, spawnRowboat, refreshWorkshop, refreshIncome, storyNewDay, townNewDay, applyTown, raiseIsle, nextIsleKind, isleQuest, loadIsle, incOf, incCollect, pinesRegrow,

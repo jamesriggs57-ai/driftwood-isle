@@ -11,7 +11,7 @@
    built in wiki.js. Writing rules: plain words, no em dashes, no emoji, only facts the code supports.
    ===================================================================== */
 
-export const GUIDE_VERSION = 'v1.54';
+export const GUIDE_VERSION = 'v1.56';
 export const GUIDE_UPDATED = '2026-11-26';
 
 const tip = s => `<div class="tip"><b>Tip</b> ${s}</div>`;
@@ -142,8 +142,8 @@ ${note('Guest mode caps your wallet at 10,000 clams. Make an account to lift it.
 `},
 
 { id:'farshore', group:'island', title:'The far shore', html:`
-<p>Since v1.54 one side of your island reaches further out to sea: about half as much land again, all on that one side. It's left wild.</p>
-<ul><li><b>Which side</b>: picked once for each island, the first time it loads after v1.54, and it never moves after that. It stays clear of the dock, the river mouth, the waterfall, Wendell's isles (raised or still to come) and their bridges. Usually that is the northwest, between where Clover Meadow and Lantern Bluff rise; on an island where some isles were already up it can be another side.</li>
+<p>Since v1.56 one side of your island reaches further out to sea: about half as much land again, all on that one side. It's left wild.</p>
+<ul><li><b>Which side</b>: picked once for each island, the first time it loads after v1.56, and it never moves after that. It stays clear of the dock, the river mouth, the waterfall, Wendell's isles (raised or still to come) and their bridges. Usually that is the northwest, between where Clover Meadow and Lantern Bluff rise; on an island where some isles were already up it can be another side.</li>
 <li><b>What grows there</b>: a few low hills, grass and wild flowers, trees, fruit trees of your island's fruit, palms along its beach, and a few rocks to hit.</li>
 <li><b>What turns up</b>: bugs, dig spots, weeds and beach finds, like anywhere else on the island.</li>
 <li><b>What doesn't</b>: no paths, and nobody moves in out there. New islanders' houses, the keepers and the town's buildings all go on the old part of the island.</li>
@@ -468,10 +468,11 @@ ${note('Relics can\'t be sold, gifted, mailed or traded. A storage chest holds t
 <p>Every island has a Portal Station near the plaza: a stone platform with an arch over stairs. "Go down" leads to the portal hall.</p>
 <ul><li><b>Portal arches</b>: one per friend's island (up to 5; more opens the Friends list). Step in to travel. A dark arch means no visits left.</li>
 <li><b>Home portal</b> while you're visiting.</li>
-<li><b>Invite booth</b>: make an invite link.</li>
+<li><b>Invite booth</b>: opens the Friends tab, to invite a friend over or make an invite link.</li>
 <li><b>Pen pal desk</b>.</li></ul>
 <h3>Friends</h3>
-<p>Friends only come through invite links (one use, one person, 14 days). There's no search and no stranger contact. When inviting you choose:</p>
+<p>New friends only come through invite links (one use, one person, 14 days). There's no search and no stranger contact.</p>
+<p>Once you're friends, either of you can invite the other over without a new link: Friends tab, <b>Invite a friend over</b>. It lists friends who can't visit you right now (they only ever invited you, or their one visit was used). Tap Invite and they get a letter in their mailbox saying they can come. Whether by link or from the list, you choose one visit or any time, and a role:</p>
 <table class="t"><tr><th>Role</th><th>Can</th></tr>
 <tr><td>Visitor</td><td>Look around, pick fruit, dig fossils, collect beach finds, shop. Their picks come from their own copy of the day, so they never use up yours. Can't chop, plant, place, donate, invest or build.</td></tr>
 <tr><td>Resident</td><td>Everything the owner can except building their own house. Changes sync live.</td></tr></table>
@@ -760,7 +761,9 @@ ${steps(['Talk to them and pick <b>Come and meet people</b>. They follow you for
 { id:'changes', group:'done', title:'What\'s changed', html:`
 <p>Recent updates, newest first.</p>
 <ul>
-<li><b>v1.54</b>: The far shore: one side of your island now reaches further out to sea, about half as much land again, left wild (see The far shore). Newcomers move in about a week apart, in story order, and the four keepers turn up one at a time.</li>
+<li><b>v1.56</b>: The far shore: one side of your island now reaches further out to sea, about half as much land again, left wild (see The far shore). Newcomers move in about a week apart, in story order, and the four keepers turn up one at a time.</li>
+<li><b>v1.55</b>: Invite friends over from the Friends tab without a new link. Anyone you're already friends with who can't visit you (because only they invited you, or their one visit was used) shows under Invite a friend over, and they get a letter when you invite them.</li>
+<li><b>v1.54</b>: Fix: visiting a friend's island or going on a boat trip no longer forgets which conversations you've had with your islanders, or woodworking plans you found before you started woodworking.</li>
 <li><b>v1.53</b>: Wendell's spells are much brighter. The aurora's light now drifts across the island and the sea, with floating lights in the air, so you can see it from the normal view. Glowing paths light every path stone with a rune, run pulses of light along the paths and send up sparks. Casting either one at the star altar now has a short show.</li>
 <li><b>v1.52</b>: 54 new fish and 57 new bugs, so there are now 100 of each, every one with its own model. New homes: the sea around each of Wendell's isles, the isles themselves, Starfall Isle, the boat trip islands, and six bigger reef fish that come back to Cay Bay as the reef grows. The museum gets new tanks for them, and there are new achievement tiers for 60 and 100 kinds of fish or bugs and 150 and 200 museum displays.</li>
 <li><b>v1.51</b>: Hover over an item in your bag (or tap it on a phone) to see its name and what it sells for, and who pays the most for it. Story items say they can't be sold instead of showing 0.</li>

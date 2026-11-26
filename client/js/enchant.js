@@ -7,7 +7,8 @@ import { ITEMS, TOOLS } from './content.js';
 import { M, mk, G, glowMat, addGlow, ITEM_BUILDERS } from './models.js';
 import { ENCH, FAMILIES, TWIN, TWIN_SLOTS, POWER, CRAFT, REPAIR, SCROLL_ODDS, WORDS, migrate, fits, knows, enchOf, slotsOf, rankOn, describe, toolsText, maxUses,
   canApply, needFor, missing, apply, remove, learn, repairNeed, repairClams, repair, repairForClams, craftNeed, canCraft, craft, teachable, rank3Known, scrollPick,
-  outputOf, oneSwing, luckFor, bonkPower, sureOf, bigRoll, sprayOf, sprayTargets, ONE_SWING_WOOD, carryDrops, upgradeTool, FENNICK_SCROLL_PRICE } from './enchant-core.js';
+  outputOf, oneSwing, luckFor, bonkPower, sureOf, bigRoll, sprayOf, sprayTargets, ONE_SWING_WOOD, carryDrops, upgradeTool, FENNICK_SCROLL_PRICE,
+  brokenOf, brokenList, breakTool, fixNeed, canFix, fix, scrapsBroken, FIX_BENCH } from './enchant-core.js';
 import { toolBench, enchBench, TWIN_BENCH, BENCH_NAME } from './benches-core.js';
 export * from './enchant-core.js';
 
@@ -47,8 +48,18 @@ export function createEnchant(C){
     maxUses:t=>maxUses(S(),t),
     // after T.uses-- in useTool: warn before an enchanted tool breaks, and say what was lost when it does
     onUse(t, T){ const mx=maxUses(S(),t), en=T.ench||[]; if (!en.length || !mx) return;
-      if (T.uses<=0){ setTimeout(()=>C.toast(`The ${en.map(nm).join(' and ')} enchantment${en.length>1?'s':''} went with it.`), 900); return; }
-      const warn=Math.max(3, Math.round(mx*0.1)); if (T.uses===warn) setTimeout(()=>C.toast(`Your ${TOOLS[t].tiers[T.tier].name} is wearing thin. Repair it before it breaks, or its enchantments go with it.`), 600); },
+      if (T.uses<=0) return;   // v1.49: breakTool says what happened
+      const warn=Math.max(3, Math.round(mx*0.1)); if (T.uses===warn) setTimeout(()=>C.toast(`Your ${TOOLS[t].tiers[T.tier].name} is wearing thin. Repair it now and it's cheap. Once it breaks, it takes a crafting table and twice the materials.`), 600); },
+    // v1.49: the tool's last use is spent. It leaves your hands and waits to be fixed at a crafting table.
+    breakTool(t){ const T=S().tools[t]; if (!T) return; const name=TOOLS[t].tiers[T.tier].name, B=breakTool(S(),t);
+      if (B) setTimeout(()=>C.toast(`Your ${name} broke!`, C.toolThumb(t,B.tier), '', `Fix it at a crafting table (Craft, then Tools).${B.ench?` ${B.ench.map(nm).join(' and ')} ${B.ench.length>1?'are':'is'} still on it.`:''}`), 400);
+      else setTimeout(()=>C.toast(`Your ${name} broke!`), 400); },
+    broken:t=>brokenOf(S(),t), brokenList:()=>brokenList(S()),
+    // v1.49: a line at the top of Woodworking when you're at a table and a tool needs you (broken, or under a quarter left)
+    fixNote(){ if (!H.hasTab() || here()<FIX_BENCH) return ''; const s=S(), br=brokenList(s), worn=Object.keys(s.tools).filter(t=>repairNeed(s,t) && s.tools[t].uses<=maxUses(s,t)*0.25);
+      if (!br.length && !worn.length) return '';
+      const parts=[...br.map(t=>`${TOOLS[t].tiers[brokenOf(s,t).tier].name} (broken)`), ...worn.map(t=>`${TOOLS[t].tiers[s.tools[t].tier].name} (worn)`)];
+      return `<div class="notice"><b>Tools to fix</b> <span class="muted">· ${parts.join(', ')}</span><div style="margin-top:6px"><button class="btn alt" data-ct="tools">Fix them</button></div></div>`; },
     output:t=>outputOf(S(),t), oneSwing:t=>oneSwing(S(),t), ONE_SWING_WOOD,
     luck:(key)=>luckFor(S(), key, S().equip),
     rareMult:(key)=>luckFor(S(), key, S().equip),
@@ -68,7 +79,10 @@ export function createEnchant(C){
     learnScroll(itemId){ const id=ITEMS[itemId].ench; if (!learn(S(), id)) return false; C.save(); C.Snd.fanfare();
       C.toast(`Enchantment learned: ${ENCH[id].name}!`, C.thumb(itemId), 'new', describe(id)+'. Put it on a tool from the Tools tab.'); return true; },
     // the shop's buy button: say what an upgrade would cost you before replacing an enchanted tool
-    replaceWarning(t, k){ const T=S().tools[t], d=T ? carryDrops(S(),t,k) : []; return d.length ? `Your ${TOOLS[t].tiers[T.tier].name} has ${d.map(nm).join(' and ')} on it. An heirloom never wears out, so that comes off. Anything else on it moves over.` : ''; },
+    replaceWarning(t, k){ const T=S().tools[t], d=T ? carryDrops(S(),t,k) : [], B=scrapsBroken(S(),t,k), out=[];
+      if (d.length) out.push(`Your ${TOOLS[t].tiers[T.tier].name} has ${d.map(nm).join(' and ')} on it. An heirloom never wears out, so that comes off. Anything else on it moves over.`);
+      if (B && B.ench) out.push(`You've still got that broken ${TOOLS[t].tiers[B.tier].name} with ${B.ench.map(nm).join(' and ')} on it. Buy this and I'll take it off your hands for scrap, charm and all. You could fix it at a crafting table instead.`);
+      return out.join(' '); },
     // a bought tool replaces the old one and keeps its enchantments
     upgradeTool:(t,k)=>upgradeTool(S(),t,k),
     // the shop keeper's choices (Pemberton repairs for clams)
@@ -114,7 +128,13 @@ export function createEnchant(C){
     let h=tabsH+`<div class="tabs">${[['tools','Your tools'],['make','Make a tool'],['known','Enchantments']].map(([k,n])=>`<button class="tab${k===mode?' on':''}" data-em="${k}">${n}</button>`).join('')}</div>`;
     if (C.benchBanner) h+=C.benchBanner();
     if (mode==='tools'){
-      if (!sel) h+='<div class="muted">You don\'t have any tools. Pemberton sells them, or you can make one.</div>';
+      const br=brokenList(s);   // v1.49: broken tools wait here to be fixed at a crafting table
+      if (br.length){ h+=`<div class="notice"><b>Broken tools</b> <span class="muted">· fix them at any crafting table, enchantments and all</span>`;
+        for (const t of br){ const B=brokenOf(s,t), c=canFix(s,t,inv,here()), own=s.tools[t];
+          const notes=[B.ench ? `Still on it: ${B.ench.map(nm).join(' and ')}` : '', own ? `Takes the place of your ${TOOLS[t].tiers[own.tier].name}${c.loses?`, and ${c.loses.map(nm).join(' and ')} on it is lost`:''}` : ''].filter(Boolean).join('. ');
+          h+=`<div class="row" style="margin:8px 0 0"><img src="${C.toolThumb(t,B.tier)}" style="filter:grayscale(.8)"><div class="grow"><div class="nm">${TOOLS[t].tiers[B.tier].name}</div><div class="sub">${notes?`<i>${notes}</i><br>`:''}${matsHTML(c.need||fixNeed(t,B.tier))}${benchLine(FIX_BENCH)}</div></div><button class="btn" data-efx="${t}" ${c.ok?'':'disabled'}>Fix</button></div>`; }
+        h+='</div>'; }
+      if (!sel) h+=br.length ? '' : '<div class="muted">You don\'t have any tools. Pemberton sells them, or you can make one.</div>';
       else { h+='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">'+tools.filter(t=>s.tools[t]).map(t=>`<button class="btn ${t===sel?'':'alt'}" data-et="${t}" style="padding:4px 10px"><img src="${C.toolThumb(t,s.tools[t].tier)}" style="width:26px;height:26px;vertical-align:middle"> ${TOOLS[t].name}</button>`).join('')+'</div>';
         const T=s.tools[sel], d=TOOLS[sel].tiers[T.tier], mx=maxUses(s,sel), en=enchOf(s,sel);
         h+=`<div class="notice"><b>${d.name}</b><br><span class="muted">${d.forever?'Never breaks':`${T.uses} of ${mx} uses left`}</span>`;
@@ -146,6 +166,10 @@ export function createEnchant(C){
     pB.querySelectorAll('[data-em]').forEach(b=>b.onclick=()=>{ mode=b.dataset.em; C.Snd.click(); renderTab(tabsH, bind); pB.scrollTop=0; });
     pB.querySelectorAll('[data-et]').forEach(b=>b.onclick=()=>{ sel=b.dataset.et; C.Snd.click(); renderTab(tabsH, bind); });
     const rer=()=>{ const st=pB.scrollTop; renderTab(tabsH, bind); pB.scrollTop=st; };
+    pB.querySelectorAll('[data-efx]').forEach(b=>b.onclick=()=>{ if (C.noEdit()) return; const t=b.dataset.efx, c=canFix(s,t,inv,here()); if (!c.ok) return;
+      const go=()=>{ const B=brokenOf(s,t), r=fix(s,t,inv,here()); if (!r.ok){ C.toast(r.why); return; } sel=t; C.Snd.fanfare(); C.equip(t); const on=enchOf(s,t);
+        C.toast(`Your ${TOOLS[t].tiers[s.tools[t].tier].name} is fixed!`, C.toolThumb(t,s.tools[t].tier), 'new', on.length ? `${on.map(nm).join(' and ')} ${on.length>1?'are':'is'} still on it.` : 'Good as new.'); C.save(); C.updateHeld(); C.updateHUD(); rer(); };
+      if (c.replaces!==null && c.replaces!==undefined) confirm(`Your ${TOOLS[t].tiers[c.replaces].name} gets taken apart for the fix${c.loses?`, and ${c.loses.map(nm).join(' and ')} on it unravels`:''}.`, go); else go(); });
     const rep=pB.querySelector('#eRep'); if (rep) rep.onclick=()=>{ if (C.noEdit()) return; const r=repair(s,sel,inv); if (r.ok){ C.Snd.coin(); C.toast(`Your ${TOOLS[sel].tiers[s.tools[sel].tier].name} is good as new.`, C.toolThumb(sel,s.tools[sel].tier)); C.save(); } rer(); };
     pB.querySelectorAll('[data-erm]').forEach(b=>b.onclick=()=>{ if (C.noEdit()) return; const id=b.dataset.erm; confirm(`Take ${ENCH[id].name} off? The charm unravels, so you'd need the ingredients again to put it back.`, ()=>{ remove(s,sel,id); C.save(); C.Snd.click(); rer(); }); });
     pB.querySelectorAll('[data-eap]').forEach(b=>b.onclick=()=>{ if (C.noEdit()) return; const id=b.dataset.eap, c=canApply(s,sel,id,inv); if (!c.ok || applyBench(id,c)>here()) return;
@@ -157,7 +181,9 @@ export function createEnchant(C){
       else go(null); });
     pB.querySelectorAll('[data-emk]').forEach(b=>b.onclick=()=>{ if (C.noEdit()) return; const [t,k]=b.dataset.emk.split(':'), kk=+k, c=canCraft(s,t,kk,inv,C.reqMet); if (!c.ok || toolBench(kk)>here()) return;
       const go=()=>{ const r=craft(s,t,kk,inv,C.reqMet); if (!r.ok){ C.toast(r.why); return; } C.Snd.fanfare(); C.equip(t); const on=enchOf(s,t); C.toast(`You made a ${TOOLS[t].tiers[kk].name}!`, C.toolThumb(t,kk), 'new', on.length ? `${on.map(nm).join(' and ')} moved over from the old one.` : undefined); C.save(); C.updateHUD(); rer(); };
-      if (c.loses) confirm(`Your old ${TOOLS[t].name.toLowerCase()} has ${c.loses.map(nm).join(' and ')} on it. An heirloom never wears out, so that comes off. Anything else on it moves over.`, go); else go(); });
+      const B=scrapsBroken(s,t,kk), warn=[c.loses ? `Your old ${TOOLS[t].name.toLowerCase()} has ${c.loses.map(nm).join(' and ')} on it. An heirloom never wears out, so that comes off. Anything else on it moves over.` : '',
+        B && B.ench ? `Your broken ${TOOLS[t].tiers[B.tier].name} still has ${B.ench.map(nm).join(' and ')} on it. Making this scraps it, charm and all. You could fix it instead.` : ''].filter(Boolean).join(' ');
+      if (warn) confirm(warn, go); else go(); });
   }
   // a yes/no inside the panel (no dialog box, so the panel stays open)
   function confirm(text, yes){ if (C.confirm) return C.confirm(text, yes); const pB=C.pBody(), box=document.createElement('div'); box.className='notice'; box.style.cssText='position:sticky;bottom:0;z-index:2;box-shadow:0 -4px 14px rgba(0,0,0,.15)';
@@ -181,6 +207,9 @@ export function createEnchant(C){
     give(t, k=0){ const tr=TOOLS[t].tiers[k]; S().tools[t]={ tier:k, uses:tr.forever?0:tr.uses }; C.save(); C.updateHeld(); },
     put(t, ...ids){ const T=S().tools[t]; if (!T) return false; T.ench=ids.filter(id=>ENCH[id] && fits(id,t)).slice(0,TWIN_SLOTS); if (!T.ench.length) delete T.ench; C.save(); return T.ench||[]; },
     wear(t, n){ const T=S().tools[t]; if (T) T.uses=Math.max(1,T.uses-n); C.save(); return T&&T.uses; },
+    // v1.49: break a tool now (as if its last use ran out)
+    breakIt(t){ if (!S().tools[t]) return null; H.breakTool(t); if (S().equip===t) S().equip=null; C.save(); C.updateHeld(); C.updateHUD(); return brokenOf(S(),t); },
+    canFix:(t)=>canFix(S(),t,inv,here()), fixNeed, brokenOf:t=>brokenOf(S(),t),
     open:()=>H.openTools(),
   };
   return H;

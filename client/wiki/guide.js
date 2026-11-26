@@ -11,7 +11,7 @@
    built in wiki.js. Writing rules: plain words, no em dashes, no emoji, only facts the code supports.
    ===================================================================== */
 
-export const GUIDE_VERSION = 'v1.44';
+export const GUIDE_VERSION = 'v1.49';
 export const GUIDE_UPDATED = '2026-11-26';
 
 const tip = s => `<div class="tip"><b>Tip</b> ${s}</div>`;
@@ -207,7 +207,12 @@ ${note('If the islander a story favor was written for doesn\'t live on your isla
 <p>Fix a worn tool before it breaks. Two ways:</p>
 <ul><li><b>Yourself</b>: the Tools tab in the Craft panel, anywhere, no crafting table needed. It costs materials by tier (see the table below), scaled by how worn the tool is, at least 1 of each.</li>
 <li><b>Pemberton</b>: "Fix my tools" at the General Store, for clams. The more worn the tool, the more it costs, and enchanted tools cost a bit more to fix.</li></ul>
-<p>Heirloom tools never wear out, so they never need fixing. You get one warning when an enchanted tool is wearing thin. A tool that breaks is gone, along with any enchantments on it.</p>
+<p>Heirloom tools never wear out, so they never need fixing. You get one warning when an enchanted tool is wearing thin.</p>
+<h3>Broken tools</h3>
+<p>A tool that breaks leaves your hands but isn't gone. It waits in the Tools tab under <b>Broken tools</b>, with its enchantments still on it, until you fix it. Fixing a broken tool needs a crafting table nearby (any one, a Workbench is enough) and costs twice a full repair: Flimsy 4 wood and 4 driftwood branches, Sturdy 6 wood and 2 iron, Golden 8 iron and 8 stone (the Golden Can too; the basic can costs the same as a Flimsy tool). The fixed tool comes back with all its uses and enchantments, and goes straight into your hand. Pemberton only fixes tools that are worn, not broken.</p>
+<ul><li>If you bought or made a cheaper stand-in while it was broken, the fixed tool takes its place, and anything enchanted on the stand-in is lost. The Tools tab asks first.</li>
+<li>Buying or making a tool of that kind that's as good or better scraps the broken one, enchantments and all. Pemberton and the Tools tab warn you first if it had any.</li>
+<li>At a crafting table, the top of Woodworking lists any broken tool, and any tool with a quarter or less of its uses left, with a button to the Tools tab.</li></ul>
 <h3>Making tools</h3>
 <p>The Tools tab's "Make a tool" list makes the same tools Pemberton sells, from materials. You need the same experience as buying (the "Needs" column below). A Flimsy tool (and the basic Watering Can) can be made anywhere; each better tier needs a bigger crafting table: Sturdy at a Workbench, Golden at a Carpenter's Bench, Heirloom at a Master Workbench. The watering can skips Sturdy, so the Golden Can needs only a Workbench and the Heirloom Can a Carpenter's Bench. See <a href="#tables">Crafting tables</a>.</p>
 <p>A new tool of the same kind, bought or made, takes the old one's enchantments with it. The one exception: Tough, Tougher and Ultratough come off when you move up to an Heirloom tool, because it never wears out. The shop and the Tools tab warn you first.</p>
@@ -226,7 +231,7 @@ ${note('If the islander a story favor was written for doesn\'t live on your isla
 <li>Putting on a stronger (or different) enchantment of the same kind replaces the old one. On a full tool you pick which one comes off.</li>
 <li>Double Output, Triple Output and One-Swing are one kind, so a tool never has more than one of them.</li>
 <li>Tough can't go on an Heirloom tool, since it never wears out.</li>
-<li>Your enchantments move over when you buy or make a better tool of the same kind. They're only lost if the tool breaks, so repair it in time.</li></ul>
+<li>Your enchantments move over when you buy or make a better tool of the same kind. A broken tool keeps them until you fix it at a crafting table (see <a href="#tools">Broken tools</a>), but replacing it instead scraps them.</li></ul>
 <h3>What the special ones do</h3>
 <ul><li><b>Bonk</b>: swing at an islander (or a friend) and they fly farther.</li>
 <li><b>Lucky</b>: better odds of rare-or-better finds. On the axe that's things like heartwood, on the shovel fossils and other finds, on the net bugs, on the rod fish. On rocks it counts for whichever of the axe or shovel you hit with.</li>
@@ -258,13 +263,13 @@ ${note('Guests can learn from Pippa and enchant, but don\'t find scrolls. On a f
 `},
 
 { id:'crafting', group:'island', title:'Woodworking', data:'woodwork', html:`
-<p>Make furniture from the Craft panel. Away from a crafting table you can only make a few simple things (Stump Stool, Wooden Fence, Log Pile, Wooden Signpost, Mossy Stump Seat, Cozy Campfire and the Workbench itself); everything else needs a table nearby, and rare showpieces need a Carpenter's Bench. See <a href="#tables">Crafting tables</a>. You start knowing 4 plans (Stump Stool, Fence, Log Pile, Mossy Stump Seat). Making 10 things teaches 6 more (Signpost, Birdhouse, Crate, Bench, Workbench, Campfire).</p>
+<p>Make furniture from the Craft panel. Away from a crafting table you can only make a few simple things (Stump Stool, Wooden Fence, Log Pile, Wooden Signpost, Mossy Stump Seat, Cozy Campfire and the Workbench itself); everything else needs a table nearby, and rare showpieces need a Carpenter's Bench. See <a href="#tables">Crafting tables</a>. You start knowing 4 plans (Stump Stool, Fence, Log Pile, Mossy Stump Seat). Making 3 different ones of those, and 10 things in all, teaches 6 more (Signpost, Birdhouse, Crate, Bench, Workbench, Campfire).</p>
 <p>After that new plans come from:</p>
-<ul><li>A batch of 4 or 5 at 25, 50, 100, 150, 250, 400, 600, 850 and 1,150 things made.</li>
+<ul><li>A batch of 3 at each variety milestone. Each different piece you make counts for up to 3 points: making it once is 1 point, three times is 3, and making it more often adds nothing. The milestones are at 24, 33, 42, 51, 60, 69, 78 and 87 points, so you need to make most of what you know, a few times each, before more comes. You get at most one batch a day; if you pass a milestone after that, the plans come the next day (open the Craft panel).</li>
 <li>Woodworking Plan items: dug up (1.5% of digs), from felled trees (1%), or Pemberton's one-a-day plan.</li>
 <li>Studying a piece you own from the Woodworking panel, once a day.</li></ul>
 <p>Digging up a stump gives a Tree Stump for stump furniture.</p>
-${tip('Making 10 <b>different</b> pieces is what starts Bramble\'s workshop story.')}
+${tip('Making 14 <b>different</b> pieces is what starts Bramble\'s workshop story.')}
 <h3>Rare showpieces</h3>
 <p>Six legendary pieces need a rare plan (found very rarely, Fennick sometimes sells one for 45,000, or pick one at the Plan Library island) and rare ingredients that turn up by chance:</p>
 <ul><li><b>Heartwood</b>: chopping, more when a tree comes down.</li><li><b>Golden Sap</b>: shaking trees.</li>
@@ -278,8 +283,8 @@ ${tip('Making 10 <b>different</b> pieces is what starts Bramble\'s workshop stor
 <table class="t"><tr><th>Table</th><th>How you get it</th><th>What it adds</th></tr>
 <tr><td>None</td><td></td><td>Repair tools, make Flimsy tools and a few simple pieces</td></tr>
 <tr><td>Workbench</td><td>Bramble gives you one when he teaches woodworking; you can make more</td><td>All everyday woodworking, Sturdy tools, first-rank enchantments</td></tr>
-<tr><td>Carpenter's Bench</td><td>Its plan comes once you've made 12 different things</td><td>Rare-plan showpieces, Golden tools, second-rank enchantments and Double Output, plus Rocking Horse, Garden Wagon, Rolltop Desk and Vine Pergola</td></tr>
-<tr><td>Master Workbench</td><td>Its plan comes once you've made 24 different things, one of them a Carpenter's Bench</td><td>Heirloom tools, the strongest enchantments and the Twin Charm's binding, plus Carousel Music Box, Weaving Loom, Garden Windmill and Garden Gazebo</td></tr></table>
+<tr><td>Carpenter's Bench</td><td>Its plan comes once you've made 16 different things</td><td>Rare-plan showpieces, Golden tools, second-rank enchantments and Double Output, plus Rocking Horse, Garden Wagon, Rolltop Desk and Vine Pergola</td></tr>
+<tr><td>Master Workbench</td><td>Its plan comes once you've made 30 different things, one of them a Carpenter's Bench</td><td>Heirloom tools, the strongest enchantments and the Twin Charm's binding, plus Carousel Music Box, Weaving Loom, Garden Windmill and Garden Gazebo</td></tr></table>
 <p>Building a table for the first time teaches its pieces. Materials are in the <a href="#crafting">Woodworking</a> table.</p>
 `},
 
@@ -518,7 +523,7 @@ ${tip('Plant a mix. Table coral is the bottleneck and its fish include the 30,00
 `},
 
 { id:'workshop', group:'stories', title:'Bramble\'s Workshop', html:`
-<p><b>Who:</b> Bramble, Wendell, Clementine. <b>Starts:</b> after you've made 10 different woodworking pieces.</p>
+<p><b>Who:</b> Bramble, Wendell, Clementine. <b>Starts:</b> after you've made 14 different woodworking pieces.</p>
 ${steps([
  'Bramble admits he always wanted a real workshop, but there are hardly any pines. Next he wonders if Wendell could help.',
  'Wendell raises <b>Old Pinewood</b> (needs Grand Town Hall, Pemberton backed, 3 relics, 180,000 + 60 wood + 20 stone). Pines there grow back overnight and Mossby doesn\'t mind.',
@@ -709,6 +714,7 @@ ${steps(['Talk to them and pick <b>Come and meet people</b>. They follow you for
 { id:'changes', group:'done', title:'What\'s changed', html:`
 <p>Recent updates, newest first.</p>
 <ul>
+<li><b>v1.49</b>: Fewer fish swimming about (at most 2 near you and 5 on the island, turning up about half as often). Broken tools aren't gone: fix them at any crafting table, enchantments and all. New woodworking plans now come from making lots of different things (making the same piece over and over no longer counts), at most one batch a day. The Carpenter's Bench now needs 16 different things made, the Master Workbench 30, and Bramble's workshop story 14.</li>
 <li><b>v1.44</b>: Shop rewards and fishing tips. At the top two tiers Pemberton opens his back room (one piece a week, sometimes a rare plan), Marlo adds a rare shelf and Sprig sells rare flower colors, hybrids and the glowing Lantern Bloom. Marlo and Gill tell you what's biting, more exactly as their shop and boat grow.</li>
 <li><b>v1.41</b>: Juniper's reading nook, Otis's race course, Marigold's flower show and a spring show every April, the newcomer, the Island Charter and Charter Hall, the Driftwood Festival every season, and Starfall Isle with its own bugs and Wendell's two spells. The legendary trip island Starfall Isle is now called Stardrift Isle.</li>
 <li><b>v1.40</b>: Repair, make and enchant your tools. Pippa and Wendell teach enchantments, and scrolls turn up now and then (Fennick sometimes sells one). Two bigger crafting tables, the Carpenter's Bench and the Master Workbench, with pieces of their own. Most woodworking now needs a table nearby.</li>

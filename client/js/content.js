@@ -877,10 +877,12 @@ for (const r of RECIPES){
 def('sled', { name:'Wooden Sled', kind:'gear', price:500, buy:3000, stack:1, model:{t:'furn', b:'sled'} });
 // a campfire is now something you can build yourself
 WOODWORK.push({ id:'campfire', mats:{ stone:4, wood:3, softwood:2 }, unlock:2 });
-/* v1.34 woodworking pace. You start knowing 4 plans. Making 10 things in all teaches 6 more (10 known).
-   After that plans come three ways: a new batch of 4 or 5 at each crafting milestone (WOOD_MILESTONES, total things
-   made), plans you find or buy (one Woodworking Plan item per piece, WOOD_PLAN_PRICE), and studying a piece you
-   own (from a shop or found) at the workbench, once a day. WOOD_ORDER is the order milestone batches come in. */
+/* v1.34 woodworking pace. You start knowing 4 plans. v1.49: making 3 of them (any 3, so a missing stump can't hold you up)
+   and 10 things in all teaches 6 more (10 known). After that plans come three ways: a batch of WOOD_BATCH at each milestone,
+   plans you find or buy (one Woodworking Plan item per piece, WOOD_PLAN_PRICE), and studying a piece you own
+   (from a shop or found) at the workbench, once a day. WOOD_ORDER is the order milestone batches come in.
+   v1.49 milestones count VARIETY, not volume: each different piece counts for up to WOOD_PER_KIND of the times you make it
+   (making 3 fences counts 3; making 300 fences still counts 3). At most WOOD_MS_PER_DAY milestone batches a day. */
 WOODWORK.push(
   { id:'sidetable',    mats:{ wood:4, softwood:2 } },
   { id:'birdfeeder',   mats:{ wood:3, softwood:2 } },
@@ -898,7 +900,14 @@ export const WOOD_START = ['stool','fence','logpile','stumpstool'];
 export const WOOD_TEN = ['signpost','birdhouse','crate','bench','workbench','campfire'];
 export const WOOD_ORDER = ['planterbox','stumptable','table','sidetable','driftchair','stumpbench','chest','birdfeeder','mailbox','bookshelf','desk','stumpplanter',
   'rodrack','dresser','arbor','rocker','easel','stumplamp','pottingbench','hammock','bed','porchswing','flowercart','grandfather'];
-export const WOOD_MILESTONES = [25, 50, 100, 150, 250, 400, 600, 850, 1150];
+// v1.49: milestones are variety points (was total things made: 25, 50, 100, 150, 250, 400, 600, 850, 1150, with 4 or 5 plans each).
+// Each sits 6 points (two pieces made 3 times) below the most you could have from plans the milestones alone hand out,
+// so you make nearly everything you know, a few times each, before more comes.
+export const WOOD_TEN_KINDS = 3, WOOD_TEN_MADE = 10;   // different starting pieces made, and things made in all
+export const WOOD_PER_KIND = 3;
+export const WOOD_MILESTONES = [24, 33, 42, 51, 60, 69, 78, 87];
+export const WOOD_BATCH = 3;
+export const WOOD_MS_PER_DAY = 1;
 export const WOOD_PLAN_PRICE = id => Math.round((1200 + ITEMS[id].price*3)/100)*100;
 // (the Woodworking Plan items are made at the end of this file, once every furniture piece exists)
 ITEMS.campfire.shop='rare';

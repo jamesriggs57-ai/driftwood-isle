@@ -51,6 +51,16 @@ const FISH_LOOK = {
   wrasse:{ pat:'rainbow', iri:0.7 }, goby:{ pat:'spots', mark:0x2a9ae0, n:26 }, blenny:{ pat:'bands', bands:[0.3,0.6], band:0xf2c040, edge:0x2a1a5a },
   bannerfin:{ pat:'bands', bands:[0.18,0.55], band:0x1a1a1a, edge:0x1a1a1a, fin:0xf6dc50 }, velvetray:{ pat:'spots', mark:0xf4f4ff, n:70 },
   parrotfish:{ pat:'scales', big:true, iri:0.8 }, grouper:{ pat:'spots', mark:0x2a8ae0, n:80 }, goldseahorse:{ pat:'rings', mark:0xc88010 },
+  // v1.52 wave 1
+  needlefish:{ pat:'line', iri:0.9 }, gardeneel:{ pat:'speck', mark:0x1a1a1a, n:90 }, sole:{ pat:'speck', mark:0x6a5236, n:160 }, flyingfish:{ pat:'counter', iri:0.9 },
+  butterflyfish:{ pat:'eyespot', mark:0x1a1a1a }, searobin:{ pat:'mottle', mark:0x6a2a1a }, cuttlefish:{ pat:'tiger', mark:0x4a2a1a }, lionfish:{ pat:'zebra', mark:0xf8f0e8 },
+  angler:{ pat:'mottle', mark:0x2a2a2a }, swordfish:{ pat:'counter', iri:0.6 }, frilledshark:{ pat:'counter' }, oarfish:{ pat:'dash', mark:0x3a4a5a, iri:1, pearl:true }, hammerhead:{ pat:'counter' },
+  sculpin:{ pat:'mottle', mark:0x3a3a24 }, hatchetfish:{ pat:'counter', iri:1, pearl:true }, mudskipper:{ pat:'speck', mark:0x6ad8ff, n:70 }, lamprey:{ pat:'mottle', mark:0x4a4a3a },
+  piranha:{ pat:'speck', mark:0xd8dce8, n:120 }, grayling:{ pat:'speck', mark:0x2a2a2a, n:40, iri:0.7 }, paddlefish:{ pat:'counter' }, arowana:{ pat:'scales', big:true, iri:1 },
+  sturgeon:{ pat:'counter' }, stickleback:{ pat:'line', iri:0.6 }, angelfish:{ pat:'zebra', mark:0x1a1a1a }, betta:{ pat:'scales', iri:1 }, elephantnose:{ pat:'counter' }, lungfish:{ pat:'spots', mark:0x3a3a2a, n:60 },
+  triggerfish:{ pat:'picasso' }, mandarin:{ pat:'swirl', mark:0xf0802a }, whaleshark:{ pat:'grid', mark:0xf4f6f8 }, moray:{ pat:'spots', mark:0x3a2a1a, n:60 }, ratfish:{ pat:'speck', mark:0xf8f8ff, n:60, iri:0.7 },
+  wolffish:{ pat:'mottle', mark:0x3a4048 }, blindfish:{ pat:'counter', clear:true }, coelacanth:{ pat:'spots', mark:0xf0f0e8, n:50 }, foureyes:{ pat:'line', iri:0.5 }, unicornfish:{ pat:'counter' },
+  humphead:{ pat:'squiggle', mark:0xa8e0c0 }, viperfish:{ pat:'counter', iri:0.5 }, gulper:{ pat:'counter' }, barreleye:{ pat:'counter' }, bichir:{ pat:'hex', mark:0x3a3020 },
   // v1.38 night bay fish
   cardinal:{ pat:'bands', bands:[0.42,0.62], band:0x3a1a1a, edge:0x3a1a1a, iri:0.4 }, flashlight:{ pat:'photo', mark:0xd8f8ff, glow:true, iri:0.3 },
 };
@@ -81,6 +91,13 @@ export function fishSkin(id, d){ return once('fish:'+id, ()=>{
     if (P==='counter'){ c.copy(back).lerp(col(0xf4f6f8), smooth01(0.0,-0.3,up)); }
     if (P==='koi'){ c.copy(col(0xfdfaf2)); for (const [kv,ku,kr,kb] of koi){ const dt=Math.min(Math.abs(u-0.75),1-Math.abs(u-0.75)); if (Math.hypot(Math.max(0,dt-ku)*1.1,(v-kv))<kr*(kb?0.5:1) && up>-0.45) c.copy(col(kb?0x1a1a1e:0xe8502a)); } }
     if (P==='rings' && Math.sin(v*70)>0.6) c.lerp(mark,0.5);
+    if (P==='zebra' && Math.sin(v*52+up*1.5)>0.35 && v>0.08) c.lerp(mark,0.9);
+    if (P==='eyespot'){ if (Math.abs(v-0.14)<0.035 && up>-0.7) c.copy(mark); const du=Math.min(Math.abs(u-0.68),1-Math.abs(u-0.68)); if (Math.hypot(du*1.2,v-0.8)<0.06) c.copy(mark); else if (Math.hypot(du*1.2,v-0.8)<0.075) c.copy(col(0xffffff)); }
+    if (P==='dash' && Math.abs(Math.sin(up*9))<0.25 && (v*60+up*3)%1<0.35 && up>-0.5) c.lerp(mark,0.7);
+    if (P==='picasso'){ if (Math.abs(v-0.12)<0.012 || Math.abs(v-0.16)<0.01) c.copy(col(0x2a5ab8)); if (Math.abs(v-0.2)<0.025 && up<0.2) c.copy(col(0x1a1a1a)); if (v>0.45 && v<0.85 && up<0.3 && Math.abs(Math.sin((v-up*0.4)*45))<0.18) c.copy(col(0x1a1a1a)); if (Math.abs(up+0.2)<0.05 && v>0.25 && v<0.55) c.copy(col(0xf0c030)); }
+    if (P==='swirl'){ const w=Math.sin(v*38+Math.sin(u*TAU*3+v*9)*2.6)*Math.sin(u*TAU*4+Math.sin(v*21)*2); if (Math.abs(w)<0.18) c.copy(mark); else if (Math.abs(w)<0.24) c.copy(col(0x1a1a2a)); }
+    if (P==='grid' && up>-0.35){ const gx=v*36, gy=(up+1)*7+(Math.floor(gx)%2)*0.5, fx=gx-Math.floor(gx), fy=gy-Math.floor(gy); if (Math.hypot(fx-0.5,fy-0.5)<0.2) c.copy(mark); else if (Math.abs(fy-0.02)<0.03 && v>0.2) c.lerp(mark,0.5); }
+    if (P==='squiggle' && v<0.3 && Math.abs(Math.sin(v*90+Math.sin(up*12)*1.5))<0.15) c.lerp(mark,0.8);
     if (P==='segments' && Math.sin(v*40)>0.7) c.lerp(mark,0.6);
     if (P==='hex'){ const hx=v*9, hy=(up+1)*3+(Math.floor(hx)%2)*0.5; const fx=hx%1, fy=hy%1; if (fx<0.08||fy<0.08) c.lerp(mark,0.7); else c.offsetHSL(0,0,(0.5-Math.hypot(fx-0.5,fy-0.5))*0.12); }
     if (P==='chroma'){ for (const [bu,bv,br] of blobs){ const du=Math.min(Math.abs(u-bu),1-Math.abs(u-bu)); if (Math.hypot(du,v-bv*0.9)<br*0.8) c.lerp(mark,0.7); } }
@@ -91,7 +108,7 @@ export function fishSkin(id, d){ return once('fish:'+id, ()=>{
     { const gv=0.2+0.05*up*up; const dg=v-gv; if (Math.abs(up)<0.78 && dg>-0.012 && dg<0) c.offsetHSL(0,0.04,-0.13); else if (Math.abs(up)<0.78 && dg>=0 && dg<0.008) c.offsetHSL(0,0,0.05); else if (Math.abs(up)<0.7 && v<gv && v>0.08) c.offsetHSL(0,0,0.02*(1-Math.abs(up))); }
     if (v<0.045 && up>-0.42 && up<-0.08 && Math.abs(up+0.25-v*1.5)<0.035) c.offsetHSL(0,0.05,-0.18);
     // fine scale shimmer on every scaled fish, lateral line dots
-    if (!['eel','loach','catfish','squid','octopus','shark','tadpole','turtle','seahorse','ray'].includes(id) && v>0.2 && v<0.92){ const gx=v*70, gy=(up+1)*12+(Math.floor(gx)%2)*0.5, fx=gx-Math.floor(gx), fy=gy-Math.floor(gy); const e=Math.hypot(fx-0.15,(fy-0.5)*0.8); if (e>0.45&&e<0.52) c.offsetHSL(0,0,-0.035); else if (e<0.3) c.offsetHSL(0,0,0.012); }
+    if (!['eel','loach','catfish','squid','octopus','shark','tadpole','turtle','seahorse','ray','gardeneel','oarfish','frilledshark','hammerhead','lamprey','paddlefish','sturgeon','lungfish','whaleshark','moray','ratfish','gulper','elephantnose','swordfish'].includes(id) && v>0.2 && v<0.92){ const gx=v*70, gy=(up+1)*12+(Math.floor(gx)%2)*0.5, fx=gx-Math.floor(gx), fy=gy-Math.floor(gy); const e=Math.hypot(fx-0.15,(fy-0.5)*0.8); if (e>0.45&&e<0.52) c.offsetHSL(0,0,-0.035); else if (e<0.3) c.offsetHSL(0,0,0.012); }
     if (v>0.22 && v<0.92 && Math.abs(up-0.12+v*0.06)<0.012 && (v*90)%1<0.55) c.offsetHSL(0,0,-0.08);
     const i=(py*W+px)*4; img.data[i]=c.r*255; img.data[i+1]=c.g*255; img.data[i+2]=c.b*255; img.data[i+3]=255;
     if (eimg){ let e=0; if (P==='photo'){ for (const [bu,bv] of blobs){ if (Math.hypot(Math.min(Math.abs(u-((bu*0.5)+0.12)),1),v-bv*0.9)<0.018 && up<0.2) e=1; } if (Math.abs(up+0.35)<0.04 && (v*14)%1<0.4) e=1; }
@@ -115,7 +132,13 @@ const WING_LOOK = {
   sunwing:{ border:0.16, spots:'white', vein:true }, ember:{ border:0.2, band:0xffd060, vein:true }, bluebell:{ grad:0xb8d8ff, border:0.14, vein:true },
   peacock:{ eye:[0x4a6ad8,0xf0e0a0,0x1a1a2a], border:0.1, vein:true }, swallowtail:{ band:0x9af0c0, border:0.22, tails:true, vein:true }, wanderer:{ border:0.12, vein:'heavy', spots:'white' },
   leafdancer:{ leaf:true }, rainwing:{ grad:0xe0f8ff, border:0.18, drops:true, vein:true }, moth:{ fuzz:true, line:true }, snowmoth:{ fuzz:true, frost:true }, frostmoth:{ fuzz:true, frost:true, line:true },
-  starmoth:{ stars:true, fuzz:true }, lunamoth:{ eye:[0xf0d070,0x8a6a3a,0xf8f0c0], tails:'long', fuzz:true }, owlmoth:{ eye:[0x2a1a10,0xf0e0b0,0x1a1008], big:true, fuzz:true, line:true },
+  starmoth:{ stars:true, fuzz:true },
+  // v1.52 wave 1
+  skipper:{ grad:0xf0a040, border:0.1, vein:true }, comma:{ dots:0x3a2210, border:0.1, vein:true }, hairstreak:{ grad:0xa8b0bc, line:true, eye:[0x1a1a1a,0xf06a2a,0x1a1a1a], eyeS:0.4, eyeAt:[0.72,0.82] },
+  longwing:{ stripes:[0xfff2b0,3] }, rosymaple:{ grad:0xf8e060, band:0xf080a0, fuzz:true }, glasswing:{ glass:true, border:0.12, spots:'white' }, hawkmoth:{ fuzz:true, line:true }, hawkmothh:{ fuzz:true, border:0.25 },
+  morpho:{ grad:0x3a9aff, border:0.14, spots:'white' }, tigermoth:{ maze:0xf4efe4, fuzz:true }, tigermothh:{ dots:0x1a2a4a, fuzz:true }, lanternfly:{ grad:0xc8b890, dots:0x1a1a1a, fuzz:true },
+  ribbonmoth:{ stars:true, fuzz:true, border:0.08 }, beefly:{ glass:true, half:0x3a2a1a }, scorpionfly:{ glass:true, dots:0x2a1a10 }, atlasmoth:{ grad:0xc85a30, line:true, windows:true, fuzz:true },
+  birdwing:{ vein:'heavy', border:0.04 }, birdwingh:{ border:0.14, dots:0x1a1a14, vein:true }, lunamoth:{ eye:[0xf0d070,0x8a6a3a,0xf8f0c0], tails:'long', fuzz:true }, owlmoth:{ eye:[0x2a1a10,0xf0e0b0,0x1a1008], big:true, fuzz:true, line:true },
 };
 export function wingTex(id, d){ return once('wing:'+id, ()=>{
   const L=WING_LOOK[id]||{}, r=mulberry32(hashStr(id)), c=col(d.c), c2=col(d.c2), hex=k=>'#'+col(k).getHexString();
@@ -126,12 +149,20 @@ export function wingTex(id, d){ return once('wing:'+id, ()=>{
     if (L.vein){ x.strokeStyle=hex(c2); x.globalAlpha=L.vein==='heavy'?0.9:0.55; x.lineWidth=L.vein==='heavy'?4:2; for (let i=0;i<7;i++){ x.beginPath(); x.moveTo(0,H*0.5); x.quadraticCurveTo(W*0.5,H*(0.5+(i-3)*0.06),W,H*(0.08+i*0.14)); x.stroke(); } x.globalAlpha=1; }
     if (L.border){ const b=L.border*W; x.fillStyle=hex(c2); x.fillRect(W-b,0,b,H); x.beginPath(); x.ellipse(W*0.6,0,W*0.6,b*0.9,0,0,TAU); x.fill(); x.beginPath(); x.ellipse(W*0.6,H,W*0.6,b*0.9,0,0,TAU); x.fill();
       if (L.spots==='white'){ x.fillStyle='#fff8ec'; for (let i=0;i<7;i++){ x.beginPath(); x.arc(W-b*0.5,H*(0.1+i*0.13),b*0.18,0,TAU); x.fill(); } } }
-    if (L.eye){ const [o,m,i]=L.eye.map(hex), ex=W*0.62, ey=H*0.4, s=L.big?60:38; x.fillStyle=o; x.beginPath(); x.arc(ex,ey,s,0,TAU); x.fill(); x.fillStyle=m; x.beginPath(); x.arc(ex,ey,s*0.62,0,TAU); x.fill(); x.fillStyle=i; x.beginPath(); x.arc(ex,ey,s*0.34,0,TAU); x.fill(); x.fillStyle='#ffffff'; x.beginPath(); x.arc(ex-s*0.12,ey-s*0.12,s*0.1,0,TAU); x.fill(); }
+    if (L.eye){ const [o,m,i]=L.eye.map(hex), ex=W*(L.eyeAt?L.eyeAt[0]:0.62), ey=H*(L.eyeAt?L.eyeAt[1]:0.4), s=(L.big?60:38)*(L.eyeS||1); x.fillStyle=o; x.beginPath(); x.arc(ex,ey,s,0,TAU); x.fill(); x.fillStyle=m; x.beginPath(); x.arc(ex,ey,s*0.62,0,TAU); x.fill(); x.fillStyle=i; x.beginPath(); x.arc(ex,ey,s*0.34,0,TAU); x.fill(); x.fillStyle='#ffffff'; x.beginPath(); x.arc(ex-s*0.12,ey-s*0.12,s*0.1,0,TAU); x.fill(); }
     if (L.fuzz){ for (let i=0;i<1800;i++){ x.fillStyle=`rgba(255,255,255,${r()*0.12})`; x.fillRect(r()*W,r()*H,2,2); x.fillStyle=`rgba(0,0,0,${r()*0.06})`; x.fillRect(r()*W,r()*H,2,2); } }
     if (L.line){ x.strokeStyle=hex(c2); x.lineWidth=5; x.beginPath(); x.moveTo(W*0.35,0); x.bezierCurveTo(W*0.5,H*0.3,W*0.3,H*0.7,W*0.45,H); x.stroke(); x.beginPath(); x.moveTo(W*0.7,0); x.bezierCurveTo(W*0.8,H*0.4,W*0.65,H*0.6,W*0.78,H); x.stroke(); }
     if (L.frost){ for (let i=0;i<60;i++){ x.fillStyle=hex(c2); x.globalAlpha=0.6; const px=r()*W, py=r()*H, s=2+r()*4; x.fillRect(px-s,py-0.5,s*2,1); x.fillRect(px-0.5,py-s,1,s*2); } x.globalAlpha=1; }
     if (L.stars){ x.fillStyle='#fff3c0'; for (let i=0;i<40;i++){ x.globalAlpha=0.5+r()*0.5; x.beginPath(); x.arc(r()*W,r()*H,1+r()*2.5,0,TAU); x.fill(); } x.globalAlpha=1; }
     if (L.drops){ for (let i=0;i<14;i++){ const px=r()*W, py=r()*H, s=6+r()*8; const gg=x.createRadialGradient(px-s*0.3,py-s*0.3,1,px,py,s); gg.addColorStop(0,'rgba(255,255,255,.9)'); gg.addColorStop(1,'rgba(255,255,255,0)'); x.fillStyle=gg; x.beginPath(); x.arc(px,py,s,0,TAU); x.fill(); } }
+    if (L.half){ x.fillStyle=hex(L.half); x.beginPath(); x.moveTo(0,H*0.55); x.bezierCurveTo(W*0.3,H*0.5,W*0.7,H*0.3,W,H*0.25); x.lineTo(W,0); x.lineTo(0,0); x.fill(); }
+    if (L.stripes){ const [sc,n]=L.stripes; x.strokeStyle=hex(sc); x.lineWidth=14; for (let i=0;i<n;i++){ const y0=H*(0.25+i*0.5/(n-1||1)); x.beginPath(); x.moveTo(W*0.08,y0); x.bezierCurveTo(W*0.4,y0+(i-1)*12,W*0.7,y0+(i-1)*20,W*0.95,y0+(i-1)*30); x.stroke(); } }
+    if (L.dots){ x.fillStyle=hex(L.dots); for (let i=0;i<16;i++){ x.beginPath(); x.arc(W*(0.15+r()*0.75),H*(0.1+r()*0.8),4+r()*9,0,TAU); x.fill(); } }
+    if (L.maze){ x.strokeStyle=hex(L.maze); x.lineWidth=10; x.lineCap='round'; for (let i=0;i<9;i++){ x.beginPath(); let px=r()*W, py=r()*H; x.moveTo(px,py); for (let j=0;j<3;j++){ px+=(r()-0.5)*90; py+=(r()-0.5)*90; x.lineTo(px,py); } x.stroke(); } }
+    if (L.glass||L.windows){ x.save(); x.globalCompositeOperation='destination-out';
+      if (L.glass){ x.fillStyle='rgba(0,0,0,0.85)'; x.beginPath(); x.ellipse(W*0.45,H*0.5,W*0.4,H*0.36,0,0,TAU); x.fill(); }
+      if (L.windows){ x.fillStyle='rgba(0,0,0,0.9)'; x.beginPath(); x.moveTo(W*0.42,H*0.42); x.lineTo(W*0.56,H*0.5); x.lineTo(W*0.44,H*0.6); x.fill(); x.beginPath(); x.moveTo(W*0.2,H*0.45); x.lineTo(W*0.28,H*0.5); x.lineTo(W*0.21,H*0.56); x.fill(); }
+      x.restore(); }
     if (!L.leaf && !L.fuzz){ const sh=x.createLinearGradient(0,0,W,H); sh.addColorStop(0,'rgba(255,255,255,0.18)'); sh.addColorStop(0.5,'rgba(255,255,255,0)'); sh.addColorStop(1,'rgba(255,255,255,0.12)'); x.fillStyle=sh; x.fillRect(0,0,W,H); }
   });
   const t=tex(cv); t.wrapS=t.wrapT=THREE.ClampToEdgeWrapping; return t; }); }

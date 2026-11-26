@@ -48,14 +48,14 @@ export function createEnchant(C){
     maxUses:t=>maxUses(S(),t),
     // after T.uses-- in useTool: warn before an enchanted tool breaks, and say what was lost when it does
     onUse(t, T){ const mx=maxUses(S(),t), en=T.ench||[]; if (!en.length || !mx) return;
-      if (T.uses<=0) return;   // v1.49: breakTool says what happened
+      if (T.uses<=0) return;   // v1.50: breakTool says what happened
       const warn=Math.max(3, Math.round(mx*0.1)); if (T.uses===warn) setTimeout(()=>C.toast(`Your ${TOOLS[t].tiers[T.tier].name} is wearing thin. Repair it now and it's cheap. Once it breaks, it takes a crafting table and twice the materials.`), 600); },
-    // v1.49: the tool's last use is spent. It leaves your hands and waits to be fixed at a crafting table.
+    // v1.50: the tool's last use is spent. It leaves your hands and waits to be fixed at a crafting table.
     breakTool(t){ const T=S().tools[t]; if (!T) return; const name=TOOLS[t].tiers[T.tier].name, B=breakTool(S(),t);
       if (B) setTimeout(()=>C.toast(`Your ${name} broke!`, C.toolThumb(t,B.tier), '', `Fix it at a crafting table (Craft, then Tools).${B.ench?` ${B.ench.map(nm).join(' and ')} ${B.ench.length>1?'are':'is'} still on it.`:''}`), 400);
       else setTimeout(()=>C.toast(`Your ${name} broke!`), 400); },
     broken:t=>brokenOf(S(),t), brokenList:()=>brokenList(S()),
-    // v1.49: a line at the top of Woodworking when you're at a table and a tool needs you (broken, or under a quarter left)
+    // v1.50: a line at the top of Woodworking when you're at a table and a tool needs you (broken, or under a quarter left)
     fixNote(){ if (!H.hasTab() || here()<FIX_BENCH) return ''; const s=S(), br=brokenList(s), worn=Object.keys(s.tools).filter(t=>repairNeed(s,t) && s.tools[t].uses<=maxUses(s,t)*0.25);
       if (!br.length && !worn.length) return '';
       const parts=[...br.map(t=>`${TOOLS[t].tiers[brokenOf(s,t).tier].name} (broken)`), ...worn.map(t=>`${TOOLS[t].tiers[s.tools[t].tier].name} (worn)`)];
@@ -128,7 +128,7 @@ export function createEnchant(C){
     let h=tabsH+`<div class="tabs">${[['tools','Your tools'],['make','Make a tool'],['known','Enchantments']].map(([k,n])=>`<button class="tab${k===mode?' on':''}" data-em="${k}">${n}</button>`).join('')}</div>`;
     if (C.benchBanner) h+=C.benchBanner();
     if (mode==='tools'){
-      const br=brokenList(s);   // v1.49: broken tools wait here to be fixed at a crafting table
+      const br=brokenList(s);   // v1.50: broken tools wait here to be fixed at a crafting table
       if (br.length){ h+=`<div class="notice"><b>Broken tools</b> <span class="muted">· fix them at any crafting table, enchantments and all</span>`;
         for (const t of br){ const B=brokenOf(s,t), c=canFix(s,t,inv,here()), own=s.tools[t];
           const notes=[B.ench ? `Still on it: ${B.ench.map(nm).join(' and ')}` : '', own ? `Takes the place of your ${TOOLS[t].tiers[own.tier].name}${c.loses?`, and ${c.loses.map(nm).join(' and ')} on it is lost`:''}` : ''].filter(Boolean).join('. ');
@@ -207,7 +207,7 @@ export function createEnchant(C){
     give(t, k=0){ const tr=TOOLS[t].tiers[k]; S().tools[t]={ tier:k, uses:tr.forever?0:tr.uses }; C.save(); C.updateHeld(); },
     put(t, ...ids){ const T=S().tools[t]; if (!T) return false; T.ench=ids.filter(id=>ENCH[id] && fits(id,t)).slice(0,TWIN_SLOTS); if (!T.ench.length) delete T.ench; C.save(); return T.ench||[]; },
     wear(t, n){ const T=S().tools[t]; if (T) T.uses=Math.max(1,T.uses-n); C.save(); return T&&T.uses; },
-    // v1.49: break a tool now (as if its last use ran out)
+    // v1.50: break a tool now (as if its last use ran out)
     breakIt(t){ if (!S().tools[t]) return null; H.breakTool(t); if (S().equip===t) S().equip=null; C.save(); C.updateHeld(); C.updateHUD(); return brokenOf(S(),t); },
     canFix:(t)=>canFix(S(),t,inv,here()), fixNeed, brokenOf:t=>brokenOf(S(),t),
     open:()=>H.openTools(),

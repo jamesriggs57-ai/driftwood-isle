@@ -8,7 +8,7 @@
    The bigger tables are woodworking plans you learn by making enough DIFFERENT things.
    Building a table teaches its own pieces. A table does everything the smaller ones do.
    ===================================================================== */
-import { ITEMS, WOODWORK, RARE_WORK, def } from './content.js';
+import { ITEMS, WOODWORK, RARE_WORK, def, repriceCraft } from './content.js';
 
 export const BENCH_IDS = ['workbench', 'carpbench', 'masterbench'];   // index+1 = tier
 export const BENCH_NAME = ['away from a crafting table', 'Workbench', 'Carpenter\'s Bench', 'Master Workbench'];
@@ -18,7 +18,7 @@ export const NEAR = 2.6;   // how close (beyond the table's own size) counts as 
 // What you can make anywhere: the simple things. Everything else in woodworking needs at least a Workbench.
 export const FIELD = ['stool', 'fence', 'logpile', 'signpost', 'stumpstool', 'campfire', 'workbench'];
 
-// The two new tables. kinds = how many different things you've made before you work out how to build one (v1.49: 16 and 30, were 12 and 24).
+// The two new tables. kinds = how many different things you've made before you work out how to build one (v1.50: 16 and 30, were 12 and 24).
 export const NEW_BENCHES = [
   { id:'carpbench',   name:'Carpenter\'s Bench', buy:9000,  r:0.9, mats:{ wood:16, softwood:6, iron:4, stone:4 },        bench:1, kinds:16 },
   { id:'masterbench', name:'Master Workbench',   buy:24000, r:1.0, mats:{ wood:24, iron:10, plank:6, heartwood:1 },      bench:2, kinds:30, after:'carpbench' },
@@ -38,7 +38,7 @@ export const BENCH_PIECES = [
 // items and recipes (same shape as furn() and WOODWORK in content.js; shop:'craft' keeps them out of every shop)
 for (const p of [...NEW_BENCHES, ...BENCH_PIECES]){
   if (!ITEMS[p.id]) def(p.id, { name:p.name, kind:'furniture', buy:p.buy, price:Math.round(p.buy/4), r:p.r, shop:'craft', stack:p.id.endsWith('bench')?1:5, model:{ t:'furn', b:p.id }, ...(p.glow?{ glow:true }:{}) });
-  if (!WOODWORK.some(r=>r.id===p.id)) WOODWORK.push({ id:p.id, mats:p.mats, bench:p.bench });
+  if (!WOODWORK.some(r=>r.id===p.id)){ const r={ id:p.id, mats:p.mats, bench:p.bench }; WOODWORK.push(r); repriceCraft(r); }   // v1.48: sells for its materials, see content.js
 }
 for (const r of WOODWORK) if (r.bench===undefined) r.bench = FIELD.includes(r.id) ? 0 : 1;
 for (const r of RARE_WORK) if (r.bench===undefined) r.bench = 2;   // showpieces from rare plans

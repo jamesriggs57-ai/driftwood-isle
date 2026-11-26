@@ -9,14 +9,14 @@
      several enchantments) lets a tool hold two.
    - Strengths are never shown as numbers: only "slightly", "moderately" or "greatly increased ...".
    - A worn tool can be repaired anywhere (Tools tab) or by Pemberton for clams.
-   - v1.49: a tool that breaks isn't gone. It waits in S.rare.broken with its tier and enchantments, and you can fix it
+   - v1.50: a tool that breaks isn't gone. It waits in S.rare.broken with its tier and enchantments, and you can fix it
      at any crafting table for BROKEN_MULT full repairs' worth of materials. Getting a tool of that kind at the same or
      a better tier (bought or made) scraps the broken one.
    - Double Output, Triple Output and One-Swing never stack: they share one family, so a tool has at most one.
 
    Save shape (all inside keys that already exist, so nothing new to sync):
      S.tools[t].ench = ['lucky3', 'tough2']        // the enchantments on that tool, at most 2
-     S.rare.broken = { rod:{ tier:2, ench:['lucky2'] } }   // v1.49: tools that broke, waiting to be fixed
+     S.rare.broken = { rod:{ tier:2, ench:['lucky2'] } }   // v1.50: tools that broke, waiting to be fixed
      S.rare.ench = { v:1, known:[...ids], twin:false, applied:0, lessons:{ pippa:0 }, lastLesson:'' }
 
    This file is data and pure logic only (no DOM, no THREE), so it runs in node for tests.
@@ -109,7 +109,7 @@ export const REPAIR = {
 };
 const canTier = (t,k) => t==='can' && k>=1 ? k+1 : k;   // map the can's tiers onto the others' (it skips Sturdy)
 export const REPAIR_CLAMS = 0.45;   // Pemberton's full repair costs this share of the tool's price
-export const BROKEN_MULT = 2;       // v1.49: fixing a broken tool costs twice a full repair (Flimsy: 4 wood, 4 branches; Sturdy: 6 wood, 2 iron; Golden: 8 iron, 8 stone)
+export const BROKEN_MULT = 2;       // v1.50: fixing a broken tool costs twice a full repair (Flimsy: 4 wood, 4 branches; Sturdy: 6 wood, 2 iron; Golden: 8 iron, 8 stone)
 export const FIX_BENCH = 1;         // and needs a crafting table (any: Workbench or bigger)
 // Crafting a tool from materials. Same requirements as buying it (reqMet). Heirloom tools are a long haul on purpose.
 export const CRAFT = {
@@ -140,7 +140,7 @@ export function migrate(S){
   if (!E.lessons || typeof E.lessons!=='object') E.lessons={};
   for (const t of Object.keys(S.tools||{})){ const T=S.tools[t]; if (!T) continue;
     if (T.ench!==undefined){ if (!Array.isArray(T.ench)) delete T.ench; else { T.ench=T.ench.filter(id=>ENCH[id] && fits(id,t)).slice(0, TWIN_SLOTS); if (!T.ench.length) delete T.ench; } } }
-  // v1.49 broken tools: drop anything that doesn't make sense (unknown tool, bad tier, an heirloom, or a broken one no better than the one you hold)
+  // v1.50 broken tools: drop anything that doesn't make sense (unknown tool, bad tier, an heirloom, or a broken one no better than the one you hold)
   if (S.rare.broken!==undefined && (!S.rare.broken || typeof S.rare.broken!=='object' || Array.isArray(S.rare.broken))) delete S.rare.broken;
   for (const [t,B] of Object.entries(S.rare.broken||{})){ const tr=TOOLS[t] && B && TOOLS[t].tiers[B.tier], own=S.tools && S.tools[t];
     if (!tr || tr.forever || (own && own.tier>=B.tier)){ delete S.rare.broken[t]; continue; }
@@ -215,7 +215,7 @@ export function repair(S, t, inv){ const need=repairNeed(S,t); if (!need) return
   for (const [m,n] of need) inv.take(m,n); S.tools[t].uses=maxUses(S,t); return { ok:true }; }
 export function repairForClams(S, t, pay){ const c=repairClams(S,t); if (!c) return { ok:false, why:'It doesn\'t need fixing.' }; if (!pay(c)) return { ok:false, why:'Not enough clams.' }; S.tools[t].uses=maxUses(S,t); return { ok:true, cost:c }; }
 
-/* v1.49: broken tools. breakTool runs when a tool's last use is spent: the tool leaves your hands but keeps its tier
+/* v1.50: broken tools. breakTool runs when a tool's last use is spent: the tool leaves your hands but keeps its tier
    and enchantments in S.rare.broken until you fix it at a crafting table. Fixing puts it back in your hands, good as new.
    If you're holding a stand-in of that kind (say a Flimsy Rod you bought after your Golden Rod broke), the fixed one
    takes its place, and anything on the stand-in is lost (the Tools tab asks first). */
@@ -243,9 +243,9 @@ export function carryDrops(S, t, k){ const old=S.tools[t], d=TOOLS[t].tiers[k]||
 export function upgradeTool(S, t, k){
   const old=S.tools[t], d=TOOLS[t].tiers[k], drop=carryDrops(S,t,k), keep=(old && old.ench || []).filter(id=>ENCH[id] && !drop.includes(id));
   S.tools[t]={ tier:k, uses:0 }; if (keep.length) S.tools[t].ench=keep; S.tools[t].uses = d.forever ? 0 : maxUses(S,t);
-  const B=brokenOf(S,t); if (B && B.tier<=k) delete S.rare.broken[t];   // v1.49: a tool as good or better scraps the broken one
+  const B=brokenOf(S,t); if (B && B.tier<=k) delete S.rare.broken[t];   // v1.50: a tool as good or better scraps the broken one
   return drop; }
-// v1.49: what getting tier k of tool t would scrap: the broken one, if it's no better (null if nothing, or nothing on it worth a warning)
+// v1.50: what getting tier k of tool t would scrap: the broken one, if it's no better (null if nothing, or nothing on it worth a warning)
 export function scrapsBroken(S, t, k){ const B=brokenOf(S,t); return B && B.tier<=k ? B : null; }
 
 /* Craft: same requirements as buying (pass reqMet). You can't craft a tool you already have at that tier or better. */

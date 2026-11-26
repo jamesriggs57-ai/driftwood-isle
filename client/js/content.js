@@ -4,7 +4,13 @@
    ===================================================================== */
 import { range } from './util.js';
 const ALL='all';
-export const ITEMS = {};
+// v1.63: items can also be made up on demand (custom furniture, whose whole design is in its id: see custom-core.js).
+// A resolver gets any id that isn't defined yet and may define it.
+const RESOLVERS = [];
+export const ITEMS = new Proxy({}, { get(t, k){
+  if (k==='__resolve') return fn => RESOLVERS.push(fn);
+  if (typeof k==='string' && !(k in t) && RESOLVERS.length) for (const f of RESOLVERS){ const it=f(k); if (it) return it; }
+  return t[k]; } });
 export function def(id, o){ ITEMS[id] = Object.assign({ id, stack: 30 }, o); return ITEMS[id]; }
 
 /* Rarity: weight used when rolling spawns. Higher = more common. */
@@ -98,7 +104,7 @@ def('sealily',  {name:'Sea Lily Fossil',   kind:'fossil', price:800,  rarity:3, 
 def('wingfossil',{name:'Dragonfly Wing Fossil',kind:'fossil',price:1100,rarity:2, model:{t:'fossil', s:'wing'}});
 def('tusk',     {name:'Mammoth Tusk',      kind:'fossil', price:1800, rarity:1, model:{t:'fossil', s:'tusk'}});
 def('dinoegg',  {name:'Dino Egg',          kind:'fossil', price:2500, rarity:0.6, model:{t:'fossil', s:'egg'}});
-/* v1.63 wave 2: 69 more fossils (each has its own model in fossils2.js). Kept at rarity 1.5 or more so they share the
+/* v1.65 wave 2: 69 more fossils (each has its own model in fossils2.js). Kept at rarity 1.5 or more so they share the
    ordinary dig odds; the Very rare and Legendary slots stay with the Mammoth Tusk and the Dino Egg. */
 def('orthocone',    {name:'Straight Shell',          kind:'fossil', price:420,  rarity:5, model:{t:'fossil', s:'orthocone'}});
 def('belemnite',    {name:'Belemnite',               kind:'fossil', price:380,  rarity:5, model:{t:'fossil', s:'belemnite'}});

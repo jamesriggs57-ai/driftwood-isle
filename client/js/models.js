@@ -8,7 +8,7 @@ import * as C2 from './critters2.js';
 import * as CH from './chars.js';
 const buildFossilInto=CR.buildFossilInto;
 import { buildFossil2Into } from './fossils2.js';
-// v1.63: every fossil is built once and handed out as copies that share its shapes and paints (the wave 2 ones take a few
+// v1.65: every fossil is built once and handed out as copies that share its shapes and paints (the wave 2 ones take a few
 // milliseconds each to carve, and the museum, the bag icon and the dig drop all want one)
 const FOSSIL_TPL = new Map();
 function fossilInto(g, id, d){
@@ -402,7 +402,7 @@ function renderThumb(key, m){
   return thumbCache[key]=url;
 }
 export const thumb = id => thumbCache[id] || renderThumb(id, buildItemModel(id));
-export const hasThumb = id => !!thumbCache[id];   // v1.63: lets long lists draw their pictures a few at a time
+export const hasThumb = id => !!thumbCache[id];   // v1.65: lets long lists draw their pictures a few at a time
 export const toolThumb = (type,tier) => thumbCache['tool:'+type+tier] || renderThumb('tool:'+type+tier, (()=>{ const g=buildTool(type,tier); g.rotation.z=-0.6; return g; })());
 
 /* ---------- Furniture ---------- */

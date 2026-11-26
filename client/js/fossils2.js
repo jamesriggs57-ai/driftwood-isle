@@ -1,4 +1,4 @@
-// v1.63 wave 2 fossils: 69 new finds, each with its own model.
+// v1.65 wave 2 fossils: 69 new finds, each with its own model.
 // Same contract as buildFossilInto in critters.js: the find sits on (or is pressed into) a small stone, about 0.8 wide, top near y=0.1.
 // Every builder is called once; models.js keeps the result as a template and hands out clones that share geometry.
 import * as THREE from 'three';
@@ -21,7 +21,7 @@ function polyR(poly){ const N=512, T=new Float32Array(N);
 function stone(parent, W, D, h, seed, relief=null, tint=0xd7c6a2, seg=60, shape=null){
   const segX=seg, segZ=Math.max(8,Math.round(seg*D/W)), g=new THREE.PlaneGeometry(W, D, segX, segZ); g.rotateX(-Math.PI/2);
   const base=col(tint), dark=base.clone().offsetHSL(0.01,0.05,-0.2), light=base.clone().offsetHSL(0,-0.03,0.07), fos=new THREE.Color();
-  const pr=shape&&shape.poly? polyR(shape.poly) : null, flat=!!pr;   // v1.63: a polygon outline gives a cut, flat-topped tablet
+  const pr=shape&&shape.poly? polyR(shape.poly) : null, flat=!!pr;   // v1.65: a polygon outline gives a cut, flat-topped tablet
   const edge=pr? (x,z)=>Math.hypot(x,z)/pr(Math.atan2(z,x)) : (x,z)=>{ const a=Math.atan2(z/D,x/W), wob=1+fbm(Math.cos(a)*1.6,Math.sin(a)*1.6,seed,seed)*0.18; return Math.hypot(x/(W/2),z/(D/2))/wob; };
   const p=g.attributes.position, cArr=new Float32Array(p.count*3), c=new THREE.Color();
   for (let i=0;i<p.count;i++){ let x=p.getX(i), z=p.getZ(i), e=edge(x,z);
@@ -461,7 +461,7 @@ B.coprolite=(g,seed)=>{ base(g,seed,0xc6b898);
     const m=mesh(geo, vcPhys({ roughness:0.12, clearcoat:1, clearcoatRoughness:0.05 }), x, TOP+R*0.8, z, g); m.rotation.y=ry; };
   one(0.36,0.065,0.02,-0.04,0.3,1); one(0.16,0.04,-0.12,0.16,-0.9,2); };
 
-/* ================= v1.63: the reworked slab fossils =================
+/* ================= v1.65: the reworked slab fossils =================
    These used to share one look: a round stone with a dark picture pressed into it. Each one now has its own shape:
    the find stands up off the rock in 3D, and the rock itself is cut, split, stacked or framed in its own way. */
 

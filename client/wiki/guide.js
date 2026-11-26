@@ -11,7 +11,7 @@
    built in wiki.js. Writing rules: plain words, no em dashes, no emoji, only facts the code supports.
    ===================================================================== */
 
-export const GUIDE_VERSION = 'v1.63';
+export const GUIDE_VERSION = 'v1.65';
 export const GUIDE_UPDATED = '2026-11-26';
 
 const tip = s => `<div class="tip"><b>Tip</b> ${s}</div>`;
@@ -317,6 +317,60 @@ ${tip('Making 14 <b>different</b> pieces is what starts Bramble\'s workshop stor
 <p>Building a table for the first time teaches its pieces. Materials are in the <a href="#crafting">Woodworking</a> table.</p>
 `},
 
+{ id:'custom', group:'island', title:'Custom furniture', html:`
+<p>Once you've made 10 different woodworking pieces, crafting gets a <b>Design</b> tab. Stand at a crafting table, pick a piece and choose every part of it yourself.</p>
+<table class="t"><tr><th>Piece</th><th>Parts you choose</th></tr>
+<tr><td>Chair</td><td>11 legs, 12 backs, 7 seats, 5 arms, 8 trims</td></tr>
+<tr><td>Table</td><td>10 bases, 8 tops, 6 aprons, 9 things on top</td></tr>
+<tr><td>Bed</td><td>7 frames, 10 headboards, 6 footboards, 7 beddings, 5 canopies</td></tr>
+<tr><td>Shelf</td><td>7 bodies, 6 crowns, 5 bases, 7 fillings</td></tr>
+<tr><td>Lamp</td><td>7 bases, 6 stems, 9 shades, 5 finishes</td></tr>
+<tr><td>Dresser</td><td>6 bodies, 6 feet, 7 fronts, 6 handles, 6 tops</td></tr></table>
+<p>That's 68,412 shapes. On top of that: 16 woods and paints, a second wood, 5 metals, 14 fabrics and 9 patterns. A spinning preview shows the piece as you go. <b>Surprise me</b> picks a matching set in one style (rustic, cottage, antique, modern or woodland).</p>
+<h3>Unlocking parts</h3>
+<ul><li>A <b>Workbench</b> opens the everyday parts, woods and finishes.</li>
+<li>A <b>Carpenter's Bench</b> opens fancier ones (turned and twisted legs, wingbacks, marble tops, damask and velvet).</li>
+<li>A <b>Master Workbench</b> opens the finest (cabriole and claw feet, shield backs, sleigh beds, stained glass, gold leaf, ebony).</li>
+<li>A few rare parts only come from <b>sketches</b>: claw feet, carved leaf backs, moss cushions, moonpearl finials, starstone inlay, root bases, hollow-trunk shelves, carved forest headboards and more.</li></ul>
+<h3>Sketches</h3>
+<p>Now and then a whole furniture sketch turns up: about 1 dig in 80, 1 felled tree in 50 and 1 catch in 250. The sketch goes straight into your designs and teaches any rare parts it uses.</p>
+<h3>What pieces are worth</h3>
+<ul><li>Every copy sells for its materials plus 15%, so you can't get rich making the same chair over and over.</li>
+<li>The <b>first time you sell a design you made yourself</b>, you get a craftsmanship bonus on top: more for detailed parts and for materials you can't farm (iron, planks, clay, stumps, rare ingredients). It's usually 700 to 3,500 clams, and much more when rare ingredients go in.</li>
+<li>Only 2 new designs a day earn the bonus. Sell the rest another day and they still get it.</li></ul>
+<h3>Islanders' requests</h3>
+<p>An islander you're friends with (friendship 3+) sometimes asks you to make something and shows you a sketch of it, in a style that suits them (gruff: rustic, elegant: antique, dreamy: woodland, sporty and lazy: modern, cheerful and caring: cottage). Make it at a crafting table, then talk to them and hand it over.</p>
+<ul><li>The closer it is to the sketch, the more they pay. Shape counts most, then the wood, then the fabric.</li>
+<li>Get at least half of it right or they'll ask you to try again.</li>
+<li>A close match is +3 friendship, a looser one +2. They keep the piece.</li>
+<li>Each islander asks at most once every 2 weeks, and you can have 2 requests open at once. Open requests show in the Design tab, with a "Try it" button that loads the sketch into the designer.</li></ul>
+${tip('Your saved designs are kept, so making a matching set of chairs is quick: press Make on the saved design.')}
+`},
+{ id:'sewing', group:'island', title:'Sewing: rugs and clothes', html:`
+<p>You sew at a <b>Sewing Machine</b>. Once you know woodworking, ask Pemberton <i>"Do you sell sewing machines?"</i> and he'll sell you one for <b>12,000 clams</b> (he only offers it while you don't already own one). Place it on your island or in your house, walk up and press <b>Sew</b>. Weeds are your yarn. Pick a rug or a piece of clothing, set its shape and size, then <b>paint it pixel by pixel</b> from 32 yarn colours.</p>
+<p>The machine sells back for 3,000. You can't use a machine on a friend's island.</p>
+<h3>Getting better</h3>
+<p>Every piece you sew counts toward your sewing skill. The better you get, the finer your grid (more detail) and the more alterations your clothes can carry.</p>
+<table class="t"><tr><th>Skill</th><th>Pieces sewn</th><th>Grid</th><th>Alterations</th><th>Opens</th></tr>
+<tr><td>Beginner</td><td>0</td><td>8 x 8</td><td>0</td><td>Rectangle, round, oval and runner rugs; shirts and dresses</td></tr>
+<tr><td>Apprentice</td><td>3</td><td>12 x 12</td><td>1</td><td>Octagon rugs, borders, plush pile; coats and overalls; pockets, collars, cuffs, buttons</td></tr>
+<tr><td>Tailor</td><td>8</td><td>16 x 16</td><td>2</td><td>Cloud rugs, tassels, braided edges; robes, bell sleeves; ruffles, bows, hoods, lace</td></tr>
+<tr><td>Artisan</td><td>16</td><td>24 x 24</td><td>3</td><td>Star and leaf rugs, scalloped edges; puffed sleeves, ballgowns; capes, studs, coat tails, patches</td></tr>
+<tr><td>Master</td><td>30</td><td>32 x 32</td><td>5</td><td>Shell rugs, pom-poms; the strange ones: leaf mantles, toadstool epaulettes, fins down the back, glowing trim, orbiting stars, little wings</td></tr></table>
+<p>An old design painted on a coarser grid can be moved up to your current grid with one click, then refined.</p>
+<h3>Painting</h3>
+<ul><li><b>Brush</b> paints one square, <b>Fill</b> fills a patch of one colour, <b>Pick colour</b> copies a colour from the painting.</li>
+<li><b>Mirror</b> paints both sides at once.</li>
+<li><b>Start from</b> stripes, a check, a border or a diamond in your two colours, then paint over it.</li>
+<li>On clothes, the middle half of the painting is the front; the outer quarters wrap round the back.</li></ul>
+<h3>Rugs</h3>
+<p>Choose the shape, width and length (0.6 to 3 m), edge, pile and edge colour. A rug costs weeds by its size (plush pile and tassels or pom-poms take a few more). It goes in your bag; place it like any furniture.</p>
+<ul><li>Copies sell for their materials plus 15%.</li>
+<li>The first time you sell a rug you designed, you get an art bonus for the work: more colours, a finer grid and fancier shapes and edges pay more (from a few hundred for a simple two-colour rug to about 3,000 for a big, detailed one). Up to 2 new rugs a day get the bonus.</li></ul>
+<h3>Clothes</h3>
+<p>Choose a garment (shirt, dress, coat, overalls, robe), sleeves, length and, for dresses and robes, how full the skirt is. Then add alterations. Clothes take weeds, plus a little extra for some alterations (iron for studs, branches for a leaf mantle, clay for toadstools, glimmer moss for glowing trim, a starstone for orbiting stars, heartwood for wings).</p>
+<p>Finished clothes go in your <b>closet</b> at the Sewing Machine. Press <b>Wear</b> to put one on, <b>Take off</b> to go back to your usual outfit. Friends see what you're wearing, painting and all. Picking a different outfit in Menu &gt; Change my look takes sewn clothes off.</p>
+`},
 { id:'cooking', group:'island', title:'Cooking', data:'recipes', html:`
 <p>Mabel teaches cooking once she knows you. Cook at a <b>campfire</b> (craftable; simple dishes marked "fire") or a <b>Wood Stove</b> (anything). Dishes sell well, islanders love them, and eating one makes you walk a little faster for 5 minutes. "Fish" or "fruit" in a recipe means any fish or fruit.</p>
 `},
@@ -777,6 +831,7 @@ ${steps(['Talk to them and pick <b>Come and meet people</b>. They follow you for
 <li>All six legendary woodworking showpieces</li>
 <li>The reading room, the race course record, the flower show won, the newcomer settled in</li>
 <li>The Island Charter, and all four seasons' festival keepsakes</li>
+<li>Every rare custom-furniture part from sketches, and a request finished for every islander</li>
 <li>Every enchantment and the Twin Charm</li>
 <li>Every passive income and stake at its top tier</li>
 <li>Best friends with everyone</li>
@@ -788,7 +843,9 @@ ${steps(['Talk to them and pick <b>Come and meet people</b>. They follow you for
 { id:'changes', group:'done', title:'What\'s changed', html:`
 <p>Recent updates, newest first.</p>
 <ul>
-<li><b>v1.63</b>: 69 new fossils, 80 in all, each with its own model: shells, corals, sea life, trilobites, ancient fish and sea reptiles, plants, amber, dinosaur skulls and bones, Ice Age mammals and more. A fossil you haven't found yet is twice as likely to turn up. Once more than 6 fossils are donated, the museum builds the full Fossil Hall with a pedestal or a glass case spot for every fossil (see The museum). New achievements for 25, 50 and all 80 fossils and for 250 and 288 museum displays; the old 11-fossil one is now called Fossil Shelf.</li>
+<li><b>v1.65</b>: 69 new fossils, 80 in all, each with its own model: shells, corals, sea life, trilobites, ancient fish and sea reptiles, plants, amber, dinosaur skulls and bones, Ice Age mammals and more. A fossil you haven't found yet is twice as likely to turn up. Once more than 6 fossils are donated, the museum builds the full Fossil Hall with a pedestal or a glass case spot for every fossil (see The museum). New achievements for 25, 50 and all 80 fossils and for 250 and 288 museum displays; the old 11-fossil one is now called Fossil Shelf.</li>
+<li><b>v1.64</b>: Sewing. Buy a Sewing Machine from Pemberton (12,000), place it and use it to make rugs and clothes and paint them pixel by pixel; the more you sew, the finer the grid and the stranger the alterations (up to glowing trim, orbiting stars and little wings).</li>
+<li><b>v1.63</b>: Custom furniture. Design your own chairs, tables, beds, shelves, lamps and dressers part by part, find sketches, and make pieces islanders ask for.</li>
 <li><b>v1.62</b>: The far shore now goes all the way round your island instead of off one side, so the island keeps its shape and simply grows, and Wendell's isles move out with the coast. Islands that had the one-sided far shore are moved over once; everything on the old part of the island stays put (see The far shore). Reroll in the island maker now makes a genuinely different island each time.</li>
 <li><b>v1.61</b>: Fixed signed-in islands with a town hall getting stuck on "Building the island..." the first time they loaded on a new day. Nothing on the island was lost.</li>
 <li><b>v1.60</b>: The old lighthouse on Lantern Bluff is now about two and a half times as tall and you can walk inside and climb it. It starts out broken down and gets mended step by step as the lighthouse story goes on. You now fit the lamp from the lamp room at the top.</li>

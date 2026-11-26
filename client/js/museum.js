@@ -40,12 +40,12 @@ export const TANK_GROUPS = (() => { const out={};
     for (const it of Object.values(ITEMS)) if (it.kind===k && !seen.has(it.id)) gs[gs.length-1].ids.push(it.id); out[k]=gs; }
   return out; })();
 export const tankOf = id => { for (const k in TANK_GROUPS) for (const g of TANK_GROUPS[k]) if (g.ids.includes(id)) return g; return null; };
-// Big fossils stand on their own pedestals. v1.63: the order here is their place in the full Fossil Hall, back row first.
+// Big fossils stand on their own pedestals. v1.65: the order here is their place in the full Fossil Hall, back row first.
 const BIG_ORDER = ['pteroskull','duckbillskull','trikeskull','trexskull','dinoegg','stegoplate','claw','femur',
   'ammonite','ichthyosaur','mosasaurjaw','armorfish','firstbird','tusk','cavebear','dawnhorse'];
 const BIG_FOSSIL = new Set(BIG_ORDER);
 export const isBigFossil = id => BIG_FOSSIL.has(id);
-/* v1.63: once the fossils outgrow the second Fossil Hall, the builders fit out the full hall. Every fossil in the game has
+/* v1.65: once the fossils outgrow the second Fossil Hall, the builders fit out the full hall. Every fossil in the game has
    its own spot there: a pedestal for each big one and a place in one of the themed glass cases (8 to a case) for the rest,
    so an empty spot shows what is still out there to find. Fossils added later that aren't listed get extra cases. */
 const FOSSIL_CASES0 = [
@@ -72,11 +72,11 @@ export const FOSSIL_CAP = [3, 6, 99], SHELL_CAP = [4, 99];
    The museum starts as one small room: a shared fish tank on the left wall, a shared terrarium on the right,
    three fossil pedestals at the back and a little case of beach finds. Each section grows on its own once it runs
    out of room: the Aquarium and Insectarium become wings off the sides with one themed tank per group, and the
-   fossils move into a Fossil Hall across the back. When that fills (v1.63) it becomes the full Fossil Hall, as wide as
+   fossils move into a Fossil Hall across the back. When that fills (v1.65) it becomes the full Fossil Hall, as wide as
    the museum, with a pedestal or a case spot for every fossil in the game (FOSSIL_HALL).
    st = { fish:null|[group ids], bug:null|[group ids], fossil:0..2, shell:0..1 } */
 const W0=11, WING=5.4, SLOT=3.9, TLEN=3.4;
-// v1.63 full Fossil Hall: pedestal rows 2.4 apart, then rows of glass cases (4 to a row) 2.7 apart
+// v1.65 full Fossil Hall: pedestal rows 2.4 apart, then rows of glass cases (4 to a row) 2.7 apart
 export const FCASE_LEN=3.4, FCASE_DEP=1.3;
 const PED_STEP=2.4, CASE_STEP=2.7, CASES_PER_ROW=4;
 export function museumLayout(st, nFossil){
@@ -295,7 +295,7 @@ export function buildPedestal(id, h, big, filled){ const g=new THREE.Group(), r=
   g.userData.top=h+0.05; return g; }
 export function fossilModel(id, big){ return wrapModel(id, big?0.85:0.55); }
 
-/* v1.63 glass case for small fossils in the full Fossil Hall: 8 trays in two rows of 4 */
+/* v1.65 glass case for small fossils in the full Fossil Hall: 8 trays in two rows of 4 */
 export function fossilCaseSlots(len=FCASE_LEN){ const out=[]; for (let r=0;r<2;r++) for (let i=0;i<4;i++) out.push([-len/2+len/8+i*len/4, r?0.3:-0.3]); return out; }
 export const FCASE_TOP = 0.885;   // where a fossil sits, on its tray
 export function buildFossilCase(len, name, sub){ const g=new THREE.Group(), d=FCASE_DEP;

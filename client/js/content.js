@@ -206,7 +206,7 @@ bug('bluespark','Blue Spark',1400,'glade',range(4,10),[20,3],2.5,[8,14],0.0001,{
 bug('mossglow','Moss Glowmoth',2400,'glade',range(3,11),[20,4],1.6,[30,50],0.00004,{c:0x4a6a3a,c2:0xb8ffa0,w:'moth',glow:true});
 bug('starlantern','Starlantern Beetle',5200,'glade',range(5,9),[21,3],0.6,[20,36],0.0001,{c:0x2a1a3a,c2:0xffe9a0,w:'beetle',glow:true});
 // v1.41 Starfall Isle bugs: they live only on the floating isle above Hollow Crags, where it is always night (main.js skyBugOK)
-bug('stardrifter','Star Drifter',1800,'starfall',ALL,null,3,[30,48],0.0001,{c:0x2a2a5a,c2:0xd8e4ff,w:'moth',glow:true});
+bug('stardrifter','Sky Drifter',1800,'starfall',ALL,null,3,[30,48],0.0001,{c:0x2a2a5a,c2:0xd8e4ff,w:'moth',glow:true});
 bug('cometbeetle','Comet Beetle',3600,'starfall',ALL,null,1.6,[18,30],0.0001,{c:0x1a1a3a,c2:0x9ad8ff,w:'beetle',glow:true});
 bug('nebulamoth','Nebula Moth',7200,'starfall',ALL,null,0.5,[60,90],0.00004,{c:0x5a3a8a,c2:0xf0a8ff,w:'moth',glow:true});
 

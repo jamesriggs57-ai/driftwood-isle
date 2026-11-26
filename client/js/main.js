@@ -767,7 +767,7 @@ function terrainMat(){ if (_terrainMat) return _terrainMat;
         diffuseColor.rgb *= 1.0 + (a.b-0.5)*0.16*(1.0-gr); }`); };
   m.userData.patchKey='ground3'; m.onBeforeCompile=m.userData.patch; m.customProgramCacheKey=()=>'ground3'; return _terrainMat=m; }
 // v1.36: also builds the terrain of Wendell's isles (o.isle), each as its own mesh, at its own detail
-// v1.58 Hollow Crags' ground: grey stone and gravel, moss in a few hollows (the grass, ferns and flowers keep to the moss)
+// v1.59 Hollow Crags' ground: grey stone and gravel, moss in a few hollows (the grass, ferns and flowers keep to the moss)
 const CRAG_STONE=[new THREE.Color(0x8e8d88), new THREE.Color(0x77756f), new THREE.Color(0xa5a39b)], CRAG_MOSS=new THREE.Color(0x6a8a4c), CRAG_PATH=new THREE.Color(0xb2a68c), CRAG_TMP=new THREE.Color();
 function cragMoss(x,z){ return smooth(0.58,0.74,vnoise(x*0.085+4,z*0.085-2)); }
 function buildTerrain(o={}){
@@ -798,7 +798,7 @@ function buildTerrain(o={}){
       if (!inland) c.lerp(SAND, smooth(SAND_H+0.2, SAND_H, y)); else if (y<SAND_H) c.lerp(new THREE.Color(0x9a8a6a), smooth(SAND_H,0.2,y));
       if (I){ const sl=ISL.isleSlope(I,x,z); if (sl>0.18 && pd>1.4) c.lerp(TIER_EDGE, smooth(0.18,0.6,sl)*0.75);
         if (sl>1.5) c.lerp(CLIFF_ROCK, smooth(1.5,2.6,sl)*0.9).offsetHSL(0,0,(vnoise(x*1.7,z*1.7)-0.5)*0.06);
-        if (I.kind==='crags'){ const mo=cragMoss(x,z), g0=fbm(x*0.21+5,z*0.21-8);   // v1.58 bare stone and gravel, with moss only in a few hollows
+        if (I.kind==='crags'){ const mo=cragMoss(x,z), g0=fbm(x*0.21+5,z*0.21-8);   // v1.59 bare stone and gravel, with moss only in a few hollows
           CRAG_TMP.copy(CRAG_STONE[0]).lerp(CRAG_STONE[1], g0).lerp(CRAG_STONE[2], smooth(0.6,0.85,vnoise(x*0.7,z*0.7))*0.5).offsetHSL(0,0,(vnoise(x*3.1,z*3.1)-0.5)*0.07);
           c.lerp(CRAG_TMP, (1-mo*0.75)*(sl>1.5?0.35:0.92)).lerp(CRAG_MOSS, mo*0.55);
           if (pd<1.4) c.lerp(CRAG_PATH, smooth(1.4,0.6,pd)*0.6); gw[i]*=mo*0.7; }
@@ -1118,11 +1118,11 @@ if (!S.stumps) S.stumps=[];
 function buildRockModel(r){ const g=new THREE.Group(); const c=[0x9aa1a8,0x8a9198,0xa8afb5]; mk(G.dod(0.75), M(c[0],{flatShading:true}), 0,0.45,0,g).scale.set(1.1,0.8,1); mk(G.dod(0.45), M(c[1],{flatShading:true}), 0.6,0.25,0.3,g); mk(G.dod(0.35), M(c[2],{flatShading:true}), -0.5,0.2,0.35,g); const moss=mk(G.sph(0.35,10,6), M(0x6a9a4a), -0.1,0.78,0.05,g); moss.scale.set(1.2,0.25,1); g.rotation.y=r()*TAU; return g; }
 // v1.57 a Hollow Crags rock, each hit: iron half the time (stone 30%, clay 20%), a 20% chance of a second iron, and a 4% chance of a fossil.
 // Four hits a day comes to about 2.8 iron a rock, against about 0.5 from a rock on the main island.
-const CRAG_ROCK = { stone:0.3, clay:0.2, bonus:0.2, fossil:0.04, emerald:0.02 };   // v1.58 emerald: per hit, only on the crags
+const CRAG_ROCK = { stone:0.3, clay:0.2, bonus:0.2, fossil:0.04, emerald:0.02 };   // v1.59 emerald: per hit, only on the crags
 function buildRichRock(r){ const g=new THREE.Group(), c=[0x8e8a84,0x7e7a74,0x9a948c], rust=M(0xa0562e,{flatShading:true, roughness:0.6, metalness:0.25}), rust2=M(0xc0703a,{flatShading:true, roughness:0.5, metalness:0.3});
   mk(G.dod(0.85), M(c[0],{flatShading:true}), 0,0.5,0,g).scale.set(1.15,0.85,1.05); mk(G.dod(0.5), M(c[1],{flatShading:true}), 0.7,0.28,0.3,g); mk(G.dod(0.4), M(c[2],{flatShading:true}), -0.6,0.22,0.4,g);
   for (let i=0;i<6;i++){ const a=r()*TAU, y=0.25+r()*0.6, d=0.62+r()*0.2; const v=mk(G.dod(0.13+r()*0.1), i%2?rust:rust2, Math.cos(a)*d, y, Math.sin(a)*d*0.9, g); v.rotation.set(r()*3,r()*3,0); v.castShadow=false; }   // seams of red iron ore
-  const moss=mk(G.sph(0.32,10,6), M(0x5f8a3e), 0.1,0.9,-0.05,g); moss.scale.set(1.2,0.25,1); g.rotation.y=r()*TAU; mergeStatic(g); return g; }   // v1.58 merged: 12 of these on the crags
+  const moss=mk(G.sph(0.32,10,6), M(0x5f8a3e), 0.1,0.9,-0.05,g); moss.scale.set(1.2,0.25,1); g.rotation.y=r()*TAU; mergeStatic(g); return g; }   // v1.59 merged: 12 of these on the crags
 class Rock extends Ent {
   constructor(idx,x,z,r,rich=false){ super('rock',x,z,0.95); this.idx=idx; this.rich=rich; this.solid=true; this.reach=1.9; this.hit=0; this.attach(rich ? buildRichRock(r) : buildRockModel(r)); }
   label(){ return 'Hit'; }
@@ -1139,7 +1139,7 @@ class Rock extends Ent {
     else if (this.idx===S.day.lucky){ const amt=[100,200,400,800][u]; addClams(amt); Snd.coin(); toast('A pouch of '+amt+' clams popped out!'); }
     else if (this.rich){ for (let k=0;k<out;k++){ const x=Math.random(); dropNear(x<CRAG_ROCK.stone?'stone':(x<CRAG_ROCK.stone+CRAG_ROCK.clay?'clay':'iron'), this.pos, 1.7); if (Math.random()<CRAG_ROCK.bonus) dropNear('iron', this.pos, 1.7); }   // v1.57 the crags' iron-heavy rock
       if (Math.random()<CRAG_ROCK.fossil){ const f=tierPick(Math.random, Object.values(ITEMS).filter(i=>i.kind==='fossil' && allowedFind(i)), i=>luckW(i,'dig'), 'dig'); if (f){ dropNear(f.id, this.pos, 1.4); toast('Something was pressed into the stone!'); } }
-      if (Math.random()<CRAG_ROCK.emerald){ const first=!S.seen.emerald; dropNear('emerald', this.pos, 1.4); sparkle(this.pos.clone().add(new THREE.Vector3(0,1.4,0))); Snd.fanfare(); toast(first ? 'An emerald! The first you\'ve found.' : 'An emerald!', thumb('emerald'), 'new', `Emerald ${rarityTag(ITEMS.emerald)}`); S.stats.emeralds=(S.stats.emeralds|0)+1; }   // v1.58 joins this rock's pickup pile
+      if (Math.random()<CRAG_ROCK.emerald){ const first=!S.seen.emerald; dropNear('emerald', this.pos, 1.4); sparkle(this.pos.clone().add(new THREE.Vector3(0,1.4,0))); Snd.fanfare(); toast(first ? 'An emerald! The first you\'ve found.' : 'An emerald!', thumb('emerald'), 'new', `Emerald ${rarityTag(ITEMS.emerald)}`); S.stats.emeralds=(S.stats.emeralds|0)+1; }   // v1.59 joins this rock's pickup pile
       rareRoll(World.night>0.5?'rockNight':'rock', 'starstone', this.pos); }
     else { for (let k=0;k<out;k++){ const x=Math.random(), q=[0.6,0.88]; dropNear(x<q[0]?'stone':(x<q[1]?'clay':'iron'), this.pos, 1.7); } rareRoll(World.night>0.5?'rockNight':'rock', 'starstone', this.pos); } }
     save();
@@ -5746,7 +5746,7 @@ const ISLE_IN=70, ISLE_OUT=105;
 const ISLE_TREES = {
   meadow:[['fruittree',7],['blossom',5],['birch',4],['oak',4],['maple',2],['blossom2',4],['birch2',3],['oak2',3],['maple2',3]], dunes:[['palm',34]],
   bluff:[['pine',10],['cedar',8],['birch',2],['pine2',6],['cedar2',5],['birch2',3]], crags:[['cedar',3],['pine',2],['cedar2',2]], pines:[['pine',24],['cedar',8]], starfall:[['birch',5],['blossom',6],['birch2',3],['blossom2',4]] };
-const ISLE_ROCKS = { meadow:2, dunes:0, bluff:5, crags:12, pines:2, starfall:2 };   // v1.57 the crags are a proper quarry now; v1.58 12 rocks, and only 7 trees
+const ISLE_ROCKS = { meadow:2, dunes:0, bluff:5, crags:12, pines:2, starfall:2 };   // v1.57 the crags are a proper quarry now; v1.59 12 rocks, and only 7 trees
 // a rock's id keys its taps today: the first 10 on each isle keep their old ids, more go in a range of their own
 const isleRockId = (I,i) => i<10 ? 200+I.k*10+i : 400+I.k*10+(i-10);
 // the meadow grows a fruit the main island doesn't, the same one every time
@@ -5763,7 +5763,7 @@ function isleSpot(I, r, minH, maxH, rad, keep=true){   // v1.52 keep=false only 
     if (S.placed.some(p=>p.x<500 && Math.hypot(p.x-x,p.z-z)<rad+0.6) || S.plants.some(p=>!p.wild && Math.hypot(p.x-x,p.z-z)<rad) || S.stumps.some(p=>!mine(p) && Math.hypot(p.x-x,p.z-z)<rad)) continue;   // never on top of anything of yours
     if (keep) I.taken.push([x,z,rad]); return [x,z]; }
   return null; }
-/* v1.58 Hollow Crags reads as rock: loose boulders and scree everywhere, ferns only in the mossy hollows, and a few solid outcrops (cragOutcrops).
+/* v1.59 Hollow Crags reads as rock: loose boulders and scree everywhere, ferns only in the mossy hollows, and a few solid outcrops (cragOutcrops).
    All of it is instanced, so the whole lot is a handful of draw calls. Decor stays off paths, features, rocks, trees, the forge and anything placed. */
 const CRAG_GEO = { d:new THREE.DodecahedronGeometry(1,0), i:new THREE.IcosahedronGeometry(1,0), m:new THREE.IcosahedronGeometry(1,1) };
 const cragStoneMat = () => new THREE.MeshStandardMaterial({ color:0xffffff, flatShading:true, roughness:0.92 });
@@ -5786,7 +5786,7 @@ function cragCover(I, grp, r, rx, rz, ok, add){
         dummy.position.set(xx, rawHeight(xx,zz)+s*0.15, zz); dummy.rotation.set(r()*3, r()*TAU, r()*3); dummy.scale.set(s*(0.8+r()*0.5), s*(0.5+r()*0.4), s); dummy.updateMatrix(); sm.setMatrixAt(n, dummy.matrix); sm.setColorAt(n, tint(k+j)); n++; } }
     sm.count=n; add(sm); }
 }
-// v1.58 the crags' solid outcrops: clusters of tall broken stone. Placed like the rocks (never over a path, a feature or anything of yours), and walked around.
+// v1.59 the crags' solid outcrops: clusters of tall broken stone. Placed like the rocks (never over a path, a feature or anything of yours), and walked around.
 function cragOutcrops(I, grp, r){
   const N=9, PER=5, sm=new THREE.InstancedMesh(CRAG_GEO.d, cragStoneMat(), N*PER), mm=new THREE.InstancedMesh(CRAG_GEO.m, cragMossMat(), N*2), dummy=new THREE.Object3D(), col=new THREE.Color(), R=[]; let n=0, m=0;
   for (let i=0;i<N;i++){ const p=isleSpot(I, r, SAND_H+0.3, 14, 2.6); if (!p) continue; const [x,z]=p, k=3+Math.floor(r()*3); R.push([x-1.35,z-1.35,x+1.35,z+1.35]);
@@ -5801,7 +5801,7 @@ function isleCover(I, grp){
   const ok=(x,z,pd=1.3)=>{ if (ISL.isleT(I,x,z)>1.02) return false; const h=rawHeight(x,z); if (h<SAND_H+0.15 || ISL.isleSlope(I,x,z)>1.3 || islePathDist(I,x,z)<pd || onBridge(x,z)) return false;
     if (I.sand) return false;   // v1.57 the dunes are bare sand
     if ([I.spires, I.fxSpires].some(L=>L && L.some(([px,pz,pr])=>Math.hypot(x-px,z-pz)<pr*1.05))) return false; if (I.fxOn && I.fxOn.length && (ISL.fxBlock(I,x,z,0.2) || ISL.fxWet(I,x,z))) return false; return true; };
-  const grow=I.gr ? I.gr.reduce((a,v)=>a+v*v,0)/I.gr.length : 1, frac=(I.r*I.r*grow)/(2500*SC*SC), mul={ meadow:1.25, dunes:0.35, bluff:0.9, crags:0.5, pines:0.75, starfall:0.8 }[I.kind], bare=(x,z)=>I.kind==='crags' && cragMoss(x,z)<0.3;   // v1.58 on the crags, grass and flowers only grow in the mossy hollows
+  const grow=I.gr ? I.gr.reduce((a,v)=>a+v*v,0)/I.gr.length : 1, frac=(I.r*I.r*grow)/(2500*SC*SC), mul={ meadow:1.25, dunes:0.35, bluff:0.9, crags:0.5, pines:0.75, starfall:0.8 }[I.kind], bare=(x,z)=>I.kind==='crags' && cragMoss(x,z)<0.3;   // v1.59 on the crags, grass and flowers only grow in the mossy hollows
   const add=im=>{ im.castShadow=false; im.receiveShadow=true; im.computeBoundingSphere(); grp.add(im); };
   { const tuftN=Math.round((isMobile?3600:5800)*frac*mul), TV=3, per=Math.ceil(tuftN/TV)+8, gm=GC.swayMat({ height:0.45, amp:0.05 });
     const tms=[...Array(TV)].map((_,v)=>{ const im=new THREE.InstancedMesh(GC.tuftGeo(v), gm, per); im.count=0; GC.tickWind(im); return im; });

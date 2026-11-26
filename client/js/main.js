@@ -5,12 +5,14 @@
 import * as THREE from 'three';
 import { TAU, clamp, lerp, smooth, mulberry32, hashStr, hash2, vnoise, fbm, weightedPick, inHours, inMonths, fmt, polyDist, segDist, Time, seasonOf } from './util.js';
 import { WOOD_START, WOOD_TEN, WOOD_ORDER, WOOD_MILESTONES, WOOD_PLAN_PRICE } from './content.js';
+import { TICKET_THEMES } from './content.js';   // v1.39 fixes: captain's parting line
 import { ITEMS, NATIVE_FRUITS, PLANTS, TOOLS, WOODWORK, BACKPACKS, BASE_SLOTS, HOUSE_LEVELS, RESIDENTS, DIALOGUE, PEDDLER, EVENTS, rarityLabel, RARITY_COLORS, SHOPS, INVEST, KEEPERS, MUSEUM, BUILD,
   FOREIGN_FRUIT_PRICE, FRUIT_REGROW_DAYS, POTIONS, WIZARD, MAGIC, STORY, FAVOR_ASKS, CROPS, RECIPES, ARRIVE, MENTOR, islandSeedPool, ISLAND_SEED_BUY, islandFlowerPool, WILDFLOWER_SEEDS, GARDEN_FENCES, GARDEN_DECOR, FR, RARE_WORK, RARE_ODDS, PLAN_PRICE,
   WEAR_IDS, FAVOR_THEMES, DO_TASKS, ORIGINAL_RESIDENTS, LETTERS, LETTER_IDS, CORAL_KINDS, CORAL_NAMES, CORAL_FISH, NIGHT_BAY } from './content.js';
 import * as S2 from './story2.js';   // v1.38 phase 2 buildings and furniture
 import * as S3 from './story3.js';   // v1.39 phase 3 buildings and furniture
 import * as S4 from './story4.js';   // v1.40 phase 4 buildings, festival and Starfall spells
+import * as LH from './lighthouse.js';   // v1.39 fixes: the climbable lighthouse on Lighthouse Point
 import { ACHIEVEMENTS, ACH_GROUPS } from './achieve.js';
 import { BY_SLOT, SLOT_NAMES } from './wardrobe-data.js';
 import { CELL, buildSoil, buildFences, buildStake, buildGardenSign, buildScarecrow, buildLanternPost, buildFlowerArch } from './farm.js';
@@ -40,6 +42,7 @@ import { hasUpstairs, winAt, winKey, trelAt, balcAt, buildCustomHouse, buildHome
 const $ = s => document.querySelector(s);
 const World = { weather:'sunny', season:seasonOf(Time.month()), night:0, inside:null };
 let buildMode=null;   // set while the home builder is open
+let PERCH=null, LHC=null;   // v1.39 fixes: set while you're inside or on top of the Lighthouse Point lighthouse (lighthouse.js)
 MODEL.season = World.season; MODEL.month = Time.month();
 
 /* ---------- Save state ---------- */
@@ -6448,9 +6451,19 @@ async function joinTrip(A){ tripAsk=null;
   document.documentElement.classList.add('magicret'); Snd.swoosh();
   try { if (BOOT.flush) await BOOT.flush(); } catch(e){}
   setTimeout(()=>{ location.href=location.pathname+location.search; }, 600); }
+// v1.39 fixes: what Wick says when you leave depends on the island. No island is ever kept: every trip rolls a fresh
+// one. A ticket's island (TICKET_THEMES) or the night voyage's Moonlit Isle can always be sailed to again, but laid
+// out fresh; rare and legendary islands only come back by luck; little towns and quiet islands don't come back.
+function tripPartingLine(){
+  const th=TRIP_THEME, sp=VY.SPECIAL[th];
+  if (sp && sp.tier==='legendary') return 'Ready to head home? The current only brings us here once in a blue moon. Maybe it\'ll bring us back someday.';
+  if (sp) return 'Ready to head home? I can rarely get back to islands like this one. If the wind\'s kind, we\'ll see it again.';
+  if (TICKET_THEMES[th]) return 'Ready to head home? The winds will make it tough to find this exact spot again, but a ticket will always get us somewhere just like it.';
+  return 'Ready to head home? Once we leave, the winds will make it tough to find our way back here.';
+}
 function talkSkipperTrip(){
   const v=SKIPPER.voice, nm=SKIPPER.name;
-  dialog(nm, v, ['Ready to head home? Once we leave, I can never find the same island twice.'], null, [
+  dialog(nm, v, [tripPartingLine()], null, [
     { label:'Sail home', fn:()=>tripGoHome() },
     { label:'Not yet', alt:true, fn:()=>dialog(nm, v, ['Take your time. I\'ll be right here.']) } ]);
 }
@@ -6552,16 +6565,6 @@ function buildTortoise(T){ const g=new THREE.Group(), prof=[]; const N=16;
   for (const z of [-0.28,0.28]) mk(G.box(0.03,0.04,0.2), M(0x2a2a22), 0.62,0.15,z,head).rotation.y=Math.PI/2;
   for (const [x,z] of [[0.6,-0.75],[0.6,0.75],[-0.6,-0.75],[-0.6,0.75]]) mk(G.cyl(0.42,0.5,0.7,10), skin, x*T.r,0.35,z*T.r,g);
   g.userData.head=head; return g; }
-function buildLighthouse(){ const g=new THREE.Group(), red=M(0xd8483a), white=M(0xf4f0e6), dark=M(0x3a3a44);
-  mk(G.cyl(1.9,2.1,0.6,16), M(0xa8a098), 0,0.3,0,g);
-  for (let i=0;i<5;i++){ const y0=0.6+i*1.7, r0=1.55-i*0.09, r1=1.55-(i+1)*0.09; mk(G.cyl(r1,r0,1.7,18), i%2?white:red, 0,y0+0.85,0,g); }
-  const top=0.6+5*1.7; mk(G.cyl(1.35,1.2,0.18,18), dark, 0,top+0.09,0,g);
-  const lamp=mk(G.cyl(0.75,0.75,1.1,12), glowMat(0xfff0b0), 0,top+0.75,0,g); addGlow(g, top+0.8, 6, 0xfff0b0);
-  for (let i=0;i<8;i++){ const a=i/8*TAU; mk(G.box(0.06,1.1,0.06), dark, Math.cos(a)*0.8,top+0.75,Math.sin(a)*0.8,g); }
-  mk(G.cone(1.05,0.9,16), red, 0,top+1.75,0,g); mk(G.sph(0.14,8,6), dark, 0,top+2.25,0,g);
-  mk(G.box(0.9,1.5,0.1), M(0x5a3e28), 0,1.35,1.52,g);   // door
-  for (let i=0;i<3;i++) mk(G.box(0.36,0.46,0.06), windowMat, 0,3.2+i*2.2,1.48-i*0.12,g);
-  return g; }
 function buildCircusTent(){ const g=new THREE.Group(), A=M(0xd8403a), B=M(0xf6efe0), n=12;
   for (let i=0;i<n;i++){ const m=i%2?A:B; mk(new THREE.CylinderGeometry(4.2,4.2,2.4,3,1,true,i/n*TAU,TAU/n), m, 0,1.2,0,g).material.side=THREE.DoubleSide;
     mk(new THREE.ConeGeometry(4.6,3.2,3,1,true,i/n*TAU,TAU/n), m, 0,4.0,0,g).material.side=THREE.DoubleSide; }
@@ -6746,10 +6749,10 @@ function townBuilding(s, i, P){
   clearPatch(s.x, s.z, s.r+1.2);
   if (s.role==='house'){ const id='trip_'+S.seed+'_'+i, obj=buildCottage(id, { roofC:HUT_ROOFS[i%HUT_ROOFS.length], accent:P?P.room.accent:0x6a9ad8 });
     const b=placeCottage('tb'+i, s.x, s.z, obj, 'Knock', ()=>{ Snd.door(); toast(P ? `${P.name} isn't inside. They're out and about.` : 'Nobody answers.'); }); return b; }
-  const g = s.role==='lighthouse' ? buildLighthouse() : s.role==='tent' ? buildCircusTent() : s.role==='wagon' ? buildWagon([0x3a7ad8,0x7ab04a,0xd8604d][i%3]) : s.role==='cove' ? buildCove() : s.role==='board' ? buildBoard() : null;
+  const g = s.role==='lighthouse' ? LH.buildTower(S.seed) : s.role==='tent' ? buildCircusTent() : s.role==='wagon' ? buildWagon([0x3a7ad8,0x7ab04a,0xd8604d][i%3]) : s.role==='cove' ? buildCove() : s.role==='board' ? buildBoard() : null;
   if (!g) return null;
   const toSea = Math.atan2(s.x, s.z); if (s.role==='lighthouse' || s.role==='cove') g.rotation.y=toSea+Math.PI; else g.rotation.y=Math.atan2(-s.x,-s.z)+Math.PI;
-  g.position.set(s.x, groundY(s.x,s.z), s.z); OUT.add(g); const R=s.role==='tent'?4.4:s.role==='lighthouse'?1.9:s.role==='wagon'?1.5:s.role==='cove'?2.6:0.8;
+  g.position.set(s.x, groundY(s.x,s.z), s.z); OUT.add(g); s.g=g; const R=s.role==='tent'?4.4:s.role==='lighthouse'?LH.LT.foot:s.role==='wagon'?1.5:s.role==='cove'?2.6:0.8;
   setRects('tb'+i, [[s.x-R,s.z-R,s.x+R,s.z+R]]); return g; }
 function inFront(s, d){ const a=Math.atan2(-s.x,-s.z); return [s.x+Math.sin(a)*d, s.z+Math.cos(a)*d]; }
 function setupTown(){
@@ -6763,7 +6766,7 @@ function setupTown(){
   spots.forEach((s,i)=>{ const P=owners.get(s)||null, b=townBuilding(s, i, P);
     if (P){ const d=(b && b.doorPt) ? b.doorPt : inFront(s,4), p=openSpotNear(d[0], d[1], 1.4, 3.4, tripRand('f'+i))||d; folkKeeper(P, p[0], p[1], roleMenu(P), Math.atan2(-p[0],-p[1])+Math.PI); } });
   const standBy=(P, s, dist)=>{ const d=inFront(s, dist), p=openSpotNear(d[0], d[1], 0.5, 3, tripRand('sb'+P.id))||d; folkKeeper(P, p[0], p[1], roleMenu(P), Math.atan2(-p[0],-p[1])); };
-  if (K==='lighthouse'){ const lh=byRole('lighthouse'); if (lh){ const a=Math.atan2(lh.x,lh.z)+Math.PI; new Thing('lhdoor', lh.x+Math.sin(a)*2.3, lh.z+Math.cos(a)*2.3, 0.4, new THREE.Group(), ()=>TX.climbed?'Look':'Climb up', ()=>climbLighthouse(), { solid:false, reach:1.8, hit:[0.8,1.0] }); } }
+  let upTop=null; if (K==='lighthouse'){ const lh=byRole('lighthouse'); if (lh && lh.g){ const P=folk.find(f=>f.role==='keeper'); upTop=P; setupLighthouse(lh, P); } }
   if (K==='monastery'){ const m=byRole('monastery'); if (m){ clearPatch(m.x, m.z, m.r+2); const obj=buildCottage('abbey_'+S.seed, { roofC:0x7a4a3a, accent:0xb8a070 }); obj.scale.setScalar(1.15);
       placeCottage('abbey', m.x-1.2, m.z, obj, 'Knock', ()=>{ Snd.door(); toast('The abbey is quiet. The monks are out in the garden.'); }, 3.1);
       const tw=buildBellTower(), p=[m.x+3.4, m.z-1.6]; tw.position.set(p[0], groundY(p[0],p[1]), p[1]); OUT.add(tw); setRects('bell',[[p[0]-1,p[1]-1,p[0]+1,p[1]+1]]); } }
@@ -6771,7 +6774,7 @@ function setupTown(){
   if (K==='board'){ const b=byRole('board'); if (b) new Thing('nboard', b.x, b.z+0.6, 0.8, new THREE.Group(), 'Read', ()=>openNoticeBoard(folk), { solid:false, reach:2.2, hit:[1.0,1.0] }); }
   let anchor = byRole('lighthouse')||byRole('tent')||byRole('cove')||byRole('monastery')||spots[0];
   if (!anchor){ const p=openSpotNear(DOCK.x0-9, DOCK.z, 2, 9, tripRand('anchor')); if (p) anchor={ x:p[0], z:p[1], r:1, role:'square' }; }
-  for (const P of folk){ if (housed.has(P.id) || !anchor) continue; standBy(P, anchor, anchor.role==='tent'?6.3:anchor.role==='lighthouse'?4.2:anchor.role==='monastery'?6.2:4.5); }
+  for (const P of folk){ if (housed.has(P.id) || !anchor || P===upTop) continue; standBy(P, anchor, anchor.role==='tent'?6.3:anchor.role==='lighthouse'?4.2:anchor.role==='monastery'?6.2:4.5); }
   TX.folk=folk.map(p=>p.id); }
 function roleMenu(P){
   if (P.role==='angler') return back=>{ const want=anglerWants(); if (!want) return [];
@@ -6792,18 +6795,47 @@ function roleMenu(P){
             TX.monk=(TX.monk||0)+1; save(); Snd.jingle(); dialog(P.name, P.voice, [`${ITEMS[id].name}. They don't grow on your island, so take good care of them.`], back); } },
         { label:'Not now', alt:true, fn:back } ]); } }];
   if (P.role==='ring') return back=>[{ label:'Play the cup game (300)', fn:()=>shellGame(P, back) }];
-  if (P.role==='keeper') return back=>[{ label:'The lighthouse', fn:()=>{
-      if (!TX.climbed) return dialog(P.name, P.voice, ['Go on up, the door\'s open. 112 steps. Then come tell me what you think of the view.'], back);
-      if (TX.lantern) return dialog(P.name, P.voice, ['Best view in the world, isn\'t it? Come back any time.'], back);
-      TX.lantern=1; noteGift('beaconlamp'); save(); const res=addItem('beaconlamp'); if (!res) dropNear('beaconlamp', player.pos, 1.2);
-      dialog(P.name, P.voice, ['You climbed it! Hardly anyone does.', 'Here. An old lantern from the lamp room. It deserves a window to shine out of.'], ()=>{ itemToast('beaconlamp', res==='new', 'Received'); back(); }); } }];
+  if (P.role==='keeper') return back=>[
+    { label:'What can you see?', fn:()=>dialog(P.name, P.voice, [
+        World.night>0.5 ? 'At night? Mostly the beam. Round it goes, and every time it passes the far isles light up for a blink.' : 'On a clear day? The whole island, your skipper\'s boat at the dock, and the far isles right out on the edge of the sea.',
+        'Walk round the rail. Every side\'s a different view.'], back) },
+    ...(TX.lantern ? [] : [{ label:'About the lamp', fn:()=>{
+      const res=addItem('beaconlamp'); if (!res) return dialog(P.name, P.voice, ['I\'d give you something to remember the climb by, but your bag\'s full. Make some room and come back up.'], back);
+      TX.lantern=1; noteGift('beaconlamp'); save();
+      dialog(P.name, P.voice, ['You climbed it! Hardly anyone does.', 'Here. An old lantern from the lamp room. It deserves a window to shine out of.'], ()=>{ itemToast('beaconlamp', res==='new', 'Received'); back(); }); } }]),
+    ...(TX.lantern ? [{ label:'The lighthouse', fn:()=>dialog(P.name, P.voice, ['Best view in the world, isn\'t it? Come back any time.'], back) }] : []) ];
   if (P.role==='smuggler') return back=>[{ label:'What are you selling?', fn:()=>smugglerShop(P) }];
   return null;
 }
 function anglerWants(){ if (TX.angler) return TX.angler; const r=tripRand('angler'), pool=Object.values(ITEMS).filter(i=>i.kind==='fish' && (i.rarity??5)>=3 && (i.where==='sea'||i.where==='river') && inMonths(Time.month(), i.months) && allowedFind(i));
   if (!pool.length) return null; TX.angler=pool[Math.floor(r()*pool.length)].id; save(); return TX.angler; }
-function climbLighthouse(){ if (TX.climbed){ dialog('Lighthouse', 500, ['The lamp room is warm and smells of brass polish.']); return; } TX.climbed=1; save(); Snd.door();
-  dialog('Lighthouse', 500, ['You climb, and climb, and climb. 112 steps.', 'At the top the whole sea opens up. You can see three other islands from here, and a boat that might be Skipper Wick\'s.', 'You should tell the keeper you made it.']); }
+// v1.39 fixes: the lighthouse is climbable (lighthouse.js); this wires it to the rest of the game
+function setupLighthouse(lh, P){
+  const g=lh.g; OUT.add(LH.buildFarIsles(S.seed));
+  const ctx={ tower:g, cx:lh.x, cz:lh.z, rot:g.rotation.y, player, camera, scene, get camTarget(){ return camTarget; } /* declared further down, so read it late */, groundY, Thing, Snd, toast, dialog, fade, save, stopMove, interact, nearestEnt, updateSky, updateCamera,
+    get TX(){ return TX; }, keeperSpec:P||null, folkKeeper:(x,z,face)=>folkKeeper(P, x, z, roleMenu(P), face), hud:$('#hud'),
+    step:()=>Snd.click(), night:()=>World.night, dialogOpen:()=>!!dlgState, getCamYaw:()=>camYaw, setCamYaw:v=>{ camYaw=v; }, setPerch:p=>{ PERCH=p; },
+    busy:()=>!!(dlgState || placing || buildMode || magicMode || cine || Fishing.state!=='idle' || knockedDown()),
+    prep:()=>{ if (riding) setRiding(false); if (sledding) setSled(false); },
+    input:()=>{ const jm=Math.hypot(joy.x,joy.y); if (joy.active && jm>0.15) return [joy.x/jm*clamp((jm-0.15)/0.7,0.25,1), joy.y/jm*clamp((jm-0.15)/0.7,0.25,1)];
+      return [(keys['d']||keys['arrowright']?1:0)-(keys['a']||keys['arrowleft']?1:0), (keys['s']||keys['arrowdown']?1:0)-(keys['w']||keys['arrowup']?1:0)]; },
+    skyFollow:tg=>{ sky.position.copy(camera.position); stars.position.copy(camera.position); sun.target.position.copy(tg); sun.position.copy(tg).addScaledVector(sunDir,50); } };
+  const L=LH.makeLighthouse(ctx); let lt=0; FALLING.push(dt=>{ lt+=dt; L.tick(dt, lt); return false; });
+  LHC=L; let devTop=false; if (DEV){ try { devTop=sessionStorage.getItem('dw-dev-lhtop')==='1'; sessionStorage.removeItem('dw-dev-lhtop'); } catch(e){} }
+  if (devTop) FALLING.push(()=>started && !dlgState && !scrim.classList.contains('show') && L.jumpTop());   // #dev: arrived to go straight up
+  return L; }
+// #dev: sail straight to a Lighthouse Point (the first seed that rolls one), and with top=true start up on the gallery
+function devLighthouse(top){
+  if (TRIP && LHC && LHC.keeper){ closePanel(); if (PERCH){ toast('You\'re already in the lighthouse.'); return; } if (top){ if (!LHC.jumpTop()) toast('Finish what you\'re doing first.'); }
+    else { const d=LHC.door; player.pos.set(d.pos.x+0.6, groundY(d.pos.x+0.6, d.pos.z+0.6), d.pos.z+0.6); player.obj.position.copy(player.pos); camTarget.copy(player.pos); updateCamera(1); } return; }
+  if (TRIP || VISIT || GUEST){ toast('Sail home first, then use this from your own island.'); return; }
+  let seed=(Math.random()*1e9)|0; for (let i=0;i<500 && VY.tripPlan('town', seed).kind!=='lighthouse';i++) seed=(seed+7919)|0;
+  const plan=VY.tripPlan('town', seed); if (plan.kind!=='lighthouse'){ toast('Couldn\'t find a Lighthouse Point. Try again.'); return; }
+  const fruits=NATIVE_FRUITS.filter(f=>f!==S.nativeFruit);
+  const trip={ seed, theme:'town', name:plan.name, fruit:fruits[Math.floor(Math.random()*fruits.length)], start:invCounts(), seen:Object.keys(S.seen||{}), from:S.island };
+  try { sessionStorage.setItem('dw-trip', JSON.stringify(trip)); sessionStorage.removeItem('dw-trip-world'); if (top) sessionStorage.setItem('dw-dev-lhtop','1'); } catch(e){}
+  closePanel(); save(); document.documentElement.classList.add('magicret');
+  (async()=>{ try { if (BOOT.flush) await BOOT.flush(); } catch(e){} setTimeout(()=>location.reload(), 300); })(); }
 function shellGame(P, back){
   const plays=TX.cups||0; if (plays>=5) return dialog(P.name, P.voice, ['That\'s enough cups for one day! Come back next time the circus is in town.'], back);
   if (S.clams<300) return dialog(P.name, P.voice, ['Three hundred clams a go. Come back when your pockets jingle!'], back);
@@ -7081,10 +7113,11 @@ function checkMuseumGifts(){ const n=donatedCount();
    Cut down 10 trees in one day and he pops out of a stump to complain, then explains how to plant more. */
 let mossby=null;
 const MOSSBY_VOICE=900;
-function onFelled(pos){ S.day.felled=(S.day.felled||0)+1; save(); const n=S.day.felled, seen=S.day.mossby||0;
+function onFelled(pos){ if (TRIP) return;   // v1.39b Mossby only looks after your own island
+  S.day.felled=(S.day.felled||0)+1; save(); const n=S.day.felled, seen=S.day.mossby||0;
   const mood = n>=24&&seen<3 ? 'furious' : n>=16&&seen<2 ? 'angry' : n>=10&&seen<1 ? 'warn' : null;
   if (mood){ S.day.mossby=seen+1; save(); setTimeout(()=>spawnMossby(pos, mood), 1300); } }
-function onReplant(pos){ if (!S.day.mossby) return; S.day.replant=(S.day.replant||0)+1; save(); if (S.day.replant===3) setTimeout(()=>spawnMossby(pos,'happy'), 900); }
+function onReplant(pos){ if (TRIP || !S.day.mossby) return; S.day.replant=(S.day.replant||0)+1; save(); if (S.day.replant===3) setTimeout(()=>spawnMossby(pos,'happy'), 900); }
 class Mossby extends Ent {
   constructor(x,z,mood){ super('mossby',x,z,0.3); this.mood=mood; this.reach=2.0; this.attach(buildMossby()); this.hitSphere(0.5,0.4); this.state='rise'; this.t=0; this.obj.scale.setScalar(0.01); }
   label(){ return 'Talk'; } act(){ this.talk(); }
@@ -7751,7 +7784,7 @@ function openMenu(){
     <div class="notice"><b>Testing tools</b><br><span class="muted">The game runs on your real clock. These preview other times and weather.</span>
       <label class="f">Preview time: <span id="mOffT"></span></label><input type="range" id="mOff" min="-23" max="23" step="1" value="${Time.offsetH}">
       <label class="f">Weather <select id="mW"><option value="">Today's weather</option><option>sunny</option><option>cloudy</option><option>rain</option><option>snow</option></select></label>
-      ${DEV?`<div style="margin-top:8px"><b>Shortcuts</b> <span class="muted">(only on this device)</span><br><button class="btn alt" id="dvC">+50,000 clams</button> <button class="btn alt" id="dvT">${S.magic.tower?'Tower is up':'Raise the wizard tower'}</button> ${!GUEST&&!VISIT&&nextIsleKind()?'<button class="btn alt" id="dvI">Raise the next isle</button>':''} <button class="btn alt" id="dvM">${S.devMagic?'Wizard needs requirements again':'Skip wizard requirements'}</button> <button class="btn alt" id="dvF">New favors now</button> <button class="btn alt" id="dvD">Town: skip a day</button> <button class="btn alt" id="dvR">Rare kit</button> <button class="btn alt" id="dvRf">Reef: skip to the rowboat</button> <button class="btn alt" id="dvRg">Reef: grow 12 coral</button> <button class="btn alt" id="dvWs">Workshop: skip ahead</button> <button class="btn alt" id="dvRl">Relics for the next isle</button> <button class="btn alt" id="dvSt">Phase 2: next story</button> <button class="btn alt" id="dvS3">Phase 3: next story</button> <button class="btn" id="dvMap">Story map: isles, stories, places</button> <button class="btn alt" id="dvOff">Hide shortcuts</button></div>`:''}
+      ${DEV?`<div style="margin-top:8px"><b>Shortcuts</b> <span class="muted">(only on this device)</span><br><button class="btn alt" id="dvC">+50,000 clams</button> <button class="btn alt" id="dvLp">Go to Lighthouse Point</button> <button class="btn alt" id="dvLt">Lighthouse top, with the keeper</button> <button class="btn alt" id="dvT">${S.magic.tower?'Tower is up':'Raise the wizard tower'}</button> ${!GUEST&&!VISIT&&nextIsleKind()?'<button class="btn alt" id="dvI">Raise the next isle</button>':''} <button class="btn alt" id="dvM">${S.devMagic?'Wizard needs requirements again':'Skip wizard requirements'}</button> <button class="btn alt" id="dvF">New favors now</button> <button class="btn alt" id="dvD">Town: skip a day</button> <button class="btn alt" id="dvR">Rare kit</button> <button class="btn alt" id="dvRf">Reef: skip to the rowboat</button> <button class="btn alt" id="dvRg">Reef: grow 12 coral</button> <button class="btn alt" id="dvWs">Workshop: skip ahead</button> <button class="btn alt" id="dvRl">Relics for the next isle</button> <button class="btn alt" id="dvSt">Phase 2: next story</button> <button class="btn alt" id="dvS3">Phase 3: next story</button> <button class="btn" id="dvMap">Story map: isles, stories, places</button> <button class="btn alt" id="dvOff">Hide shortcuts</button></div>`:''}
     </div>
     <button class="btn warn" id="mReset">Start a new island</button>${saveOK?'':'<div class="muted" style="margin-top:8px">Saving isn\'t available in this browser.</div>'}`;
     $('#mParty').onclick=()=>{ closePanel(); setTimeout(()=>PARTY.open(), 50); };
@@ -7784,6 +7817,7 @@ function openMenu(){
       $('#dvRg').onclick=()=>{ const B=bayPlan(); let n=0; for (const p of B.plots){ if (n>=12) break; if (S.reef.plots[p.i] || BAY_OUTER.includes(p.patch)) continue; S.reef.plots[p.i]={ k:CORAL_KINDS[(p.i+p.patch)%4], d:sday()-3 }; n++; } save(); toast(`Reef grown: ${REEF_STAGES[reefStage()]} (score ${reefInfo().score}).`); };
       $('#dvWs').onclick=()=>{ if (!SY.shop) SY.shop={ st:'wizard', at:sday() }; else if (SY.shop.st==='project'){ SY.shop.fund=SHOP_PROJECT.clams; SY.shop.mats=true; SY.shop.st='building'; SY.shop.bday=sday()-1; storyNewDay(); applyTown(); }
         else if (SY.shop.st==='open'){ SY.shop.built=sday()-8; SY.shop.made=Math.max(100, SY.shop.made||0); SY.shop.ready=(SY.shop.ready||0)+20; } else SY.shop.st='wizard'; save(); toast(`Workshop story: ${SY.shop.st}.`); };
+      $('#dvLp').onclick=()=>devLighthouse(false); $('#dvLt').onclick=()=>devLighthouse(true);   // v1.39 fixes
       $('#dvT').onclick=()=>{ if (!S.magic.tower){ closePanel(); Q.story.wizard='done'; raiseTower(); } };
       $('#dvM').onclick=()=>{ S.devMagic=!S.devMagic; save(); render(); };
       { const a=$('#dvRl'), b=$('#dvSt'); if (a) a.onclick=()=>dev138('relics'); if (b) b.onclick=()=>dev138('stories'); const c3=$('#dvS3'); if (c3) c3.onclick=()=>dev139(); const mp=$('#dvMap'); if (mp) mp.onclick=()=>openStoryMap(); }   // v1.40 Story map   // v1.38, v1.39
@@ -8127,6 +8161,7 @@ addEventListener('keydown', e=>{ if(e.target.tagName==='INPUT'||e.target.tagName
   if (k===(kb.swing||' ')){ e.preventDefault(); swing(); return; }
   if (k===kb.act||k==='enter'){ e.preventDefault(); if (performance.now()>popupCool) doAction(); return; }
   if (scrim.classList.contains('show')){ if (k===kb.bag && !menuOpen) closePanel(); return; }
+  if (PERCH) return;   // v1.39 fixes: no bike, sled, tools or bag on the lighthouse stair or gallery
   if (k===kb.tool) cycleTool(); else if (k===kb.bike) toggleBike(); else if (k===kb.sled) toggleSled(); else if (k===kb.bag && !buildMode && !placing) openBag(); });
 let keyCapture=null;   // set while Menu > Controls waits for you to press a new key
 /* v1.34: while a pop-up is up (a panel, the Friends panel, the tool or More menu, or a big announcement card),
@@ -8197,6 +8232,7 @@ function findPath(sx,sz,gx,gz,goalR,ent){
 }
 function handleTap(cx,cy){
   if (cine || bayOn()) return;
+  if (PERCH){ PERCH.tap(pickAt(cx,cy)); return; }
   if (magicMode){ magicTap(cx,cy); return; }
   if (buildMode) return;
   if (CatchMeter.bug){ resolveSwing(); return; }
@@ -8220,9 +8256,9 @@ function handleTap(cx,cy){
 }
 function farClickHint(){}
 function interact(e, mode='tap'){ if(!ents.includes(e)) return; if (e.rag) return; player.face=Math.atan2(e.pos.x-player.pos.x, e.pos.z-player.pos.z); if(!(e instanceof Bug)) player.act=0.35; hideHint(); e.act(mode); }
-function nearestEnt(){ let best=null, bd=1e9; for(const e of ents){ if(e.removed||!e.label()) continue; const d=Math.hypot(e.pos.x-player.pos.x,e.pos.z-player.pos.z); if(d<e.reach+0.3 && d<bd && entVisible(e)){ bd=d; best=e; } } return best; }
+function nearestEnt(){ let best=null, bd=1e9; for(const e of ents){ if(e.removed||!e.label()||Math.abs(e.pos.y-player.pos.y)>4) continue; const d=Math.hypot(e.pos.x-player.pos.x,e.pos.z-player.pos.z); if(d<e.reach+0.3 && d<bd && entVisible(e)){ bd=d; best=e; } } return best; }
 function facingWater(){ if(World.inside) return null; for(const d of [2.5,3.5,4.5]){ const x=player.pos.x+Math.sin(player.face)*d, z=player.pos.z+Math.cos(player.face)*d; if(isFishWater(x,z)) return new THREE.Vector3(x,0,z); } return null; }
-function doAction(){ if(performance.now()<popupCool || cardsUp().length) { dismissCards(); return; } if(cine||dlgState||scrim.classList.contains('show')||placing||layoutMode||buildMode||magicMode) return; if (bayOn()){ bayAct(); return; } if(riding) setRiding(false); if (sledding){ setSled(false); return; } if(CatchMeter.bug){ resolveSwing(); return; } if(Fishing.state!=='idle'){ reel(); return; } if (knockedDown()) return; const e=nearestEnt(); if(e){ stopMove(); interact(e,'manual'); return; } const w=facingWater(); if(w){ castAt(w); hideHint(); } }
+function doAction(){ if(performance.now()<popupCool || cardsUp().length) { dismissCards(); return; } if(cine||dlgState||scrim.classList.contains('show')||placing||layoutMode||buildMode||magicMode) return; if (bayOn()){ bayAct(); return; } if (PERCH){ PERCH.act(); return; } if(riding) setRiding(false); if (sledding){ setSled(false); return; } if(CatchMeter.bug){ resolveSwing(); return; } if(Fishing.state!=='idle'){ reel(); return; } if (knockedDown()) return; const e=nearestEnt(); if(e){ stopMove(); interact(e,'manual'); return; } const w=facingWater(); if(w){ castAt(w); hideHint(); } }
 $('#act').addEventListener('click', e=>{ e.stopPropagation(); if(layoutMode) return; doAction(); });
 let hintHidden=false; function hideHint(){ if(hintHidden) return; hintHidden=true; $('#hint').style.opacity=0; }
 
@@ -8336,6 +8372,7 @@ function updateHold(dt){ if(CT().move!=='tap') return; holdAcc+=dt; if(holdAcc<0
 
 /* ---------- Movement and camera ---------- */
 function movePlayer(dt,t){
+  if (PERCH && PERCH.move(dt,t)) return;
   const u=player.obj.userData; let mv=null; if(riding && (World.inside||buildMode)) setRiding(false); if (sledding && (World.inside||buildMode||!snowyEnough())) setSled(false); const speed=(riding?10.2:5.4)*(wellFed()?1.15:1); let spd=1;
   const kx=(keys['d']||keys['arrowright']?1:0)-(keys['a']||keys['arrowleft']?1:0), kz=(keys['s']||keys['arrowdown']?1:0)-(keys['w']||keys['arrowup']?1:0);
   if (dlgState && player.target) stopMove();   // v1.34: you stand still while someone is talking to you
@@ -8382,6 +8419,7 @@ function movePlayer(dt,t){
 }
 const camTarget=new THREE.Vector3(), _tzl=new THREE.Vector3();
 function updateCamera(dt){
+  if (PERCH && PERCH.cam(dt)) return;
   if (tankZoom){ tankZoom.t=Math.min(1, tankZoom.t+dt/0.42); const k=1-(1-tankZoom.t)**3; camera.position.lerpVectors(tankZoom.from, tankZoom.to, k); camera.lookAt(_tzl.lerpVectors(tankZoom.lookFrom, tankZoom.look, k)); return; }
   if (buildMode){ _bt.copy(buildMode.camT).add(buildMode.pan); camTarget.lerp(_bt, Math.min(1,dt*5)); const dist=buildMode.dist, pitch=buildMode.pitch, yaw=buildMode.yaw;
     if (World.inside){ scene.fog.near=Math.max(60,dist*1.2); scene.fog.far=Math.max(200,dist*3.5); }
@@ -8646,11 +8684,12 @@ function swingTarget(){
   let best=null, bd=2.2;
   const look=(px,pz,v)=>{ const dx=px-player.pos.x, dz=pz-player.pos.z, d=Math.hypot(dx,dz); if (d>=bd) return;
     let a=Math.atan2(dx,dz)-player.face; a=Math.atan2(Math.sin(a),Math.cos(a)); if (Math.abs(a)>1.15 && d>0.9) return; best=v; bd=d; };
-  for (const e of ents) if (isNpc(e) && !e.rag && !e.talking && npcInSpace(e)) look(e.pos.x, e.pos.z, { npc:e });
+  for (const e of ents) if (isNpc(e) && Math.abs(e.pos.y-player.pos.y)<4 && !e.rag && !e.talking && npcInSpace(e)) look(e.pos.x, e.pos.z, { npc:e });
   for (const r of remotes.values()) if (r.obj.visible && !r.rg) look(r.pos.x, r.pos.z, { remote:r });
   return best; }
 const TOOL_VERBS = { axe:['Chop','Hit'], shovel:['Dig','Dig up','Hit'], net:['Catch','Swing!'], can:['Water'] };
 function swing(){
+  if (PERCH) return;   // v1.39 fixes: no tools on the lighthouse stair or gallery
   if (cine||dlgState||scrim.classList.contains('show')||placing||layoutMode||buildMode||magicMode||meBody.rag||bonkCool>0) return;
   if (bayOn()){ const F=BAYR.fish; if (F.state!=='idle') bayReel(); else bayCast(); return; }
   if (CatchMeter.bug){ resolveSwing(); return; }
@@ -8848,7 +8887,7 @@ window.__game.net.applyWorld = applyWorld;   // v1.34 live island sync (online.j
 // v1.26 test hooks
 window.__game.v126 = { townNewDay, applyTown, findHomeSpot, claimHomeSpot, townCap, incomeNewDay, refreshIncome, talkIncome, incCollect, incOf, INCOME, incEnts, openMap, talkSkipperHome, talkSkipperTrip, tripGoHome, tripRecap, storyWho, askToLeave, canAskToLeave, pitchOnBuy, merchantDay, get peddler(){ return peddler; }, get skipper(){ return skipper; }, newSquares, LOAN_MAX_SQ, TRIP, TRIP_THEME, residents, residentHomes, plotEnts, KEEPOUT, Q, PATHS, camTarget, updateCamera, set camDist(v){ camDist=v; }, get camDist(){ return camDist; }, set camYaw(v){ camYaw=v; } };
 window.__game.LETTERS = LETTERS;
-window.__game.v127 = { roleMenu, folkMenu, smugglerShop, openNoticeBoard, shellGame, talkWorkshop, talkAttic, talkWizGarden, talkLibrary, anglerWants, climbLighthouse, setupTown, get PLAN(){ return PLAN; }, get TX(){ return TX; }, LAY, haulValue, haulLeft, openContacts, deliverReplies, sendLetter, addContact, canInvite, invitePenpal, readTreasureMap, bottleLetter, openNote, contactPerson, XW, POOLS, lowTide, BRIDGES, DOCK, waterType, VY, Thing };
+window.__game.v127 = { roleMenu, folkMenu, smugglerShop, openNoticeBoard, shellGame, talkWorkshop, talkAttic, talkWizGarden, talkLibrary, anglerWants, get perch(){ return PERCH; }, setupTown, get PLAN(){ return PLAN; }, get TX(){ return TX; }, LAY, haulValue, haulLeft, openContacts, deliverReplies, sendLetter, addContact, canInvite, invitePenpal, readTreasureMap, bottleLetter, openNote, contactPerson, XW, POOLS, lowTide, BRIDGES, DOCK, waterType, VY, Thing };
 // v1.25 test hooks for the house builder
 window.__game.house = { LT, previewBuild:(w)=>previewBuild(w), renderBuild:(k)=>renderBuild(k), homeBlocked, planIssue, setBuildView:(v)=>setBuildView(v), mossPaintAt, buildMossLayer, roofHit, houseFrame, rebuildFloor, HOME_IDS, get houseEnt(){ return houseEnt; }, edgeTap, stairsTap, landProblem, closeBuild };
 window.__game.farm = { openPlantPanel, startGridPlacing, plantGrid, checkGrid, openGarden, rebuildGardens, gardenAtXZ, islandSeeds, islandFlowers, harvestRec, perimeter, get fenceSegs(){ return FENCE_SEGS; }, fenceHit, get placing(){ return placing; }, plantEnts, gardenEnts, CELL };

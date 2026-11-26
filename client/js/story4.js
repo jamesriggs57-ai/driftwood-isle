@@ -176,7 +176,7 @@ export function buildFestStall(seed=1, goods=[]){
 
 /* ---------- Starfall Isle spells ---------- */
 // the aurora: long soft curtains of light high over the island. main.js fades it in after dark.
-export function buildAurora(R=60, seed=3, dir=null){   // v1.50 dir: center the curtains on that heading (for the view while a spell is cast)
+export function buildAurora(R=60, seed=3, dir=null){   // v1.53 dir: center the curtains on that heading (for the view while a spell is cast)
   const g=new THREE.Group(), r=mulberry32(seed), mats=[];
   const vs=`varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }`;
   const fs=`uniform float uT; uniform float uA; uniform vec3 uC1; uniform vec3 uC2; varying vec2 vUv;
@@ -193,7 +193,7 @@ export function buildAurora(R=60, seed=3, dir=null){   // v1.50 dir: center the 
     mats.push(m); const mesh=new THREE.Mesh(geo, m); mesh.frustumCulled=false; mesh.renderOrder=-1; g.add(mesh); }
   g.userData.tick = (t, a) => { for (const m of mats){ m.uniforms.uT.value=t; m.uniforms.uA.value=a; } g.visible=a>0.01; };
   return g; }
-// v1.50 points of light that drift and fade: the aurora's motes and the sparkles rising off the glowing paths.
+// v1.53 points of light that drift and fade: the aurora's motes and the sparkles rising off the glowing paths.
 // One Points draw each, moved on the CPU (a hundred or so at a time). spawn(p) places a new one and returns false if
 // there's nowhere to put it; main.js sets uScale from the screen so they keep their size on every device.
 export function buildMotes(n, cols, size=0.3){
@@ -215,7 +215,7 @@ export function buildMotes(n, cols, size=0.3){
     geo.attributes.position.needsUpdate=geo.attributes.aA.needsUpdate=geo.attributes.aC.needsUpdate=true; };
   P.userData.cols=cols.map(c=>new THREE.Color(c)); cols=P.userData.cols;
   return P; }
-// v1.50 the moment a spell takes at the star altar: a column of light up into the sky, rings rising and opening out.
+// v1.53 the moment a spell takes at the star altar: a column of light up into the sky, rings rising and opening out.
 // Runs on its own clock (tick(dt) returns false when it's over).
 export function buildCastBeam(color=0x9ad8ff){
   const g=new THREE.Group(), mats=[];

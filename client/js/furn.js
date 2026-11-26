@@ -34,7 +34,7 @@ function tank(g, W, H, D, baseH, fishIds){
   const fish=fishIds.map((id,i)=>{ const o=mini(id, 0.32); o.position.set(0,y0+H*(0.3+0.45*((i*0.37)%1)),0); g.add(o); return { o, ph:i*1.7, r:W*0.32, rz:D*0.22, sp:0.35+((i*0.53)%1)*0.4, y:o.position.y }; });
   const bubbles=[]; for (let i=0;i<8;i++){ const b=unshadow(mk(G.sph(0.016+i%3*0.006,6,5), glassMat(0xffffff,0.55), W*0.38, y0, -D*0.25, g)); bubbles.push({ b, off:i/8 }); }
   anim(g,(t)=>{
-    for (const f of fish){ const a=t*f.sp+f.ph; f.o.position.x=Math.cos(a)*f.r; f.o.position.z=Math.sin(a)*f.rz; f.o.position.y=f.y+Math.sin(a*2.3)*0.04; f.o.rotation.y=-a-Math.PI/2*(f.sp>0?1:-1); const tl=f.o.userData.tail; if (tl) tl.rotation.y=Math.sin(t*9+f.ph)*0.4; }
+    for (const f of fish){ const a=t*f.sp+f.ph; f.o.position.x=Math.cos(a)*f.r; f.o.position.z=Math.sin(a)*f.rz; f.o.position.y=f.y+Math.sin(a*2.3)*0.04; f.o.rotation.y=-a-Math.PI/2*(f.sp>0?1:-1); const tl=f.o.userData.tail; if (tl) tl.rotation.y=Math.sin(t*9+f.ph)*0.4; if (f.o.userData.idle) f.o.userData.idle(t); }
     for (const w of weeds) w.rotation.z=Math.sin(t*1.3+w.position.x*4)*0.12;
     for (const q of bubbles){ const k=(t*0.35+q.off)%1; q.b.position.y=y0+0.1+k*H*0.82; q.b.position.x=W*0.38+Math.sin(k*20)*0.02; q.b.visible=k<0.97; }
   });

@@ -11,7 +11,7 @@
    built in wiki.js. Writing rules: plain words, no em dashes, no emoji, only facts the code supports.
    ===================================================================== */
 
-export const GUIDE_VERSION = 'v1.53';
+export const GUIDE_VERSION = 'v1.54';
 export const GUIDE_UPDATED = '2026-11-26';
 
 const tip = s => `<div class="tip"><b>Tip</b> ${s}</div>`;
@@ -747,6 +747,7 @@ ${steps(['Talk to them and pick <b>Come and meet people</b>. They follow you for
 { id:'changes', group:'done', title:'What\'s changed', html:`
 <p>Recent updates, newest first.</p>
 <ul>
+<li><b>v1.54</b>: Fix: visiting a friend's island or going on a boat trip no longer forgets which conversations you've had with your islanders, or woodworking plans you found before you started woodworking.</li>
 <li><b>v1.53</b>: Wendell's spells are much brighter. The aurora's light now drifts across the island and the sea, with floating lights in the air, so you can see it from the normal view. Glowing paths light every path stone with a rune, run pulses of light along the paths and send up sparks. Casting either one at the star altar now has a short show.</li>
 <li><b>v1.52</b>: 54 new fish and 57 new bugs, so there are now 100 of each, every one with its own model. New homes: the sea around each of Wendell's isles, the isles themselves, Starfall Isle, the boat trip islands, and six bigger reef fish that come back to Cay Bay as the reef grows. The museum gets new tanks for them, and there are new achievement tiers for 60 and 100 kinds of fish or bugs and 150 and 200 museum displays.</li>
 <li><b>v1.51</b>: Hover over an item in your bag (or tap it on a phone) to see its name and what it sells for, and who pays the most for it. Story items say they can't be sold instead of showing 0.</li>

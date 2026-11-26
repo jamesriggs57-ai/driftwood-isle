@@ -196,6 +196,6 @@ export function buildAurora(R=60, seed=3){
 // glowing stones along every path (one instanced mesh; main.js gives it the points)
 export function buildPathGlow(points){
   const g=new THREE.Group(); if (!points.length) return g;
-  const mat=glowMat(0x9ae8ff), geo=G.ico(0.07,0), im=new THREE.InstancedMesh(geo, mat, points.length), m=new THREE.Matrix4(), q=new THREE.Quaternion(), s=new THREE.Vector3();
+  const mat=glowMat(0x9ae8ff), geo=G.ico(0.1,0), im=new THREE.InstancedMesh(geo, mat, points.length), m=new THREE.Matrix4(), q=new THREE.Quaternion(), s=new THREE.Vector3();
   points.forEach(([x,y,z,k],i)=>{ q.setFromAxisAngle(new THREE.Vector3(0,1,0), k*2.3); s.set(1,0.55,1).multiplyScalar(0.8+(k%3)*0.2); m.compose(new THREE.Vector3(x,y+0.03,z), q, s); im.setMatrixAt(i, m); });
   im.castShadow=false; im.receiveShadow=false; g.add(im); g.userData.mat=mat; return g; }

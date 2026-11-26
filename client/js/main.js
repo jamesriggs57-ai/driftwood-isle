@@ -4155,21 +4155,22 @@ function devRaiseAll(){ if (GUEST || VISIT || TRIP){ toast('Isles only rise on y
   if (kinds.includes('pines') && !SY.shop) SY.shop={ st:'project', at:sday() };
   const last=plan[kinds.length-1]; save(); toast('Raising every isle...'); magicExit({ kind:'isle', at:[last.cx, last.cz], key:String(kinds.length-1) }); }
 // somewhere to stand near a spot
-function devTravel(x, z, label){
-  if (World.inside){ exitRoom(); setTimeout(()=>devTravel(x, z, label), 900); return; }
+function devTravel(x, z, label, look){
+  if (World.inside){ exitRoom(); setTimeout(()=>devTravel(x, z, label, look), 900); return; }
   closePanel(); if (riding) setRiding(false); stopMove(); let p=null;
   for (let r=0; r<14 && !p; r+=0.7) for (let k=0;k<12 && !p;k++){ const a=k/12*TAU, px=x+Math.cos(a)*r, pz=z+Math.sin(a)*r; if (walkable(px,pz) && !blocked(px,pz,0.4)) p=[px,pz]; }
   if (!p){ toast(`No ground to stand on near ${label}.`); return; }
-  fade(()=>{ player.pos.set(p[0], groundY(p[0],p[1]), p[1]); player.obj.position.copy(player.pos); player.face=Math.atan2(x-p[0], z-p[1]); player.obj.rotation.y=player.face; camTarget.copy(player.pos); updateSky(); updateCamera(1); toast(label); }); }
+  fade(()=>{ player.pos.set(p[0], groundY(p[0],p[1]), p[1]); player.obj.position.copy(player.pos); const [lx,lz]=look||[x,z]; player.face=Math.atan2(lx-p[0], lz-p[1]); player.obj.rotation.y=player.face; camTarget.copy(player.pos); updateSky(); updateCamera(1); toast(label); }); }
 const INC_PLACE = { boat:'Gill\'s boats', bees:'Hollis\'s apiary', orchard:'Russet\'s orchard', books:'Quill\'s counting house' };
 function devPlaces(){ const T=[], St=[], Is=[];
-  const P=PLACES, add=(L,label,at)=>{ if (at && isFinite(at[0])) L.push([label, at[0], at[1]]); };
+  const P=PLACES, add=(L,label,at,look)=>{ if (at && isFinite(at[0])) L.push([label, at[0], at[1], look]); };
   add(T,'Town hall',P.hall); add(T,'Museum',P.museum); add(T,'Plaza',P.plaza); add(T,'Notice board',P.board); add(T,'Your house',P.home); add(T,'Wizard tower',P.tower); add(T,'The dock',[DOCK.x0+2, DOCK.z]);
   for (const k of INC_IDS){ const I=S.income[k]; if (I && I.at) add(T, INC_PLACE[k]||k, I.at); }
   add(St,'Tea room',SY.tea&&SY.tea.at); add(St,'Reef Hall',SY.reefhall&&SY.reefhall.at); add(St,'Post office',SY.post&&SY.post.at); add(St,'Bathhouse',SY.bath&&SY.bath.at); add(St,'Firefly glade',SY.glade&&SY.glade.at);
   add(St,'Antique shop',SY.antiq&&SY.antiq.at); add(St,'Reading room',SY.nook&&SY.nook.at); add(St,'Race course',SY.race&&SY.race.at); add(St,'Flower show table',SY.show&&SY.show.at);
   for (const I of ISLES){ const nm=(ISL.ISLE_INFO[I.kind]||{}).name||I.kind, mk2={ meadow:'the windmill', dunes:'the shipwreck', bluff:'the lighthouse', pines:'the island', crags:'the island', starfall:'the star altar' }[I.kind]||'the landmark';
-    add(Is, `${nm}: ${mk2}`, I.mark);
+    const [mx,mz,ma]=I.mark||[], st=I.mark ? [mx+Math.cos(ma+Math.PI)*5, mz+Math.sin(ma+Math.PI)*5] : null;   // stand in front of it: a far isle builds its landmark only once you're there
+    add(Is, `${nm}: ${mk2}`, st, I.mark);
     if (I.kind==='pines') add(Is, `${nm}: the workshop`, SY.pinesAt); if (I.kind==='crags') add(Is, `${nm}: the forge`, SY.cragsAt); }
   return { T, St, Is }; }
 // a free boat trip, straight there (signed-in islands only, like Skipper Wick's)
@@ -4187,9 +4188,9 @@ function openStoryMap(){
     const go=(L,pre)=>L.map(([l],i)=>`<button class="btn alt" data-go="${pre}${i}">${l}</button>`).join(' ');
     let h=`<div class="notice"><b>Isles</b><br><span class="muted">Up: ${ISLE_K.map(k=>(ISL.ISLE_INFO[k]||{}).name||k).join(', ')||'none'}. ${missing.length?`Still to rise: ${missing.map(k=>(ISL.ISLE_INFO[k]||{}).name||k).join(', ')}.`:''}</span><br>
       ${GUEST||VISIT||TRIP?'<span class="muted">Isles only rise on your own signed-in island.</span>':btn('isles', missing.length?'Raise every isle now':'Every isle is up', !missing.length)}</div>
-      <div class="notice"><b>Stories</b><br><span class="muted">"Next" moves one story one step. "Open all" finishes every story in that phase.</span><br>
+      <div class="notice"><b>Stories</b><br>${GUEST||VISIT||TRIP?'<span class="muted">The island stories only run on your own signed-in island.</span></div>':`<span class="muted">"Next" moves one story one step. "Open all" finishes every story in that phase.</span><br>
       ${btn('p2','Phase 2: next')} ${btn('p2a','Phase 2: open all')}<br>${btn('p3','Phase 3: next')} ${btn('p3a','Phase 3: open all')}<br>${btn('p4','Phase 4: next')} ${btn('p4a','Phase 4: open all')}<br>
-      ${btn('fest', festOn()?'The festival is on':'Festival: today')} ${btn('show','Flower show: today')} ${btn('sky','Starfall spells: cast both')}</div>
+      ${btn('fest', festOn()?'The festival is on':'Festival: today')} ${btn('show','Flower show: today')} ${btn('sky','Starfall spells: cast both')}</div>`}
       <div class="notice"><b>Go to: town</b><br>${go(T,'T')}</div>
       <div class="notice"><b>Go to: story places</b><br>${St.length?go(St,'S'):'<span class="muted">None built yet. Open some stories first.</span>'}</div>
       <div class="notice"><b>Go to: isles</b><br>${Is.length?go(Is,'I'):'<span class="muted">No isles yet.</span>'}</div>
@@ -4198,7 +4199,7 @@ function openStoryMap(){
       ${Object.keys(TRIP_THEMES).map(th=>`<button class="btn alt" data-trip="${th}" ${BOOT.mode!=='account'||TRIP?'disabled':''}>${TRIP_THEMES[th].name}</button>`).join(' ')}<br>
       <span class="muted">Towns:</span> ${Object.entries(TOWN_KIND_NAMES).map(([k,l])=>`<button class="btn alt" data-town="${k}" ${BOOT.mode!=='account'||TRIP?'disabled':''}>${l}</button>`).join(' ')}</div>`;
     pBody.innerHTML=h; const pl={ T, S:St, I:Is };
-    pBody.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>{ const g=b.dataset.go, [l,x,z]=pl[g[0]][+g.slice(1)]; devTravel(x, z, l); });
+    pBody.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>{ const g=b.dataset.go, [l,x,z,look]=pl[g[0]][+g.slice(1)]; devTravel(x, z, l, look); });
     pBody.querySelectorAll('[data-trip]').forEach(b=>b.onclick=()=>{ const th=b.dataset.trip; devAsk(`Sail to ${TRIP_THEMES[th].name} for free?`, ()=>devTrip(th)); });
     pBody.querySelectorAll('[data-town]').forEach(b=>b.onclick=()=>{ const k=b.dataset.town; devAsk(`Sail to a ${TOWN_KIND_NAMES[k]} town for free?`, ()=>devTrip('town', k)); });
     const A={
@@ -8930,7 +8931,7 @@ window.__game.v136 = { get ISLES(){ return ISLES; }, offerMove, startMagic, magi
 // v1.37 testing hooks (headless checks of the island stories)
 window.__game.v138 = { get SY(){ return SY; }, get S2B(){ return S2B; }, isleQuest, isleChoices, relicMissing, wantedRelics, rollTripRelic, hiveColors, colorFam, apiaryChoices, refreshStory2, refreshTea, refreshForge, refreshReefHall, openTeaRoom, openForge, lighthouseAct, wickChoices, teaSeatOf, storyNewDay2, wendellLetter, isleDirWord, dev138, storySpot, bayCutting, nightBay, lightLit, COMMISSIONS, STAKES, stakeOf, talkSkipperHome, talkIncome, talkWizard };
 window.__game.v139 = { get SY(){ return SY; }, get S3B(){ return S3B; }, LOGBOOK, BEATS3, STAKES, COMMISSIONS, millAct, openMill, millstoneOffer, millThistle, millWendell, routeTowns, postRoutes, routeWant, openPost, postNewDay, placeVents, digVent, bathSeatOf, bathStage, openBath, gladeConds, gladeStageOf, gladeBugOK, gladeBugSpot, gladeLook, gladeStump, gladeKnock, gladeApprove, gladeStumpDug, gladeLamps, wreckAct, makeWreckRoom, wreckOpen, rollTripChart, openLogbook, openAntiq, antiqStock, story3Stock, storyBeat3, story3Choices, storyNewDay3, story3News, storiesHTML3, storyGossip3, refreshStory3, dev139, landmark3, meadowLM, dunesLM };
-window.__game.v141 = { get SY(){ return SY; }, get S4B(){ return S4B; }, refreshStory4, dev141, dev138, dev139, openStoryMap, devRaiseAll, devTravel, devPlaces, devTrip, raceStart, raceEnd, raceCourse, raceLength, raceRivals, raceMenu, openReadingRoom, openStall, festDay, festOn, festSpots, refreshFest, refreshShow, showTableAct, showEntries, storyBeat4, story4Choices, storyNewDay4, story4News, storiesHTML4, starAltarAct, skyHour, skyNear, skyIsle, refreshSpells, refreshCharter, charterReqs, charterReady, hall4Choices, newbChoices, CHARTER, get ISLE_K(){ return ISLE_K; } };   // v1.41 test hooks
+window.__game.v141 = { get SY(){ return SY; }, get S4B(){ return S4B; }, refreshStory4, dev141, dev138, dev139, openStoryMap, devRaiseAll, devTravel, devPlaces, blocked: (x,z)=>blocked(x,z,0.3), devTrip, raceStart, raceEnd, raceCourse, raceLength, raceRivals, raceMenu, openReadingRoom, openStall, festDay, festOn, festSpots, refreshFest, refreshShow, showTableAct, showEntries, storyBeat4, story4Choices, storyNewDay4, story4News, storiesHTML4, starAltarAct, skyHour, skyNear, skyIsle, refreshSpells, refreshCharter, charterReqs, charterReady, hall4Choices, newbChoices, CHARTER, get ISLE_K(){ return ISLE_K; } };   // v1.41 test hooks
 window.__game.v137 = { get S(){ return S; }, get SY(){ return SY; }, get BAYR(){ return BAYR; }, get ISLES(){ return ISLES; }, get player(){ return player; }, get residents(){ return residents; },
   reefInfo, reefStage, bayPlan, bayPopulate, enterBay, exitBay, bayAct, bayCast, bayDrop, talkGill, talkShop, talkTo, talkHall, talkWizard, talkCurator, openNursery, openWorkshop, openBoard, openHallPanel,
   refreshNurseryTank, spawnRowboat, refreshWorkshop, refreshIncome, storyNewDay, townNewDay, applyTown, raiseIsle, nextIsleKind, isleQuest, loadIsle, incOf, incCollect, pinesRegrow,

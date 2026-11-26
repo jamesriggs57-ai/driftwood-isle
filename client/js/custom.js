@@ -71,7 +71,7 @@ export function createCustom(C){
     if (holder){ scene.remove(holder); holder.traverse(o=>{ if (o.isMesh && o.geometry) o.geometry.dispose(); }); }
     holder=new THREE.Group(); buildCustom(holder, id); holder.traverse(o=>{ if (o.isSprite) o.visible=false; }); scene.add(holder);
     const box=new THREE.Box3().setFromObject(holder), size=box.getSize(new THREE.Vector3()), r=Math.max(size.x, size.y*1.1, size.z)*0.5+0.15;
-    const y=size.y*0.48; cam.position.set(0, y+r*0.9, r*2.7); cam.lookAt(0, y, 0);
+    const y=size.y*0.5, tf=Math.tan(cam.fov*Math.PI/360), hh=size.y*0.62+0.12, hw=Math.max(size.x,size.z)*0.62+0.12, dist=Math.max(hh/tf, hw/(tf*cam.aspect))*1.05; cam.position.set(0, y+dist*0.32, dist); cam.lookAt(0, y, 0);
     const ctx=canvas.getContext('2d'); cancelAnimationFrame(raf); let last=performance.now();
     const loop=t=>{ if (!canvas.isConnected) return; if (t-last>33){ spin+=(t-last)/1000*0.5; last=t; holder.rotation.y=spin;
         for (const a of holder.userData.anims||[]) a(t/1000, 0.033); R.render(scene, cam); canvas.width=R.domElement.width; canvas.height=R.domElement.height; ctx.drawImage(R.domElement,0,0); }

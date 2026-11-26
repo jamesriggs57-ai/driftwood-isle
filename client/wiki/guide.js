@@ -54,7 +54,7 @@ ${tip('Everything unlocks quietly. Characters hint at what they want in their ow
 <tr><td>Space</td><td>Swing your tool (chop, dig, cast, catch, water)</td></tr><tr><td>Q</td><td>Switch tool</td></tr>
 <tr><td>B</td><td>Bike</td></tr><tr><td>G</td><td>Sled (winter)</td></tr><tr><td>I</td><td>Bag</td></tr><tr><td>Z / C</td><td>Turn the camera</td></tr></table>
 <p>Drag to look around. Clicking the ground walks you there (turn it off in Menu &gt; Controls). Every key can be changed in Menu &gt; Controls.</p>
-<p>Clicking one thing a tree or rock dropped (fruit, branches, wood, stone, clay, iron, and any rare find from it) picks up everything else that same tree or rock dropped, as long as it fits in your bag. Pressing E picks up one thing at a time. Beach finds and things you dropped yourself are always picked up one at a time.</p>
+<p>Clicking one thing a tree or rock dropped (fruit, branches, wood, stone, clay, iron, and any rare find, plan or scroll from it) picks up everything else that same tree or rock dropped, as long as it fits in your bag. Pieces still falling go straight into your bag when they land. Pressing E picks up one thing at a time. Beach finds and things you dropped yourself are always picked up one at a time.</p>
 <h3>Phone and tablet</h3>
 <p>A joystick sits bottom left. The green <b>Act</b> button uses and talks; the orange <b>Swing</b> button shows whenever you hold a tool. You can switch to tap-to-walk and resize or move the controls in Menu &gt; Controls; the choice is remembered on that device.</p>
 <p>Tapping one thing a tree or rock dropped picks up the rest of that drop too, the same as clicking on a computer. The Act button picks up one at a time.</p>

@@ -100,7 +100,7 @@ if (!S.terra) S.terra = { cells:{}, moved:{} };   // wizard work: reshaped land,
 if (!S.magic) S.magic = {};                       // wizard tower (unlocked by a quest) and where it stands
 // v1.40 tools and enchanting (enchant.js). Everything is reached through lambdas, so the order of definitions below doesn't matter.
 const EN = createEnchant({ S:()=>S, toast:(...a)=>toast(...a), Snd, save:()=>save(), countItem:id=>countItem(id), removeItem:(id,n)=>removeItem(id,n), addItem:id=>addItem(id), canAdd:id=>canAdd(id),
-  dropNear:(...a)=>dropNear(...a), sparkle:p=>sparkle(p), thumb:id=>thumb(id), toolThumb:(t,k)=>toolThumb(t,k), fmt:n=>fmt(n), dialog:(...a)=>dialog(...a), openPanel:(...a)=>openPanel(...a),
+  dropNear:(...a)=>dropNear(...a), dropGrp:()=>DROP_GRP, sparkle:p=>sparkle(p), thumb:id=>thumb(id), toolThumb:(t,k)=>toolThumb(t,k), fmt:n=>fmt(n), dialog:(...a)=>dialog(...a), openPanel:(...a)=>openPanel(...a),
   pBody:()=>pBody, pTitle:()=>pTitle, closePanel:()=>closePanel(), reqMet:(t,k)=>reqMet(t,k), friend:id=>S.friend[id]||0, updateHeld:()=>updateHeld(), updateHUD:()=>updateHUD(), equip:t=>equip(t),
   noEdit:()=>noEdit(), GUEST:()=>GUEST, VISIT:()=>VISIT, addClams:n=>addClams(n), bench:()=>BN.tier(), benchBanner:()=>BN.banner() });
 // v1.40 crafting tables (benches.js): crafting tables in reach, as [id, distance, size]
@@ -1069,7 +1069,8 @@ class GroundItem extends Ent {
     if (!this.rec.beach && noEdit()) return;
     if (!this.take()){ toast('Your bag is full. Sell or drop something first.'); return; }
     // v1.56: a click or tap (not the keys or the Act button) also picks up the rest of what the same tree or rock dropped
-    if (mode==='tap' && this.rec.g) for (const e of groundGroup(this)){ if (!e.take(true)){ toast('Your bag is full, so the rest is still on the ground.'); break; } } }
+    if (mode==='tap' && this.rec.g){ const g=this.rec.g; DROP_CLAIMED.set(g, performance.now()+CLAIM_MS);
+      for (const e of groundGroup(this)){ if (!e.take(true)){ DROP_CLAIMED.delete(g); toast('Your bag is full, so the rest is still on the ground.'); break; } } } }
   // into the bag; false if it won't fit. quiet: no pop sound (the first item of a group already made one)
   take(quiet){ const id=this.rec.id;
     if (ITEMS[id].kind==='plan'){ const fresh=learnPlan(id); if (!fresh){ addClams(ITEMS[id].price); toast(`You already know that plan. Pemberton gave you ${fmt(ITEMS[id].price)} clams for the paper.`); }
@@ -1682,14 +1683,19 @@ function hiddenSpot(x,z){
   return false; }
 /* v1.56: things a tree or rock drops share a group (rec.g). Clicking or tapping one picks up the rest of its group too. */
 var DROP_GRP=null;   // var, not let: dropNear can run before this line does
-function dropGroup(g, fn){ const o=DROP_GRP; DROP_GRP=g; try { return fn(); } finally { DROP_GRP=o; } }
+// A group that was just clicked: pieces of it still falling (fruit, a rare find, a scroll) go straight into the bag when they land.
+// Hitting, shaking or chopping the same tree or rock again ends that, so the new drop lands on the ground as usual.
+var DROP_CLAIMED=new Map();   // group -> performance.now() until which its late pieces are taken
+const CLAIM_MS=2500;   // longer than the slowest delayed drop (fruit, plans and scrolls land within about 1.2 s)
+function dropGroup(g, fn){ DROP_CLAIMED.delete(g); const o=DROP_GRP; DROP_GRP=g; try { return fn(); } finally { DROP_GRP=o; } }
 function dropNear(id, at, rad=1.4, exact=false, meta, grp=DROP_GRP){
   let x=at.x, z=at.z, fallback=null;
   // look for open ground on the camera's side first, and never tuck it behind a tree, rock or building
   for(let k=0;k<40;k++){ const a = k<20 ? Math.random()*Math.PI : Math.random()*TAU, d=exact?0:(rad*0.7+Math.random()*rad*0.6)*(k<30?1:1.6); const tx=at.x+Math.cos(a)*d, tz=at.z+Math.sin(a)*d;
     if(walkable(tx,tz) && !blocked(tx,tz,0.3)){ if (!hiddenSpot(tx,tz)){ x=tx; z=tz; fallback=null; break; } if (!fallback) fallback=[tx,tz]; } }
   if (fallback){ x=fallback[0]; z=fallback[1]; }
-  const rec={ id, x, z, fresh:true }; if(meta) rec.m=meta; if(grp) rec.g=grp; S.ground.push(rec); new GroundItem(rec); Snd.pop(); save();
+  const rec={ id, x, z, fresh:true }; if(meta) rec.m=meta; if(grp) rec.g=grp; S.ground.push(rec); const gi=new GroundItem(rec); Snd.pop(); save();
+  if (grp && DROP_CLAIMED.get(grp)>performance.now() && !gi.take(true)){ DROP_CLAIMED.delete(grp); toast('Your bag is full, so the rest is still on the ground.'); }
 }
 /* Part 3: building the island, rooms, daily reset, sky, dialogue, UI, input, main loop */
 

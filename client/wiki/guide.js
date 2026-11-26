@@ -11,7 +11,7 @@
    built in wiki.js. Writing rules: plain words, no em dashes, no emoji, only facts the code supports.
    ===================================================================== */
 
-export const GUIDE_VERSION = 'v1.47';
+export const GUIDE_VERSION = 'v1.49';
 export const GUIDE_UPDATED = '2026-11-26';
 
 const tip = s => `<div class="tip"><b>Tip</b> ${s}</div>`;
@@ -68,6 +68,7 @@ ${tip('Menu &gt; Battery saver lowers resolution and turns off shadows if your p
 <tr><td>Tidepool (Marlo)</td><td>Fish only</td><td>120%, up to 150% as you invest</td></tr>
 <tr><td>Bug &amp; Bloom (Sprig)</td><td>Bugs and flowers</td><td>120%, up to 150% as you invest</td></tr>
 <tr><td>Mabel's Tea Room (story)</td><td>Fruit, vegetables, herbs, berries, honey</td><td>150%</td></tr></table>
+<p>To see what something is worth, hover over it in your bag with a mouse, or tap it on a phone. It shows the most any shop pays for it today (with your shop upgrades and the size of a catch counted) and who pays that. Story items say they can't be sold.</p>
 <h3>Good money makers</h3>
 <ul>
 <li><b>Foreign fruit.</b> Your island has one native fruit. Other fruit sells for 250 each (native 100, coconut 150). Plant foreign fruit you bring back from trips and orchards pay for themselves.</li>
@@ -723,6 +724,7 @@ ${steps(['Talk to them and pick <b>Come and meet people</b>. They follow you for
 { id:'changes', group:'done', title:'What\'s changed', html:`
 <p>Recent updates, newest first.</p>
 <ul>
+<li><b>v1.49</b>: Hover over an item in your bag (or tap it on a phone) to see its name and what it sells for, and who pays the most for it. Story items say they can't be sold instead of showing 0.</li>
 <li><b>v1.47</b>: You can go inside Wendell's tower. He works at his cauldron in a round workroom full of books, candles and a scrying bowl, and a stair leads up to an observatory with a telescope. See Wendell the wizard.</li>
 <li><b>v1.44</b>: Shop rewards and fishing tips. At the top two tiers Pemberton opens his back room (one piece a week, sometimes a rare plan), Marlo adds a rare shelf and Sprig sells rare flower colors, hybrids and the glowing Lantern Bloom. Marlo and Gill tell you what's biting, more exactly as their shop and boat grow.</li>
 <li><b>v1.41</b>: Juniper's reading nook, Otis's race course, Marigold's flower show and a spring show every April, the newcomer, the Island Charter and Charter Hall, the Driftwood Festival every season, and Starfall Isle with its own bugs and Wendell's two spells. The legendary trip island Starfall Isle is now called Stardrift Isle.</li>

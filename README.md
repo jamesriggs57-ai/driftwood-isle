@@ -421,3 +421,6 @@ Code: `towerroom.js` (models, the star chart and eyepiece drawings, the words) a
 - Spells that happen outdoors (moving a building, shaping land, raising an isle) step you out of the tower first (`outdoors`).
 - Save: one new flag, `magic.inside` (the first-time hello). No new world keys.
 - #dev Story map: "Wizard tower" and "Wizard tower: upstairs" under Go inside. Test hooks: `window.__game.v147`.
+
+## v1.49: item value in the bag
+Hover a bag slot with a mouse to see the item's name and value; on touch screens a tap selects the slot and the same line shows in the bar at the bottom, as before. Code: `bagValue`, `invGrid` and `invTip` in `main.js`. The value comes from `sellPrice` (and `teaPrice` once the tea room is open), so it always matches what the shops pay.

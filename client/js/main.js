@@ -5875,7 +5875,7 @@ const scrim=$('#scrim'), pTitle=$('#pTitle'), pBody=$('#pBody'), pFoot=$('#pFoot
 let panelClose=null;
 function openPanel(title, onClose){ pTitle.textContent=title; pBody.innerHTML=''; setFoot(''); scrim.classList.add('show'); panelClose=onClose||null; Snd.click(); pBody.scrollTop=0; }
 function setFoot(html){ pFoot.innerHTML=html; pFoot.style.display=html?'':'none'; }
-function closePanel(){ const f=panelClose; panelClose=null; scrim.classList.remove('show'); coolPopup(); if(f) f(); }
+function closePanel(){ const f=panelClose; panelClose=null; scrim.classList.remove('show'); hideInvTip(); coolPopup(); if(f) f(); }
 $('#pClose').onclick=()=>closePanel();
 scrim.addEventListener('pointerdown', e=>{ if(e.target===scrim) closePanel(); });
 function dropToast(t){ if (t.dataset.gone) return; t.dataset.gone='1'; t.style.transition='opacity .25s'; t.style.opacity=0; setTimeout(()=>t.remove(),260); }
@@ -5909,8 +5909,29 @@ const kindName = k => ({veg:'Vegetable',herb:'Herb',berry:'Berry',food:'Food',ge
 const canPlant = it => it.kind==='seed' || it.kind==='sapling' || (it.kind==='fruit' && it.plant);
 
 /* Bag: tap an item and its actions appear in the bar pinned to the bottom of the panel */
-function invGrid(sel, dim){ let h='<div class="grid">'; const N=slotsMax(); for(let i=0;i<N;i++){ const s=S.inv[i]; if(!s){ h+='<div class="slot empty"></div>'; continue; } h+=`<div class="slot${sel===i?' sel':''}" data-i="${i}" style="${dim&&dim(s)?'opacity:.35':''}"><img src="${thumb(s.id)}" alt="">${s.n>1?`<span class="n">${s.n}</span>`:''}</div>`; } return h+'</div>'; }
-function itemDetail(s){ const it=ITEMS[s.id]; let sub=kindName(it.kind); if(s.m) sub+=` · ${statText(s.id,s.m)}`; if(it.rarity && (it.kind==='fish'||it.kind==='bug'||it.kind==='furniture'||it.rare)) sub+=' '+rarityTag(it); if (it.rare) sub+=`<br>${it.how}`; return `<img src="${thumb(s.id)}"><div class="grow"><div class="nm">${it.name}${s.n>1?` x${s.n}`:''}</div><div class="sub">${sub}</div><div class="sub">Sells for ${fmt(entryPrice(s))} clams</div></div>`; }
+// tip: what the mouse-hover label says for a slot (v1.49). Defaults to the best price any shop pays today.
+function invGrid(sel, dim, tip=bagValue){ let h='<div class="grid">'; const N=slotsMax(); for(let i=0;i<N;i++){ const s=S.inv[i]; if(!s){ h+='<div class="slot empty"></div>'; continue; } h+=`<div class="slot${sel===i?' sel':''}" data-i="${i}" data-tip="${escAttr(ITEMS[s.id].name+(s.n>1?' x'+s.n:'')+'|'+tip(s).replace(/<[^>]+>/g,''))}" style="${dim&&dim(s)?'opacity:.35':''}"><img src="${thumb(s.id)}" alt="">${s.n>1?`<span class="n">${s.n}</span>`:''}</div>`; } return h+'</div>'; }
+const escAttr = x => String(x).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+/* v1.49: what a bag entry is worth, using the same prices the shops pay (sellPrice), so it matches what you get.
+   Pemberton buys anything; Marlo, Sprig and the tea room pay more for their things, so name them when they pay the most. */
+function bagValue(s){
+  if (ITEMS[s.id].noSell) return 'Can\'t be sold';
+  let best=sellPrice(s,'stall'), who='general';
+  for (const id of ['aquarium','garden']){ const p=sellPrice(s,id); if (p!==null && p>best){ best=p; who=KEEPERS[SHOPS[id].keeper].name; } }
+  if (teaOpen()){ const p=teaPrice(s); if (p!==null && p>best){ best=p; who=npcName(SY.tea.owner||dreamHolder('tea')); } }   // the tea room, once it's open
+  if (!best) return 'Not worth any clams';
+  return `Sells for <b>${fmt(best)}</b> clams${s.n>1?' each':''}${who==='general'?'':' to '+who}`; }
+function itemDetail(s, value){ const it=ITEMS[s.id]; let sub=kindName(it.kind); if(s.m) sub+=` · ${statText(s.id,s.m)}`; if(it.rarity && (it.kind==='fish'||it.kind==='bug'||it.kind==='furniture'||it.rare)) sub+=' '+rarityTag(it); if (it.rare) sub+=`<br>${it.how}`; return `<img src="${thumb(s.id)}"><div class="grow"><div class="nm">${it.name}${s.n>1?` x${s.n}`:''}</div><div class="sub">${sub}</div><div class="sub">${value||bagValue(s)}</div></div>`; }
+/* v1.49: hovering a bag slot with a mouse shows its name and value. Touch screens skip this: a tap selects the slot
+   and the same name and value show in the bar at the bottom of the panel, so tapping works as before. */
+const invTip = document.createElement('div'); invTip.id='invTip'; document.body.appendChild(invTip);
+const hideInvTip = () => { invTip.style.display='none'; };
+pBody.addEventListener('pointerover', e=>{ if (e.pointerType!=='mouse') return; const el=e.target.closest&&e.target.closest('.slot[data-tip]'); if (!el){ hideInvTip(); return; }
+  const [nm,val]=el.dataset.tip.split('|'); invTip.innerHTML=`<b></b><span></span>`; invTip.firstChild.textContent=nm; invTip.lastChild.textContent=val; invTip.style.display='block';
+  const r=el.getBoundingClientRect(), w=invTip.offsetWidth, h=invTip.offsetHeight;
+  invTip.style.left=Math.max(6, Math.min(innerWidth-w-6, r.left+r.width/2-w/2))+'px'; invTip.style.top=(r.top-h-8<6 ? r.bottom+8 : r.top-h-8)+'px'; });
+pBody.addEventListener('pointerout', e=>{ if (!e.relatedTarget || !e.relatedTarget.closest || !e.relatedTarget.closest('.slot[data-tip]')) hideInvTip(); });
+pBody.addEventListener('scroll', hideInvTip); pBody.addEventListener('click', hideInvTip);
 function openBag(mode='view', onPick, onCancel){
   let sel=-1;
   const render=()=>{
@@ -6327,10 +6348,10 @@ function openShop(which, startTab){
         h+=`<div class="row"><div class="slot" style="width:56px;border-width:2px;font-weight:700">${p.slots}</div><div class="grow"><div class="nm">${p.name}${next?' <span style="color:#d08a10;font-weight:600">New!</span>':''}</div><div class="sub">${p.slots} slots · ${fmt(p.cost)} clams</div></div>${owned?'<span class="muted">Owned</span>':`<button class="btn" data-pack="${i}" ${S.clams<p.cost?'disabled':''}>Buy</button>`}</div>`; }); }
     if (tab==='sell'){
       const sh=SHOPS[sid]; const pays = which==='rare' ? '' : sh.buys ? `${KEEPERS[sh.keeper].name} pays <b>${Math.round(sh.sell[shopTier(sid)]*100)}%</b> for ${buysText(sh)}. Nothing else.` : `Pemberton buys anything${shopTier('general')?` at <b>${Math.round(sh.sell[shopTier('general')]*100)}%</b>`:''}. Specialists pay more for their thing.`;
-      h+=`<div class="muted" style="margin-bottom:8px">${pays} Bigger catches are worth more.</div>`+invGrid(sel, s=>sellPrice(s,which)===null);
+      h+=`<div class="muted" style="margin-bottom:8px">${pays} Bigger catches are worth more.</div>`+invGrid(sel, s=>sellPrice(s,which)===null, s=>{ const p=sellPrice(s,which); return p===null ? (ITEMS[s.id].noSell?'Can\'t be sold':'Not bought here') : `Sells here for ${fmt(p)} clams${s.n>1?' each':''}`; });
       const s=S.inv[sel]; if(s){ const it=ITEMS[s.id], pr=sellPrice(s,which); const same=S.inv.filter(x=>x.id===s.id && !x.m).reduce((a,x)=>a+x.n,0);
         if (pr===null) setFoot(`<div class="detail">${itemDetail(s)}<div class="acts muted" style="max-width:220px">${KEEPERS[SHOPS[sid].keeper].refuse}</div></div>`);
-        else { setFoot(`<div class="detail">${itemDetail(s).replace(/Sells for [\d,]+ clams/, `Sells here for <b>${fmt(pr)}</b> clams`)}<div class="acts"><button class="btn" id="s1">Sell 1</button>${!s.m&&same>1?`<button class="btn alt" id="sA">Sell all ${fmt(pr*same)}</button>`:''}</div></div>`);
+        else { setFoot(`<div class="detail">${itemDetail(s, `Sells here for <b>${fmt(pr)}</b> clams${s.n>1?' each':''}`)}<div class="acts"><button class="btn" id="s1">Sell 1</button>${!s.m&&same>1?`<button class="btn alt" id="sA">Sell all ${fmt(pr*same)}</button>`:''}</div></div>`);
           pFoot.querySelector('#s1').onclick=()=>{ if(!walletOK(pr)) return; removeAt(sel,1); addClams(pr); addTrade(which,pr); track('sold'); track('earned',pr); Snd.coin(); if(!S.inv[sel]||S.inv[sel].id!==s.id) sel=-1; render(); };
           const sa=pFoot.querySelector('#sA'); if(sa) sa.onclick=()=>{ if(!walletOK(pr*same)) return; removeItem(s.id,same); addClams(pr*same); addTrade(which,pr*same); track('sold',same); track('earned',pr*same); Snd.coin(); sel=-1; render(); }; }
       } else setFoot('');

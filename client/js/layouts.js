@@ -7,6 +7,7 @@
    ===================================================================== */
 import { TAU, clamp, lerp, mulberry32, polyDist } from './util.js';
 import { tripPlan, TOWN_KINDS } from './voyage.js';
+import { extR } from './extend.js';
 
 export const LAYOUTS = {
   classic: {
@@ -43,7 +44,28 @@ export const GUEST_LAYOUTS = ['village', 'classic', 'highlands'];
 export const DEFAULT_SHAPE = { R:50, ph:[1,2,0.5], scale:1,
   river:[[-30,-6],[-20,-16],[-8,-24],[2,-34],[8,-46],[12,-64]], pond:{ x:30, z:20, r:5 },
   bridges:[[2,0.5],[1,0.35]], bumps:[[-36,-14,1.9,14,3],[38,-24,1.2,9,2]] };
-export const islandRadius = (L, a) => L.R*(1 + 0.09*Math.sin(3*a+L.ph[0]) + 0.06*Math.sin(5*a+L.ph[1]) + 0.03*Math.sin(7*a+L.ph[2]));
+export const islandRadius = (L, a) => L.sh ? shapeR(L, a) : L.R*(1 + 0.09*Math.sin(3*a+L.ph[0]) + 0.06*Math.sin(5*a+L.ph[1]) + 0.03*Math.sin(7*a+L.ph[2]));
+/* v1.62 islands made in the island maker from now on carry their own coast (L.sh): stretched one way or another, the town
+   off to one side of the middle, a bay or two and a headland, all from the seed. sh.c: [harmonic, amount, phase], sh.b: bays
+   [angle, depth, width] (a negative depth is a headland), sh.k scales it back to the usual area. Older islands keep the old coast. */
+function shapeR(L, a){ const s=L.sh; let f=1; for (const [k,amp,ph] of s.c) f+=amp*Math.sin(k*a+ph); for (const [ba,d,w] of s.b) f-=d*Math.exp((Math.cos(a-ba)-1)/w); return L.R*f*s.k; }
+function makeShape(r, R){
+  const rr=(a,b)=>a+r()*(b-a), angDist=(a,b)=>Math.abs(Math.atan2(Math.sin(a-b), Math.cos(a-b)));
+  const c=[[1, rr(0.03,0.12), rr(0,TAU)], [2, rr(0.02,0.2), rr(0,TAU)], [3, rr(0,0.08), rr(0,TAU)], [4, rr(0,0.05), rr(0,TAU)], [5, rr(0,0.05), rr(0,TAU)], [7, rr(0,0.025), rr(0,TAU)]], b=[];
+  const nb=Math.floor(r()*3), nc=r()<0.5?1:0;
+  for (let i=0;i<nb+nc;i++){ for (let k=0;k<20;k++){ const a=rr(0,TAU); if (angDist(a,0)<0.7 || b.some(q=>angDist(q[0],a)<1.0)) continue; b.push([a, i<nb ? rr(0.07,0.15) : -rr(0.05,0.1), rr(0.02,0.06)]); break; } }
+  const sh={ c, b, k:1 }, L={ R, sh };
+  for (let it=0; it<12; it++){ let m2=0, mx=0, mn=9; for (let i=0;i<360;i++){ sh.k=1; const f=shapeR(L, i/360*TAU)/R; m2+=f*f; mx=Math.max(mx,f); mn=Math.min(mn,f); }
+    const k=1/Math.sqrt(m2/360); if (mx*k<=1.15 && mn*k>=0.72){ sh.k=k; break; }
+    for (const q of c) q[1]*=0.85; for (const q of b) q[1]*=0.85; sh.k=k; }
+  sh.k=+sh.k.toFixed(4); for (const q of c){ q[1]=+q[1].toFixed(4); q[2]=+q[2].toFixed(3); } for (const q of b){ q[0]=+q[0].toFixed(3); q[1]=+q[1].toFixed(4); q[2]=+q[2].toFixed(3); }
+  return sh; }
+/* v1.62 where Wendell's isles go on a new island: the old pattern turned to a random side, sometimes mirrored, each nudged a little */
+function isleDirs(r){ const base={ meadow:Math.PI, dunes:Math.PI*0.62, bluff:-Math.PI*0.42, pines:Math.PI*0.2 }; let out;
+  for (let t=0;t<40;t++){ const rot=r()*TAU, m=r()<0.5?1:-1, j=()=>(r()-0.5)*0.5; out={};
+    for (const [k,a] of Object.entries(base)){ const v=m*a+rot+j(); out[k]=+Math.atan2(Math.sin(v), Math.cos(v)).toFixed(3); }
+    if (Object.values(out).every(a=>Math.abs(a)>=0.6)) break; }   // keep every isle well clear of the dock (it always faces east, angle 0)
+  return out; }
 
 /* =====================================================================
    ISLAND MAKER: new islands for accounts.
@@ -76,18 +98,24 @@ const FOOT = { museum:9, shop:5.5, aquarium:7, garden:7.5, tower:4.5, home:7, re
 export function generateLayout(gen){
   const terrain = TERRAINS[gen.terrain] ? gen.terrain : 'hilly', town = TOWNS[gen.town] ? gen.town : 'suburbs';
   for (let attempt=0; attempt<12; attempt++){
-    const L = tryGenerate((gen.seed|0) + attempt*7919, terrain, town);
+    const L = tryGenerate((gen.seed|0) + attempt*7919, terrain, town, false, gen.v>=2);
     if (L) return L;
   }
-  return tryGenerate(gen.seed|0, terrain, town, true);
+  return tryGenerate(gen.seed|0, terrain, town, true, gen.v>=2);
 }
 
-function tryGenerate(seed, terrain, town, force){
+/* v2 (islands made from v1.62 on, S.gen.v=2): the same recipe with much more left to the seed, so a reroll really is a different
+   island: the coast's shape (makeShape), which side the hills crowd onto, where the spring rises, how many hills there are,
+   which side of the plaza the shops cluster on, how the neighbors group, and which way Wendell's isles lie.
+   v1 islands (everything older) go through exactly the steps they always did, so they come out the same. */
+function tryGenerate(seed, terrain, town, force, v2){
   const r = mulberry32(seed ^ 0x5eed);
   const scale = Math.SQRT2, R = 50*scale;   // twice the area of the preset islands
   const rr = (a,b) => a + r()*(b-a);
   const ph = [rr(0,TAU), rr(0,TAU), rr(0,TAU)];
   const L = { gen:true, name:'Your island', terrain, town, R, ph, scale, bumps:[], places:{ plaza:[0,0], board:[-4,-3.5] }, homes:{}, mounds:[], flora:FLORA[terrain] };
+  let hiA=0, hiW=Math.PI, shopA=0, shopW=Math.PI;   // v2: the side the hills crowd onto, and the side the shops cluster on
+  if (v2){ L.sh=makeShape(r, R); L.v=2; hiA=rr(0,TAU); hiW=rr(0.9,3.2); shopA=rr(0,TAU); shopW=rr(0.9,2.4); L.isleDirs=isleDirs(r); }
   const radiusAt = a => islandRadius(L, a);
   const tOf = (x,z) => Math.hypot(x,z)/radiusAt(Math.atan2(z,x));
   const inDockLane = (x,z,m=0) => x > 0.42*R && Math.abs(z-4) < 7+m;
@@ -103,10 +131,10 @@ function tryGenerate(seed, terrain, town, force){
     L.bluff = { a, d0, h:2.75, ramps };
   }
 
-  // River: from an inland spring out to the coast, wiggling a little. The mouth stays away from the dock (east).
+  // River: from an inland spring out to the coast, wiggling a little. The mouth stays away from the dock (east). v2: the spring is usually up in the hills.
   let river=null;
   for (let k=0; k<60 && !river; k++){
-    const as = rr(0,TAU), rs = rr(0.42,0.54)*R, side = r()<0.5?1:-1, am = as + side*rr(0.45,0.95);
+    const as = v2 && k<30 && r()<0.75 ? hiA+rr(-0.9,0.9) : rr(0,TAU), rs = rr(0.42,0.54)*R, side = r()<0.5?1:-1, am = as + side*rr(0.45,0.95);
     if (angDist(am,0) < 0.75 || angDist(as,0) < 0.5) continue;
     if (L.cliff && (angDist(am, L.cliff.a) < 1.0 || angDist(as, L.cliff.a) < 0.7)) continue;
     const pts=[]; for (let i=0;i<=5;i++){ const f=i/5, a=lerp(as, am, Math.pow(f,0.85)), rad=lerp(rs, radiusAt(am)*1.28, f);
@@ -135,7 +163,8 @@ function tryGenerate(seed, terrain, town, force){
   L.pond = pond;
 
   // Hills
-  const mk = (n, A0, A1, R0, R1, dmin, dmax, avoidPlaza=10) => { for (let i=0,k=0; i<n && k<200; k++){ const a=rr(0,TAU), d=rr(dmin,dmax)*R, x=Math.cos(a)*d, z=Math.sin(a)*d;
+  const mk = (n, A0, A1, R0, R1, dmin, dmax, avoidPlaza=10) => { if (v2) n=Math.max(1, n-1+Math.floor(r()*3));   // v2: a hill more or less
+    for (let i=0,k=0; i<n && k<200; k++){ const a=v2 && k<120 ? hiA+(r()*2-1)*hiW : rr(0,TAU), d=rr(dmin,dmax)*R, x=Math.cos(a)*d, z=Math.sin(a)*d;
       if (Math.hypot(x,z) < avoidPlaza || polyDist(x,z,river) < 8 || Math.hypot(x-pond.x,z-pond.z) < 12) continue; L.mounds.push([+x.toFixed(1),+z.toFixed(1),+rr(A0,A1).toFixed(2),+rr(R0,R1).toFixed(1)]); i++; } };
   if (terrain==='flat'){ mk(3, 0.5, 0.9, 10, 16, 0.25, 0.65); L.liftAmp=0.45; }
   if (terrain==='hilly'){ mk(8, 1.4, 2.6, 12, 22, 0.2, 0.7); L.liftAmp=1.2; }
@@ -154,23 +183,25 @@ function tryGenerate(seed, terrain, town, force){
     for (const m of L.mounds) if (m[2]>3 && Math.hypot(x-m[0],z-m[1]) < m[3]*0.75) return false;
     for (const p of placed) if (Math.hypot(x-p[1],z-p[2]) < f+p[3]+sep) return false;
     return true; };
-  const put = (key, f, dmin, dmax, sep, near) => {
-    for (let k=0;k<400;k++){ const a=rr(0,TAU), d=rr(dmin,dmax)+k*0.04, cx=near?near[0]:0, cz=near?near[1]:0, x=cx+Math.cos(a)*d, z=cz+Math.sin(a)*d;
+  const put = (key, f, dmin, dmax, sep, near, sec) => {
+    for (let k=0;k<400;k++){ const a=sec ? sec[0]+(r()*2-1)*Math.min(Math.PI, sec[1]+k*0.006) : rr(0,TAU), d=rr(dmin,dmax)+k*0.04, cx=near?near[0]:0, cz=near?near[1]:0, x=cx+Math.cos(a)*d, z=cz+Math.sin(a)*d;
       if (!ok(x,z,f,sep)) continue; const p=[+x.toFixed(1),+z.toFixed(1)]; placed.push([key,p[0],p[1],f]); return p; }
     if (force){ for (let k=0;k<2000;k++){ const a=rr(0,TAU), d=rr(10,0.65*R), x=Math.cos(a)*d, z=Math.sin(a)*d; if (ok(x,z,f,1)){ const p=[+x.toFixed(1),+z.toFixed(1)]; placed.push([key,p[0],p[1],f]); return p; } } }
     return null; };
   const shopsR = town==='spread' ? [12, 30] : [10, 20], sep = town==='dense' ? 2 : 3;
-  for (const k of ['museum','shop','aquarium','garden','tower']){ const p=put(k, FOOT[k], shopsR[0], shopsR[1], sep); if(!p) return null; L.places[k]=p; }
+  if (v2){ shopsR[0]+=rr(-1,2); shopsR[1]+=rr(-2,6); }
+  const shopSec = v2 ? [shopA, shopW] : null;
+  for (const k of ['museum','shop','aquarium','garden','tower']){ const p=put(k, FOOT[k], shopsR[0], shopsR[1], sep, null, shopSec); if(!p) return null; L.places[k]=p; }
   const homeR = town==='dense' ? [12,24] : town==='suburbs' ? [18,32] : [16,40];
   const home = put('home', FOOT.home, homeR[0], homeR[1], sep); if (!home) return null;
   L.places.home = home; L.lot = { x:home[0], z:+(home[1]-0.5).toFixed(1) };
   if (town==='suburbs'){
-    const centers=[]; for (let c=0;c<3;c++){ for (let k=0;k<200;k++){ const a=rr(0,TAU), d=rr(0.36,0.52)*R, x=Math.cos(a)*d, z=Math.sin(a)*d; if (tOf(x,z)>0.62 || centers.some(q=>Math.hypot(q[0]-x,q[1]-z)<26)) continue; centers.push([x,z]); break; } }
+    const centers=[]; for (let c=0;c<(v2 ? 2+Math.floor(r()*3) : 3);c++){ for (let k=0;k<200;k++){ const a=rr(0,TAU), d=rr(0.36,0.52)*R, x=Math.cos(a)*d, z=Math.sin(a)*d; if (tOf(x,z)>0.62 || centers.some(q=>Math.hypot(q[0]-x,q[1]-z)<26)) continue; centers.push([x,z]); break; } }
     if (centers.length<2) return null;
     RESIDENT_IDS.forEach((id,i)=>{ if (!L) return; const c=centers[i%centers.length]; const p=put(id, FOOT.res, 4, 13, sep, c) || put(id, FOOT.res, 14, 0.62*R, sep); L.homes[id]=p; });
   } else {
-    const rr2 = town==='dense' ? [12, 30] : [16, 0.68*R];
-    for (const id of RESIDENT_IDS){ const p=put(id, FOOT.res, rr2[0], rr2[1], town==='spread'?8:sep); L.homes[id]=p; }
+    const rr2 = town==='dense' ? [12, 30] : [16, 0.68*R], hs = v2 && town==='dense' ? [shopA, shopW+0.9] : null;   // v2: a dense town gathers on the shops' side
+    for (const id of RESIDENT_IDS){ const p=put(id, FOOT.res, rr2[0], rr2[1], town==='spread'?8:sep, null, hs); L.homes[id]=p; }
   }
   if (Object.values(L.homes).some(p=>!p)) return null;
   return L;
@@ -179,19 +210,23 @@ function tryGenerate(seed, terrain, town, force){
 export function bluffD(B, x, z){ return x*Math.cos(B.a) + z*Math.sin(B.a) - B.d0; }
 
 /* A small top-down map of a layout, for the island maker */
-export function drawIslandPreview(cv, L){
-  const ctx=cv.getContext("2d"), W=cv.width, H=cv.height, S=W/(L.R*2.45), cx=W/2, cz=H/2;
+export function drawIslandPreview(cv, L, E){   // E (v1.62): the island's even growth, so the map shows the coast you'll really get
+  const R0=a=>islandRadius(L,a), CR=a=>E ? extR(R0, E, a) : R0(a);
+  let mx=0; for (let i=0;i<96;i++) mx=Math.max(mx, CR(i/96*TAU));
+  const ctx=cv.getContext("2d"), W=cv.width, H=cv.height, S=E ? W/(mx*2.2) : W/(L.R*2.45), cx=W/2, cz=H/2;
   const X=x=>cx+x*S, Z=z=>cz+z*S;
   ctx.fillStyle='#4cc3d6'; ctx.fillRect(0,0,W,H);
-  const ring=(k,col)=>{ ctx.beginPath(); for(let i=0;i<=96;i++){ const a=i/96*TAU, rd=islandRadius(L,a)*k; const x=Math.cos(a)*rd, z=Math.sin(a)*rd; i?ctx.lineTo(X(x),Z(z)):ctx.moveTo(X(x),Z(z)); } ctx.fillStyle=col; ctx.fill(); };
-  ring(1.02,'#f3dca6'); ring(0.9,'#8cc46a');
+  const ring=(f,col)=>{ ctx.beginPath(); for(let i=0;i<=120;i++){ const a=i/120*TAU, rd=f(a); const x=Math.cos(a)*rd, z=Math.sin(a)*rd; i?ctx.lineTo(X(x),Z(z)):ctx.moveTo(X(x),Z(z)); } ctx.fillStyle=col; ctx.fill(); };
+  if (E){ ring(a=>CR(a)+1,'#f3dca6'); ring(a=>CR(a)-0.12*R0(a),'#8cc46a'); }
+  else { ring(a=>R0(a)*1.02,'#f3dca6'); ring(a=>R0(a)*0.9,'#8cc46a'); }
   for (const m of L.mounds){ const g=ctx.createRadialGradient(X(m[0]),Z(m[1]),0,X(m[0]),Z(m[1]),m[3]*S); const k=clamp(m[2]/5.6,0.15,1); g.addColorStop(0,`rgba(70,110,50,${0.35+0.5*k})`); g.addColorStop(1,'rgba(70,110,50,0)'); ctx.fillStyle=g; ctx.beginPath(); ctx.arc(X(m[0]),Z(m[1]),m[3]*S,0,TAU); ctx.fill(); }
   if (L.bluff){ const B=L.bluff; ctx.save(); ctx.beginPath(); for(let i=0;i<=96;i++){ const a=i/96*TAU, rd=islandRadius(L,a)*0.92; const x=Math.cos(a)*rd, z=Math.sin(a)*rd; i?ctx.lineTo(X(x),Z(z)):ctx.moveTo(X(x),Z(z)); } ctx.clip();
     const ca=Math.cos(B.a), sa=Math.sin(B.a); ctx.fillStyle='rgba(90,120,60,.55)'; ctx.beginPath(); const p0=[ca*B.d0-sa*200, sa*B.d0+ca*200], p1=[ca*B.d0+sa*200, sa*B.d0-ca*200]; ctx.moveTo(X(p0[0]),Z(p0[1])); ctx.lineTo(X(p1[0]),Z(p1[1])); ctx.lineTo(X(p1[0]+ca*300),Z(p1[1]+sa*300)); ctx.lineTo(X(p0[0]+ca*300),Z(p0[1]+sa*300)); ctx.fill();
     ctx.strokeStyle='#6b5a44'; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(X(p0[0]),Z(p0[1])); ctx.lineTo(X(p1[0]),Z(p1[1])); ctx.stroke();
     ctx.fillStyle='#d8c48a'; for (const q of B.ramps){ ctx.beginPath(); ctx.arc(X(q[0]),Z(q[1]),4,0,TAU); ctx.fill(); } ctx.restore(); }
   if (L.cliff){ ctx.strokeStyle='#6b5a44'; ctx.lineWidth=4; ctx.beginPath(); for(let i=0;i<=40;i++){ const a=L.cliff.a-0.9+i/40*1.8, rd=islandRadius(L,a); const x=Math.cos(a)*rd, z=Math.sin(a)*rd; i?ctx.lineTo(X(x),Z(z)):ctx.moveTo(X(x),Z(z)); } ctx.stroke(); }
-  ctx.strokeStyle='#3aa6c8'; ctx.lineWidth=Math.max(3, 5*S); ctx.lineCap='round'; ctx.lineJoin='round'; ctx.beginPath(); L.river.forEach((p,i)=>i?ctx.lineTo(X(p[0]),Z(p[1])):ctx.moveTo(X(p[0]),Z(p[1]))); ctx.stroke();
+  const RV=L.river.slice(); if (E && RV.length>1){ const e=RV[RV.length-1], q=RV[RV.length-2], d=Math.hypot(e[0]-q[0],e[1]-q[1])||1; RV.push([e[0]+(e[0]-q[0])/d*0.3*L.R, e[1]+(e[1]-q[1])/d*0.3*L.R]); }   // it runs on out through the new land
+  ctx.strokeStyle='#3aa6c8'; ctx.lineWidth=Math.max(3, 5*S); ctx.lineCap='round'; ctx.lineJoin='round'; ctx.beginPath(); RV.forEach((p,i)=>i?ctx.lineTo(X(p[0]),Z(p[1])):ctx.moveTo(X(p[0]),Z(p[1]))); ctx.stroke();
   ctx.fillStyle='#3aa6c8'; ctx.beginPath(); ctx.arc(X(L.pond.x),Z(L.pond.z),L.pond.r*S*1.1,0,TAU); ctx.fill();
   if (L.falls){ const [sx,sz]=L.river[0]; ctx.fillStyle='#ffffff'; ctx.strokeStyle='#3aa6c8'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(X(sx),Z(sz),5,0,TAU); ctx.fill(); ctx.stroke(); }
   ctx.fillStyle='#c8a26a'; ctx.beginPath(); ctx.arc(X(0),Z(0),6,0,TAU); ctx.fill();

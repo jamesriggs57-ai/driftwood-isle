@@ -244,14 +244,17 @@ async function renderPanel() {
     body.innerHTML = '<div class="muted">Loading...</div>';
     const f = await api('/api/friends'); if (panelTab !== 'friends') return;
     const canInvite = B.mode === 'account';
-    body.innerHTML = `${canInvite ? `<div class="notice"><b>Invite a friend</b><br><span class="muted">Only people you send a link to can visit. There's no way for strangers to find your island.</span>
+    const inv = f.invitable || [];   // v1.55: friends who can't come over right now
+    body.innerHTML = `${canInvite ? `<div class="notice"><b>Invite a friend</b><br><span class="muted">Only your friends and people you send a link to can visit. There's no way for strangers to find your island.</span>
         <label class="f">They can <select id="invRole"><option value="visitor">Visit (look, pick fruit, shop)</option><option value="resident">Live here (change anything, like you)</option></select></label>
         <label class="f">For <select id="invStand"><option value="0">One visit</option><option value="1">Any time (standing invite)</option></select></label>
         <div id="resWarn" class="notice warn" style="display:none">Residents can cut trees, move things and change your island just like you. Only invite people you know in real life and trust.</div>
+        ${inv.length ? `<b style="display:block;margin-top:8px">Invite a friend over</b><span class="muted">No link needed. They get a letter saying they can come.</span>${inv.map(v => `<div class="row"><span><b>${esc(v.name)}</b><br><span class="muted">${v.visitUsed ? 'Their visit was used' : 'Can\'t visit you yet'}</span></span><span><button class="btn sm" data-inv="${v.friendId}" data-name="${esc(v.name)}">Invite</button></span></div>`).join('')}
+        <b style="display:block;margin-top:8px">Someone new</b>` : ''}
         <button class="btn" id="mkInv">Make invite link</button><div id="invOut"></div></div>` : ''}
       <b>Islands you can visit</b>${(f.canVisit || []).length ? f.canVisit.map(v => `<div class="row"><span><b>${esc(v.name)}</b>${v.island ? ' · ' + esc(v.island) : ''}<br><span class="muted">${v.role}${v.standing ? ', any time' : ', ' + v.visitsLeft + ' visit left'}</span></span>
         <span><button class="btn sm" data-visit="${v.ownerId}" ${!v.standing && v.visitsLeft <= 0 ? 'disabled' : ''}>Visit</button> <button class="btn sm alt" data-gift="${v.ownerId}" data-name="${esc(v.name)}">Gift</button> <button class="btn sm alt" data-leave="${v.ownerId}">Remove</button></span></div>`).join('') : '<div class="muted">None yet. Ask a friend for an invite link.</div>'}
-      ${canInvite ? `<b style="display:block;margin-top:12px">Who can visit you</b>${(f.visitors || []).length ? f.visitors.map(v => `<div class="row"><span><b>${esc(v.name)}</b><br><span class="muted">${v.role}${v.standing ? ', any time' : ', ' + v.visitsLeft + ' visit left'}</span></span>
+      ${canInvite ? `<b style="display:block;margin-top:12px">Who can visit you</b>${(f.visitors || []).length ? f.visitors.map(v => `<div class="row"><span><b>${esc(v.name)}</b><br><span class="muted">${v.role}${v.standing ? ', any time' : v.visitsLeft > 0 ? ', ' + v.visitsLeft + ' visit left' : ', visit used'}</span></span>
         <span><button class="btn sm alt" data-role="${v.friendId}" data-r="${v.role}" data-s="${v.standing ? 1 : 0}">${v.role === 'resident' ? 'Make visitor' : 'Make resident'}</button> <button class="btn sm alt" data-gift="${v.friendId}" data-name="${esc(v.name)}">Gift</button> <button class="btn sm alt" data-revoke="${v.friendId}">Remove</button></span></div>`).join('') : '<div class="muted">Nobody yet.</div>'}` : ''}`;
     const role = $('#invRole'); if (role) role.onchange = () => $('#resWarn').style.display = role.value === 'resident' ? '' : 'none';
     const mk = $('#mkInv'); if (mk) mk.onclick = async () => {
@@ -261,6 +264,14 @@ async function renderPanel() {
       $('#invOut').innerHTML = `<div class="copyRow"><input readonly value="${esc(r.url)}"><button class="btn sm" id="cp">Copy</button></div><div class="muted">Works once, for one person, for 14 days.</div>`;
       $('#cp').onclick = async () => { try { await navigator.clipboard.writeText(r.url); $('#cp').textContent = 'Copied'; } catch { $('#invOut input').select(); } };
     };
+    // v1.55: invite a friend over with the role and one-visit/standing picked above
+    body.querySelectorAll('[data-inv]').forEach(b => b.onclick = async () => {
+      if (role.value === 'resident' && !confirmBox(`Residents can change or ruin your island. Only invite people you know in real life and trust. Invite ${b.dataset.name} to live here?`)) return;
+      b.disabled = true;
+      const r = await api(`/api/friends/${b.dataset.inv}/invite`, { method: 'POST', body: { role: role.value, standing: $('#invStand').value === '1' } });
+      if (!r.ok) { G().net.toast(r.error || 'Could not invite. Try again.'); b.disabled = false; return; }
+      G().net.toast(`Invited ${b.dataset.name}.${r.letter ? ' A letter is on its way to them.' : ''}`); renderPanel();
+    });
     body.querySelectorAll('[data-visit]').forEach(b => b.onclick = async () => { await flush(); sessionStorage.setItem('dw-visit', b.dataset.visit); location.reload(); });
     body.querySelectorAll('[data-gift]').forEach(b => b.onclick = () => pickGift(b.dataset.gift, b.dataset.name, false));
     body.querySelectorAll('[data-leave]').forEach(b => b.onclick = async () => { if (!confirmBox('Remove this island from your list? You would need a new invite to visit again.')) return; await api(`/api/links/${b.dataset.leave}/${B.user.id}`, { method: 'DELETE' }); renderPanel(); });

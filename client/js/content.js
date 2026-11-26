@@ -1344,8 +1344,10 @@ export const LETTERS = {
   weather:{ label:'How\'s the weather', text:['Dear {to},','How\'s the weather out your way? Here it\'s the kind of day that makes you want to sit outside and do nothing at all.','Lazily, {p}'] },
   cheer:  { label:'Cheer up',           text:['Dear {to},','Just in case today was a long one: you\'re doing great. Really.','Cheering for you, {p}'] },
   gift:   { label:'A little something', text:['Dear {to},','I tucked a little something in with this letter. I hope it makes you smile.','Warmly, {p}'] },
+  // v1.55: sent by the server when a friend invites you over from their Friends tab. sys letters can't be picked or mailed by players.
+  invited:{ label:'You\'re invited', sys:true, text:['Dear {to},','I just invited you over to {isle}! Open Friends and tap Visit next to my island, or step through my arch in the Portal Station, whenever you like.','See you soon, {p}'] },
 };
-export const LETTER_IDS = Object.keys(LETTERS);
+export const LETTER_IDS = Object.keys(LETTERS).filter(k => !LETTERS[k].sys);
 
 // The lighthouse keeper's thank-you (only found on boat trips)
 furn('beaconlamp','Lighthouse Lantern',8000,0.4,{ b:'lantern', shop:'trip', rarity:FR.r, glow:true });

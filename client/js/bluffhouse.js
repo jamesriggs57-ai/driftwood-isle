@@ -1,5 +1,5 @@
 /* =====================================================================
-   v1.55 THE LANTERN BLUFF LIGHTHOUSE: the old lighthouse on Wendell's bluff isle, now a proper landmark (about two and a half times
+   v1.59 THE LANTERN BLUFF LIGHTHOUSE: the old lighthouse on Wendell's bluff isle, now a proper landmark (about two and a half times
    as tall as before) that you can walk into and climb.
 
    Inside you see what years of nobody have done to it, and it gets put right as Skipper Wick's lighthouse story moves on.

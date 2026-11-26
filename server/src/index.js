@@ -2,7 +2,8 @@
    DRIFTWOOD ISLE SERVER (Cloudflare Worker + D1 + Durable Objects)
    - Accounts: sign up with name, email and display name; sign in with an emailed 6-digit code or link (no passwords).
    - Saves: one island per account, versioned so an older copy never overwrites a newer one.
-   - Friends: only through invite links. There is no search or public list of players.
+   - Friends: first through invite links. There is no search or public list of players.
+     Once you're friends (linked either way), you can invite them over from the Friends tab without a new link (v1.55).
    - Visits: visitor (look, harvest, shop) or resident (same rights as the owner), one-time or standing.
    - Items move between players only through the server (mail, direct gifts, trades). Clams never move.
    - Live visits: one Durable Object room per island relays positions and emotes and settles trades.
@@ -117,6 +118,14 @@ async function startSession(env, row) {
 /* ---------- friend links ---------- */
 async function getLink(env, ownerId, friendId) { return env.DB.prepare('SELECT * FROM links WHERE owner_id = ? AND friend_id = ?').bind(ownerId, friendId).first(); }
 async function areFriends(env, a, b) { return !!(await env.DB.prepare('SELECT 1 FROM links WHERE (owner_id = ? AND friend_id = ?) OR (owner_id = ? AND friend_id = ?)').bind(a, b, b, a).first()); }
+// v1.55: everyone linked to me in either direction who has no usable link to my island (none, or a one-visit link already used)
+async function invitableFriends(env, me) {
+  return (await env.DB.prepare(`SELECT x.id, u.display_name, (SELECT 1 FROM links o WHERE o.owner_id = ?1 AND o.friend_id = x.id) AS had
+    FROM (SELECT owner_id AS id FROM links WHERE friend_id = ?1 UNION SELECT friend_id FROM links WHERE owner_id = ?1) x
+    JOIN users u ON u.id = x.id
+    WHERE x.id != ?1 AND NOT EXISTS (SELECT 1 FROM links l WHERE l.owner_id = ?1 AND l.friend_id = x.id AND (l.standing = 1 OR l.visits_left > 0))
+    ORDER BY u.display_name COLLATE NOCASE`).bind(me).all()).results;
+}
 async function passFor(env, token, ownerId) {
   if (!token) return null;
   return env.DB.prepare('SELECT * FROM visit_passes WHERE token = ? AND owner_id = ? AND expires > ?').bind(token, ownerId, Date.now()).first();
@@ -252,7 +261,22 @@ async function api(req, env, url) {
     return json({
       canVisit: canVisit.map(r => ({ ownerId: r.owner_id, name: r.display_name, island: islands[r.owner_id], role: r.role, standing: !!r.standing, visitsLeft: r.standing ? null : r.visits_left })),
       visitors: visitors.map(r => ({ friendId: r.friend_id, name: r.display_name, role: r.role, standing: !!r.standing, visitsLeft: r.standing ? null : r.visits_left })),
+      // v1.55: friends (linked either way) who can't come to my island right now: no link from me, or a used-up one-visit link
+      invitable: (await invitableFriends(env, me.id)).map(r => ({ friendId: r.id, name: r.display_name, visitUsed: !!r.had })),
     });
+  }
+  // v1.55: invite someone who is already a friend straight to my island, no link needed. Same upsert as accepting an invite.
+  if ((m = p.match(/^\/api\/friends\/([a-f0-9]+)\/invite$/)) && M === 'POST') {
+    const to = m[1]; if (to === me.id) return err(400, 'That is you.');
+    if (!(await areFriends(env, me.id, to))) return err(403, 'You can only invite friends this way. Send them an invite link instead.');
+    const s = await loadSave(env, me.id); if (!s) return err(400, 'Save your island first.');
+    const b = await body(req); const role = b.role === 'resident' ? 'resident' : 'visitor', standing = b.standing ? 1 : 0;
+    const stmts = [env.DB.prepare('INSERT INTO links (owner_id, friend_id, role, standing, visits_left, created) VALUES (?, ?, ?, ?, 1, ?) ON CONFLICT(owner_id, friend_id) DO UPDATE SET role = excluded.role, standing = excluded.standing, visits_left = 1').bind(me.id, to, role, standing, Date.now())];
+    // A letter tells them, unless one from me is still unopened in their mailbox (so inviting twice doesn't pile up letters)
+    const waiting = await env.DB.prepare("SELECT 1 FROM mail WHERE to_id = ? AND from_id = ? AND claimed = 0 AND json_extract(item, '$.letter') = 'invited'").bind(to, me.id).first();
+    if (!waiting) stmts.push(env.DB.prepare('INSERT INTO mail (to_id, from_id, item, direct, created) VALUES (?, ?, ?, 0, ?)').bind(to, me.id, JSON.stringify({ letter: 'invited', fromName: me.displayName, isle: cleanText(s.data.island || '', 40) }), Date.now()));
+    if (!(await tx(env, stmts))) return err(500, 'Could not send the invite. Try again.');
+    return json({ ok: true, role, standing: !!standing, letter: !waiting });
   }
   if ((m = p.match(/^\/api\/links\/([a-f0-9]+)\/([a-f0-9]+)$/))) {
     const [, ownerId, friendId] = m;
@@ -316,7 +340,7 @@ async function api(req, env, url) {
     if ((b.baseVersion | 0) !== s.version) return json({ error: 'conflict', version: s.version }, 409);
     // v1.27: a letter is one of the preset templates (never free text), optionally with an item tucked in
     const letter = b.letter === undefined ? null : String(b.letter);
-    if (letter !== null && !LETTERS[letter]) return err(400, 'Unknown letter.');
+    if (letter !== null && (!LETTERS[letter] || LETTERS[letter].sys)) return err(400, 'Unknown letter.');   // v1.55: sys letters are sent only by the server
     let item = null;
     if (KEEP_IDS.test(String(b.id || ''))) return err(400, 'That one stays with you.');   // v1.38 relics and story parts
     if (b.id || letter === null) { item = takeAt(s.data, b.slot | 0, String(b.id || '')); if (!item) return err(400, 'That item is not in your bag anymore.'); }

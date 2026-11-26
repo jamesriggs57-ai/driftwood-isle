@@ -18,10 +18,10 @@ export const NEAR = 2.6;   // how close (beyond the table's own size) counts as 
 // What you can make anywhere: the simple things. Everything else in woodworking needs at least a Workbench.
 export const FIELD = ['stool', 'fence', 'logpile', 'signpost', 'stumpstool', 'campfire', 'workbench'];
 
-// The two new tables. plan = how many different things you've made before you work out how to build one.
+// The two new tables. kinds = how many different things you've made before you work out how to build one (v1.50: 16 and 30, were 12 and 24).
 export const NEW_BENCHES = [
-  { id:'carpbench',   name:'Carpenter\'s Bench', buy:9000,  r:0.9, mats:{ wood:16, softwood:6, iron:4, stone:4 },        bench:1, kinds:12 },
-  { id:'masterbench', name:'Master Workbench',   buy:24000, r:1.0, mats:{ wood:24, iron:10, plank:6, heartwood:1 },      bench:2, kinds:24, after:'carpbench' },
+  { id:'carpbench',   name:'Carpenter\'s Bench', buy:9000,  r:0.9, mats:{ wood:16, softwood:6, iron:4, stone:4 },        bench:1, kinds:16 },
+  { id:'masterbench', name:'Master Workbench',   buy:24000, r:1.0, mats:{ wood:24, iron:10, plank:6, heartwood:1 },      bench:2, kinds:30, after:'carpbench' },
 ];
 // The pieces each table teaches when you first build it (furniture you can only make there)
 export const BENCH_PIECES = [

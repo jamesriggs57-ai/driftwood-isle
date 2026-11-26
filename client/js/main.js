@@ -4,7 +4,7 @@
    ===================================================================== */
 import * as THREE from 'three';
 import { TAU, clamp, lerp, smooth, mulberry32, hashStr, hash2, vnoise, fbm, weightedPick, inHours, inMonths, fmt, polyDist, segDist, Time, seasonOf } from './util.js';
-import { WOOD_START, WOOD_TEN, WOOD_ORDER, WOOD_MILESTONES, WOOD_PLAN_PRICE } from './content.js';
+import { WOOD_START, WOOD_TEN, WOOD_ORDER, WOOD_MILESTONES, WOOD_PLAN_PRICE, WOOD_TEN_KINDS, WOOD_TEN_MADE, WOOD_BATCH, WOOD_PER_KIND, WOOD_MS_PER_DAY } from './content.js';
 import { TICKET_THEMES } from './content.js';   // v1.39 fixes: captain's parting line
 import { ITEMS, NATIVE_FRUITS, PLANTS, TOOLS, WOODWORK, BACKPACKS, BASE_SLOTS, HOUSE_LEVELS, RESIDENTS, DIALOGUE, PEDDLER, EVENTS, rarityLabel, RARITY_COLORS, SHOPS, INVEST, KEEPERS, MUSEUM, BUILD,
   FOREIGN_FRUIT_PRICE, FRUIT_REGROW_DAYS, POTIONS, WIZARD, MAGIC, STORY, FAVOR_ASKS, CROPS, RECIPES, ARRIVE, MENTOR, islandSeedPool, ISLAND_SEED_BUY, islandFlowerPool, WILDFLOWER_SEEDS, GARDEN_FENCES, GARDEN_DECOR, FR, RARE_WORK, RARE_ODDS, PLAN_PRICE,
@@ -914,7 +914,7 @@ const article = n => /^[aeiou]/i.test(n) ? 'an' : 'a';
 const isForever = t => { const T=S.tools[t]; return !!(T && TOOLS[t].tiers[T.tier] && TOOLS[t].tiers[T.tier].forever); };
 function useTool(t){
   const T=S.tools[t]; if(!T) return false; if (isForever(t)){ save(); return true; } T.uses--; EN.onUse(t,T);
-  if (T.uses<=0){ const nm=TOOLS[t].tiers[T.tier].name; delete S.tools[t]; if(S.equip===t) S.equip=null; Snd.breakTool(); setTimeout(()=>toast(`Your ${nm} broke!`),400); updateHeld(); }
+  if (T.uses<=0){ EN.breakTool(t); /* v1.50: it waits to be fixed at a crafting table */ if(S.equip===t) S.equip=null; Snd.breakTool(); updateHeld(); }
   else if (T.uses===5) setTimeout(()=>toast(`Your ${TOOLS[t].tiers[T.tier].name} is looking worn out.`),400);
   save(); return true;
 }
@@ -1472,9 +1472,11 @@ function reel(){
   } else if (f && (f.state==='nibble'||f.state==='approach')){ toast('Too soon!'); f.state='flee'; f.t=0; Snd.splash(); }
   Fishing.state='idle'; Fishing.fish=null; bobber.visible=false; fishLine.visible=false; exclaim.visible=false; player.act=0.4;
 }
+// v1.50: fewer fish about. At most FISH_NEAR within 22 units of you and FISH_MAX in all; a new one turns up at about FISH_RATE a second while there's room (was 3, 9 and 0.3)
+const FISH_NEAR=2, FISH_MAX=5, FISH_RATE=0.15;
 function updateFishing(dt,t){
   feedFishShadows(dt); if (World.inside) return;
-  const near=fishes.filter(f=>f.m.position.distanceTo(player.pos)<22).length; if (near<3 && fishes.length<9 && Math.random()<dt*0.3) spawnFish();
+  const near=fishes.filter(f=>f.m.position.distanceTo(player.pos)<22).length; if (near<FISH_NEAR && fishes.length<FISH_MAX && Math.random()<dt*FISH_RATE) spawnFish();
   for (let i=fishes.length-1;i>=0;i--){ const f=fishes[i]; f.ph+=dt;
     if (f.state==='swim'){ if(f.m.position.distanceTo(player.pos)>45){ f.state='flee'; f.t=0.9; continue; } const x=f.home.x+Math.sin(f.ph*0.3)*1.8, z=f.home.z+Math.cos(f.ph*0.23)*1.8; if(isFishWater(x,z)){ const a=Math.atan2(z-f.m.position.z, x-f.m.position.x); f.m.position.x=x; f.m.position.z=z; f.m.rotation.y=-a; } }
     else if (f.state==='approach'){ f.hes=(f.hes||0)-dt; const d=Fishing.pt.clone().sub(f.m.position); d.y=0; const L=d.length();
@@ -2257,7 +2259,7 @@ function talkIncome(k){
    - the reef: Gill lost his boat because the reef off the cays died. Sprig grows coral from fragments that wash up,
      in a nursery tank Marlo builds. You row Gill's old rowboat out to Cay Bay and drop starters on the old rubble.
      Fish come back between visits, stage by stage. Gill's boats (his stake) wait on the reef.
-   - Bramble's workshop: once you've made 10 different things at his workbench he admits he wants a real workshop.
+   - Bramble's workshop: once you've made 14 different things (v1.50; was 10) he admits he wants a real workshop.
      Wendell can raise Old Pinewood (pines that grow back overnight); Clementine runs the building project; then
      Bramble saws planks (the new mid-game material) and offers you a share.
    - helpers (friendly islanders lend a hand on a project), gossip, an Island stories page on the board,
@@ -2300,11 +2302,12 @@ const holderName = key => { const h=dreamHolder(key); return h ? npcName(h) : DR
 const asWritten = key => dreamHolder(key)===DREAM_FOR[key];
 
 /* ---------- the day turning over ---------- */
+const SHOP_DREAM_KINDS=14;
 function storyNewDay(){
   if (VISIT || TRIP || GUEST) return; const now=sday();
   if (SY.reef && SY.reef.st==='building' && now>SY.reef.tankDay){ SY.reef.st='nursery'; SY.reef.tankNews=true; }
-  // Bramble's dream: 10 different things made at his workbench
-  if (!SY.shop && S.craft && (S.craft.kinds||[]).length>=10){ SY.shop={ st:'pending', at:now+1+(hashStr('shop:'+S.seed)%3) }; }
+  // Bramble's dream: SHOP_DREAM_KINDS different things made (v1.50: 14, was 10)
+  if (!SY.shop && S.craft && (S.craft.kinds||[]).length>=SHOP_DREAM_KINDS){ SY.shop={ st:'pending', at:now+1+(hashStr('shop:'+S.seed)%3) }; }
   if (SY.shop && SY.shop.st==='building' && now>SY.shop.bday){ SY.shop.st='open'; SY.shop.built=now; SY.shop.owner=dreamHolder('shop'); SY.shop.news=true; }
   if (SY.shop && SY.shop.order && now>SY.shop.order.day){ SY.shop.ready=(SY.shop.ready||0)+SY.shop.order.n; SY.shop.order=null; }
   // helpers: a week of help is worth a little friendship
@@ -6157,10 +6160,14 @@ const recipeOut = r => r.out||1;
 const kindsMade = () => S.craft ? (S.craft.kinds||[]).length : 0;
 /* v1.34 woodworking pace (see WOOD_* in content.js). S.craft.known = plans you know, S.craft.ms = milestones passed,
    S.craft.studied = the day you last studied a piece. Plans learned before woodworking wait in S.woodLater. */
-function woodInit(){ const C=S.craft; if (!C) return; C.kinds=C.kinds||[];
+/* v1.50 variety points: each different piece counts for up to WOOD_PER_KIND of the times you've made it. S.craft.per = { id: times made, capped }.
+   Saves from before v1.50 only know which pieces were made, so each one starts at its share of everything made (at least 1, at most the cap). */
+function woodPer(C){ if (!C.per || typeof C.per!=='object'){ const k=(C.kinds||[]).length, each=k ? Math.max(1, Math.min(WOOD_PER_KIND, Math.floor((C.made||0)/k))) : 0; C.per={}; for (const id of C.kinds||[]) C.per[id]=each; } return C.per; }
+const woodScore = C => Object.values(woodPer(C)).reduce((a,n)=>a+Math.min(WOOD_PER_KIND, n|0), 0);
+function woodInit(){ const C=S.craft; if (!C) return; C.kinds=C.kinds||[]; woodPer(C);
   if (!C.known){   // islands from before v1.34 keep every plan they have actually made, plus the starting ones
     C.known=[...new Set([...WOOD_START, ...(C.made>=10?WOOD_TEN:[]), ...C.kinds])].filter(id=>WOODWORK.some(r=>r.id===id));
-    C.ms=WOOD_MILESTONES.filter(m=>m<=C.made).length; }
+    C.ms=WOOD_MILESTONES.filter(m=>m<=woodScore(C)).length; }   // v1.50: milestones count variety points
   if (S.woodLater && S.woodLater.length){ for (const id of S.woodLater) if (!C.known.includes(id)) C.known.push(id); S.woodLater=[]; }
   C.ms=C.ms||0; }
 woodInit();
@@ -6171,11 +6178,16 @@ function learnWood(id, how){ if (!S.craft){ S.woodLater=S.woodLater||[]; if (S.w
 // what's still to learn, in the order milestone batches hand it out
 if (!VISIT && !TRIP) BN.progress();   // v1.40: islands that have already made enough different things know the bigger tables
 const woodUnknown = () => [...WOOD_START, ...WOOD_TEN, ...WOOD_ORDER].filter(id=>!knowsWood(id) && !(S.woodLater||[]).includes(id));
-// After crafting: the 10-made batch, and a batch of 4 or 5 at each milestone
-function woodProgress(){ const C=S.craft, got=[];
-  if (C.made>=10) for (const id of WOOD_TEN) if (learnWood(id)) got.push(id);
-  while (C.ms<WOOD_MILESTONES.length && C.made>=WOOD_MILESTONES[C.ms]){ const n=C.ms%2?5:4; C.ms++;
-    for (const id of woodUnknown().slice(0,n)) if (learnWood(id)) got.push(id); }
+// After crafting (and when the day turns over): the first batch (3 different starting pieces, 10 things in all), then a batch at each
+// variety milestone, at most WOOD_MS_PER_DAY a day. C.ms counts milestones passed; C.msDay / C.msToday track today's.
+// Saves from before v1.50 keep their milestone count and every plan they already know.
+const woodTenDue = C => C.made>=WOOD_TEN_MADE && WOOD_START.filter(id=>(C.kinds||[]).includes(id)).length>=WOOD_TEN_KINDS;
+const woodWaiting = () => { const C=S.craft; return !!C && C.ms<WOOD_MILESTONES.length && woodScore(C)>=WOOD_MILESTONES[C.ms] && C.msDay===today() && (C.msToday||0)>=WOOD_MS_PER_DAY; };
+function woodProgress(){ const C=S.craft, got=[]; if (!C) return got; const score=woodScore(C);
+  if (woodTenDue(C)) for (const id of WOOD_TEN) if (learnWood(id)) got.push(id);
+  if (C.msDay!==today()){ C.msDay=today(); C.msToday=0; }
+  while (C.ms<WOOD_MILESTONES.length && score>=WOOD_MILESTONES[C.ms] && C.msToday<WOOD_MS_PER_DAY){ C.ms++; C.msToday++;
+    for (const id of woodUnknown().slice(0,WOOD_BATCH)) if (learnWood(id)) got.push(id); }
   save(); return got; }
 // Studying a piece you own teaches its plan. One a day. The piece stays yours.
 const studyToday = () => !!S.craft && S.craft.studied===today();
@@ -6205,11 +6217,12 @@ function doCraft(r, k){
   const before=kindsMade(); S.craft.made+=k; track('craft',k); S.craft.kinds=S.craft.kinds||[];
   if (r.plan){ S.rare.made+=k; save(); Snd.chop(); setTimeout(()=>Snd.fanfare(),200); sparkle(player.pos.clone().add(new THREE.Vector3(0,2.2,0)));
     toast(`You made the ${ITEMS[r.id].name}!`, thumb(r.id), 'new', `${rarityTag(ITEMS[r.id])} It's in your bag.`); return true; }
-  if(!S.craft.kinds.includes(r.id)) S.craft.kinds.push(r.id); save();
+  if(!S.craft.kinds.includes(r.id)) S.craft.kinds.push(r.id); const per=woodPer(S.craft); per[r.id]=Math.min(WOOD_PER_KIND, (per[r.id]||0)+k); save();   // v1.50 variety points
   Snd.chop(); setTimeout(()=>Snd.jingle(),140);
   toast(`${isNew?'New! ':''}You made ${n>1?n+' ':''}${n>1?ITEMS[r.id].name+(ITEMS[r.id].name.endsWith('s')?'':'s'):article(ITEMS[r.id].name)+' '+ITEMS[r.id].name}!`, thumb(r.id), isNew?'new':'');
   const fresh=[...woodProgress(), ...BN.progress()];   // v1.40: bigger crafting tables and their pieces
   if (fresh.length) setTimeout(()=>{ Snd.fanfare(); toast('New woodworking plans!', thumb(fresh[0]), 'new', fresh.map(x=>ITEMS[x].name).join(', ')); }, 900);
+  else if (woodWaiting() && S.craft.msHint!==today()){ S.craft.msHint=today(); save(); setTimeout(()=>toast('Your head\'s full of ideas.', null, '', 'Sleep on it. New plans will come to you tomorrow.'), 900); }   // v1.50: one batch a day
   return true;
 }
 // v1.13: rare plans sit at the top of Woodworking. Unfound ones show as silhouettes.
@@ -6226,6 +6239,7 @@ function rareCraftSection(){
   return h+'</div>'; }
 function openCraft(start){
   if (!S.craft && !S.cook) return;
+  if (S.craft && !VISIT && !TRIP){ const got=woodProgress(); if (got.length) setTimeout(()=>{ Snd.fanfare(); toast('You slept on it: new woodworking plans!', thumb(got[0]), 'new', got.map(x=>ITEMS[x].name).join(', ')); }, 300); }   // v1.50: a milestone held over from yesterday
   let filter='all', tab = start || (S.craft ? 'wood' : 'cook'); const qty={};
   const render=()=>{
     const tabsH = (S.craft && S.cook) || EN.hasTab() ? '<div class="tabs">'+[...(S.craft?[['wood','Woodworking']]:[]),...(S.cook?[['cook','Cooking']]:[]),...(EN.hasTab()?[['tools','Tools']]:[])].map(([k,n])=>`<button class="tab${k===tab?' on':''}" data-ct="${k}">${n}</button>`).join('')+'</div>' : '';
@@ -6237,7 +6251,10 @@ function openCraft(start){
     // v1.24: no progress bar or locked plans. New plans just turn up as you make things.
     let h=tabsH+BN.banner()+`<div class="notice"><b>Woodworking</b> <span class="muted">· ${(S.craft.known||[]).length} plans known · ${fmt(S.craft.made)} crafted</span>`;
     h+= left ? '' : `<br><span class="muted">You know every plan. Bramble would be proud.</span>`;
+    if (left && woodWaiting()) h+=`<br><span class="muted">Your head's full of ideas. New plans will come to you tomorrow.</span>`;   // v1.50
+    else if (left) h+=`<br><span class="muted">New plans come from making lots of <b>different</b> things. Making the same piece over and over won't teach you anything new.</span>`;
     h+=`<div class="muted" style="margin-top:6px">Your materials: ${Object.keys(MAT_NAMES).map(m=>`${MAT_NAMES[m]} ${countItem(m)}`).join(' · ')}</div></div>`;
+    h+=EN.fixNote();   // v1.50: broken or nearly worn-out tools, with a jump to the Tools tab
     h+=rareCraftSection();
     // v1.34: study a piece you own to work out its plan
     const st=studyable();
@@ -6450,7 +6467,8 @@ function openShop(which, startTab){
       const outT=toolOutToday();
       for (const [t,T] of Object.entries(TOOLS)){ const own=S.tools[t];
         if (own && t===outT){ h+=`<div class="notice"><b>${T.name}</b> <span class="muted">· ${T.does}</span><br><span class="muted">You have: ${T.tiers[own.tier].name}, ${T.tiers[own.tier].forever?'never breaks':own.uses+' uses left'}</span><div class="muted" style="margin-top:6px">${T.name}s are sold out today. More on tomorrow's boat.</div></div>`; continue; }
-        h+=`<div class="notice"><b>${T.name}</b> <span class="muted">· ${T.does}</span><br><span class="muted">${own?`You have: ${T.tiers[own.tier].name}, ${T.tiers[own.tier].forever?'never breaks':own.uses+' uses left'}`:'You don\'t have one yet.'}</span>`;
+        const brk=EN.broken(t);   // v1.50
+        h+=`<div class="notice"><b>${T.name}</b> <span class="muted">· ${T.does}</span><br><span class="muted">${own?`You have: ${T.tiers[own.tier].name}, ${T.tiers[own.tier].forever?'never breaks':own.uses+' uses left'}`:brk?'':'You don\'t have one yet.'}${brk?`${own?'. ':''}Your broken ${T.tiers[brk.tier].name} can be fixed at a crafting table.`:''}</span>`;
         // v1.23: better tools stay off the shelf until Pemberton offers them to you in person (see toolPitch)
         const ever=Math.max(own?own.tier:-1, S.toolEver[t]??-1), offered=S.toolOffer[t]??-1; let hidden=0;
         T.tiers.forEach((tr,k)=>{ const ok=reqMet(t,k), keep=own&&T.tiers[own.tier].forever&&k<=own.tier;
@@ -8047,7 +8065,7 @@ function openMenu(){
     <div class="notice"><b>Testing tools</b><br><span class="muted">The game runs on your real clock. These preview other times and weather.</span>
       <label class="f">Preview time: <span id="mOffT"></span></label><input type="range" id="mOff" min="-23" max="23" step="1" value="${Time.offsetH}">
       <label class="f">Weather <select id="mW"><option value="">Today's weather</option><option>sunny</option><option>cloudy</option><option>rain</option><option>snow</option></select></label>
-      ${DEV?`<div style="margin-top:8px"><b>Shortcuts</b> <span class="muted">(only on this device)</span><div class="muted" style="margin:6px 0 2px">Story map</div><button class="btn" id="dvMap">Story map: isles, stories, places</button><div class="muted" style="margin:6px 0 2px">Isles and stories</div><button class="btn alt" id="dvT">${S.magic.tower?'Tower is up':'Raise the wizard tower'}</button> ${!GUEST&&!VISIT&&nextIsleKind()?'<button class="btn alt" id="dvI">Raise the next isle</button>':''} <button class="btn alt" id="dvM">${S.devMagic?'Wizard needs requirements again':'Skip wizard requirements'}</button> <button class="btn alt" id="dvRl">Relics for the next isle</button> <button class="btn alt" id="dvSt">Phase 2: next story</button> <button class="btn alt" id="dvS3">Phase 3: next story</button><div class="muted" style="margin:6px 0 2px">Town and island</div><button class="btn alt" id="dvC">+50,000 clams</button> <button class="btn alt" id="dvF">New favors now</button> <button class="btn alt" id="dvD">Town: skip a day</button> <button class="btn alt" id="dvR">Rare kit</button> <button class="btn alt" id="dvRf">Reef: skip to the rowboat</button> <button class="btn alt" id="dvRg">Reef: grow 12 coral</button> <button class="btn alt" id="dvWs">Workshop: skip ahead</button><div class="muted" style="margin:6px 0 2px">Shops and fishing</div><button class="btn alt" id="dvSh3">Shops to tier 3 of 4</button> <button class="btn alt" id="dvSh4">Shops to the top tier</button> <button class="btn alt" id="dvBk">Back room: next week</button> <button class="btn alt" id="dvGb">Gill: next boat</button><div class="muted" style="margin:6px 0 2px">Lighthouse</div><button class="btn alt" id="dvLp">Go to Lighthouse Point</button> <button class="btn alt" id="dvLt">Lighthouse top, with the keeper</button><div class="muted" style="margin:6px 0 2px">Enchanting and tables</div><button class="btn alt" id="dvEnL">Learn every enchantment</button> <button class="btn alt" id="dvEnT">${S.rare&&S.rare.ench&&S.rare.ench.twin?'Two-enchantment trick learned':'Learn the two-enchantment trick'}</button> <button class="btn alt" id="dvEnI">+20 of each ingredient</button> <button class="btn alt" id="dvEnK">A Sturdy tool of each kind</button> ${!VISIT&&!TRIP?'<button class="btn alt" id="dvB1">Workbench here</button> <button class="btn alt" id="dvB2">Carpenter\'s Bench here</button> <button class="btn alt" id="dvB3">Master Workbench here</button>':''} <button class="btn alt" id="dvBA">${BN.dev.any?'Tables work normally again':'Count as a Master Workbench anywhere'}</button> <button class="btn alt" id="dvEn">All of it at once</button>${PLACES.hall?`<div class="muted" style="margin:6px 0 2px">Town hall</div><button class="btn alt" id="dvH">Into the town hall</button> <button class="btn alt" id="dvHg">${(S.town.hall||0)>=2?'Make it the Town Hall':'Make it the Grand Town Hall'}</button>`:''}<br><button class="btn alt" id="dvOff">Hide shortcuts</button></div>`:''}
+      ${DEV?`<div style="margin-top:8px"><b>Shortcuts</b> <span class="muted">(only on this device)</span><div class="muted" style="margin:6px 0 2px">Story map</div><button class="btn" id="dvMap">Story map: isles, stories, places</button><div class="muted" style="margin:6px 0 2px">Isles and stories</div><button class="btn alt" id="dvT">${S.magic.tower?'Tower is up':'Raise the wizard tower'}</button> ${!GUEST&&!VISIT&&nextIsleKind()?'<button class="btn alt" id="dvI">Raise the next isle</button>':''} <button class="btn alt" id="dvM">${S.devMagic?'Wizard needs requirements again':'Skip wizard requirements'}</button> <button class="btn alt" id="dvRl">Relics for the next isle</button> <button class="btn alt" id="dvSt">Phase 2: next story</button> <button class="btn alt" id="dvS3">Phase 3: next story</button><div class="muted" style="margin:6px 0 2px">Town and island</div><button class="btn alt" id="dvC">+50,000 clams</button> <button class="btn alt" id="dvF">New favors now</button> <button class="btn alt" id="dvD">Town: skip a day</button> <button class="btn alt" id="dvR">Rare kit</button> <button class="btn alt" id="dvRf">Reef: skip to the rowboat</button> <button class="btn alt" id="dvRg">Reef: grow 12 coral</button> <button class="btn alt" id="dvWs">Workshop: skip ahead</button><div class="muted" style="margin:6px 0 2px">Shops and fishing</div><button class="btn alt" id="dvSh3">Shops to tier 3 of 4</button> <button class="btn alt" id="dvSh4">Shops to the top tier</button> <button class="btn alt" id="dvBk">Back room: next week</button> <button class="btn alt" id="dvGb">Gill: next boat</button><div class="muted" style="margin:6px 0 2px">Lighthouse</div><button class="btn alt" id="dvLp">Go to Lighthouse Point</button> <button class="btn alt" id="dvLt">Lighthouse top, with the keeper</button><div class="muted" style="margin:6px 0 2px">Enchanting and tables</div><button class="btn alt" id="dvEnL">Learn every enchantment</button> <button class="btn alt" id="dvEnT">${S.rare&&S.rare.ench&&S.rare.ench.twin?'Two-enchantment trick learned':'Learn the two-enchantment trick'}</button> <button class="btn alt" id="dvEnI">+20 of each ingredient</button> <button class="btn alt" id="dvEnK">A Sturdy tool of each kind</button> <button class="btn alt" id="dvBrk">Break the tool in hand</button> ${!VISIT&&!TRIP?'<button class="btn alt" id="dvB1">Workbench here</button> <button class="btn alt" id="dvB2">Carpenter\'s Bench here</button> <button class="btn alt" id="dvB3">Master Workbench here</button>':''} <button class="btn alt" id="dvBA">${BN.dev.any?'Tables work normally again':'Count as a Master Workbench anywhere'}</button> <button class="btn alt" id="dvEn">All of it at once</button>${PLACES.hall?`<div class="muted" style="margin:6px 0 2px">Town hall</div><button class="btn alt" id="dvH">Into the town hall</button> <button class="btn alt" id="dvHg">${(S.town.hall||0)>=2?'Make it the Town Hall':'Make it the Grand Town Hall'}</button>`:''}<br><button class="btn alt" id="dvOff">Hide shortcuts</button></div>`:''}
     </div>
     <button class="btn warn" id="mReset">Start a new island</button>${saveOK?'':'<div class="muted" style="margin-top:8px">Saving isn\'t available in this browser.</div>'}`;
     $('#mParty').onclick=()=>{ closePanel(); setTimeout(()=>PARTY.open(), 50); };
@@ -8082,6 +8100,7 @@ function openMenu(){
         on('dvEnL', ()=>toast(`Learned ${EN.dev.learnEnch()} enchantments.`));
         on('dvEnT', ()=>{ EN.dev.learnTwin(); toast('Learned the two-enchantment trick. Binding a second one needs a Master Workbench.'); openMenu(); });
         on('dvEnI', ()=>toast('20 of each enchanting, tool and repair ingredient.'+bag(EN.dev.kit())));
+        on('dvBrk', ()=>{ const t=S.equip; if (!t || !S.tools[t]) { toast('Hold a tool first.'); return; } if (isForever(t)) { toast('Heirloom tools never break.'); return; } EN.dev.breakIt(t); updateToolBtn(); });   // v1.50
         on('dvEnK', ()=>{ sturdy(); toast('A Sturdy tool of each kind you were missing.'); });
         on('dvB1', ()=>table(1)); on('dvB2', ()=>table(2)); on('dvB3', ()=>table(3));
         on('dvBA', ()=>{ const k=BN.dev.anywhere(BN.dev.any?0:3); toast(k?'Anywhere counts as a Master Workbench until you reload.':'Tables work normally again.'); openMenu(); });

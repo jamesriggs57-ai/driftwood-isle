@@ -12,8 +12,14 @@ import { TAU, smooth, segDist } from './util.js';
 export const EXT_GROW = 0.5;   // half as much land again
 const angDist = (a, b) => Math.abs(Math.atan2(Math.sin(a-b), Math.cos(a-b)));
 
+/* v1.62 EVEN GROWTH: E = { even:1, D, ph:[3 phases] } moves the whole coast out, a little more in some places than others,
+   so the island keeps its own shape and simply grows all round. Its bulge is about 1 everywhere (0.7 to 1.3). */
+export const evenG = (E, a) => 1 + 0.16*Math.sin(2*a+E.ph[0]) + 0.10*Math.sin(3*a+E.ph[1]) + 0.05*Math.sin(5*a+E.ph[2]);
+export function makeEven(R0, seed){ let s=(seed|0)+6203; const r=()=>{ s=(s+0x6D2B79F5)|0; let t=Math.imul(s^(s>>>15), 1|s); t=(t+Math.imul(t^(t>>>7), 61|t))^t; return ((t^(t>>>14))>>>0)/4294967296; };
+  const E={ even:1, a:0, W:Math.PI, D:0, ph:[r()*TAU, r()*TAU, r()*TAU].map(v=>+v.toFixed(3)) };
+  E.D=+extDepth(R0, 0, Math.PI, E).toFixed(2); return E; }
 // how far out the coast moves at angle a, from 0 (old coast) to 1 (the full reach); a few slow wobbles so it isn't a perfect arc
-export function extBulge(E, a){ if (!E) return 0; const d=angDist(a, E.a); if (d>=E.W) return 0;
+export function extBulge(E, a){ if (!E) return 0; if (E.even) return evenG(E, a); const d=angDist(a, E.a); if (d>=E.W) return 0;
   const s=Math.atan2(Math.sin(a-E.a), Math.cos(a-E.a)); return smooth(E.W, E.W*0.45, d)*(1 + 0.07*Math.sin(s*7+1.3) + 0.04*Math.sin(s*13+0.4)); }
 export const extR = (R0, E, a) => R0(a) + (E ? E.D*extBulge(E, a) : 0);
 
@@ -25,8 +31,8 @@ export function extT(R0, E, x, z){ const a=Math.atan2(z,x), r=Math.hypot(x,z), r
   return Math.max(0.7, 1-(r0+E.D*b-r)/r0); }
 
 // the depth D that adds EXT_GROW of the old area for a given half-width W
-export function extDepth(R0, a, W){ const old=area(R0, null);
-  let lo=0, hi=200; for (let it=0; it<40; it++){ const D=(lo+hi)/2, add=area(R0, { a, W, D })-old; if (add<old*EXT_GROW) lo=D; else hi=D; }
+export function extDepth(R0, a, W, base){ const old=area(R0, null);
+  let lo=0, hi=200; for (let it=0; it<40; it++){ const D=(lo+hi)/2, add=area(R0, { ...(base||{}), a, W, D })-old; if (add<old*EXT_GROW) lo=D; else hi=D; }
   return (lo+hi)/2; }
 function area(R0, E){ let s=0; const N=720; for (let i=0;i<N;i++){ const a=i/N*TAU, r=extR(R0, E, a); s+=r*r/2; } return s*TAU/N; }
 
@@ -58,8 +64,14 @@ export function clearance(E, o){
   return m;
 }
 // a few gentle terraced hills out on the new land (same form as a layout's mounds: [x, z, height, radius])
-export function extMounds(R0, E, SC){
+export function extMounds(R0, E, SC, avoidA){
   if (!E) return [];
+  if (E.even){   // v1.62 small hills here and there round the new ring of land, kept away from the dock, the river mouth and the isles' bridges
+    const out=[], av=avoidA||[];
+    for (let i=0;i<14 && out.length<6;i++){ const a=(i*0.618034*TAU+E.ph[0])%TAU, g=evenG(E,a); if (g<0.9 || av.some(([aa,w])=>angDist(a,aa)<w)) continue;
+      if (out.some(m=>Math.hypot(m[0]-Math.cos(a)*R0(a), m[1]-Math.sin(a)*R0(a))<30*SC)) continue;
+      const r=R0(a)+E.D*g*0.5; out.push([+(Math.cos(a)*r).toFixed(1), +(Math.sin(a)*r).toFixed(1), +(0.9+0.4*(g-0.9)).toFixed(2), +(6*SC).toFixed(1)]); }
+    return out; }
   const at=(da, f)=>{ const a=E.a+da*E.W, r=R0(a)+E.D*extBulge(E,a)*f; return [Math.cos(a)*r, Math.sin(a)*r]; };
   return [ [...at(0.05, 0.55), 2.0, 14*SC], [...at(-0.45, 0.4), 1.4, 11*SC], [...at(0.5, 0.35), 1.2, 10*SC] ];
 }

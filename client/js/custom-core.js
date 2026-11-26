@@ -1,5 +1,5 @@
 /* =====================================================================
-   v1.62 CUSTOM FURNITURE: data and rules (no THREE, no DOM, so the server and node tests can import it).
+   v1.63 CUSTOM FURNITURE: data and rules (no THREE, no DOM, so the server and node tests can import it).
    A custom piece is a base (chair, table, bed, shelf, lamp, dresser), one option per slot, and materials.
    The whole design lives in its item id: 'cf_' + base letter + one base-36 digit per field, so every
    player, the server and a friend's island can rebuild any piece from the id alone.

@@ -4,7 +4,7 @@
    ===================================================================== */
 import { range } from './util.js';
 const ALL='all';
-// v1.62: items can also be made up on demand (custom furniture, whose whole design is in its id: see custom-core.js).
+// v1.63: items can also be made up on demand (custom furniture, whose whole design is in its id: see custom-core.js).
 // A resolver gets any id that isn't defined yet and may define it.
 const RESOLVERS = [];
 export const ITEMS = new Proxy({}, { get(t, k){

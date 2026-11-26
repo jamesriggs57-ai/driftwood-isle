@@ -11,7 +11,7 @@
    built in wiki.js. Writing rules: plain words, no em dashes, no emoji, only facts the code supports.
    ===================================================================== */
 
-export const GUIDE_VERSION = 'v1.63';
+export const GUIDE_VERSION = 'v1.64';
 export const GUIDE_UPDATED = '2026-11-26';
 
 const tip = s => `<div class="tip"><b>Tip</b> ${s}</div>`;
@@ -97,6 +97,7 @@ ${note('Guest mode caps your wallet at 10,000 clams. Make an account to lift it.
 <tr><td>House</td><td>Up to 12 squares, fewer styles</td><td>Up to 20 x 20, four floors</td></tr>
 <tr><td>Friends, trips, loans, income</td><td>No</td><td>Yes</td></tr></table>
 <p>Sign in with an emailed 6-digit code, no password. Making an account can carry your guest island over, or start fresh in the island maker. Hilly, mountainous and cliff islands get a waterfall.</p>
+<p>In the island maker, <b>Reroll</b> makes a whole new island, not the same one turned round: the shape of the coast (bays and headlands), where the hills and the river's spring are, where the shops and houses go, and which way Wendell's isles will rise. The preview shows the island as it will be, with the far shore.</p>
 `},
 
 /* ============================== ISLAND LIFE ============================== */
@@ -144,13 +145,20 @@ ${note('Guest mode caps your wallet at 10,000 clams. Make an account to lift it.
 `},
 
 { id:'farshore', group:'island', title:'The far shore', html:`
-<p>Since v1.58 one side of your island reaches further out to sea: about half as much land again, all on that one side. It's left wild.</p>
-<ul><li><b>Which side</b>: picked once for each island, the first time it loads after v1.58, and it never moves after that. It stays clear of the dock, the river mouth, the waterfall, Wendell's isles (raised or still to come) and their bridges. Usually that is the northwest, between where Clover Meadow and Lantern Bluff rise; on an island where some isles were already up it can be another side.</li>
-<li><b>What grows there</b>: a few low hills, grass and wild flowers, trees, fruit trees of your island's fruit, palms along its beach, and a few rocks to hit.</li>
+<p>Your island reaches further out to sea all the way round: about half as much land again, left wild. Since v1.62 the new land goes round the whole coast (from v1.58 to v1.61 it was all on one side).</p>
+<ul><li><b>How far</b>: the coast moves out by different amounts in different places, so the island keeps its own shape with a gentle wobble. On average that is about 11 metres on a Village, Spread out or Highlands island (often 8 to 14 metres) and about 16 metres on an island from the island maker (often 11 to 20 metres). The wobble is picked once for each island and never changes.</li>
+<li><b>What grows there</b>: up to 6 low hills (kept away from the dock, the river mouth and the directions Wendell's isles rise), grass and wild flowers, trees, fruit trees of your island's fruit, palms along the beach, and a few rocks to hit.</li>
 <li><b>What turns up</b>: bugs, dig spots, weeds and beach finds, like anywhere else on the island.</li>
-<li><b>What doesn't</b>: no paths, and nobody moves in out there. New islanders' houses, the keepers and the town's buildings all go on the old part of the island.</li>
+<li><b>The dock and the river</b>: the dock sits out on the new beach and the path to it runs straight on out from where the dock used to be. The river runs on through the new land to the sea.</li>
+<li><b>What doesn't</b>: no other paths, and nobody moves in out there. New islanders' houses, the keepers and the town's buildings all go on the old part of the island.</li>
 <li>It's still yours to use: place furniture, plant, have Wendell move a building out there, or shape the land.</li></ul>
-${note('Everything you had keeps its place. On that one side the old beach is now inland, so a few trees and things near it sit a little higher or lower than before.')}
+<h3>Islands that had the one-sided far shore</h3>
+<p>The first time such an island loads after v1.62 it is moved over to the new shore, once:</p>
+<ul><li>Everything on the old part of the island stays exactly where it was: buildings, paths, trees, rocks, gardens, placed furniture and plants.</li>
+<li>The one-sided far shore goes back under the sea and the new land goes all round instead. Anything you placed, planted or dropped out on that land is moved in onto the new shore on the same side, in the same order (what was further out stays further out). The wild trees and rocks that grew out there are replaced by the new shore's own.</li>
+<li>Wendell's isles move straight out, in the same directions, about as far as the coast grew there. Everything on them moves with them, and their bridges reach out to the new shore.</li>
+<li>Gill's fishing boat stays the same distance in from the coast, so it moves out with it.</li></ul>
+${note('Islands that never loaded with the one-sided far shore get the even shore straight away. On the old beach, now inland, a few things sit a little higher or lower than before.')}
 `},
 
 { id:'islanders', group:'island', title:'Islanders and friendship', data:'residents', html:`
@@ -412,7 +420,7 @@ ${tip('Your saved designs are kept, so making a matching set of chairs is quick:
 <tr><td>4</td><td>Lantern Bluff</td><td>All three museum wings, the workshop open</td><td>Moonsap Vial</td><td>220,000, 30 planks, 8 iron, 10 clay</td><td>Cliff-top plateau with raised knolls, a spring that spills over the cliff as a waterfall, sea stacks offshore, pines, good rocks, the old lighthouse</td></tr>
 <tr><td>5</td><td>Hollow Crags</td><td>All three shops at tier 2, the reef at Teeming</td><td>Amber Sliver, Living Coral Crown</td><td>350,000, 15 iron, 30 stone, 2 fossils</td><td>Bare stone and gravel, a quarry of iron-rich rocks (and now and then an emerald), boulders, scree and rock outcrops, stone spires, old ruins, a sunken grotto with steps down to a pool; site of Pemberton's forge</td></tr>
 <tr><td>6</td><td>Starfall Isle</td><td>The Island Charter signed and Wendell's last letter</td><td>Living Coral Crown, Starglass Shard, Moonsap Vial</td><td>500,000, and one each of: plank, honey, tea cake, iron fitting, flour, bath salts</td><td>A small isle in the sky beside Hollow Crags, up a stair of glowing stones. Always night up there, with its own bugs and the star altar</td></tr></table>
-<p>Isles never rise off the far shore (see The far shore), and nothing about the far shore moves an isle that's already up.</p>
+<p>Each isle rises off the new coast (see The far shore). On islands made in the island maker since v1.62, the directions the isles rise in are picked for that island, so they're not in the same places on every island. Older islands keep the usual directions. Since v1.62 Wendell names the direction an isle will rise in when he first brings it up.</p>
 <p>The first isle isn't mentioned at all until the island is ready for it. The day after each isle rises, Wendell writes a letter hinting which way to look for the next. Starfall Isle is different: Wendell says nothing about it until the Island Charter is signed, and his letter the day after is the hint.</p>
 <h3>What each isle gives</h3>
 <ul><li><b>Clover Meadow</b>: the pond and the brook are fishable (pond fish and river fish). 7 fruit trees, an orchard of 12 more, and 28 other trees (was 15).</li>
@@ -835,8 +843,9 @@ ${steps(['Talk to them and pick <b>Come and meet people</b>. They follow you for
 { id:'changes', group:'done', title:'What\'s changed', html:`
 <p>Recent updates, newest first.</p>
 <ul>
-<li><b>v1.63</b>: Sewing. Buy a Sewing Machine from Pemberton (12,000), place it and use it to make rugs and clothes and paint them pixel by pixel; the more you sew, the finer the grid and the stranger the alterations (up to glowing trim, orbiting stars and little wings).</li>
-<li><b>v1.62</b>: Custom furniture. Design your own chairs, tables, beds, shelves, lamps and dressers part by part, find sketches, and make pieces islanders ask for.</li>
+<li><b>v1.64</b>: Sewing. Buy a Sewing Machine from Pemberton (12,000), place it and use it to make rugs and clothes and paint them pixel by pixel; the more you sew, the finer the grid and the stranger the alterations (up to glowing trim, orbiting stars and little wings).</li>
+<li><b>v1.63</b>: Custom furniture. Design your own chairs, tables, beds, shelves, lamps and dressers part by part, find sketches, and make pieces islanders ask for.</li>
+<li><b>v1.62</b>: The far shore now goes all the way round your island instead of off one side, so the island keeps its shape and simply grows, and Wendell's isles move out with the coast. Islands that had the one-sided far shore are moved over once; everything on the old part of the island stays put (see The far shore). Reroll in the island maker now makes a genuinely different island each time.</li>
 <li><b>v1.61</b>: Fixed signed-in islands with a town hall getting stuck on "Building the island..." the first time they loaded on a new day. Nothing on the island was lost.</li>
 <li><b>v1.60</b>: The old lighthouse on Lantern Bluff is now about two and a half times as tall and you can walk inside and climb it. It starts out broken down and gets mended step by step as the lighthouse story goes on. You now fit the lamp from the lamp room at the top.</li>
 <li><b>v1.59</b>: Hollow Crags is rocky: bare stone and gravel ground, boulders, scree and outcrops, 7 trees (was 21), and 12 rocks to mine (was 8). New item: the Emerald, a very rare gem (2% per hit on a crags rock, sells for 2,500).</li>

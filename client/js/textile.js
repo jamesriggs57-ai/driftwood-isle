@@ -1,5 +1,5 @@
 /* =====================================================================
-   v1.63 SEWING: the Sewing tab. Pick a rug or a piece of clothing, set its shape and size, then paint it
+   v1.64 SEWING: the Sewing tab. Pick a rug or a piece of clothing, set its shape and size, then paint it
    pixel by pixel. The more you've sewn, the finer the grid (8x8 up to 32x32) and the more (and stranger)
    alterations your clothes can carry. Rugs go in your bag; clothes go in your closet and you wear them.
    main.js builds C and calls createSewing(C). C needs:

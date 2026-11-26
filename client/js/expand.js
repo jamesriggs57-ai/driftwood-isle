@@ -27,7 +27,7 @@ export const ISLE_INFO = {
 // What Wendell asks for each one. need: [item id or item kind, how many]. days: days since the last one rose.
 export const ISLE_QUESTS = [
   { kind:'meadow', clams:60000,  need:[['wood',30],['stone',15],['flower',10]], days:0, relics:['relic_acorn'],
-    ask:['Hmm. Hmm hmm. The sea out west has been humming at me all week.','There\'s land down there, you know. Old land. It sank long before anyone named this island.','I could bring a piece of it up. A meadow, I think. It wants to be a meadow.',
+    ask:['Hmm. Hmm hmm. The sea out {dir} has been humming at me all week.','There\'s land down there, you know. Old land. It sank long before anyone named this island.','I could bring a piece of it up. A meadow, I think. It wants to be a meadow.',
       'It takes a lot out of a wizard, though. Bring me 30 wood and 15 stone for the footings, 10 flowers so it remembers how to grow, and 60,000 clams for my trouble.'],
     done:['Wood, stone, flowers... and the clams. Yes. Yes! Stand back. No, further back. Further.'] },
   { kind:'dunes', clams:120000, need:[['shell',10],['softwood',20],['coconut',6]], days:3, relics:['relic_leystone'],
@@ -35,11 +35,11 @@ export const ISLE_QUESTS = [
       'Bring me 10 beach finds, 20 branches and 6 coconuts. It wants to know what a beach is supposed to feel like. And 120,000 clams.'],
     done:['Shells, branches, coconuts. Just so. Now, a little hum, a little wiggle...'] },
   { kind:'pines', clams:180000, need:[['wood',60],['stone',20]], days:3, relics:['relic_frostpine','relic_amber','relic_acorn'],
-    ask:['{who}\'s workshop. Yes, I heard. Half the island has heard about it.','There is an old pine forest sunk off the east shore. The trees there were planted by people long gone, and their roots still remember.',
+    ask:['{who}\'s workshop. Yes, I heard. Half the island has heard about it.','There is an old pine forest sunk off the {dir} shore. The trees there were planted by people long gone, and their roots still remember.',
       'Raised, they would grow back as fast as you cut them. Bring me 60 wood so the roots know what they are for, 20 stone for the footings, and 180,000 clams.'],
     done:['Wood and stone, and the clams. The old forest is listening. Stand back, and mind the pine cones.'] },
   { kind:'bluff', clams:220000, need:[['plank',30],['iron',8],['clay',10]], days:3, relics:['relic_moonsap'],
-    ask:['This one is bigger. Taller. There\'s a bluff out north, all stone, sitting on the seabed sulking.','It would need a trestle bridge up to the top. And somewhere up there an old lighthouse is waiting to be lit again.',
+    ask:['This one is bigger. Taller. There\'s a bluff out {dir}, all stone, sitting on the seabed sulking.','It would need a trestle bridge up to the top. And somewhere up there an old lighthouse is waiting to be lit again.',
       'Bring me 30 planks from the workshop for the trestle, 8 iron nuggets and 10 clay. And 220,000 clams. Bluffs are heavy.'],
     done:['Planks, iron, clay. Excellent. Hold onto your hat. Actually, hold onto mine too.'] },
   { kind:'crags', clams:350000, need:[['iron',15],['stone',30],['fossil',2]], days:3, relics:['relic_amber','relic_coralcrown'],
@@ -64,11 +64,12 @@ export const SKY_CUT = SKY - 4;
    o: { seed, SC, shore(a) -> main island shore radius at angle a, ok(a) -> can a bridge land on the main island there,
         clear(x,z,r,k) -> optional, is isle k clear of the main island's far shore there (v1.58) }
    Meadow, dunes and bluff each hang off the main island at their own angle; the crags hang off the bluff. */
+export const PREFER = { meadow:Math.PI, dunes:Math.PI*0.62, bluff:-Math.PI*0.42, pines:Math.PI*0.2 };   // where the isles go on islands made before v1.62
 export function planIsles(kinds, o){
   if (typeof kinds==='number') kinds=OLD_ORDER.slice(0,kinds);
   const out=[], R=50*o.SC, used=[], r=mulberry32((o.seed|0)+90210), n=kinds.length;
   const angDist=(a,b)=>Math.abs(Math.atan2(Math.sin(a-b),Math.cos(a-b)));
-  const prefer={ meadow:Math.PI, dunes:Math.PI*0.62, bluff:-Math.PI*0.42, pines:Math.PI*0.2 };
+  const prefer=o.prefer || PREFER;   // v1.62 new islands bring their own directions (layouts.js isleDirs)
   for (let k=0;k<Math.min(n,6);k++){
     const kind=kinds[k], info=ISLE_INFO[kind], I={ k, kind, name:info.name, sand:info.sand, ph:[r()*TAU, r()*TAU, r()*TAU] };
     I.r = R*0.51*(kind==='bluff'||kind==='crags' ? 1.08 : kind==='starfall' ? 0.72 : 1);   // about a quarter of the main island's area (cliff isles a bit wider: their edges are cliff; Starfall is small)
@@ -86,12 +87,15 @@ export function planIsles(kinds, o){
       // out past the bluff, turned away from the main island so it never comes back toward it
       let a=Math.atan2(B.cz, B.cx) + 0.75; const tryAt=aa=>[B.cx+Math.cos(aa)*(B.r*0.97+I.br.gap+I.r*0.97), B.cz+Math.sin(aa)*(B.r*0.97+I.br.gap+I.r*0.97)];
       const crowded=(x,z)=>out.some(J=>J!==B && Math.hypot(x-J.cx,z-J.cz)<J.r+I.r+20) || (o.clear && !o.clear(x,z,I.r,k));   // v1.58 also clear of the main island's far shore
-      let [x,z]=tryAt(a); if (crowded(x,z)){ a=Math.atan2(B.cz,B.cx)-0.75; [x,z]=tryAt(a); }
+      let [x,z]=tryAt(a); const sv=o.subSaved && o.angles && Number.isFinite(o.angles[k]) ? o.angles[k] : null;   // v1.62 once risen it keeps its side of the bluff
+      if (sv!==null){ a=sv; [x,z]=tryAt(a); } else if (crowded(x,z)){ a=Math.atan2(B.cz,B.cx)-0.75; [x,z]=tryAt(a); }
       I.a=a; I.dir=[Math.cos(a), Math.sin(a)]; I.from=out.indexOf(B); I.cx=x; I.cz=z;
     } else {   // v1.41 Starfall: up a stair from the crags, further out again, clear of everything else
       const C=out.find(J=>J.kind==='crags'); if (!C) break; const base=Math.atan2(C.cz, C.cx);
       const at=aa=>[C.cx+Math.cos(aa)*(C.r*0.97+I.br.gap+I.r*0.97), C.cz+Math.sin(aa)*(C.r*0.97+I.br.gap+I.r*0.97)];
-      let a=base, x, z; for (const d of [0.55,-0.55,1.1,-1.1,0,1.6,-1.6]){ a=base+d; [x,z]=at(a); if (!out.some(J=>J!==C && Math.hypot(x-J.cx,z-J.cz)<J.r+I.r+16) && Math.hypot(x,z)>R*1.3+I.r && (!o.clear || o.clear(x,z,I.r,k))) break; }
+      let a=base, x, z; const sv=o.subSaved && o.angles && Number.isFinite(o.angles[k]) ? o.angles[k] : null;
+      if (sv!==null){ a=sv; [x,z]=at(a); }   // v1.62 once risen it stays where it rose
+      else for (const d of [0.55,-0.55,1.1,-1.1,0,1.6,-1.6]){ a=base+d; [x,z]=at(a); if (!out.some(J=>J!==C && Math.hypot(x-J.cx,z-J.cz)<J.r+I.r+16) && Math.hypot(x,z)>R*1.3+I.r && (!o.clear || o.clear(x,z,I.r,k))) break; }
       I.a=a; I.dir=[Math.cos(a), Math.sin(a)]; I.from=out.indexOf(C); I.cx=x; I.cz=z;
     }
     const ext=I.r*1.3+8; I.box=[I.cx-ext, I.cz-ext, I.cx+ext, I.cz+ext];

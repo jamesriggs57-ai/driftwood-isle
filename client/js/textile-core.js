@@ -1,5 +1,5 @@
 /* =====================================================================
-   v1.63 SEWING: rugs and clothes you paint pixel by pixel. Data and rules only (no THREE, no DOM),
+   v1.64 SEWING: rugs and clothes you paint pixel by pixel. Data and rules only (no THREE, no DOM),
    so the server can import it.
    A design is a short string: a few fields, then the pixels, run-length coded in the base64url alphabet.
      rug:      'r' shape w d edge pile edgeColor grid | pixels      item id 'cr_' + code

@@ -1,5 +1,5 @@
 /* =====================================================================
-   v1.62 CUSTOM FURNITURE: the game side. The Design tab in crafting, islanders' requests,
+   v1.63 CUSTOM FURNITURE: the game side. The Design tab in crafting, islanders' requests,
    sketches you find while digging, chopping and fishing, and the first-sale craftsmanship bonus.
    Data and rules are in custom-core.js, the 3D parts in custom-models.js.
    main.js builds C and calls createCustom(C). C needs:

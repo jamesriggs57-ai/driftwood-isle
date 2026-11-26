@@ -1,5 +1,5 @@
 /* =====================================================================
-   v1.62 CUSTOM FURNITURE: 3D parts. buildCustom(g, id) puts the piece described by a cf_ id into g.
+   v1.63 CUSTOM FURNITURE: 3D parts. buildCustom(g, id) puts the piece described by a cf_ id into g.
    Each base has one builder per slot option, in the same order as custom-core.js. Every piece faces +z.
    Parts share a little context (ctx): the materials and where the last part left off (seat top, back posts...),
    so any leg goes with any back.

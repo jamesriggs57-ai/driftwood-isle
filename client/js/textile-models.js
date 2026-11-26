@@ -1,5 +1,5 @@
 /* =====================================================================
-   v1.63 SEWING: 3D for rugs (an item model) and painted clothes (worn on the character).
+   v1.64 SEWING: 3D for rugs (an item model) and painted clothes (worn on the character).
    The painting becomes a canvas texture, one block per pixel, with a light weave so it reads as fabric.
    ===================================================================== */
 import * as THREE from 'three';

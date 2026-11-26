@@ -335,7 +335,7 @@ furn('weathervane','Weathervane',5200,0.4,{shop:'story'});
 // v1.40 the charter, the Driftwood Festival (stall goods and Clementine's keepsakes), the race cup and the flower show ribbon
 furn('charterplaque','Island Charter',9000,0.5,{shop:'story',stack:1});
 furn('festbunting','Festival Bunting',1800,0.9,{shop:'story'});
-furn('starlamp','Paper Star Lantern',2400,0.35,{shop:'story',glow:true});
+furn('paperstar','Paper Star Lantern',2400,0.35,{shop:'story',glow:true});
 furn('fishkite','Fish Kite',2200,0.5,{shop:'story'});
 furn('pinwheel','Pinwheel Stand',1400,0.3,{shop:'story'});
 furn('fest_spring','Blossom Festival Lantern',6000,0.4,{shop:'story',glow:true,stack:1});

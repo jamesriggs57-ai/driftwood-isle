@@ -13,7 +13,7 @@ import { mergeStatic } from './cottage.js';
 import { buildGrandfatherStump } from './reef.js';
 
 // v1.37: Old Pinewood (Bramble's dream) rises third. Islands raised before v1.37 keep the order they rose in (S.terra.isleK).
-export const ISLE_ORDER = ['meadow', 'dunes', 'pines', 'bluff', 'crags'];
+export const ISLE_ORDER = ['meadow', 'dunes', 'pines', 'bluff', 'crags', 'starfall'];   // v1.40 Starfall Isle floats above the crags, last of all
 export const OLD_ORDER = ['meadow', 'dunes', 'bluff', 'crags'];
 export const ISLE_INFO = {
   meadow:{ name:'Clover Meadow', bridge:'causeway', gap:26, blurb:'rolling grass, wildflowers and an orchard of fruit that doesn\'t grow on the main island', sand:false },
@@ -21,6 +21,7 @@ export const ISLE_INFO = {
   dunes: { name:'Sandpiper Dunes', bridge:'boardwalk', gap:30, blurb:'sand hills, palms and an old shipwreck; the beach there is good for shells', sand:true },
   bluff: { name:'Lantern Bluff', bridge:'trestle', gap:30, blurb:'a high plateau of pines on sheer cliffs, with a lighthouse and good rocks to mine', sand:false },
   crags: { name:'Hollow Crags', bridge:'rope', gap:20, blurb:'mossy stone spires and old ruins out past the bluff, across a rope bridge; rocks heavy with iron', sand:false },
+  starfall:{ name:'Starfall Isle', bridge:'stair', gap:22, blurb:'a small island hanging in the sky above the crags, up a stair of glowing stones; it is always night up there', sand:false },
 };
 // What Wendell asks for each one. need: [item id or item kind, how many]. days: days since the last one rose.
 export const ISLE_QUESTS = [
@@ -44,11 +45,19 @@ export const ISLE_QUESTS = [
     ask:['Out past the bluff there are crags. Old, mossy, a bit grumpy. They used to be part of the bluff before the sea cut them off.','I can lift them, but there\'s no way to reach them from here. You\'d have to cross from the cliff on a rope bridge.',
       'Bring me 15 iron nuggets, 30 stone and 2 fossils. The crags like old things. And 350,000 clams. This is the big one.'],
     done:['Iron, stone, fossils. The crags will be pleased. Well. Less grumpy.'] },
+  // v1.40: the last one. One thing from each of the island's chains (the workshop, the apiary, the tea room, the forge, the mill, the bathhouse).
+  { kind:'starfall', clams:500000, need:[['plank',1],['honey',1],['teacake',1],['fitting',1],['flour',1],['bathsalts',1]], days:3, relics:['relic_coralcrown','relic_starglass','relic_moonsap'],
+    ask:['Sit down. No, really, sit. This one is different.','Hazel\'s last page. The island that hung in the sky above the old land. I thought it was a sailor\'s story. It is not. It is still up there, above the crags, waiting.',
+      'I can bring it down to where you can reach it, and lay a stair of starlight up from Hollow Crags. But it has to know this island is a real home now.',
+      'Bring me one thing from each of the things you built together: a plank from the workshop, a jar of honey, one of the tea room\'s cakes, an iron fitting from the forge, a sack of flour from the mill and a jar of bath salts. And 500,000 clams. This is the last of it, and the biggest.'],
+    done:['A plank, honey, cake, a fitting, flour and bath salts. The whole island, in a basket. Look up. Keep looking up.'] },
 ];
 export const isleQuestFor = kind => ISLE_QUESTS.find(q=>q.kind===kind);
 export const ISLE_STEP = 0.55, ISLE_OFF = 0.85;
 const quant = (v, riser=0.2) => { if (v<=ISLE_OFF) return v; const q=(v-ISLE_OFF)/ISLE_STEP, k=Math.floor(q), f=q-k; return ISLE_OFF+ISLE_STEP*(k+smooth(1-riser,1,f)); };
 export const PLATEAU = ISLE_OFF + ISLE_STEP*8;   // 5.25 m: the bluff and crag tops, level with each other so the rope bridge can hang between them
+export const SKY = PLATEAU + ISLE_STEP*14;   // v1.40 13.0 m: Starfall Isle's top. Its ground stops at SKY_CUT; below that is the rocky underside (a model)
+export const SKY_CUT = SKY - 4;
 
 /* ---------- Where they go ----------
    o: { seed, SC, shore(a) -> main island shore radius at angle a, ok(a) -> can a bridge land on the main island there }
@@ -58,23 +67,29 @@ export function planIsles(kinds, o){
   const out=[], R=50*o.SC, used=[], r=mulberry32((o.seed|0)+90210), n=kinds.length;
   const angDist=(a,b)=>Math.abs(Math.atan2(Math.sin(a-b),Math.cos(a-b)));
   const prefer={ meadow:Math.PI, dunes:Math.PI*0.62, bluff:-Math.PI*0.42, pines:Math.PI*0.2 };
-  for (let k=0;k<Math.min(n,5);k++){
+  for (let k=0;k<Math.min(n,6);k++){
     const kind=kinds[k], info=ISLE_INFO[kind], I={ k, kind, name:info.name, sand:info.sand, ph:[r()*TAU, r()*TAU, r()*TAU] };
-    I.r = R*0.51*(kind==='bluff'||kind==='crags' ? 1.08 : 1);   // about a quarter of the main island's area (cliff isles a bit wider: their edges are cliff)
+    I.r = R*0.51*(kind==='bluff'||kind==='crags' ? 1.08 : kind==='starfall' ? 0.72 : 1);   // about a quarter of the main island's area (cliff isles a bit wider: their edges are cliff; Starfall is small)
+    if (kind==='starfall') I.sky=true;
     I.br={ type:info.bridge, gap:info.gap*Math.min(1.25, 0.85+0.15*o.SC), w:info.bridge==='rope'?0.95:1.2 };
-    if (kind!=='crags'){
+    if (kind!=='crags' && kind!=='starfall'){
       let best=null, bd=1e9; const saved=o.angles && Number.isFinite(o.angles[k]) ? o.angles[k] : null;
       if (saved===null) for (let i=0;i<144;i++){ const a=-Math.PI+i/144*TAU; if (!o.ok(a)) continue; if (used.some(u=>angDist(u,a)<1.05)) continue; const d=angDist(a,prefer[kind]); if (d<bd){ bd=d; best=a; } }
       if (saved!==null){ best=saved; bd=0; }
       if (best===null) for (let i=0;i<144;i++){ const a=-Math.PI+i/144*TAU; if (used.some(u=>angDist(u,a)<0.9)) continue; const d=angDist(a,prefer[kind]); if (d<bd){ bd=d; best=a; } }
       const a=best??prefer[kind]; used.push(a); I.a=a; I.dir=[Math.cos(a), Math.sin(a)]; I.from='main';
       const shore=o.shore(a); I.cx=I.dir[0]*(shore+I.br.gap+I.r*0.97); I.cz=I.dir[1]*(shore+I.br.gap+I.r*0.97);
-    } else {
+    } else if (kind==='crags'){
       const B=out.find(J=>J.kind==='bluff'); if (!B) break;
       // out past the bluff, turned away from the main island so it never comes back toward it
       let a=Math.atan2(B.cz, B.cx) + 0.75; const tryAt=aa=>[B.cx+Math.cos(aa)*(B.r*0.97+I.br.gap+I.r*0.97), B.cz+Math.sin(aa)*(B.r*0.97+I.br.gap+I.r*0.97)];
       let [x,z]=tryAt(a); if (out.some(J=>J!==B && Math.hypot(x-J.cx,z-J.cz)<J.r+I.r+20)){ a=Math.atan2(B.cz,B.cx)-0.75; [x,z]=tryAt(a); }
       I.a=a; I.dir=[Math.cos(a), Math.sin(a)]; I.from=out.indexOf(B); I.cx=x; I.cz=z;
+    } else {   // v1.40 Starfall: up a stair from the crags, further out again, clear of everything else
+      const C=out.find(J=>J.kind==='crags'); if (!C) break; const base=Math.atan2(C.cz, C.cx);
+      const at=aa=>[C.cx+Math.cos(aa)*(C.r*0.97+I.br.gap+I.r*0.97), C.cz+Math.sin(aa)*(C.r*0.97+I.br.gap+I.r*0.97)];
+      let a=base, x, z; for (const d of [0.55,-0.55,1.1,-1.1,0,1.6,-1.6]){ a=base+d; [x,z]=at(a); if (!out.some(J=>J!==C && Math.hypot(x-J.cx,z-J.cz)<J.r+I.r+16) && Math.hypot(x,z)>R*1.3+I.r) break; }
+      I.a=a; I.dir=[Math.cos(a), Math.sin(a)]; I.from=out.indexOf(C); I.cx=x; I.cz=z;
     }
     const ext=I.r*1.3+8; I.box=[I.cx-ext, I.cz-ext, I.cx+ext, I.cz+ext];
     // spires on the crags (sheer, you walk round them), a lighthouse knoll on the bluff, a windmill hill on the meadow
@@ -107,6 +122,10 @@ export function isleRaw(I, x, z){
     const base=-2.7+3.05*smooth(1.16,0.97,t)+0.55*smooth(0.8,0.55,t), m=smooth(0.85,0.5,t);
     const ridge=0.5+0.5*Math.sin(x*0.16+z*0.09+fbm(sx,sz)*4);
     return base + m*(0.9*ridge*ridge*smooth(0.25,0.75,fbm(sx*1.3,sz*1.3)) + 0.35*fbm(x*0.11,z*0.11)); }
+  if (K==='starfall'){   // v1.40 a floating plate: a gentle top with two low steps, a short rim, nothing under it (the model hangs below)
+    const rim=t+(fbm(sx*2.2,sz*2.2)-0.5)*0.07; if (rim>1.06) return -2.7;
+    const top=SKY + ISLE_STEP*Math.floor(2*smooth(0.35,0.85,fbm(sx*1.4,sz*1.4)))*smooth(0.82,0.5,rim);
+    return lerp(SKY_CUT-0.6, top, smooth(1.0, 0.93, rim)); }
   // bluff and crags: a plateau on sheer cliffs
   const rim=t+(fbm(sx*2.2,sz*2.2)-0.5)*0.09;
   let top=PLATEAU + smooth(0.86,0.5,rim)*(K==='bluff' ? quant(ISLE_OFF+1.2*smooth(0.35,0.8,fbm(sx,sz)))-ISLE_OFF : 0.55*Math.floor(2*smooth(0.3,0.85,fbm(sx*1.7,sz*1.7))));
@@ -123,6 +142,7 @@ export function makeIsleBridge(type, a, b, ya, yb, w){
   const dx=b[0]-a[0], dz=b[1]-a[1], len=Math.hypot(dx,dz), ux=dx/len, uz=dz/len;
   const hump = type==='causeway' ? 0.55 : type==='boardwalk' ? 0.35 : 0, sag = type==='rope' ? Math.min(1.3, len*0.055) : 0, low = type==='trestle' ? 0 : 1.05;
   const yAt = s => { s=clamp(s,0,1); const base=lerp(ya,yb,s);
+    if (type==='stair') return base;
     if (type==='rope') return base - sag*Math.sin(Math.PI*s);
     if (type==='trestle') return lerp(ya, yb, s*s*(3-2*s)*0.35+s*0.65);
     const mid=Math.max(low,(ya+yb)/2), e=smooth(0, Math.min(0.5, 4/len), Math.min(s,1-s));
@@ -131,6 +151,7 @@ export function makeIsleBridge(type, a, b, ya, yb, w){
 }
 // local frame: the group sits at a, +x runs toward b
 export function buildIsleBridge(B, groundAt){
+  if (B.type==='stair') return buildStair(B);
   const g=new THREE.Group(), L=B.len, w=B.w, T=B.type; g.position.set(B.a[0],0,B.a[1]); g.rotation.y=Math.atan2(-B.uz, B.ux);
   // the rope bridge swings about the line between its anchors, so its deck hangs from a pivot at anchor height
   const pivot=new THREE.Group(); pivot.position.y = T==='rope' ? (B.ya+B.yb)/2 : 0; g.add(pivot);
@@ -175,11 +196,49 @@ export function buildIsleBridge(B, groundAt){
   mergeStatic(deck); return g;
 }
 
+// v1.40 Wendell's stair of starlight: pale stone steps hanging in the air, each lit from inside, a few loose stones drifting under it
+function buildStair(B){
+  const g=new THREE.Group(), L=B.len, w=B.w; g.position.set(B.a[0],0,B.a[1]); g.rotation.y=Math.atan2(-B.uz, B.ux); g.userData.swing=null;
+  const stone=M(0xd8d4e8,{ flatShading:true, roughness:0.7 }), lit=glowMat(0xbfd8ff), r=mulberry32(Math.round(L*100));
+  const n=Math.ceil(L/0.42), drift=new THREE.Group(); g.add(drift); g.userData.drift=drift;
+  for (let i=0;i<n;i++){ const u=(i+0.5)*L/n, y=B.yAtS(u/L);
+    mk(G.box(L/n+0.04, 0.16, w*2), stone, u, y-0.08, 0, g);
+    const e=mk(G.box(0.06, 0.05, w*2-0.1), lit, u+L/n/2-0.03, y-0.01, 0, g); e.castShadow=false;
+    if (i%9===4){ addGlow(g, y+0.4, 2.2, 0xbfd8ff).position.x=u; }
+    if (i%3===1){ const k=mk(G.dod(0.14+r()*0.2), stone, u+(r()-0.5)*0.6, y-0.7-r()*1.4, (r()-0.5)*2.4*w, drift); k.userData.ph=r()*TAU; k.userData.y0=k.position.y; } }
+  for (const [u,s] of [[0,0],[L,1]]){ const y=B.yAtS(s); mk(G.box(1.1,0.4,w*2+0.5), stone, u, y-0.25, 0, g);
+    for (const sd of [-1,1]){ mk(G.cyl(0.09,0.12,1.4,6), stone, u, y+0.7, sd*(w+0.15), g); const c=mk(G.ico(0.16,0), lit, u, y+1.55, sd*(w+0.15), g); c.castShadow=false; addGlow(g, y+1.55, 1.6, 0xd8e4ff).position.set(u, y+1.55, sd*(w+0.15)); } }
+  return g; }
+// the underside of a floating isle: rock tapering to a point, following the isle's own outline, with a few crystals and roots hanging off it
+export function buildSkyUnder(I){
+  const g=new THREE.Group(), RING=[[1.0,0.15],[0.985,0],[0.93,-1.8],[0.78,-4.6],[0.56,-8.2],[0.32,-11.6],[0.1,-14.2],[0,-15.4]], NA=56, r=mulberry32(I.k*131+7);
+  const pos=[], col=[], idx=[], c=new THREE.Color(), moss=new THREE.Color(0x5a7a4a), rock=new THREE.Color(0x7a7088), deep=new THREE.Color(0x4a4258);
+  RING.forEach(([f,dy],j)=>{ for (let i=0;i<NA;i++){ const a=i/NA*TAU, wob=j>0 && j<RING.length-1 ? 1+(r()-0.5)*0.14 : 1, rr=isleRadius(I,a)*f*wob;
+      pos.push(Math.cos(a)*rr, SKY_CUT+dy+(j>1 && j<RING.length-1 ? (r()-0.5)*1.1 : 0), Math.sin(a)*rr);
+      c.copy(j<2 ? moss : rock).lerp(deep, j/(RING.length-1)).offsetHSL(0,0,(r()-0.5)*0.06); col.push(c.r,c.g,c.b); } });
+  for (let j=0;j<RING.length-1;j++) for (let i=0;i<NA;i++){ const a=j*NA+i, b=j*NA+(i+1)%NA, c2=(j+1)*NA+i, d=(j+1)*NA+(i+1)%NA; idx.push(a,c2,b, b,c2,d); }
+  const geo=new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pos,3)); geo.setAttribute('color', new THREE.Float32BufferAttribute(col,3)); geo.setIndex(idx); geo.computeVertexNormals();
+  const m=new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors:true, flatShading:true, roughness:0.95, side:THREE.DoubleSide })); m.castShadow=true; m.receiveShadow=true; g.add(m);
+  const cry=glowMat(0xa8c8ff), root=M(0x5a4a3a);
+  for (let i=0;i<14;i++){ const a=r()*TAU, f=0.35+r()*0.5, rr=isleRadius(I,a)*f, y=SKY_CUT-2-(1-f)*11-r()*1.5;
+    const k=mk(G.cone(0.25+r()*0.3, 1.4+r()*2.2, 5), cry, Math.cos(a)*rr, y, Math.sin(a)*rr, g); k.rotation.x=Math.PI; k.rotation.z=(r()-0.5)*0.4; k.castShadow=false; }
+  for (let i=0;i<10;i++){ const a=r()*TAU, rr=isleRadius(I,a)*(0.9+r()*0.08), h=1.5+r()*3; const rt=mk(G.cyl(0.04,0.07,h,5), root, Math.cos(a)*rr, SKY_CUT-0.6-h/2, Math.sin(a)*rr, g); rt.rotation.z=(r()-0.5)*0.3; rt.castShadow=false; }
+  g.position.set(I.cx, 0, I.cz); return g; }
+
 /* ---------- Landmarks ---------- */
 export function buildLandmark(kind, seed){
   const g=new THREE.Group(), r=mulberry32(seed|0), stone=M(0xb8b0a0,{flatShading:true}), stone2=M(0x9a948a,{flatShading:true}), wood=M(0x8a5e3a), dark=M(0x5a3e28), white=M(0xf4efe6), red=M(0xc8503d), moss=M(0x5f8a3e);
   g.userData.spin=null; g.userData.desc='';
   if (kind==='pines') return buildGrandfatherStump();
+  if (kind==='starfall'){ // v1.40 the star altar: a ring of pale stones round a dais, a star turning slowly over it
+    const pale=M(0xd8d4e8,{flatShading:true}), lit=glowMat(0xd8e4ff), gold=M(0xf3c35a,{ metalness:0.6, roughness:0.3 });
+    mk(G.cyl(2.4,2.7,0.35,16), pale, 0,0.17,0,g); mk(G.cyl(1.6,1.8,0.3,16), stone, 0,0.5,0,g); mk(G.cyl(0.4,0.55,1.1,8), pale, 0,1.2,0,g); mk(G.cyl(0.62,0.62,0.12,10), gold, 0,1.8,0,g);
+    for (let i=0;i<7;i++){ const a=i/7*TAU, h=1.3+r()*0.9, s=mk(G.box(0.45,h,0.32), pale, Math.cos(a)*3.4, h/2, Math.sin(a)*3.4, g); s.rotation.y=-a; s.rotation.z=(r()-0.5)*0.12;
+      const gl=mk(G.box(0.08,h*0.6,0.02), lit, Math.cos(a)*3.23, h*0.5, Math.sin(a)*3.23, g); gl.rotation.y=-a+Math.PI/2; gl.castShadow=false; }
+    const star=new THREE.Group(); star.position.y=3.0; g.add(star); const sh=new THREE.Shape(); for (let i=0;i<10;i++){ const a=i/10*TAU+Math.PI/2, rr=i%2?0.22:0.55; i?sh.lineTo(Math.cos(a)*rr,Math.sin(a)*rr):sh.moveTo(Math.cos(a)*rr,Math.sin(a)*rr); }
+    const sm=new THREE.Mesh(new THREE.ExtrudeGeometry(sh,{ depth:0.16, bevelEnabled:true, bevelSize:0.04, bevelThickness:0.04, bevelSegments:1 }), glowMat(0xfff0b0)); sm.position.z=-0.08; star.add(sm); addGlow(g, 3.0, 4.2, 0xfff0c0);
+    g.userData.spin=star; g.userData.desc='A ring of pale stones on the top of the sky. A star turns slowly over the altar, warm to stand near.';
+    g.userData.rects=[[-2.5,-2.5,2.5,2.5]]; return g; }
   if (kind==='meadow'){ // a stone windmill with cloth sails that turn in the wind
     mk(G.cyl(1.6,2.2,6.2,12), stone, 0,3.1,0,g); mk(G.cyl(1.7,1.7,0.2,12), stone2, 0,6.2,0,g);
     const cap=mk(G.cone(2.0,2.2,12), M(0x7a4a3a), 0,7.4,0,g); cap.castShadow=true;

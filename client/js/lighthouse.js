@@ -153,7 +153,9 @@ export function makeLighthouse(ctx){
   const crosses = (a, d) => blockers().some(([ba,hw]) => { const o=angD(ba, a); return Math.sign(o)===Math.sign(d) && Math.abs(o) < Math.abs(d)-0.05; });
 
   // ---- helpers ----
-  const hud = on => { const h=ctx.hud; if (!h) return; h.classList.toggle('inbay', on); h.classList.toggle('magic', on); };
+  // on the stair the HUD goes away like a cutscene; up top you get the action button and joystick back, but no tools or bag
+  if (!document.getElementById('lhCss')){ const c=document.createElement('style'); c.id='lhCss'; c.textContent='#hud.lhtop #swingBtn,#hud.lhtop #bar{display:none}'; document.head.appendChild(c); }
+  const hud = m => { const h=ctx.hud; if (!h) return; h.classList.toggle('inbay', !!m); h.classList.toggle('magic', m==='climb'); h.classList.toggle('lhtop', m==='top'); };
   const pose = (a, rr, h, face) => { const p=at(a, rr, h); P.pos.copy(p); P.obj.position.copy(p); if (face!==undefined){ P.face=face; P.obj.rotation.y=face; } };
   const walkAnim = (t, k) => { const u=P.obj.userData; if (!u.legs) return; const ph=t*11; u.legs[0].rotation.x=Math.sin(ph)*0.7*k; u.legs[1].rotation.x=-Math.sin(ph)*0.7*k; if (u.arms){ u.arms[0].rotation.x=-Math.sin(ph)*0.6*k; u.arms[1].rotation.x=Math.sin(ph)*0.6*k; } if (u.body) u.body.position.y=Math.abs(Math.sin(ph))*0.07*k; };
   const still = () => { const u=P.obj.userData; (u.legs||[]).forEach(l=>l.rotation.x*=0.8); (u.arms||[]).forEach(a=>a.rotation.x*=0.8); if (u.body) u.body.position.y*=0.8; };
@@ -166,13 +168,13 @@ export function makeLighthouse(ctx){
   let noteI=0, stepI=0;
 
   function climb(){
-    if (ctx.busy()) return; ctx.prep(); ctx.stopMove(); hud(true); ctx.setPerch(perch);
+    if (ctx.busy()) return; ctx.prep(); ctx.stopMove(); hud('climb'); ctx.setPerch(perch);
     st.mode='in'; st.t=0; noteI=0; stepI=0; ctx.Snd.door();
     st.camA=W(0); st.camP.copy(at(0, 8.6, 2.6)); st.look.copy(P.pos); st.h0=dp.y-baseY;
     if (!ctx.TX.climbed){ ctx.TX.climbed=1; ctx.save(); }
   }
   function goDown(){
-    st.mode='down'; ctx.stopMove();
+    st.mode='down'; ctx.stopMove(); hud('climb');
     ctx.fade(()=>{ st.mode='off'; P.obj.visible=true; cutaway(false); hud(false); ctx.setPerch(null); ctx.setCamYaw(0);
       const a=0, p=at(a, LT.rBot+1.1, 0); p.y=ctx.groundY(p.x,p.z); P.pos.copy(p); P.obj.position.copy(p); P.face=W(a); P.obj.rotation.y=P.face;
       ctx.camTarget.copy(P.pos); ctx.updateSky(); ctx.updateCamera(1); });
@@ -183,7 +185,7 @@ export function makeLighthouse(ctx){
     ctx.toast('The top of the lighthouse', null, '', 'Tap to look around on your own.');
   }
   function endPan(){
-    if (st.mode!=='pan') return; st.mode='top'; st.t=0; st.lookYaw=0; ctx.setCamYaw(0); st.camP.copy(ctx.camera.position);   // ease on from where the pan left the camera
+    if (st.mode!=='pan') return; st.mode='top'; st.t=0; hud('top'); st.lookYaw=0; ctx.setCamYaw(0); st.camP.copy(ctx.camera.position);   // ease on from where the pan left the camera
     if (keeper && !st.greeted){ st.greeted=true; const S=ctx.keeperSpec;
       setTimeout(()=>{ if (st.mode==='top') ctx.dialog(S.name, S.voice, [ctx.TX.lantern ? 'Back up again? The view never gets old, does it.' : `Oh! A visitor, all the way up here. ${LT.steps} steps! Hardly anyone makes it.`, 'Come say hello when you\'ve had a look round.']); }, 250); }
   }
@@ -246,6 +248,7 @@ export function makeLighthouse(ctx){
         st.lookYaw=clamp(ctx.getCamYaw(), -1.3, 1.3); const a=st.ang+st.lookYaw;
         const want=new THREE.Vector3(cx+Math.sin(st.ang)*(LT.walkR-0.25), Gy+1.65, cz+Math.cos(st.ang)*(LT.walkR-0.25));
         const look=new THREE.Vector3(want.x+Math.sin(a)*12, Gy-1.2, want.z+Math.cos(a)*12);
+        if (keeper && ctx.dialogOpen() && Math.hypot(keeper.pos.x-P.pos.x, keeper.pos.z-P.pos.z)<3) look.set(keeper.pos.x, Gy+0.75, keeper.pos.z);   // chatting: look at the keeper, not the sea
         st.camP.lerp(want, k); st.look.lerp(look, k); c.position.copy(st.camP); c.lookAt(st.look); cutaway(false);
         farFog(); ctx.skyFollow(P.pos); return true; }
       return false;

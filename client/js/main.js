@@ -7068,6 +7068,7 @@ addEventListener('keydown', e=>{ if(e.target.tagName==='INPUT'||e.target.tagName
   if (k===(kb.swing||' ')){ e.preventDefault(); swing(); return; }
   if (k===kb.act||k==='enter'){ e.preventDefault(); if (performance.now()>popupCool) doAction(); return; }
   if (scrim.classList.contains('show')){ if (k===kb.bag && !menuOpen) closePanel(); return; }
+  if (PERCH) return;   // v1.39 fixes: no bike, sled, tools or bag on the lighthouse stair or gallery
   if (k===kb.tool) cycleTool(); else if (k===kb.bike) toggleBike(); else if (k===kb.sled) toggleSled(); else if (k===kb.bag && !buildMode && !placing) openBag(); });
 let keyCapture=null;   // set while Menu > Controls waits for you to press a new key
 /* v1.34: while a pop-up is up (a panel, the Friends panel, the tool or More menu, or a big announcement card),

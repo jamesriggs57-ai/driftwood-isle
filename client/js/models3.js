@@ -130,7 +130,7 @@ export function buildStore(tier=0){
 }
 
 /* ---------- Town hall: a tent at first, then a hall, then a grand hall with a clock tower ---------- */
-export function buildTownHall(tier=0){
+export function buildTownHall(tier=0, name=null){   // v1.41 name: 'Charter Hall' once the charter is signed
   const g=new THREE.Group();
   if (tier===0){ // a big canvas tent with a little desk out front
     const t=mk(new THREE.ConeGeometry(3.0,3.2,8), M(0xf2e6c8), 0,1.6,0,g); t.castShadow=true; t.rotation.y=Math.PI/8;
@@ -150,7 +150,7 @@ export function buildTownHall(tier=0){
   for (let st=0; st<2; st++) mk(G.box(2.4-st*0.3,0.2,0.5), M(0xd8d0c0), 0, F-0.1-st*0.2, D/2+0.35+st*0.45, g);
   if (big){ for (let i=0;i<4;i++){ const x=-2.25+i*1.5; mk(G.cyl(0.18,0.2,H,12), M(0xf4efe4), x,F+H/2,D/2+0.9,g); } mk(G.box(W*0.65,0.3,1.4), M(0xf4efe4), 0,F+H+0.1,D/2+0.6,g); }
   mk(G.box(1.3,2.1,0.1), M(0xffffff), 0,F+1.05,D/2+0.02,g); for (const s of [-1,1]) mk(G.box(0.55,1.9,0.08), M(0x2f5a8a), s*0.29,F+0.95,D/2+0.06,g); mk(G.sph(0.05,8,6), M(0xf3c35a,{metalness:0.6,roughness:0.3}), 0.1,F+0.95,D/2+0.12,g);
-  const sg=sign(big?'Grand Town Hall':'Town Hall', '#fff1d6', '#5b4336', 2.4); sg.position.set(0,F+H+0.5,D/2+(big?1.35:0.3)); g.add(sg);
+  const sg=sign(name||(big?'Grand Town Hall':'Town Hall'), '#fff1d6', '#5b4336', 2.4); sg.position.set(0,F+H+0.5,D/2+(big?1.35:0.3)); g.add(sg);
   // clock tower on the grand hall, a cupola with a bell on the first hall
   const tw=new THREE.Group(); tw.position.set(0,F+H,-0.2); g.add(tw);
   if (big){ mk(G.box(1.6,3.0,1.6), M(wc), 0,1.5,0,tw); mk(G.cyl(0.55,0.55,0.08,24), M(0xfff8ea), 0,2.2,0.81,tw).rotation.x=Math.PI/2; mk(G.box(0.05,0.4,0.03), M(0x222222), 0,2.32,0.86,tw); mk(G.box(0.3,0.05,0.03), M(0x222222), 0.12,2.2,0.86,tw); mk(G.cone(1.25,1.6,4), M(0x5a6a8a), 0,3.8,0,tw).rotation.y=Math.PI/4; mk(G.sph(0.14,10,8), M(0xf3c35a,{metalness:0.7,roughness:0.3}), 0,4.7,0,tw); }

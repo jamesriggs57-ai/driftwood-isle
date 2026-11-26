@@ -223,7 +223,7 @@ export const TRIP_THEMES = {
   wizgarden: { name:'The Wizard\'s Garden', terrain:'hilly', blurb:'Wendell\'s old teacher lives here.', flowers:3 },
   library:   { name:'The Plan Library', terrain:'hilly', blurb:'Shelves of rare woodworking plans.' },
   workshop:  { name:'The Wishing Workshop', terrain:'flat', blurb:'An old craftsman who can make anything at all.' },
-  starfall:  { name:'Starfall Isle',   terrain:'flat',  blurb:'Always night. Falling stars land as starstones.' },
+  starfall:  { name:'Stardrift Isle',  terrain:'flat',  blurb:'Always night. Falling stars land as starstones.' },
   attic:     { name:'The Collector\'s Attic', terrain:'hilly', blurb:'A curator with a spare of everything.' },
   shimmer:   { name:'Shimmer Lagoon',  terrain:'flat',  blurb:'Only very rare and legendary fish swim here.', lagoon:true },
 };

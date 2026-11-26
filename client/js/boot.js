@@ -200,6 +200,7 @@ async function start() {
     const tripRaw = sessionStorage.getItem('dw-trip');
     if (tripRaw && data && data.player) {
       let trip = null; try { trip = JSON.parse(tripRaw); } catch {}
+      if (trip && trip.theme === 'starfall' && trip.name === 'Starfall Isle') trip.name = 'Stardrift Isle';   // v1.41 the legendary trip was renamed (Starfall Isle is Wendell's sixth isle now)
       if (trip && trip.seed) {
         const S = {}; for (const k of PLAYER_KEYS) if (data[k] !== undefined) S[k] = data[k];
         let world = null; try { world = JSON.parse(sessionStorage.getItem('dw-trip-world') || 'null'); } catch {}

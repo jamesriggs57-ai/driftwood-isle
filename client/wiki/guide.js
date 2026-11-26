@@ -11,7 +11,7 @@
    built in wiki.js. Writing rules: plain words, no em dashes, no emoji, only facts the code supports.
    ===================================================================== */
 
-export const GUIDE_VERSION = 'v1.40';
+export const GUIDE_VERSION = 'v1.41';
 export const GUIDE_UPDATED = '2026-11-26';
 
 const tip = s => `<div class="tip"><b>Tip</b> ${s}</div>`;
@@ -257,7 +257,7 @@ ${tip('Making 10 <b>different</b> pieces is what starts Bramble\'s workshop stor
 <ul><li><b>Heartwood</b>: chopping, more when a tree comes down.</li><li><b>Golden Sap</b>: shaking trees.</li>
 <li><b>Starstone</b>: hitting rocks, more at night.</li><li><b>Moonpearl</b>: with a catch, or on the beach.</li>
 <li><b>Glimmer Moss</b>: digging out old stumps, or with weeds at night.</li></ul>
-<p>Luck potions make them more likely. Golden Grove (sap and heartwood) and Starfall Isle (starstones) are full of them.</p>
+<p>Luck potions make them more likely. Golden Grove (sap and heartwood) and Stardrift Isle (starstones) are full of them.</p>
 `},
 
 { id:'tables', group:'island', title:'Crafting tables', html:`
@@ -294,14 +294,22 @@ ${tip('Making 10 <b>different</b> pieces is what starts Bramble\'s workshop stor
 `},
 
 { id:'isles', group:'magic', title:'Wendell\'s isles', html:`
-<p>Once the tower is up and the island is ready, Wendell starts talking about old land sunk under the sea ("You look distracted"). He raises five isles, one at a time, at least 3 days apart. He never lists requirements: he says one hint for the first thing missing, in this order: relics, then the town hall, trade (shops), the museum, a neighbor's dream, then the price.</p>
+<p>Once the tower is up and the island is ready, Wendell starts talking about old land sunk under the sea ("You look distracted"). He raises six isles, one at a time, at least 3 days apart. He never lists requirements: he says one hint for the first thing missing, in this order: relics, then the town hall, trade (shops), the museum, a neighbor's dream, then the price.</p>
 <table class="t"><tr><th>#</th><th>Isle</th><th>Hidden requirements</th><th>Relics</th><th>Clams and materials</th><th>What's there</th></tr>
 <tr><td>1</td><td>Clover Meadow</td><td>Town Hall, one shop backed</td><td>Heartwood Acorn</td><td>60,000, 30 wood, 15 stone, 10 flowers</td><td>Grass, wildflowers, an orchard of a fruit you don't grow, an old windmill</td></tr>
 <tr><td>2</td><td>Sandpiper Dunes</td><td>Marlo backed, museum's first wing</td><td>Sunken Ley Stone</td><td>120,000, 10 beach finds, 20 branches, 6 coconuts</td><td>Sand hills, palms, a shipwreck, good beachcombing, extra coral</td></tr>
 <tr><td>3</td><td>Old Pinewood</td><td>Grand Town Hall, Pemberton backed, Bramble's workshop dream open</td><td>Frostpine Cone, Amber Sliver, Heartwood Acorn</td><td>180,000, 60 wood, 20 stone</td><td>Misty pines that grow back overnight, the Grandfather Stump, site of Bramble's workshop</td></tr>
 <tr><td>4</td><td>Lantern Bluff</td><td>All three museum wings, the workshop open</td><td>Moonsap Vial</td><td>220,000, 30 planks, 8 iron, 10 clay</td><td>Cliff-top plateau, pines, good rocks, the old lighthouse</td></tr>
-<tr><td>5</td><td>Hollow Crags</td><td>All three shops at tier 2, the reef at Teeming</td><td>Amber Sliver, Living Coral Crown</td><td>350,000, 15 iron, 30 stone, 2 fossils</td><td>Mossy stone spires, ruins, iron-rich rocks; site of Pemberton's forge</td></tr></table>
-<p>The first isle isn't mentioned at all until the island is ready for it. The day after each isle rises, Wendell writes a letter hinting which way to look for the next.</p>
+<tr><td>5</td><td>Hollow Crags</td><td>All three shops at tier 2, the reef at Teeming</td><td>Amber Sliver, Living Coral Crown</td><td>350,000, 15 iron, 30 stone, 2 fossils</td><td>Mossy stone spires, ruins, iron-rich rocks; site of Pemberton's forge</td></tr>
+<tr><td>6</td><td>Starfall Isle</td><td>The Island Charter signed and Wendell's last letter</td><td>Living Coral Crown, Starglass Shard, Moonsap Vial</td><td>500,000, and one each of: plank, honey, tea cake, iron fitting, flour, bath salts</td><td>A small isle in the sky beside Hollow Crags, up a stair of glowing stones. Always night up there, with its own bugs and the star altar</td></tr></table>
+<p>The first isle isn't mentioned at all until the island is ready for it. The day after each isle rises, Wendell writes a letter hinting which way to look for the next. Starfall Isle is different: Wendell says nothing about it until the Island Charter is signed, and his letter the day after is the hint.</p>
+<h3>Starfall Isle</h3>
+<p>The stair climbs from Hollow Crags. Up top it is always night, whatever the clock says, and three bugs live nowhere else: the Sky Drifter, the Comet Beetle and the rare Nebula Moth. They're in the bug catalog under "On Starfall Isle".</p>
+<p>The <b>star altar</b> takes two of Wendell's spells. Leave the clams in the bowl:</p>
+<ul><li><b>Aurora</b> (80,000): green and violet light over your island every clear night.</li>
+<li><b>Glowing paths</b> (50,000): small stones along every path that glow after dark, isles included.</li></ul>
+<p>Both are for looks only. You can lift either one at the altar and bring it back later for free.</p>
+${note('Stardrift Isle, the legendary trip island, is a different place. It was called Starfall Isle before v1.41.')}
 ${note('Islands that raised isles before v1.37 keep their old order (meadow, dunes, bluff, crags) and get Old Pinewood next.')}
 `},
 
@@ -312,8 +320,9 @@ ${note('Islands that raised isles before v1.37 keep their old order (meadow, dun
 <tr><td>Sunken Ley Stone</td><td>Shipwreck Cove</td><td>Sandpiper Dunes</td></tr>
 <tr><td>Frostpine Cone</td><td>Frost Isle</td><td>Old Pinewood</td></tr>
 <tr><td>Amber Sliver</td><td>Fossil Bluffs</td><td>Old Pinewood, Hollow Crags</td></tr>
-<tr><td>Moonsap Vial</td><td>Moonlit Isle</td><td>Lantern Bluff</td></tr>
-<tr><td>Living Coral Crown</td><td>Coral Atoll</td><td>Hollow Crags</td></tr></table>
+<tr><td>Moonsap Vial</td><td>Moonlit Isle</td><td>Lantern Bluff, Starfall Isle</td></tr>
+<tr><td>Living Coral Crown</td><td>Coral Atoll</td><td>Hollow Crags, Starfall Isle</td></tr>
+<tr><td>Starglass Shard</td><td>Any rare or legendary island (always, while Wendell wants it); Moonlit Isle</td><td>Starfall Isle</td></tr></table>
 <h3>Finding one</h3>
 <p>Look for a <b>rune stone that hums</b> on a trip island; the relic is buried at its foot (shovel). Chances a trip holds one you still need: 60% on its own kind of island, 15% on another themed island, 5% on a plain one.</p>
 ${note('Relics can\'t be sold, gifted, mailed or traded. A storage chest holds them.')}
@@ -379,7 +388,7 @@ ${note('Relics can\'t be sold, gifted, mailed or traded. A storage chest holds t
 <tr><td>The Wizard's Garden</td><td>Rare</td><td>Bellamy, Wendell's old teacher, gives a 50,000-clam spell voucher</td></tr>
 <tr><td>The Plan Library</td><td>Rare</td><td>Pick any plan you don't know</td></tr>
 <tr><td>The Wishing Workshop</td><td>Legendary</td><td>Bring 10 wood, get any furniture at all</td></tr>
-<tr><td>Starfall Isle</td><td>Legendary</td><td>Always night; starstones lying around and falling</td></tr>
+<tr><td>Stardrift Isle</td><td>Legendary</td><td>Always night; starstones lying around and falling</td></tr>
 <tr><td>The Collector's Attic</td><td>Legendary</td><td>Any museum specimen you're missing</td></tr>
 <tr><td>Shimmer Lagoon</td><td>Legendary</td><td>Only very rare and legendary fish</td></tr></table>
 `},
@@ -465,7 +474,10 @@ ${steps(['The Reef (Gill, Sprig, Marlo) and Bramble\'s workshop dream start earl
  'Lantern Bluff: the lighthouse and night voyages.',
  'Hollow Crags (needs the reef at Teeming): Pemberton\'s forge, which finishes the Driftwood Queen and the wreck\'s hold.',
  'Reef Thriving: Thistle\'s Reef Hall.',
- 'Alongside: Wren\'s trade routes, Tobin\'s bathhouse and Lumi\'s firefly glade.'])}
+ 'Alongside: Wren\'s trade routes, Tobin\'s bathhouse and Lumi\'s firefly glade.',
+ 'Small threads once the town hall is up: Juniper\'s reading nook, Otis\'s race course, Marigold\'s flower show and a newcomer who wants to meet people.',
+ 'The Island Charter, then the Driftwood Festival every season.',
+ 'Last of all: Starfall Isle.'])}
 `},
 
 { id:'reef', group:'stories', title:'The Reef and Cay Bay', html:`
@@ -600,8 +612,51 @@ ${steps(['<b>Diving bell</b>: Marlo\'s glass (20,000, on the sand the next day),
 <p>Each part holds two pieces of salvage furniture and pages of the <i>Saltwren</i>'s logbook (12 in all; reread them with Hazel or at the wreck). The day after the vault opens, <b>Hazel's Antiques</b> opens near the museum with three pieces of salvage a day, and offers a stake.</p>
 `},
 
+{ id:'nook', group:'stories', title:'Juniper\'s Reading Nook', html:`
+<p><b>Starts:</b> once the town hall is up and Bramble's workshop is open, a day or three later. Juniper (or whoever holds the dream) wants a reading nook beside the museum.</p>
+${steps(['<b>Rare plans</b>: know 3 of the 6 rare plans, the ones for the legendary showpieces (see <a href="#crafting">Woodworking</a>). Juniper brings it up again the next time you talk once you do.',
+ '<b>Shelves</b>: commission the Reading Nook Shelves at the workshop (20 planks, 5 clay, 15,000; ready the next day).',
+ '<b>Build</b>: give Juniper the shelves. The builders work overnight and the reading room opens the next morning.'])}
+<p>Inside you can reread every island story, every letter you kept, and the <i>Saltwren</i>'s logbook pages you've found.</p>
+`},
+
+{ id:'race', group:'stories', title:'Otis\'s Race Course', html:`
+<p><b>Starts:</b> with the town hall up, a bike, 3 of Wendell's isles risen and the workshop open. Otis (or whoever holds the dream) wants a bike race right round the island.</p>
+${steps(['<b>Sign</b>: commission the Race Course Sign at the workshop (10 planks, 2 iron, 8,000; ready the next day).',
+ '<b>Course</b>: give Otis the sign and the start arch goes up near the plaza.',
+ '<b>Race</b>: start at the arch on your bike. Ride through 7 flags in order (the next one lights up) and back through the arch.'])}
+<p>Every islander has a time to beat, set by their personality and the length of your island's course. Sporty islanders are fastest, lazy ones slowest. Getting off the bike, going inside or taking over 6 minutes ends the race. Beat everyone once for <b>5,000 clams</b> and the Island Race Cup. Your best time is kept.</p>
+`},
+
+{ id:'flowershow', group:'stories', title:'Marigold\'s Flower Show', html:`
+<p><b>Starts:</b> with the town hall up and the garden shop backed. Marigold (or whoever holds the dream) sets their heart on one rare flower color, picked for your island: a purple tulip, black rose, red pansy, orange cosmos, pink hyacinth, orange lily, yellow rose or white tulip.</p>
+${steps(['<b>Grow it</b>: plant that flower until a seed comes up in that color. Wild flowers don\'t count.',
+ '<b>Enter</b>: tell Marigold once it blooms. The show is two days later, on a table by the plaza.',
+ '<b>Win</b>: it takes first prize the next day, and Marigold gives you the Flower Show Rosette.'])}
+<h3>The spring show</h3>
+<p>After that, a show is held every year on the first Saturday of April. Enter your whole garden at the table: the judges count every different flower and color you planted that is blooming that day. You get 1,500 clams per kind, up to 40,000. 12 or more kinds is first prize (and a rosette if you don't have one), 6 or more second, fewer third. Once a year.</p>
+`},
+
+{ id:'newcomer', group:'stories', title:'The newcomer', html:`
+<p><b>Starts:</b> with the town hall up, a day or three after someone new moves in who isn't one of your first islanders and doesn't already hold a dream. They don't know anyone yet.</p>
+${steps(['Talk to them and pick <b>Come and meet people</b>. They follow you for the rest of the day (until bedtime). "Wait here for now" stops them.',
+ 'Walk up to another islander with them close by and pick <b>Meet</b>. Each introduction gives +1 friendship to both.',
+ 'After 4 introductions they settle in.'])}
+<p>Once they have, they can help on island projects straight away, without the usual friendship 10.</p>
+`},
+
+{ id:'charter', group:'stories', title:'The Island Charter and the Driftwood Festival', html:`
+<p><b>Starts:</b> Clementine brings it up ("You look pleased with yourself") once all of these are in place: Gill's Trawler, the workshop on Old Pinewood, the tea room, the lighthouse lit, the forge and 10 islanders. Before that, ask her "What's next for the town?" and she says what's still missing.</p>
+<p><b>Cost:</b> 500,000 clams (chip in at the town projects, any amount), 50 planks, 20 iron fittings and 10 honey. Sign it, the whole town signs overnight, and the next day it's official.</p>
+<ul><li>The hall becomes the <b>Charter Hall</b>, with flags and bunting at the door. Ask Clementine about the charter for a brass copy to hang up.</li>
+<li>The day after, Wendell writes his last letter. That opens Starfall Isle (see <a href="#isles">Wendell's isles</a>).</li></ul>
+<h3>The Driftwood Festival</h3>
+<p>The first one is two days after the charter. After that it's the first Saturday and Sunday of March, June, September and December, 9 in the morning to 9 at night. Up to six islanders run stalls around the plaza, a different few each day. Each stall sells two festival things that suit its owner (candy apples, hand pies, pinwheels, fish kites, paper star lanterns, bunting).</p>
+<p>Visit every stall on a festival day and Clementine gives you that season's keepsake: a Blossom Festival Lantern, Summer Festival Drum, Harvest Festival Wreath or Winter Festival Snow Globe.</p>
+`},
+
 { id:'later', group:'stories', title:'Still to come', html:`
-<p>Planned but not in the game yet: small threads for every resident (a reading nook, a bike race, a flower show), the Island Charter, the Driftwood Festival, and a capstone floating isle. Pen pals visiting in person isn't built yet either. This page will change when they land.</p>
+<p>Pen pals visiting in person isn't built yet. This page will change when it lands.</p>
 `},
 
 /* ============================== CATALOG (live) ============================== */
@@ -624,10 +679,12 @@ ${steps(['<b>Diving bell</b>: Marlo\'s glass (20,000, on the sand the next day),
 <li>All three shops at tier 3 (Grand Emporium, Grand Aquarium Hall, Botanical Conservatory)</li>
 <li>House: pay off every loan; four floors if you like</li>
 <li>Every tool at Heirloom tier, the Grand Expedition Pack and the bike</li>
-<li>All 5 of Wendell's isles</li>
+<li>All 6 of Wendell's isles, and both of Wendell's spells at the star altar</li>
 <li>The reef Restored and the Driftwood Queen</li>
 <li>Every story business: workshop, apiary, tea room, lighthouse, forge, mill, post office with routes at level 5, bathhouse with rock pools, glade at full strength, all 4 wreck layers and the antiques shop</li>
 <li>All six legendary woodworking showpieces</li>
+<li>The reading room, the race course record, the flower show won, the newcomer settled in</li>
+<li>The Island Charter, and all four seasons' festival keepsakes</li>
 <li>Every enchantment and the Twin Charm</li>
 <li>Every passive income and stake at its top tier</li>
 <li>Best friends with everyone</li>
@@ -639,6 +696,7 @@ ${steps(['<b>Diving bell</b>: Marlo\'s glass (20,000, on the sand the next day),
 { id:'changes', group:'done', title:'What\'s changed', html:`
 <p>Recent updates, newest first.</p>
 <ul>
+<li><b>v1.41</b>: Juniper's reading nook, Otis's race course, Marigold's flower show and a spring show every April, the newcomer, the Island Charter and Charter Hall, the Driftwood Festival every season, and Starfall Isle with its own bugs and Wendell's two spells. The legendary trip island Starfall Isle is now called Stardrift Isle.</li>
 <li><b>v1.40</b>: Repair, make and enchant your tools. Pippa and Wendell teach enchantments, and scrolls turn up now and then (Fennick sometimes sells one). Two bigger crafting tables, the Carpenter's Bench and the Master Workbench, with pieces of their own. Most woodworking now needs a table nearby.</li>
 <li><b>v1.39.1</b>: Darker nights. Lamps, windows, fireflies, the lighthouse beam and night fish now stand out. Menu &gt; Brightness lifts the whole scene if it's too dark for you.</li>
 <li><b>v1.39 fixes</b>: Climb the lighthouse on Lighthouse Point and meet the keeper at the top. Mossby stays on your home island. Skipper Wick's goodbye no longer says you can never come back.</li>

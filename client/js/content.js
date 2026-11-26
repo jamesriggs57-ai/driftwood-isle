@@ -51,6 +51,7 @@ relic('relic_frostpine', 'Frostpine Cone',     'frostpine', 'A pine cone covered
 relic('relic_amber',     'Amber Sliver',       'amber',     'A shard of old amber with a fern frond caught inside, from before the island had a name.');
 relic('relic_moonsap',   'Moonsap Vial',       'moonsap',   'Silvery sap from a tree that only grows by moonlight. It glows a little brighter at night.');
 relic('relic_coralcrown','Living Coral Crown', 'coralcrown','A ring of every coral on the reef, grown together around a pearl. Still alive.');
+relic('relic_starglass', 'Starglass Shard',    'starglass', 'A sliver of glass that fell out of the sky. Stars move inside it, even in daylight.');   // v1.41: only rare and legendary isles, and moonlit ones, hold one
 def('lampframe', {name:'Lamp Frame',     kind:'material', price:0, stack:1, noSell:true, noGift:true, model:{t:'lampframe'}, desc:'An iron and brass frame for the lighthouse lamp, made at the workshop.'});
 def('cutting',   {name:'Coral Cutting',  kind:'coral', price:0, stack:20, noSell:true, noGift:true, model:{t:'cutting'}, desc:'A cutting from a full-grown coral in Cay Bay, for Thistle\'s Reef Hall.'});
 def('teacake',   {name:'Honey Tea Cake', kind:'food', price:650, stack:10, model:{t:'teacake'}, desc:'One of Mabel\'s tea cakes, sticky with honey from Hollis\'s hives.'});
@@ -64,6 +65,11 @@ def('crowbar',   {name:'Crowbar',        kind:'material', price:0, stack:1, noSe
 def('wrecklens', {name:'Lantern Lens',   kind:'material', price:0, stack:1, noSell:true, noGift:true, story:true, model:{t:'wrecklens'}, desc:'A thick glass lens from Marlo that throws a lantern\'s light a long way through dark water.'});
 def('bellframe', {name:'Diving Bell Frame', kind:'material', price:0, stack:1, noSell:true, noGift:true, story:true, model:{t:'bellframe'}, desc:'A stout timber frame from the workshop, to hang Hazel\'s diving bell from.'});
 def('chartpiece',{name:'Treasure Chart Piece', kind:'relic', price:0, stack:4, noSell:true, noGift:true, story:true, model:{t:'chartpiece'}, desc:'A torn corner of an old sea chart, inked with a compass rose. Hazel says there are four.'});
+/* ---------- v1.41 story things (models in story4.js) ---------- */
+def('nookshelves',{name:'Reading Nook Shelves', kind:'material', price:0, stack:1, noSell:true, noGift:true, story:true, model:{t:'nookshelves'}, desc:'Built-in shelves and a window seat from the workshop, for the reading nook at Thistle\'s museum.'});
+def('racesign',  {name:'Race Course Sign', kind:'material', price:0, stack:1, noSell:true, noGift:true, story:true, model:{t:'racesign'}, desc:'A painted start-and-finish sign for the island bike race, made at the workshop.'});
+def('candyapple',{name:'Candy Apple',    kind:'food', price:120, buy:300, stack:10, story:true, model:{t:'candyapple'}, desc:'A crisp apple in a shell of red sugar, from a festival stall.'});
+def('festpie',   {name:'Festival Hand Pie', kind:'food', price:200, buy:480, stack:10, story:true, model:{t:'festpie'}, desc:'A warm little pie with fruit inside, from a festival stall.'});
 export const CORAL_KINDS = ['brain','staghorn','fan','table'];
 export const CORAL_NAMES = { brain:'Brain', staghorn:'Staghorn', fan:'Sea Fan', table:'Table' };
 for (const k of CORAL_KINDS){
@@ -199,6 +205,10 @@ bug('gladefly','Glade Firefly',600,'glade',range(4,10),[19,4],4,[10,16],0.0001,{
 bug('bluespark','Blue Spark',1400,'glade',range(4,10),[20,3],2.5,[8,14],0.0001,{c:0x22284a,c2:0x7ad8ff,w:'beetle',glow:true});
 bug('mossglow','Moss Glowmoth',2400,'glade',range(3,11),[20,4],1.6,[30,50],0.00004,{c:0x4a6a3a,c2:0xb8ffa0,w:'moth',glow:true});
 bug('starlantern','Starlantern Beetle',5200,'glade',range(5,9),[21,3],0.6,[20,36],0.0001,{c:0x2a1a3a,c2:0xffe9a0,w:'beetle',glow:true});
+// v1.41 Starfall Isle bugs: they live only on the floating isle above Hollow Crags, where it is always night (main.js skyBugOK)
+bug('stardrifter','Sky Drifter',1800,'starfall',ALL,null,3,[30,48],0.0001,{c:0x2a2a5a,c2:0xd8e4ff,w:'moth',glow:true});
+bug('cometbeetle','Comet Beetle',3600,'starfall',ALL,null,1.6,[18,30],0.0001,{c:0x1a1a3a,c2:0x9ad8ff,w:'beetle',glow:true});
+bug('nebulamoth','Nebula Moth',7200,'starfall',ALL,null,0.5,[60,90],0.00004,{c:0x5a3a8a,c2:0xf0a8ff,w:'moth',glow:true});
 
 /* ---------- Plants ----------
    ptype: flower | shrub | tree.  days: days to fully grow.  bloom: months a shrub flowers. */
@@ -322,6 +332,18 @@ furn('noticeboard','Village Noticeboard',3800,0.6,{shop:'story',route:'board'});
 furn('ironlantern','Iron Lantern',4800,0.4,{shop:'story',glow:true});
 furn('irongate','Iron Gate',6000,1.3,{shop:'story'});
 furn('weathervane','Weathervane',5200,0.4,{shop:'story'});
+// v1.41 the charter, the Driftwood Festival (stall goods and Clementine's keepsakes), the race cup and the flower show ribbon
+furn('charterplaque','Island Charter',9000,0.5,{shop:'story',stack:1});
+furn('festbunting','Festival Bunting',1800,0.9,{shop:'story'});
+furn('paperstar','Paper Star Lantern',2400,0.35,{shop:'story',glow:true});
+furn('fishkite','Fish Kite',2200,0.5,{shop:'story'});
+furn('pinwheel','Pinwheel Stand',1400,0.3,{shop:'story'});
+furn('fest_spring','Blossom Festival Lantern',6000,0.4,{shop:'story',glow:true,stack:1});
+furn('fest_summer','Summer Festival Drum',6000,0.45,{shop:'story',stack:1});
+furn('fest_autumn','Harvest Festival Wreath',6000,0.45,{shop:'story',stack:1});
+furn('fest_winter','Winter Festival Snow Globe',6000,0.35,{shop:'story',glow:true,stack:1});
+furn('racecup','Island Race Cup',12000,0.4,{shop:'story',stack:1});
+furn('showribbon','Flower Show Rosette',5000,0.4,{shop:'story',stack:1});
 // Fennick's cart
 furn('umbrella','Beach Umbrella',2200,0.5,{shop:'rare',...R});
 furn('campfire','Cozy Campfire',2800,0.8,{shop:'rare',glow:true,...R});

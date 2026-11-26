@@ -524,6 +524,8 @@ RM('goldsap',    'Golden Sap',   2500, 'Now and then when you shake a tree (once
 RM('starstone',  'Starstone',    3000, 'Now and then when you hit rocks, more often at night');
 RM('moonpearl',  'Moonpearl',    3000, 'Now and then with a catch, or washed up on the beach');
 RM('glimmermoss','Glimmer Moss', 2000, 'Grows on old stumps: sometimes comes up when you dig one out, or with weeds at night');
+// v1.58 not a woodworking ingredient: a gem to keep or sell. Only the rocks on Hollow Crags give one.
+RM('emerald',    'Emerald',      2500, 'Only from the rocks on Hollow Crags: about 1 hit in 50', { desc:'A clear green emerald from the crags. Very rare, and worth keeping.' });
 const legend = (id, name, buy, r, o={}) => furn(id, name, buy, r, Object.assign({ shop:'craft', rarity:FR.l, legendary:true, glow:true, stack:1 }, o));
 legend('lanterntree',  'Heartwood Lantern Tree', 90000, 0.75);
 legend('pearlfountain','Moonpearl Fountain',    110000, 1.0);

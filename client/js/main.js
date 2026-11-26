@@ -4324,31 +4324,110 @@ function ghostOf(src, from){
   g.userData.tint=bad=>{ for (const m of mats) if (m.emissive) m.emissive.setHex(bad?0xb03a2a:0x6a4ab8); };
   g.userData.solid=()=>{ for (const [c,orig] of swaps){ c.material=orig; c.castShadow=true; } };
   return g; }
-const footprintClear = (x,z,r,self) => {
-  const msgs=[];
-  if (Math.hypot(x,z)/islandR(Math.atan2(z,x))>0.74) return 'Too close to the shore.';
-  if (Math.hypot(x,z)<r+8) return 'That\'s the plaza.';
-  if (polyDist(x,z,RIVER)<r+5 || Math.hypot(x-POND.x,z-POND.z)<POND.r+r+5) return 'Too close to the water.';
-  if (nearFall(x,z,r)) return 'Too close to the waterfall.';
-  if (XBR.some(b=>Math.hypot(x-b.a[0],z-b.a[1])<r+5)) return 'That\'s where the bridge to the new land comes ashore.';
-  if (x>DOCK.x0-r-6 && Math.abs(z-DOCK.z)<r+5) return 'That\'s the way to the dock.';
-  for (const k in PLACES){ if (k===self || k==='plaza' || k==='board') continue; const p=PLACES[k]; if (Math.hypot(x-p[0],z-p[1]) < r+footOf(k)+2.5) return 'Too close to another building.'; }
-  for (const k of INC_IDS){ const at=S.income[k] && S.income[k].at; if (!at || 'inc:'+k===self) continue; if (Math.hypot(x-at[0],z-at[1]) < r+5) return 'Too close to '+INCOME[k].who+'.'; }
-  let lo=99, hi=-99; for (let i=0;i<13;i++){ const a=i/12*TAU, rr=i===12?0:r, px=x+Math.cos(a)*rr, pz=z+Math.sin(a)*rr; if (!walkable(px,pz) && !inRects(px,pz,0) || (TERRA_ANY && terraWet(px,pz)>0)) return 'There\'s water or a cliff in the way.'; const h=rawHeight(px,pz); lo=Math.min(lo,h); hi=Math.max(hi,h); }
-  if (hi-lo>3.2) return 'The ground there is too steep.';
-  if (!walkable(x, z+r+1.5)) return 'The front door would open onto water or a cliff.';
-  const stuff=[...GCELLS.keys()].filter(k=>{ const [i,j]=k.split(',').map(Number); return Math.hypot(i*CELL-x,j*CELL-z)<r+0.5; }).length + S.plants.filter(p=>Math.hypot(p.x-x,p.z-z)<r+0.5 && !gardenAtXZ(p.x,p.z)).length + S.placed.filter(p=>p.x<500 && Math.hypot(p.x-x,p.z-z)<r+0.5).length;
-  if (stuff) return `Clear the plants, garden or furniture there first.`;
-  return null; };
-function magicPlace(x,z){
-  const M=magicMode; if (!M || M.kind!=='move') return; M.at=[+x.toFixed(1), +z.toFixed(1)];
-  M.ghost.position.set(x, groundY(x,z), z); const why=footprintClear(x,z,footOf(M.key),M.key); M.ok=!why; M.why=why;
+/* v1.40 easier moving. The old check put a big circle around every building, kept it a quarter of the island away from
+   the shore and nine meters from the river, and counted a wild flower as "furniture", so most of a crowded island showed red.
+   Now the building's own outline (its walls, or the house lot) is checked with a small gap, the message names what's in the way
+   and a red marker shows where, and a tap that's a little off slides to the nearest spot that fits. Wild flowers, stumps,
+   trees and rocks are cleared; furniture, flowers and trees you placed or planted, and things lying on the ground, are set down
+   just outside the new spot. Water, cliffs, the beach, the plaza, the dock, gardens, other buildings and their doors still block. */
+const BLD_GAP=1.0, MOVE_SNAP=3.2;
+const BLD_NAMES={ home:'your house', shop:'Pemberton\'s shop', museum:'the museum', aquarium:'the aquarium shop', garden:'Bug & Bloom', tower:'the wizard tower', hall:'the town hall', portal:'the Portal Station',
+  board:'the island board', reefhall:'the Reef Hall', forge:'the forge', tearoom:'the tea room', workshop:'the workshop', postoffice:'the post office', bathhouse:'the bathhouse', antiques:'the antiques shop' };
+const resAt = (x,z,d=1.5) => RESIDENTS.find(R=>R.home && Math.hypot(R.home[0]-x, R.home[1]-z)<d);
+function bldName(kind, e){ if (kind==='rhome' || kind==='plot'){ const R=e && resAt(e.pos.x, e.pos.z, 2.5); return R ? R.name+(kind==='plot'?'\'s plot':'\'s house') : kind==='plot'?'a neighbor\'s plot':'a neighbor\'s house'; }
+  if (BLD_NAMES[kind]) return BLD_NAMES[kind]; const R=RESIDENTS.find(R=>R.id===kind); return R ? R.name+'\'s house' : 'another building'; }
+const bldEntOf = key => { const o=bldObj(key); return o ? ents.find(e=>e.obj===o && !e.removed) || null : null; };
+// the building's outline relative to where it stands now: its wall rectangles, or a circle for cottages and stands
+function moveBody(key){
+  const p=placeOf(key), e=bldEntOf(key), off=q=>[q[0]-p[0], q[1]-p[1], q[2]-p[0], q[3]-p[1]];
+  const own = e && e.kind!=='rhome' && e.kind!=='plot' ? RECTS.filter(q=>q[4]===e.kind).map(off) : [];
+  if (key==='home') own.push(off(lotRect()));   // the lot moves with the house, so it has to fit too
+  const dp = e && (e.kind==='rhome' ? doorOf(e) : e.doorPt), door = dp ? [dp[0]-p[0], dp[1]-p[1]] : [0, 3.6];
+  if (own.length) return { rects:own, door, self:e };
+  return { r: key.startsWith('inc:') ? 2.2 : key==='home' ? 2.6 : 3.4, door, self:e }; }
+// points spread over the outline (edges, corners and the inside), for checking the ground under it
+function bodyPts(B, x, z){ const pts=[];
+  if (B.rects) for (const q of B.rects){ const w=q[2]-q[0], d=q[3]-q[1], nx=Math.max(2,Math.ceil(w/1.2)), nz=Math.max(2,Math.ceil(d/1.2));
+    for (let i=0;i<=nx;i++) for (let j=0;j<=nz;j++) pts.push([x+q[0]+w*i/nx, z+q[1]+d*j/nz]); }
+  else { pts.push([x,z]); for (const [rr,n] of [[B.r/2,6],[B.r,14]]) for (let i=0;i<n;i++){ const a=i/n*TAU; pts.push([x+Math.cos(a)*rr, z+Math.sin(a)*rr]); } }
+  return pts; }
+// how far a point is from the outline (0 inside it)
+function bodyDist(B, x, z, px, pz){ if (!B.rects) return Math.max(0, Math.hypot(px-x, pz-z)-B.r);
+  let best=1e9; for (const q of B.rects){ const dx=Math.max(x+q[0]-px, 0, px-(x+q[2])), dz=Math.max(z+q[1]-pz, 0, pz-(z+q[3])); best=Math.min(best, Math.hypot(dx,dz)); } return best; }
+function bodyRectDist(B, x, z, r){ if (!B.rects){ const dx=Math.max(r[0]-x, 0, x-r[2]), dz=Math.max(r[1]-z, 0, z-r[3]); return Math.max(0, Math.hypot(dx,dz)-B.r); }
+  let best=1e9; for (const q of B.rects){ const dx=Math.max(r[0]-(x+q[2]), 0, (x+q[0])-r[2]), dz=Math.max(r[1]-(z+q[3]), 0, (z+q[1])-r[3]); best=Math.min(best, Math.hypot(dx,dz)); } return best; }
+// what will be set down beside the new spot (and what simply goes, like wild flowers)
+function underBody(B, x, z, pad=0.4){ const near=(px,pz)=>px<500 && bodyDist(B,x,z,px,pz)<pad;
+  return { placed:S.placed.filter(p=>near(p.x,p.z)), plants:S.plants.filter(p=>!p.wild && !gardenAtXZ(p.x,p.z) && near(p.x,p.z)), wild:S.plants.filter(p=>p.wild && near(p.x,p.z)),
+    ground:S.ground.filter(g=>near(g.x,g.z)), stumps:(S.stumps||[]).filter(p=>near(p.x,p.z)) }; }
+// Is the spot OK? Returns null, or { why, at:[x,z] } with what's in the way and where
+function moveProblem(x, z, key, B=moveBody(key)){
+  const no=(why,px,pz)=>({ why, at:[px,pz] });
+  if (x>DOCK.x0-4 && Math.abs(z-DOCK.z)<5) return no('That\'s the way to the dock.', x, z);
+  const rw=(LAY.riverW||1.7)+0.8;
+  let lo=99, hi=-99;
+  for (const [px,pz] of bodyPts(B,x,z)){
+    if (rawHeight(px,pz)<0.3 || Math.hypot(px,pz)/islandR(Math.atan2(pz,px))>0.97) return no('Part of it would stand in the sea.', px, pz);
+    if (isBeach(px,pz)) return no('That\'s the beach. Buildings need firmer ground.', px, pz);
+    if (polyDist(px,pz,RIVER)<rw || Math.hypot(px-POND.x,pz-POND.z)<POND.r+1 || (TERRA_ANY && terraWet(px,pz)>0) || ((XW.length||POOLS.length) && xWaterNear(px,pz,0.8))) return no('Part of it would stand in the water.', px, pz);
+    if (FALLS.length && (nearFall(px,pz,-4) || inFallPool(px,pz))) return no('Too close to the waterfall.', px, pz);
+    if (onWall(px,pz)) return no('Part of it would hang over a cliff.', px, pz);
+    if (onBridge(px,pz) || onDock(px,pz)) return no('That\'s a bridge.', px, pz);
+    if (XBR.some(b=>Math.hypot(px-b.a[0],pz-b.a[1])<3.5)) return no('That\'s where the bridge to the new land comes ashore.', px, pz);
+    if (Math.hypot(px,pz)<6.4) return no('That\'s the plaza.', px, pz);
+    const g=gardenAtXZ(px,pz); if (g) return no('Your garden is in the way.', px, pz);
+    const h=rawHeight(px,pz); lo=Math.min(lo,h); hi=Math.max(hi,h); }
+  if (hi-lo>2.6) return no('The ground there is too uneven. Try flatter ground, or ask Wendell to shape the land.', x, z);
+  // other buildings: their walls (plus a small gap) and the ground in front of their doors
+  const mine=B.self, myKind = mine && mine.kind!=='rhome' && mine.kind!=='plot' ? mine.kind : null;
+  for (const q of RECTS){ if (q[4]===myKind) continue; if (bodyRectDist(B,x,z,q)<BLD_GAP){ const e=ents.find(e=>!e.removed && e.kind===q[4]); return no(`Too close to ${bldName(q[4], e)}.`, (q[0]+q[2])/2, (q[1]+q[3])/2); } }
+  for (const e of ents){ if (e.removed || e===mine || !(e instanceof Building) || e.pos.x>500) continue;
+    const hasR=RECTS.some(q=>q[4]===e.kind && e.kind!=='rhome' && e.kind!=='plot');
+    if (!hasR && bodyDist(B,x,z,e.pos.x,e.pos.z) < (e.kind==='rhome'?3.2:e.kind==='plot'?2.6:e.r+0.6)+BLD_GAP) return no(`Too close to ${bldName(e.kind, e)}.`, e.pos.x, e.pos.z);
+    const d = e.kind==='rhome' ? doorOf(e) : e.doorPt; if (d && bodyDist(B,x,z,d[0],d[1])<1.4) return no(`That would block the door of ${bldName(e.kind, e)}.`, d[0], d[1]); }
+  for (const k of INC_IDS){ const at=S.income[k] && S.income[k].at; if (!at || 'inc:'+k===key) continue; if (bodyDist(B,x,z,at[0],at[1])<2.4) return no('Too close to '+INCOME[k].who+'.', at[0], at[1]); }
+  // the new front door has to open onto ground you can walk on
+  const dx=x+B.door[0], dz=z+B.door[1]+1.2;
+  if (!walkable(dx,dz) || (TERRA_ANY && terraWet(dx,dz)>0)) return no('The front door would open onto water or a cliff.', dx, dz);
+  if (inRects(dx,dz,0.3)) return no('The front door would open into another building.', dx, dz);
+  return null; }
+const footprintClear = (x,z,r,self) => { const p=moveProblem(x,z,self); return p ? p.why : null; };   // older callers
+// the nearest spot within a few meters that fits (so a tap that's a little off still works)
+function snapSpot(x, z, key, B){ for (let d=0.6; d<=MOVE_SNAP; d+=0.6){ const n=Math.max(8, Math.round(d*5));
+    for (let k=0;k<n;k++){ const a=k/n*TAU, px=x+Math.cos(a)*d, pz=z+Math.sin(a)*d; if (!moveProblem(px,pz,key,B)) return [px,pz]; } } return null; }
+function magicPlace(x,z,exact){
+  const M=magicMode; if (!M || M.kind!=='move') return;
+  const B=M.body||(M.body=moveBody(M.key)); let prob=moveProblem(x,z,M.key,B); M.nudged=false;
+  if (prob && !exact){ const s=snapSpot(x,z,M.key,B); if (s){ x=s[0]; z=s[1]; prob=null; M.nudged=true; } }
+  M.at=[+x.toFixed(1), +z.toFixed(1)]; M.ok=!prob; M.why=prob && prob.why;
+  M.ghost.position.set(x, groundY(x,z), z);
   M.ghost.userData.ring.material.color.setHex(M.ok?0x9a7ad8:0xe2604d);
   if (M.bghost){ M.bghost.position.set(x, groundY(x,z), z); M.bghost.userData.tint(!M.ok); }
+  // a red marker on whatever is in the way
+  if (!M.badMark){ const g=new THREE.Group(), m=new THREE.MeshBasicMaterial({ color:0xe2604d, transparent:true, opacity:0.85, depthTest:false });
+    const ring=new THREE.Mesh(new THREE.TorusGeometry(0.9,0.12,8,32), m); ring.rotation.x=Math.PI/2; ring.renderOrder=6; g.add(ring);
+    const pin=new THREE.Mesh(new THREE.ConeGeometry(0.35,0.9,12), m); pin.rotation.x=Math.PI; pin.position.y=2.2; pin.renderOrder=6; g.add(pin); g.userData.pin=pin; scene.add(g); M.badMark=g;
+    FX.add((dt)=>{ if (magicMode!==M){ scene.remove(g); return false; } pin.position.y=2.2+Math.sin(performance.now()/180)*0.25; return true; }); }
+  M.badMark.visible=!M.ok; if (prob){ const [bx,bz]=prob.at; M.badMark.position.set(bx, Math.max(groundY(bx,bz),0)+0.15, bz); }
+  M.under = M.ok ? underBody(B, M.at[0], M.at[1]) : null;
   // trees and rocks under the new spot won't be there afterwards, so the preview leaves them out too
-  const rr=footOf(M.key)+0.6; for (const e of [...trees, ...rocks]) if (!e.removed){ const under=Math.hypot(e.pos.x-x, e.pos.z-z)<rr; if (under) (M.hid=M.hid||new Set()).add(e); e.obj.visible=!under; }
+  for (const e of [...trees, ...rocks]) if (!e.removed){ const under=bodyDist(B,x,z,e.pos.x,e.pos.z)<0.6; if (under) (M.hid=M.hid||new Set()).add(e); e.obj.visible=!under; }
   renderMagicBar();
 }
+// when the spell lands: furniture, plants and finds under the new spot are set down just outside it; wild flowers and stumps go
+function clearUnder(key, at){
+  const B=moveBody(key), [x,z]=at, U=underBody(B,x,z), taken=[], fail=[];
+  const ok=(px,pz,r)=>bodyDist(B,x,z,px,pz)>r+0.5 && !gardenAtXZ(px,pz) && !taken.some(([a,b,c])=>Math.hypot(a-px,b-pz)<c+r) && !(TERRA_ANY && terraWet(px,pz)>0);
+  const put=(rec, r)=>{ for (let d=bodyDist(B,x,z,rec.x,rec.z)+r+0.6, n=0; n<60; d+=0.5, n++){ const m=Math.max(10, Math.round(d*4)), a0=Math.atan2(rec.z-z, rec.x-x);
+      for (let k=0;k<m;k++){ const a=a0+(k%2?1:-1)*Math.ceil(k/2)/m*TAU, px=x+Math.cos(a)*d, pz=z+Math.sin(a)*d;
+        if (walkable(px,pz) && !blocked(px,pz,r) && !(r>1 && inRects(px,pz,r)) && ok(px,pz,r)){ rec.x=+px.toFixed(2); rec.z=+pz.toFixed(2); taken.push([px,pz,r]); return true; } } } return false; };
+  for (const p of U.placed){ const it=ITEMS[p.id]||{}; if (!put(p, it.r||0.6)) fail.push(p); }
+  for (const p of U.plants){ const P=PLANTS[p.sp]||{}; put(p, P.ptype==='tree'?1.3:0.5); }
+  for (const g of U.ground) put(g, 0.3);
+  if (U.wild.length) S.plants=S.plants.filter(p=>!U.wild.includes(p));
+  if (U.stumps.length) S.stumps=S.stumps.filter(p=>!U.stumps.includes(p));
+  for (const p of fail){ if (canAdd(p.id) && !hasStore(p)){ S.placed.splice(S.placed.indexOf(p),1); addItem(p.id); } }   // nowhere to put it: into your bag
+  return U.placed.length+U.plants.length+U.ground.length; }
 // Land: grid of TC cells around the camera, and markers for planned changes
 function drawGrid(){ const M=magicMode; if(!M||M.kind!=='land') return; const g=M.grid; while(g.children.length) g.remove(g.children[0]);
   const ci=Math.floor(M.camT.x/TC), cj=Math.floor(M.camT.z/TC), R=11, pts=[];
@@ -4419,11 +4498,15 @@ function landTap(x,z){
   if (Object.keys(pend).length) M.pend[k]=pend; else delete M.pend[k];
   Snd.pop(); drawMarks(); renderMagicBar();
 }
+// v1.40 what else the move does, under the 'Looks good!' line
+function moveNote(M){ const U=M.under, n=U ? U.placed.length+U.plants.length+U.ground.length : 0, L=[];
+  if (M.nudged) L.push('Moved over a little to fit.'); if (n) L.push(`${n===1?'One thing':n+' things'} there will be set down beside it.`);
+  return L.length ? `<br><span class="muted">${L.join(' ')}</span>` : ''; }
 function renderMagicBar(){
   const M=magicMode, bar=$('#magicBar'); if(!M) return; bar.classList.add('show');
   if (M.kind==='move'){ const full=moveCost(M), cost=full-voucherOff(full), go=M.who ? 'Move it here' : `Cast ${fmt(cost)}`;
     bar.innerHTML=`<div><b>Move: ${moveName(M.key)}</b></div>
-      <div class="row2"><div class="msg">${M.ok?(cost?`Looks good! ${fmt(cost)} clams.`:'Looks good! This one\'s free.'):`<span style="color:#c0503a">${M.why||'Pick a spot.'}</span>`}</div><button class="btn alt" id="mgNo">Cancel</button><button class="btn" id="mgOk" ${!M.ok||S.clams<cost?'disabled':''}>${go}</button></div>`; }
+      <div class="row2"><div class="msg">${M.ok?(cost?`Looks good! ${fmt(cost)} clams.`:'Looks good! This one\'s free.')+moveNote(M):`<span style="color:#c0503a">${M.why||'Pick a spot.'}</span>`}</div><button class="btn alt" id="mgNo">Cancel</button><button class="btn" id="mgOk" ${!M.ok||S.clams<cost?'disabled':''}>${go}</button></div>`; }
   else { const n=Object.keys(M.pend).length, cost=pendCost()-voucherOff(pendCost());
     const tools=[['raise','Raise'],['lower','Lower'],['pond','Pond'],['river','River'],['fill','Fill water'],...(landMagicOK()?[['land','New land'],['sea','Back to sea']]:[]),['undo','Undo']];
     bar.innerHTML=`<div class="tools">${tools.map(([k,l])=>`<button class="tool${M.tool===k?' on':''}" data-tl="${k}">${l}</button>`).join('')}</div>
@@ -4456,7 +4539,7 @@ function castMagic(){
   const P = M.kind==='move' ? { kind:'move', key:M.key, at:M.at.slice(), crew:!!M.who, after:M.after } : Object.assign({ kind:'land', pend:M.pend }, pendBounds());
   if (off) S.rare.voucher-=off;
   if (M.kind==='move' && M.key.startsWith('inc:')){ moveIncome(M); return; }   // v1.36 the people you fund just pick up and walk over
-  if (M.kind==='move'){ S.clams-=cost; track('moved'); (S.terra.moved=S.terra.moved||{})[M.key]=M.at.slice(); if (M.key==='tower') S.magic.at=M.at.slice(); if (M.after) M.after(); }
+  if (M.kind==='move'){ S.clams-=cost; track('moved'); clearUnder(M.key, M.at); (S.terra.moved=S.terra.moved||{})[M.key]=M.at.slice(); if (M.key==='tower') S.magic.at=M.at.slice(); if (M.after) M.after(); }
   else { S.clams-=cost; track('terra', Object.keys(M.pend).length);
     for (const [k,p] of Object.entries(M.pend)){ const c=Object.assign({}, TERRA[k]||{}); if (p.d) c.d=(c.d||0)+p.d; if (c.d===0) delete c.d; if (p.w!==undefined){ if (p.w) c.w=p.w; else delete c.w; } if (p.L!==undefined){ if (p.L) c.L=1; else delete c.L; } if (Object.keys(c).length) TERRA[k]=c; else delete TERRA[k]; }
     S.terra.cells=TERRA; }
@@ -7813,10 +7896,11 @@ canvas.addEventListener('pointermove', e=>{ const p=ptrs.get(e.pointerId); if(!p
   if (magicMode && ptrs.size===1){ const py=p.py??p.sy; p.py=e.clientY; if (Math.hypot(p.x-p.sx,p.y-p.sy)>8){
       // moving a building: drag the ghost if you grabbed it, otherwise look around
       if (p.mg===undefined){ const g0=groundAtScreen(p.sx,p.sy), M=magicMode; p.mg = M.kind==='move' && g0 && M.at && Math.hypot(g0.x-M.at[0], g0.z-M.at[1]) < footOf(M.key)+1.5; }
-      if (p.mg){ const g=groundAtScreen(e.clientX,e.clientY); if(g) magicPlace(g.x,g.z); } else magicPan(e.clientX-px, e.clientY-py); p.held=true; } return; }
+      if (p.mg){ const g=groundAtScreen(e.clientX,e.clientY); if(g) magicPlace(g.x,g.z,true); } else magicPan(e.clientX-px, e.clientY-py); p.held=true; } return; }
   if (e.pointerType==='mouse' && ptrs.size===1 && !(placing && placing.drag) && Math.hypot(p.x-p.sx,p.y-p.sy)>5){ camYaw-=(e.clientX-px)*0.008; lookDragT=performance.now(); p.held=true; return; }   // computer: drag to look around
   if (placing && placing.drag && placing.drag.id===e.pointerId && Math.hypot(p.x-p.sx,p.y-p.sy)>4){ const g=groundAtScreen(e.clientX,e.clientY); if(g){ const x=g.x+placing.drag.ox, z=g.z+placing.drag.oz; placing.m.position.set(x, World.inside?0:groundY(x,z), z); placing.dragged=true; p.held=true; checkPlace(); } } });
-function endPtr(e){ const p=ptrs.get(e.pointerId); if(!p) return; ptrs.delete(e.pointerId); const moved=Math.hypot(p.x-p.sx,p.y-p.sy), dt=performance.now()-p.t;
+function endPtr(e){ const p=ptrs.get(e.pointerId); if(!p) return; ptrs.delete(e.pointerId); if (p.mg && magicMode && magicMode.at) magicPlace(magicMode.at[0], magicMode.at[1]);   // v1.40 a drag that ends a little off slides to a spot that fits
+  const moved=Math.hypot(p.x-p.sx,p.y-p.sy), dt=performance.now()-p.t;
   const tap = ptrs.size===0 && !p.held && moved<14 && dt<450 && !layoutMode;
   if (tap && dlgState){ if (!dlgChoices.children.length) advanceDialog(); }
   else if (tap && dismissCards()){}

@@ -11,7 +11,7 @@
    built in wiki.js. Writing rules: plain words, no em dashes, no emoji, only facts the code supports.
    ===================================================================== */
 
-export const GUIDE_VERSION = 'v1.41';
+export const GUIDE_VERSION = 'v1.47';
 export const GUIDE_UPDATED = '2026-11-26';
 
 const tip = s => `<div class="tip"><b>Tip</b> ${s}</div>`;
@@ -183,6 +183,19 @@ ${note('If the islander a story favor was written for doesn\'t live on your isla
 <tr><td>2</td><td>300,000</td><td>General Store: 10% off, +6%</td><td>Pay 140%</td></tr>
 <tr><td>3</td><td>800,000</td><td>Grand Emporium: 15% off, +10%</td><td>Pay 150%</td></tr></table>
 <p>Backing a shop also counts toward the Grand Town Hall, Wendell's spells and isles, and brings Quill the bookkeeper (see Passive income). After investing, the keeper offers to move the shop for free.</p>
+<h3>The top two tiers</h3>
+<p>At tier 2 and tier 3 each shop opens up things you can't get anywhere else. Guests and visitors don't see them.</p>
+<p><b>Pemberton's back room</b> (General Store and up): a <b>Back room</b> tab in his shop, or ask him about it. It holds one piece a week, from eight pieces that are sold nowhere else: the Seashell Jukebox, Treadle Sewing Machine, Cuckoo Clock, Steamer Trunk, Penny-Farthing, Marble Chess Table, Old Typewriter and Grand Hourglass. A new piece comes in every 7 days, and ones you haven't bought there yet come first. They get his usual discount. Sometimes a rare woodworking plan is under a dust sheet too (45,000 clams, you still need the rare ingredients): about a 25% chance a week at the General Store and 50% at the Grand Emporium.</p>
+<p><b>Marlo's rare shelf</b>: at the Tidepool Aquarium, one rare piece a day joins his stock (Jellyfish Lamp, Seahorse Column Tank, Nautilus Shell Lamp). At the Grand Aquarium Hall it's two a day, and the Kelp Forest Tank, Porthole Aquarium and Octopus Lamp join the shelf. These pieces aren't in his everyday stock. Prices are in the table below.</p>
+<p><b>Sprig's rare seeds</b>: at the Greenhouse, two packets a day from the rare colors (Blue Rose, Black Tulip, Jade Hyacinth, Rainbow Pansy) and the Starbell hybrid. At the Botanical Conservatory it's three a day, adding the Sunburst Daisy and Peppermint Poppy hybrids and the <b>Lantern Bloom</b>, which glows after dark and counts as a night flower for Lumi's glade. Sprig breeds the hybrids; you buy them as seeds and grow them like any flower. Seed prices are on the Fruit, flowers and plants page.</p>
+<h3>What's biting</h3>
+<p>Ask Marlo <b>What's biting?</b> for a tip about your home waters (sea, pond and river). Once Gill has lent you his rowboat and the reef is at least Stirring, ask him the same about Cay Bay. Tips are picked once a day and point at an uncommon, rare or very rare fish that is in season. How much they tell you depends on Marlo's shop tier and on Gill's boat.</p>
+<table class="t"><tr><th>Level</th><th>Marlo</th><th>Gill</th><th>The tip tells you</th></tr>
+<tr><td>0</td><td>Bait Shack</td><td>No boat yet</td><td>Where something is biting</td></tr>
+<tr><td>1</td><td>Aquarium Supply</td><td>Dinghy</td><td>Where, its shadow size and its rarity</td></tr>
+<tr><td>2</td><td>Tidepool Aquarium</td><td>Trawler</td><td>The fish, where, and roughly what time of day</td></tr>
+<tr><td>3</td><td>Grand Aquarium Hall</td><td>Driftwood Queen</td><td>The fish, where and its exact hours, plus a second fish</td></tr></table>
+<p>Tips are true. Once you've asked, each fish that appears in the tipped fish's water while it's biting has an extra chance to be that fish: 12% for uncommon, 8% for rare, 5% for very rare. At level 3 both fish get it. This works on your own island and in Cay Bay, not on trips.</p>
 <h3>Better tools</h3>
 <p>Better tool tiers don't just appear. When you go to rebuy a tool you wore out, Pemberton notices and offers the next tier at 20% off the first one.</p>
 `, data:'shopfurn' },
@@ -281,6 +294,20 @@ ${tip('Making 10 <b>different</b> pieces is what starts Bramble\'s workshop stor
 /* ============================== MAGIC ============================== */
 { id:'wendell', group:'magic', title:'Wendell the wizard', html:`
 <p>Wendell is a semi-retired wizard whose tower appears near the plaza after Lumi's wish (2 starfish and a sand dollar).</p>
+<h3>Inside the tower</h3>
+<p>Wendell works inside his tower (before v1.47 he stood by the door). Walk up to the door and press Enter. The first time you go in, he introduces himself if you haven't met yet, or says hello and tells you where things are if you have.</p>
+<p><b>Downstairs, the workroom:</b></p>
+<ul><li><b>Wendell</b>, by his cauldron. Talk to him for everything on this page: potions, enchanting lessons, moving buildings, shaping land and the isles.</li>
+<li><b>The cauldron</b>: tap it to go straight to the potion shop.</li>
+<li><b>The bookshelves</b>: pull out a book at random. Two of them tell you how close you are to his moving and land spells.</li>
+<li><b>The lectern</b>: his enchanting lessons, once you've met him.</li>
+<li><b>The scrying bowl</b>: another way to start moving a building or shaping the land.</li>
+<li><b>The star chart</b>, the workbench, his owl Hoot and the armchair are there to look at. Starfall Isle shows on the chart once it has risen.</li></ul>
+<p>Moving a building, shaping land and raising an isle all happen outdoors, so you step out of the tower before the spell starts.</p>
+<p><b>Upstairs, the observatory</b> (take the stair by the star chart):</p>
+<ul><li><b>The telescope</b>: by day you see sky and clouds. At night you see one of five constellations, a different one each day, or Starfall Isle hanging over the Crags once it has risen.</li>
+<li><b>The glass dome</b>: an empty cushion waiting for Starglass. Once Starfall Isle has risen, a Starglass Shard sits there.</li>
+<li>The orrery, the star globe and the desk are for looking at.</li></ul>
 <h3>Luck potions</h3>
 <p>Each lasts 10 real minutes and makes rare finds of one kind far more likely (rare things about 3.5x, very rare and legendary about 3x).</p>
 <table class="t"><tr><th>Potion</th><th>Price</th><th>Luck for</th></tr>
@@ -660,7 +687,7 @@ ${steps(['Talk to them and pick <b>Come and meet people</b>. They follow you for
 `},
 
 /* ============================== CATALOG (live) ============================== */
-{ id:'fish', group:'catalog', title:'Fish', data:'fish', html:`<p>Sea fish are caught from the beach, river fish in the river, pond fish in ponds, and bay fish only in Cay Bay. A fish's shadow shows its size. Hours are 24-hour. Sell to Marlo for more.</p>` },
+{ id:'fish', group:'catalog', title:'Fish', data:'fish', html:`<p>Sea fish are caught from the beach, river fish in the river, pond fish in ponds, and bay fish only in Cay Bay. A fish's shadow shows its size. Hours are 24-hour. Sell to Marlo for more. Marlo and Gill can tell you what's biting today (see Shops and investing).</p>` },
 { id:'bugs', group:'catalog', title:'Bugs', data:'bugs', html:`<p>At most 3 bugs are out at once. Sell to Sprig for more.</p>` },
 { id:'fossils', group:'catalog', title:'Fossils and beach finds', data:'dig', html:`<p>Dig cracks with a shovel for fossils. Beach finds wash up daily. Very rare finds come up about 0.4% of the time as a group, legendary about 1 in 5,000.</p>` },
 { id:'fruit', group:'catalog', title:'Fruit, flowers and plants', data:'plants', html:`<p>Your island has one native fruit (100). Every other fruit sells for 250.</p>` },
@@ -696,6 +723,8 @@ ${steps(['Talk to them and pick <b>Come and meet people</b>. They follow you for
 { id:'changes', group:'done', title:'What\'s changed', html:`
 <p>Recent updates, newest first.</p>
 <ul>
+<li><b>v1.47</b>: You can go inside Wendell's tower. He works at his cauldron in a round workroom full of books, candles and a scrying bowl, and a stair leads up to an observatory with a telescope. See Wendell the wizard.</li>
+<li><b>v1.44</b>: Shop rewards and fishing tips. At the top two tiers Pemberton opens his back room (one piece a week, sometimes a rare plan), Marlo adds a rare shelf and Sprig sells rare flower colors, hybrids and the glowing Lantern Bloom. Marlo and Gill tell you what's biting, more exactly as their shop and boat grow.</li>
 <li><b>v1.41</b>: Juniper's reading nook, Otis's race course, Marigold's flower show and a spring show every April, the newcomer, the Island Charter and Charter Hall, the Driftwood Festival every season, and Starfall Isle with its own bugs and Wendell's two spells. The legendary trip island Starfall Isle is now called Stardrift Isle.</li>
 <li><b>v1.40</b>: Repair, make and enchant your tools. Pippa and Wendell teach enchantments, and scrolls turn up now and then (Fennick sometimes sells one). Two bigger crafting tables, the Carpenter's Bench and the Master Workbench, with pieces of their own. Most woodworking now needs a table nearby.</li>
 <li><b>v1.39.1</b>: Darker nights. Lamps, windows, fireflies, the lighthouse beam and night fish now stand out. Menu &gt; Brightness lifts the whole scene if it's too dark for you.</li>

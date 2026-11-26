@@ -7,7 +7,7 @@ import { ITEMS, TOOLS } from './content.js';
 import { M, mk, G, glowMat, addGlow, ITEM_BUILDERS } from './models.js';
 import { ENCH, FAMILIES, TWIN, TWIN_SLOTS, POWER, CRAFT, REPAIR, SCROLL_ODDS, WORDS, migrate, fits, knows, enchOf, slotsOf, rankOn, describe, toolsText, maxUses,
   canApply, needFor, missing, apply, remove, learn, repairNeed, repairClams, repair, repairForClams, craftNeed, canCraft, craft, teachable, rank3Known, scrollPick,
-  outputOf, oneSwing, luckFor, bonkPower, sureOf, bigRoll, sprayOf, sprayTargets, ONE_SWING_WOOD } from './enchant-core.js';
+  outputOf, oneSwing, luckFor, bonkPower, sureOf, bigRoll, sprayOf, sprayTargets, ONE_SWING_WOOD, carryDrops, upgradeTool } from './enchant-core.js';
 import { toolBench, enchBench, TWIN_BENCH, BENCH_NAME } from './benches-core.js';
 export * from './enchant-core.js';
 
@@ -64,7 +64,9 @@ export function createEnchant(C){
     learnScroll(itemId){ const id=ITEMS[itemId].ench; if (!learn(S(), id)) return false; C.save(); C.Snd.fanfare();
       C.toast(`Enchantment learned: ${ENCH[id].name}!`, C.thumb(itemId), 'new', describe(id)+'. Put it on a tool from the Tools tab.'); return true; },
     // the shop's buy button: say what an upgrade would cost you before replacing an enchanted tool
-    replaceWarning(t){ const T=S().tools[t]; return T && T.ench && T.ench.length ? `Your ${TOOLS[t].tiers[T.tier].name} has ${T.ench.map(nm).join(' and ')} on it. A new one starts plain, and those enchantments are lost.` : ''; },
+    replaceWarning(t, k){ const T=S().tools[t], d=T ? carryDrops(S(),t,k) : []; return d.length ? `Your ${TOOLS[t].tiers[T.tier].name} has ${d.map(nm).join(' and ')} on it. An heirloom never wears out, so that comes off. Anything else on it moves over.` : ''; },
+    // a bought tool replaces the old one and keeps its enchantments
+    upgradeTool:(t,k)=>upgradeTool(S(),t,k),
     // the shop keeper's choices (Pemberton repairs for clams)
     keeperChoices(k, menu){ if (!ok() || k.id!=='pemberton') return []; const worn=Object.keys(S().tools).filter(t=>repairClams(S(),t)>0); if (!worn.length) return [];
       return [{ label:'Fix my tools', fn:()=>repairByKeeper(k, menu) }]; },
@@ -150,8 +152,8 @@ export function createEnchant(C){
         else pick(`Which one comes off for ${ENCH[id].name}?`, cur.map(x=>({ label:ENCH[x].name, fn:()=>go(x) }))); }
       else go(null); });
     pB.querySelectorAll('[data-emk]').forEach(b=>b.onclick=()=>{ if (C.noEdit()) return; const [t,k]=b.dataset.emk.split(':'), kk=+k, c=canCraft(s,t,kk,inv,C.reqMet); if (!c.ok || toolBench(kk)>here()) return;
-      const go=()=>{ const r=craft(s,t,kk,inv,C.reqMet); if (!r.ok){ C.toast(r.why); return; } C.Snd.fanfare(); C.equip(t); C.toast(`You made a ${TOOLS[t].tiers[kk].name}!`, C.toolThumb(t,kk), 'new'); C.save(); C.updateHUD(); rer(); };
-      if (c.loses) confirm(`Your old ${TOOLS[t].name.toLowerCase()} has ${c.loses.map(nm).join(' and ')} on it. The new one starts plain, and those are lost.`, go); else go(); });
+      const go=()=>{ const r=craft(s,t,kk,inv,C.reqMet); if (!r.ok){ C.toast(r.why); return; } C.Snd.fanfare(); C.equip(t); const on=enchOf(s,t); C.toast(`You made a ${TOOLS[t].tiers[kk].name}!`, C.toolThumb(t,kk), 'new', on.length ? `${on.map(nm).join(' and ')} moved over from the old one.` : undefined); C.save(); C.updateHUD(); rer(); };
+      if (c.loses) confirm(`Your old ${TOOLS[t].name.toLowerCase()} has ${c.loses.map(nm).join(' and ')} on it. An heirloom never wears out, so that comes off. Anything else on it moves over.`, go); else go(); });
   }
   // a yes/no inside the panel (no dialog box, so the panel stays open)
   function confirm(text, yes){ if (C.confirm) return C.confirm(text, yes); const pB=C.pBody(), box=document.createElement('div'); box.className='notice'; box.style.cssText='position:sticky;bottom:0;z-index:2;box-shadow:0 -4px 14px rgba(0,0,0,.15)';
@@ -166,7 +168,12 @@ export function createEnchant(C){
     ENCH, POWER, FAMILIES, TWIN, CRAFT, REPAIR, migrate, canApply, apply, remove, learn, teachable, scrollPick, describe, maxUses, repairNeed, repairClams, canCraft, rank3Known, bigRoll, luckFor,
     S:()=>S(), inv,
     learnAll(){ for (const id of Object.keys(ENCH)) learn(S(), id); learn(S(),'twin'); C.save(); return S().rare.ench.known.length; },
-    kit(){ for (const m of ['wood','softwood','stone','clay','iron','weed','honey','plank','fitting','heartwood','starstone','goldsap','moonpearl','glimmermoss']) for (let i=0;i<20;i++) C.addItem(m); C.save(); },
+    learnEnch(){ for (const id of Object.keys(ENCH)) learn(S(), id); C.save(); return S().rare.ench.known.length; },
+    learnTwin(){ learn(S(),'twin'); C.save(); return S().rare.ench.twin; },
+    // every material any enchantment, the Twin binding, a tool recipe or a repair calls for
+    mats(){ const m=new Set(); for (const e of Object.values(ENCH)) for (const [id] of e.need) m.add(id); for (const [id] of TWIN.bind) m.add(id);
+      for (const L of Object.values(CRAFT)) for (const r of L) for (const [id] of (r||[])) m.add(id); for (const r of Object.values(REPAIR)) for (const [id] of r) m.add(id); return [...m].filter(id=>ITEMS[id]); },
+    kit(n=20){ let short=0; for (const m of H.dev.mats()) for (let i=0;i<n;i++) if (C.addItem(m)===false) short++; C.save(); return short; },
     give(t, k=0){ const tr=TOOLS[t].tiers[k]; S().tools[t]={ tier:k, uses:tr.forever?0:tr.uses }; C.save(); C.updateHeld(); },
     put(t, ...ids){ const T=S().tools[t]; if (!T) return false; T.ench=ids.filter(id=>ENCH[id] && fits(id,t)).slice(0,TWIN_SLOTS); if (!T.ench.length) delete T.ench; C.save(); return T.ench||[]; },
     wear(t, n){ const T=S().tools[t]; if (T) T.uses=Math.max(1,T.uses-n); C.save(); return T&&T.uses; },

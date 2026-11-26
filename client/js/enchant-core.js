@@ -200,6 +200,13 @@ export function repair(S, t, inv){ const need=repairNeed(S,t); if (!need) return
   for (const [m,n] of need) inv.take(m,n); S.tools[t].uses=maxUses(S,t); return { ok:true }; }
 export function repairForClams(S, t, pay){ const c=repairClams(S,t); if (!c) return { ok:false, why:'It doesn\'t need fixing.' }; if (!pay(c)) return { ok:false, why:'Not enough clams.' }; S.tools[t].uses=maxUses(S,t); return { ok:true, cost:c }; }
 
+/* A new tool of the same kind (bought or made) takes the old one's enchantments with it. Only a broken tool loses them.
+   The one exception: Tough can't sit on an heirloom (it never wears out), so it comes off. Returns what came off. */
+export function carryDrops(S, t, k){ const old=S.tools[t], d=TOOLS[t].tiers[k]||{}; return (old && old.ench || []).filter(id=>ENCH[id] && (!fits(id,t) || (ENCH[id].fam==='tough' && d.forever))); }
+export function upgradeTool(S, t, k){
+  const old=S.tools[t], d=TOOLS[t].tiers[k], drop=carryDrops(S,t,k), keep=(old && old.ench || []).filter(id=>ENCH[id] && !drop.includes(id));
+  S.tools[t]={ tier:k, uses:0 }; if (keep.length) S.tools[t].ench=keep; S.tools[t].uses = d.forever ? 0 : maxUses(S,t); return drop; }
+
 /* Craft: same requirements as buying (pass reqMet). You can't craft a tool you already have at that tier or better. */
 export function craftNeed(t, k){ return (CRAFT[t]||[])[k] || null; }
 export function canCraft(S, t, k, inv, reqMet){
@@ -207,13 +214,13 @@ export function canCraft(S, t, k, inv, reqMet){
   const own=S.tools[t]; if (own && own.tier>=k) return { ok:false, why: own.tier===k ? 'You already have one.' : 'You already have a better one.' };
   if (!reqMet(t,k)) return { ok:false, why:tr.req ? tr.req.desc : 'Not yet.' };
   const miss=missing(need, inv); if (miss.length) return { ok:false, why:'Missing materials.', miss, need };
-  return { ok:true, need, loses:own && own.ench ? own.ench.slice() : null };
+  const d=carryDrops(S,t,k); return { ok:true, need, loses:d.length ? d : null };
 }
 export function craft(S, t, k, inv, reqMet){
   const c=canCraft(S,t,k,inv,reqMet); if (!c.ok) return c; const tr=TOOLS[t].tiers[k];
   for (const [m,n] of c.need) inv.take(m,n);
-  S.tools[t]={ tier:k, uses:tr.forever?0:tr.uses }; S.toolEver[t]=Math.max(S.toolEver[t]??-1, k); S.toolOffer[t]=Math.max(S.toolOffer[t]??-1, k);
-  S.stats.toolsMade=(S.stats.toolsMade||0)+1; return { ok:true, lost:c.loses };
+  const lost=upgradeTool(S,t,k); S.toolEver[t]=Math.max(S.toolEver[t]??-1, k); S.toolOffer[t]=Math.max(S.toolOffer[t]??-1, k);
+  S.stats.toolsMade=(S.stats.toolsMade||0)+1; return { ok:true, lost:lost.length ? lost : null };
 }
 
 /* What a teacher can teach right now. kind 'pippa' or 'wendell'. Returns [{ id, price }]. */

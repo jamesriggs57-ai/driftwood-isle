@@ -88,10 +88,11 @@ Object.assign(FURN_BUILDERS, {
 /* ---------- hooks for main.js ----------
    C: S(), tables() -> [[id, distance, size]] for crafting tables in reach, learnWood(id), toast, thumb, Snd, save */
 export function createBenches(C){
+  let devAny=0;   // #dev: act as if at this table tier everywhere
   const S=()=>C.S();
   const H = {
     isBench:id=>benchTierOf(id)>0,
-    tier:()=>bestBench(C.tables()),
+    tier:()=>Math.max(devAny, bestBench(C.tables())),
     need:r=>benchFor(r),
     canHere:r=>benchFor(r)<=H.tier(),
     name:k=>BENCH_NAME[k],
@@ -104,7 +105,14 @@ export function createBenches(C){
     // after making something: table plans, and the pieces a table you built teaches. Returns new plan ids.
     progress:()=>benchProgress(S(), id=>C.learnWood(id)),
     dev:{ NEW_BENCHES, BENCH_PIECES, FIELD, tier:()=>H.tier(), give(){ for (const id of BENCH_IDS) C.addItem(id); C.save(); },
-      learn(){ for (const p of [...NEW_BENCHES, ...BENCH_PIECES]) C.learnWood(p.id); C.save(); } },
+      learn(){ for (const p of [...NEW_BENCHES, ...BENCH_PIECES]) C.learnWood(p.id); C.save(); },
+      // #dev: unlock table tier k (1-3) as if you'd built your way there: its plan, every table below it, and their pieces
+      unlock(k){ const S0=S(); if (!S0.craft) S0.craft={ made:0, kinds:[], known:[], ms:0 }; const K=S0.craft.kinds||(S0.craft.kinds=[]);
+        for (const id of FIELD) C.learnWood(id);
+        for (let t=1; t<=k; t++){ const id=BENCH_IDS[t-1]; C.learnWood(id); if (t<k && !K.includes(id)) K.push(id); }
+        for (const p of BENCH_PIECES) if (p.bench<=k) C.learnWood(p.id); C.save(); return BENCH_IDS[k-1]; },
+      // #dev: count as standing at table tier k anywhere (0 = back to normal). Not saved.
+      anywhere(k){ devAny=k|0; return devAny; }, get any(){ return devAny; } },
   };
   return H;
 }

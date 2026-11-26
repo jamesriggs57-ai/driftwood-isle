@@ -6,7 +6,8 @@
    Then it loads main.js, which reads window.__BOOT.
    ===================================================================== */
 import { Time } from './util.js';
-import { LAYOUTS, GUEST_LAYOUTS, TERRAINS, TOWNS, generateLayout, drawIslandPreview } from './layouts.js';
+import { LAYOUTS, GUEST_LAYOUTS, TERRAINS, TOWNS, generateLayout, drawIslandPreview, islandRadius } from './layouts.js';
+import { makeEven } from './extend.js';
 
 const SAVE_KEY = 'driftwood-isle-save-v1';
 const PLAYER_KEYS = ['player','clams','inv','seen','rec','friend','pack','tools','toolEver','toolOffer','equip','stats','craft','craftHint','caught','settings','quests','potions','bike','cook','fed','rare','wardrobe','ach','look','contacts','letters','talk','woodLater'];   // v1.54: must match PLAYER_KEYS in online.js, or a visit or trip starts without these and saves over them
@@ -51,13 +52,13 @@ function islandMaker(title, opts = {}) {
       <canvas id="imMap" width="560" height="560" style="width:100%;max-width:min(320px,34vh);display:block;margin:8px auto;border-radius:18px;border:3px solid #e7d1a6"></canvas>
       <div class="muted" style="font-size:12px;text-align:center;margin-bottom:8px">Red: your home · yellow: shops and museum · purple: a spot for something magical · white: neighbors</div>
       <button class="btn alt" id="imR">Reroll</button> <button class="btn" id="imGo">Live here</button>${opts.cancel ? ' <button class="btn alt" id="imNo">Keep my old island</button>' : ''}`);
-    const draw = () => { const L = generateLayout({ seed, terrain, town }); drawIslandPreview(el.querySelector('#imMap'), L);
+    const draw = () => { const L = generateLayout({ seed, terrain, town, v: 2 }); drawIslandPreview(el.querySelector('#imMap'), L, makeEven(a => islandRadius(L, a), seed));   // v1.62 every reroll a new shape, grown all round as it will be
       el.querySelector('#imTb').textContent = TERRAINS[terrain].blurb; el.querySelector('#imWb').textContent = TOWNS[town].blurb;
       el.querySelectorAll('[data-t]').forEach(b => b.classList.toggle('on', b.dataset.t === terrain)); el.querySelectorAll('[data-w]').forEach(b => b.classList.toggle('on', b.dataset.w === town)); };
     el.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { terrain = b.dataset.t; draw(); });
     el.querySelectorAll('[data-w]').forEach(b => b.onclick = () => { town = b.dataset.w; draw(); });
     el.querySelector('#imR').onclick = () => { seed = (Math.random() * 1e9) | 0; draw(); };
-    el.querySelector('#imGo').onclick = () => res({ layout: 'gen', gen: { seed, terrain, town }, seed });
+    el.querySelector('#imGo').onclick = () => res({ layout: 'gen', gen: { seed, terrain, town, v: 2 }, seed });
     if (opts.cancel) el.querySelector('#imNo').onclick = () => res(null);
     draw();
   });

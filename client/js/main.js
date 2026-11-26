@@ -257,9 +257,9 @@ function colAt(h, f, out){ const [a,b,t]=keyLerp(h,f); return out.setHex(a).lerp
 function numAt(h, f){ const [a,b,t]=keyLerp(h,f); return lerp(a,b,t); }
 
 /* ---------- Island shape (heightAt is the single source of truth) ---------- */
-const RIVER = LAY.river;
+const RIVER = LAY.river ? LAY.river.slice() : LAY.river;   // v1.62 a copy: on a grown island it runs on out through the new land (below)
 // v1.36 new land raised by Wendell (filled in once the island's own heights are ready; see the NEW LAND section)
-let ISLES=[], mainOnly=false, skySkip=false; const XBR=[];   // v1.41 skySkip: the sea floor under Starfall Isle (for the water's depth)
+let ISLES=[], mainOnly=false, skySkip=false; const XBR=[]; let XBR_LAY=null, layoutPhase=true;   // v1.62 XBR_LAY: the isles' bridges as they stood before the coast grew (only for laying out the original trees)   // v1.41 skySkip: the sea floor under Starfall Isle (for the water's depth)
 const POND = LAY.pond;
 /* v1.27 trip island shapes: extra channels (XW), round pools (POOLS), an offshore islet with a sandbar or stepping stones,
    and a giant tortoise's shell (a smooth mound the shell model sits on, so you can walk up onto it). */
@@ -283,28 +283,63 @@ const onBar = (x,z) => !!LAY.bar && polyDist(x,z,LAY.bar)<2.0 && Math.hypot(x-LA
 function islandR0(a){ return islandRadius(LAY, a); }   // the coast as it was before v1.58 (town spots and the original trees are still placed by it)
 // v1.37: which isles have risen, in the order they rose (Old Pinewood joined the list; older islands keep the v1.36 order)
 const ISLE_K = (TRIP || GUEST) ? [] : (Array.isArray(S.terra.isleK) && S.terra.isleK.length===(S.terra.isles|0) ? S.terra.isleK.filter(k=>ISL.ISLE_INFO[k]) : ISL.OLD_ORDER.slice(0, clamp((S.terra.isles|0), 0, 4)));
-/* v1.58 THE FAR SHORE: about half as much land again, all off one side and left wild (extend.js has the shape).
-   The side is picked once, clear of every isle (raised, or still to come in its usual place), their bridges, the dock and the
-   river mouth, and kept in S.terra.ext so it never moves. Trip islands stay as they are. */
+/* v1.58 THE FAR SHORE: about half as much land again, left wild (extend.js has the shape).
+   v1.62 EVEN GROWTH: the new land now goes all round the island instead of off one side, so the island keeps its own shape
+   and simply grows, and Wendell's isles and their bridges move out with the coast in their usual directions.
+   The shape is picked once and kept in S.terra.ext (v:2). Islands that had the one-sided far shore (v:1), or no new land
+   at all, are moved over once by migrateEven below. Trip islands stay as they are. */
 let EXT=null;
 if (!TRIP){ const sv=S.terra.ext;
-  if (sv && Number.isFinite(sv.a) && sv.W>0 && sv.D>0) EXT={ a:sv.a, W:sv.W, D:sv.D };
-  else { const kinds=[...ISLE_K, ...ISL.ISLE_ORDER.filter(k=>!ISLE_K.includes(k))];
-    const FX0=S.terra.isleFx||{}, plan=ISL.planIsles(kinds, { seed:S.seed|0, SC, shore:a=>islandR0(a)*1.03, ok:()=>true, angles:(S.terra.isleA||[]).slice(0, ISLE_K.length), grow:Object.fromEntries(Object.entries(FX0).map(([k,v])=>[k, v && v.g])) });
-    const end=LAY.river[LAY.river.length-1], avoid=[[end[0], end[1], 14*SC], [islandR0(0)+6*SC, 4, 24*SC]];
-    for (const p of LAY.river) if (Math.hypot(p[0],p[1])>islandR0(Math.atan2(p[1],p[0]))*0.8) avoid.push([p[0], p[1], 10*SC]);
-    if (LAY.falls) avoid.push([LAY.river[0][0], LAY.river[0][1], 14*SC]);
-    const bridges=plan.map(I=>{ const A=I.from==='main' ? [Math.cos(I.a)*islandR0(I.a)*0.95, Math.sin(I.a)*islandR0(I.a)*0.95] : [plan[I.from].cx, plan[I.from].cz]; return [A[0], A[1], I.cx, I.cz]; });
-    const isles=plan.map(I=>({ cx:I.cx, cz:I.cz, r:I.r }));
-    for (const I of plan) if (I.gr) for (let i=0;i<36;i++){ const a=i/36*TAU, R=ISL.isleRadius(I, a); if (R>I.r*1.05) isles.push({ cx:I.cx+Math.cos(a)*R, cz:I.cz+Math.sin(a)*R, r:5 }); }   // and the side each isle grows out on (v1.57)
-    EXT=XT.chooseExt({ R0:islandR0, SC, pref:-2.25, isles, bridges, avoid,
-      avoidA:[[0, 0.35], ...plan.filter((I,i)=>I.from==='main' && i<ISLE_K.length).map(I=>[I.a, 0.05])] });   // never over the dock, never under a raised isle's bridge
-    if (!VISIT) S.terra.ext={ ...EXT, v:1 }; } }
+  if (sv && sv.even && sv.D>0 && Array.isArray(sv.ph) && sv.ph.length===3) EXT={ even:1, a:0, W:Math.PI, D:sv.D, ph:sv.ph.slice(), mv:sv.mv||null };
+  else { const old = sv && Number.isFinite(sv.a) && sv.W>0 && sv.D>0 ? { a:sv.a, W:sv.W, D:sv.D } : null;   // the one-sided far shore (v1.58 to v1.61)
+    EXT=XT.makeEven(islandR0, S.seed|0); const rp=migrateEven(old, EXT);
+    EXT.mv=rp.isles.length ? Object.fromEntries(rp.isles.map(I=>[I.kind, [I.dx, I.dz]])) : null;   // how far each isle moved out (kept: see XBR_LAY)
+    S.terra.ext={ even:1, D:EXT.D, ph:EXT.ph.slice(), v:2, ...(EXT.mv ? { mv:EXT.mv } : {}) }; } }
+/* v1.62 move an island over to even growth, once. Every isle is planned twice: where it stood on the old coast and where it
+   stands off the new one (same direction, same shape); everything saved on an isle moves with it. On an island that had the
+   one-sided far shore, things lying out on that land beyond where the new coast's grass ends are drawn in towards the island,
+   in the same order, so nothing ends up in the sea. Nothing on the old island itself moves. Returns what it did (for tests). */
+function migrateEven(OLD, E){
+  const R0=islandR0, oldR=a=>OLD ? XT.extR(R0, OLD, a) : R0(a), newR=a=>XT.extR(R0, E, a), rep={ isles:[], moved:0, pulled:0 };
+  const FX=S.terra.isleFx||{}, grow=Object.fromEntries(Object.entries(FX).map(([k,v])=>[k, v && v.g]));
+  const mv=[];   // [old isle, dx, dz]
+  if (ISLE_K.length){
+    const base={ seed:S.seed|0, SC, ok:()=>true, clear:()=>true, grow, prefer:LAY.isleDirs }, ang=(S.terra.isleA||[]).slice(0, ISLE_K.length);
+    const was=ISL.planIsles(ISLE_K, { ...base, shore:a=>oldR(a)*1.03, angles:ang });
+    const keepA=was.map(I=>+I.a.toFixed(4));   // the crags and Starfall keep the side they're on now
+    const now=ISL.planIsles(ISLE_K, { ...base, shore:a=>newR(a)*1.03, angles:keepA, subSaved:true });
+    S.terra.isleA=[...keepA, ...(S.terra.isleA||[]).slice(ISLE_K.length)];
+    was.forEach((I,i)=>{ const J=now[i]; if (J && J.kind===I.kind){ mv.push([I, J.cx-I.cx, J.cz-I.cz]); rep.isles.push({ kind:I.kind, dx:+(J.cx-I.cx).toFixed(2), dz:+(J.cz-I.cz).toFixed(2) }); } });
+  }
+  const isleOf=(x,z)=>{ for (const m of mv) if (ISL.inBox(m[0],x,z) && ISL.isleT(m[0],x,z)<1.15) return m; return null; };
+  // where a spot ends up: with its isle, drawn in off the old far shore, or (nearly always) just where it was
+  const to=(x,z)=>{ const m=isleOf(x,z); if (m){ rep.moved++; return [x+m[1], z+m[2]]; }
+    if (!OLD) return null; const a=Math.atan2(z,x), r=Math.hypot(x,z); if (r<=R0(a) || XT.extBulge(OLD, a)<=0) return null;
+    const c1=newR(a)-0.17*R0(a), rO=oldR(a); if (r<=c1 || rO<=c1+1) return null;   // c1: where the new coast's grass ends
+    const lo=Math.min(c1-1, Math.max(R0(a)*0.85, c1-0.12*R0(a)));   // squeezed into the band from lo to c1, in the same order
+    const rr=lo+(c1-lo)*Math.min(1, Math.max(0, (r-lo)/(rO-lo))); rep.pulled++; return [Math.cos(a)*rr, Math.sin(a)*rr]; };
+  const obj=o=>{ if (!o || !Number.isFinite(o.x) || !Number.isFinite(o.z)) return; const p=to(o.x, o.z); if (p){ o.x=+p[0].toFixed(3); o.z=+p[1].toFixed(3); } };
+  const arr=v=>{ if (!Array.isArray(v) || !Number.isFinite(v[0]) || !Number.isFinite(v[1])) return; const p=to(v[0], v[1]); if (p){ v[0]=+p[0].toFixed(2); v[1]=+p[1].toFixed(2); } };
+  for (const o of (S.placed||[])) if (o && o.x<500) obj(o);
+  for (const k of ['plants','stumps','ground']) for (const o of (S[k]||[])) obj(o);
+  if (S.day) for (const k of ['digs','weeds']) for (const o of (S.day[k]||[])) obj(o);
+  if (S.story){ arr(S.story.pinesAt); arr(S.story.cragsAt); }
+  if (S.terra.moved) for (const v of Object.values(S.terra.moved)) arr(v);
+  if (S.magic) arr(S.magic.at);
+  // the fishing boat sits on the beach: keep it the same distance in from the coast, which has moved out
+  const B=S.income && S.income.boat; if (B && Array.isArray(B.at) && !isleOf(B.at[0], B.at[1])){ const a=Math.atan2(B.at[1], B.at[0]), r=Math.hypot(B.at[0], B.at[1]), r2=r+newR(a)-oldR(a);
+    B.at[0]=+(Math.cos(a)*r2).toFixed(1); B.at[1]=+(Math.sin(a)*r2).toFixed(1); rep.boat=1; }
+  migrateEven.last=rep; return rep;
+}
 let extOff=false, hOld=null, sOld=null;   // true while the original trees and rocks are placed (they go by the old coast, so every saved tree keeps its spot)
 const extNear = a => !!EXT && Math.abs(Math.atan2(Math.sin(a-EXT.a), Math.cos(a-EXT.a))) < EXT.W+0.45;   // the far shore's side, with room for its hills, which spill a little past its edge
 function islandR(a){ return EXT && !extOff ? XT.extR(islandR0, EXT, a) : islandR0(a); }
 // where a point sits between the middle (0) and the coast (1); inland it is exactly what it always was
 const islandT = (x,z) => EXT && !extOff ? XT.extT(islandR0, EXT, x, z) : Math.hypot(x,z)/islandR0(Math.atan2(z,x));
+// v1.62 the river runs on, straight, through the new land to the new coast (added at the end, so its bridges keep their places)
+if (EXT && EXT.even && RIVER && RIVER.length>1){ const e=RIVER[RIVER.length-1], q=RIVER[RIVER.length-2], L=Math.hypot(e[0]-q[0], e[1]-q[1])||1, ux=(e[0]-q[0])/L, uz=(e[1]-q[1])/L;
+  let s=0; while (s<80 && Math.hypot(e[0]+ux*s, e[1]+uz*s) < islandR(Math.atan2(e[1]+uz*s, e[0]+ux*s))+6*SC) s+=1;
+  if (s>0) RIVER.push([+(e[0]+ux*s).toFixed(1), +(e[1]+uz*s).toFixed(1)]); }
 const EXT_BOX = EXT ? XT.extBox(islandR0, EXT, 0) : null;   // the island and its new land, edge to edge
 // Cliff coast direction: c > 0 on the cliff side (for the preset Highlands this is the old cos(angle) on the west)
 const cliffC = a => LAY.cliff ? -Math.cos(a - LAY.cliff.a) : 0;
@@ -334,7 +369,8 @@ function baseHeight(x, z){
    'hills': the earlier smooth-hills test. 'flat': the original island.
    Trees and rocks are still placed using the original heights, so every saved tree keeps its spot. */
 const TERRAIN_STYLE='tiers';   // gentle terraces are the island's terrain (decided 2026-11-22)
-const MOUNDS = EXT ? [...(LAY.mounds||[]), ...XT.extMounds(islandR0, EXT, SC)] : LAY.mounds;   // tier style (v1.58: a few low hills out on the new land)
+const MOUNDS = EXT ? [...(LAY.mounds||[]), ...XT.extMounds(islandR0, EXT, SC, [[0, 0.4], ...(RIVER && RIVER.length ? [[Math.atan2(RIVER[RIVER.length-1][1], RIVER[RIVER.length-1][0]), 0.4]] : []),
+  ...[...(S.terra.isleA||[]).slice(0, ISLE_K.length), ...Object.values(LAY.isleDirs || ISL.PREFER)].map(a=>[a, 0.35])])] : LAY.mounds;   // tier style (v1.58: a few low hills out on the new land; v1.62 round the ring, clear of the dock, river mouth and isle bridges)
 const TIER = { step:0.55, off:0.85, riser:0.2 };   // terrace height, lowest terrace, share of each step used by the slope between terraces
 const HGR = Math.ceil(62*SC);   // the height grid covers the whole island (bigger for generated islands)
 // v1.58: a box, grown on the new land's side only (same 0.5 m cells, lined up with the old ones)
@@ -350,13 +386,15 @@ const MAX_SLOPE = TERRAIN_STYLE==='tiers' ? 2.2 : 0.9;   // steeper than this is
 const SAND_H = 0.62;
 const DOCK = { z:4, w:1.3, x0:0, x1:0, y:0.72 };
 { let x=30*SC; while (rawHeight(x, DOCK.z) > 0.25 && x < 80*SC) x += 0.2; DOCK.x0 = x-3.5; DOCK.x1 = x+10; }
-const onDock = (x,z) => x>DOCK.x0 && x<DOCK.x1 && Math.abs(z-DOCK.z)<DOCK.w;
+// v1.62 where the dock stood before the coast grew: the island's original trees and rocks are laid out around it, as they always were
+const DOCK_OLD = EXT && EXT.even ? (()=>{ let x=30*SC; while (baseHeightOld(x, DOCK.z) > 0.25 && x < 80*SC) x += 0.2; return { ...DOCK, x0:x-3.5, x1:x+10 }; })() : DOCK;
+const onDock = (x,z) => { const D=layoutPhase ? DOCK_OLD : DOCK; return x>D.x0 && x<D.x1 && Math.abs(z-D.z)<D.w; };
 // Bridges are placed across the river where paths need to cross
 function makeBridge(i, t, len=8.5, w=1.35){ const a=RIVER[i], b=RIVER[i+1]; const cx=lerp(a[0],b[0],t), cz=lerp(a[1],b[1],t); const dx=b[0]-a[0], dz=b[1]-a[1], L=Math.hypot(dx,dz); return { x:cx, z:cz, ux:-dz/L, uz:dx/L, len, w }; }
 const BRIDGES = LAY.bridges.map(([i,t])=>makeBridge(i,t));
 for (const [x,z,ux,uz] of (LAY.xbridges||[])) BRIDGES.push({ x, z, ux, uz, len:(LAY.riverW||1.7)>2?9.6:8.5, w:1.35 });   // v1.27 bridges over extra channels
 function bridgeLocal(b,x,z){ const dx=x-b.x, dz=z-b.z; return [dx*b.ux+dz*b.uz, -dx*b.uz+dz*b.ux]; }
-function onBridge(x,z){ for(const b of BRIDGES){ const [u,v]=bridgeLocal(b,x,z); if(Math.abs(u)<b.len/2 && Math.abs(v)<b.w) return b; } for(const b of XBR){ const [u,v]=bridgeLocal(b,x,z); if(Math.abs(u)<b.len/2 && Math.abs(v)<b.w) return b; } return null; }
+function onBridge(x,z){ for(const b of BRIDGES){ const [u,v]=bridgeLocal(b,x,z); if(Math.abs(u)<b.len/2 && Math.abs(v)<b.w) return b; } for(const b of (layoutPhase && XBR_LAY ? XBR_LAY : XBR)){ const [u,v]=bridgeLocal(b,x,z); if(Math.abs(u)<b.len/2 && Math.abs(v)<b.w) return b; } return null; }
 const bridgeY = (b,x,z) => { const [u]=bridgeLocal(b,x,z); if (b.yAt) return b.yAt(u); return 0.45+0.45*Math.cos(clamp(u/(b.len/2),-1,1)*Math.PI/2); };
 
 /* Wizard terraforming: the island is split into TC-metre cells. d = terrace steps up (+) or down (-),
@@ -472,14 +510,15 @@ function genPaths(P){
     const s = x>=0 ? 1 : -1; out.push([[0,0],[x+s*6.5, z+0.5],[x+s*4, d[1]+1.8],[x,d[1]]]); };
   for (const k of Object.keys(P)) if (k!=='plaza' && k!=='board') to(k, doorOff(k));
   out.push([[0,0],[-3.5,-3]]);
-  out.push([[0,0],[14,3],[DOCK.x0-1,DOCK.z]]);
+  out.push([[0,0],[14,3],[DOCK_OLD.x0-1,DOCK.z]]);   // v1.62 old dock spot (see genPathsRouted)
   out.push([[0,0],[-7,-8],[-8,-14],bEnd(bA,1)]);
   out.push([[-6,2],[-16,-6],[-18,-9],bEnd(bB,1)]);
   return out;
 }
 // Generated islands (and moved buildings): every door gets a path from the plaza, crossing the river on a bridge when needed.
 function crossesWater(a, b){ const L=Math.hypot(b[0]-a[0],b[1]-a[1]), n=Math.max(2,Math.ceil(L/1.2));
-  for(let s=1;s<n;s++){ const x=a[0]+(b[0]-a[0])*s/n, z=a[1]+(b[1]-a[1])*s/n; if (polyDist(x,z,RIVER)<3.8 && islandT(x,z)<1) return true; if (Math.hypot(x-POND.x,z-POND.z)<POND.r+0.8) return true; } return false; }
+  const RV=layoutPhase?LAY.river:RIVER, tAt=layoutPhase?(x,z)=>Math.hypot(x,z)/islandR0(Math.atan2(z,x)):islandT;   // v1.62 the original paths (that trees grow around) go by the old coast and river
+  for(let s=1;s<n;s++){ const x=a[0]+(b[0]-a[0])*s/n, z=a[1]+(b[1]-a[1])*s/n; if (polyDist(x,z,RV)<3.8 && tAt(x,z)<1) return true; if (Math.hypot(x-POND.x,z-POND.z)<POND.r+0.8) return true; } return false; }
 function routeTo(from, to){
   if (!crossesWater(from,to)) return [from,to];
   let best=null, bc=1e9;
@@ -491,7 +530,7 @@ function routeTo(from, to){
 function genPathsRouted(P){
   const nodes=[{ p:[0,0] }], leaves=[];
   for (const k of Object.keys(P)){ if (k==='plaza' || k==='board') continue; const d=door(k, doorOff(k)); const pre=[d[0], d[1]+1.6]; nodes.push({ p:pre, k }); leaves.push([pre, d]); }
-  nodes.push({ p:[DOCK.x0-1, DOCK.z] });
+  nodes.push({ p:[DOCK_OLD.x0-1, DOCK.z] });   // v1.62 the dock where it stood before the coast grew (these paths are only for laying out the original trees)
   const bridgeOf=new Map(); for (const b of BRIDGES){ const i=nodes.length; nodes.push({ p:bEnd(b,1) }, { p:bEnd(b,-1) }); bridgeOf.set(i, i+1); bridgeOf.set(i+1, i); }
   const fp = P===PLACES ? PLACES : P;
   const cost=(i,j)=>{ if (bridgeOf.get(i)===j) return 0.01; const a=nodes[i].p, b=nodes[j].p; if (crossesWater(a,b)) return Infinity;
@@ -530,7 +569,7 @@ function genPathsGrid(P, only){
   const cellOf=p=>{ const i=clamp(Math.floor((p[0]+R0)/ST)+gL,0,n-1), j=clamp(Math.floor((p[1]+R0)/ST)+gT,0,nz-1); return j*n+i; };
   const nodes=[[0,0]], leaves=[];
   for (const k of Object.keys(P)){ if (k==='plaza'||k==='board'||(only&&!only.includes(k))) continue; const d=[P[k][0], P[k][1]+doorOff(k)], pre=[d[0], d[1]+1.6]; nodes.push(pre); leaves.push([pre,d]); }
-  if (!only) nodes.push([DOCK.x0-1, DOCK.z]);
+  if (!only) nodes.push([DOCK_OLD.x0-1, DOCK.z]);   // v1.62 the path goes to where the dock stood, then straight on out to it (below), so it keeps its old way
   for (const p of nodes){ const c=cellOf(p); blk[c]=0; near[c]=9; }   // every node is reachable from its own cell
   const NB=[[1,0,1],[-1,0,1],[0,1,1],[0,-1,1],[1,1,1.414],[1,-1,1.414],[-1,1,1.414],[-1,-1,1.414]];
   const stepCost=c=>1+(near[c]<1.6?(1.6-near[c])*2.2:0);
@@ -553,6 +592,7 @@ function genPathsGrid(P, only){
       out.push(simp.map(q=>[+q[0].toFixed(2), +q[1].toFixed(2)])); }
     for (let v=0;v<M;v++){ if (inT[v]) continue; const c=runs[u].g[cells[v]]; if (c<best[v]){ best[v]=c; par[v]=u; } } }
   out.push(...leaves); if (!only) out.push([[0,0],[-3.5,-3]]);
+  if (!only && DOCK_OLD!==DOCK) out.push([[DOCK_OLD.x0-1, DOCK.z], [DOCK.x0-1, DOCK.z]]);
   return out;
 }
 let PATHS;
@@ -561,7 +601,7 @@ else if (TRIP) PATHS = [];   // trip islands have no town, so no paths
 else PATHS = genPathsGrid(PLACES);
 const REROUTED = LAYOUT_ID!=='classic' || MOVED;   // the paths you see differ from the ones trees were placed around
 if (LAYOUT_ID!=='classic' && !TRIP) PATHS_V4.push(...(LAYOUT_ID==='gen' ? genPathsRouted(PLACES0) : genPaths(PLACES0)));
-let layoutPhase=true;   // true while the original trees and rocks are being placed
+layoutPhase=true;   // true while the original trees and rocks are being placed (declared up by XBR)
 const pathDist = (x,z) => { let m=1e9; for(const p of (layoutPhase?PATHS_V4:PATHS)) m=Math.min(m, polyDist(x,z,p)); return m; };
 const newPathDist = (x,z) => { let m=1e9; for(const p of PATHS_NEW) m=Math.min(m, polyDist(x,z,p)); return m; };
 
@@ -629,6 +669,7 @@ const newPathDist = (x,z) => { let m=1e9; for(const p of PATHS_NEW) m=Math.min(m
        so the same trees come up in the same places. Only the old shore on that side is different; work it out there again. */
     if (EXT){ hOld=h.slice(); for(let j=0;j<nz;j++) for(let i=0;i<n;i++){ const x=HG.x0+i*HG.step, z=HG.z0+j*HG.step, a=Math.atan2(z,x);
         if (!extNear(a) || Math.hypot(x,z)<islandR0(a)*0.6) continue;
+        if (EXT.even && Math.hypot(x,z)>islandR0(a)*1.12+3){ hOld[j*n+i]=0; continue; }   // v1.62 out past the old beach was open sea: no old tree or rock was ever there
         extOff=true; const v=cell(x, z, -1); extOff=false; hOld[j*n+i]=v===null?0:v; } }
   }
   if (TERRAIN_STYLE!=='flat'){
@@ -638,6 +679,7 @@ const newPathDist = (x,z) => { let m=1e9; for(const p of PATHS_NEW) m=Math.min(m
     HG.h=h; HG.s=sl;
     if (hOld){ sOld=sl.slice(); const H0=(i,j)=>baseHeightOld(HG.x0+i*HG.step, HG.z0+j*HG.step)+hOld[j*n+i];   // the old shore's slopes too (see hOld above)
       for(let j=1;j<nz-1;j++) for(let i=1;i<n-1;i++){ const x=HG.x0+i*HG.step, z=HG.z0+j*HG.step, a=Math.atan2(z,x); if (!extNear(a) || Math.hypot(x,z)<islandR0(a)*0.55) continue;
+        if (EXT.even && Math.hypot(x,z)>islandR0(a)*1.12+2){ sOld[j*n+i]=0; continue; }
         const o=hOld; if(!o[j*n+i]&&!o[j*n+i+1]&&!o[j*n+i-1]&&!o[(j+1)*n+i]&&!o[(j-1)*n+i]){ sOld[j*n+i]=0; continue; }   // flat as it always was, as above
         sOld[j*n+i]=Math.hypot(H0(i+1,j)-H0(i-1,j), H0(i,j+1)-H0(i,j-1))/(2*HG.step); } }
   }
@@ -654,13 +696,15 @@ function visPathDistH(x,z){ let m=1e9; for(const p of PATHS) m=Math.min(m, polyD
 const ISLE_N = ISLE_K.length;
 const angDiff = (a,b) => Math.abs(Math.atan2(Math.sin(a-b), Math.cos(a-b)));
 // v1.58 is a spot clear of the far shore (for the crags and Starfall, which hang off other isles; isles already raised stay put)
-const extClear = (x,z,r,k) => !EXT || k<ISLE_K.length || XT.clearance(EXT, { R0:islandR0, SC, isles:[{ cx:x, cz:z, r }], bridges:[], avoid:[] })>=4*SC;
+const extClear = (x,z,r,k) => !EXT || k<ISLE_K.length || (EXT.even ? isleSeaClear(x,z,r) : XT.clearance(EXT, { R0:islandR0, SC, isles:[{ cx:x, cz:z, r }], bridges:[], avoid:[] })>=4*SC);
+// v1.62 an isle hanging off another (the crags, Starfall) keeps a strip of sea between it and the grown coast
+function isleSeaClear(x,z,r){ for (let i=0;i<72;i++){ const a=i/72*TAU, R=islandR(a)+4*SC; if (Math.hypot(x-Math.cos(a)*R, z-Math.sin(a)*R)<r*1.25) return false; } return Math.hypot(x,z)>islandR(Math.atan2(z,x))+r; }
 function mainLanding(a){ const ux=Math.cos(a), uz=Math.sin(a), R0=islandR(a); let d=R0*1.25;
   for (; d>R0*0.55; d-=0.35) if (rawHeight(ux*d, uz*d)>SAND_H+0.2) break;
   d-=1.8; return [ux*d, uz*d]; }
 function landingOK(a){ const [x,z]=mainLanding(a), ux=Math.cos(a), uz=Math.sin(a);
   if (LAY.cliff && cliffC(a)>-0.25) return false;   // not off the sea cliffs
-  if (EXT && angDiff(a, EXT.a)<EXT.W+0.45) return false;   // v1.58 not off the far shore (an isle there would crowd it)
+  if (EXT && !EXT.even && angDiff(a, EXT.a)<EXT.W+0.45) return false;   // v1.58 not off the far shore (an isle there would crowd it); v1.62 the coast grows all round, so isles simply sit further out
   if (!walkable(x,z) || !walkable(x-ux*3, z-uz*3) || hillSlope(x,z)>1.2 || rawHeight(x,z)>3.2) return false;
   if (polyDist(x,z,RIVER)<9 || (FALLS.length && nearFall(x,z,4))) return false;
   if (x>DOCK.x0-16 && Math.abs(z-DOCK.z)<13) return false;
@@ -678,7 +722,7 @@ function rimFrom(I, toward){ // the last flat spot on a plateau before the cliff
 const islePathDist = (I,x,z) => { let m=1e9; for (const p of (I.paths||[])) m=Math.min(m, polyDist(x,z,p)); return m; };
 if (ISLE_N){
   const FXS = S.terra.isleFx || {};   // v1.57 each isle's grown shape and where its features went, kept once settled
-  ISLES = ISL.planIsles(ISLE_K, { seed:S.seed|0, SC, shore:a=>islandR(a)*1.03, ok:landingOK, clear:extClear, angles:S.terra.isleA||[], grow:Object.fromEntries(Object.entries(FXS).map(([k,v])=>[k, v && v.g])) });   // saved angles keep an isle where it rose even if buildings move later
+  ISLES = ISL.planIsles(ISLE_K, { seed:S.seed|0, SC, shore:a=>islandR(a)*1.03, ok:landingOK, clear:extClear, angles:S.terra.isleA||[], subSaved:true, prefer:LAY.isleDirs, grow:Object.fromEntries(Object.entries(FXS).map(([k,v])=>[k, v && v.g])) });   // saved angles keep an isle where it rose even if buildings move later
   for (const I of ISLES){
     const cliff = I.kind==='bluff' || I.kind==='crags', need = I.sky ? ISL.SKY-0.08 : cliff ? ISL.PLATEAU-0.08 : I.sand ? 0.45 : SAND_H+0.25;
     let A, ya;
@@ -686,6 +730,8 @@ if (ISLE_N){
     else { const B=ISLES[I.from]; A=rimFrom(B, [I.cx,I.cz]); ya=ISL.isleRaw(B,A[0],A[1]); }
     const Bp=isleLanding(I, A, [I.cx,I.cz], need), yb=ISL.isleRaw(I,Bp[0],Bp[1]);
     I.bridge=ISL.makeIsleBridge(I.br.type, A, Bp, ya+0.03, yb+0.03, I.br.w); XBR.push(I.bridge);
+    if (EXT && EXT.mv && EXT.mv[I.kind] && I.from==='main'){ const [dx,dz]=EXT.mv[I.kind], A0=onOldGround(()=>mainLanding(I.a));   // v1.62 this bridge as it was before the coast grew
+      (XBR_LAY=XBR_LAY||[]).push(ISL.makeIsleBridge(I.br.type, A0, [Bp[0]-dx, Bp[1]-dz], 0, 0, I.br.w)); }
     // a dirt path from the bridge to the landmark
     const mfd = I.kind==='dunes' ? 11 : 4.2, mf=[I.mark[0]+Math.cos(I.mark[2]+Math.PI)*mfd, I.mark[1]+Math.sin(I.mark[2]+Math.PI)*mfd];   // v1.57 the wreck is bigger: the path stops at its bow
     const mid=[(Bp[0]+mf[0])/2+(I.cz-Bp[1])*0.12, (Bp[1]+mf[1])/2-(I.cx-Bp[0])*0.12];
@@ -1811,7 +1857,7 @@ const reserved=[]; const reserve=(x,z,r)=>reserved.push([x,z,r]);
 const isFree=(x,z,r)=>{ for(const [a,b,c] of reserved) if(Math.hypot(x-a,z-b)<c+r) return false; return true; };
 reserve(0,0,3.5); reserve(...PLACES0.board,2.5); reserve(...PLACES0.shop,4.5); reserve(PLACES0.home[0],PLACES0.home[1]+1,5.5);
 for (const R of RESIDENTS) if (PLACES0[R.id]) reserve(PLACES0[R.id][0],PLACES0[R.id][1]+1,5.5);
-reserve(DOCK.x0-2,DOCK.z-3,4); reserve(DOCK.x0,DOCK.z,3);
+reserve(DOCK_OLD.x0-2,DOCK.z-3,4); reserve(DOCK_OLD.x0,DOCK.z,3);
 for (const [px,pz,pr] of (LAY.pads||[])) reserve(px,pz,pr+1.5);   // v1.27 trip towns and surprises
 if (LAY.islet) reserve(LAY.islet.x, LAY.islet.z, LAY.islet.r+1); for(const b of BRIDGES){ reserve(...bEnd(b,1),2.5); reserve(...bEnd(b,-1),2.5); }
 /* v1.58 the far shore: a random spot out on the new land, beyond a disc (sq false) or a square (sq true) of half-size lim,
@@ -1836,7 +1882,7 @@ function randLand(r, minH, maxH, rad, tries=60, near){
   for(let k=0;k<tries;k++){ let x,z; if(near){ const a=r()*TAU, d=4+r()*near[2]; x=near[0]+Math.cos(a)*d; z=near[1]+Math.sin(a)*d; }
     else if (EXT && !layoutPhase && r()<EXT_SHARE){ const p=extPt(r, false, 56*SC); if (!p) continue; [x,z]=p; }   // v1.58 out on the far shore now and then
     else { const a=r()*TAU, d=Math.sqrt(r())*56*SC; x=Math.cos(a)*d; z=Math.sin(a)*d; }
-    const h=layoutPhase?baseHeightOld(x,z):rawHeight(x,z); if(h>minH && h<maxH && isFree(x,z,rad) && pathDist(x,z)>1.6 && !onDock(x,z) && !onBridge(x,z) && polyDist(x,z,RIVER)>4.6 && Math.hypot(x-POND.x,z-POND.z)>7.5 && !((XW.length||POOLS.length) && xWaterNear(x,z,3.2)) && !(LAY.tortoise && Math.hypot(x-LAY.tortoise.x,z-LAY.tortoise.z)<LAY.tortoise.r+1.2) && (layoutPhase || (!inRects(x,z,rad+0.5) && !inLotZone(x,z,rad)))) return [x,z]; }
+    const h=layoutPhase?baseHeightOld(x,z):rawHeight(x,z); if(h>minH && h<maxH && isFree(x,z,rad) && pathDist(x,z)>1.6 && !onDock(x,z) && !onBridge(x,z) && polyDist(x,z,layoutPhase?LAY.river:RIVER)>4.6 && Math.hypot(x-POND.x,z-POND.z)>7.5 && !((XW.length||POOLS.length) && xWaterNear(x,z,3.2)) && !(LAY.tortoise && Math.hypot(x-LAY.tortoise.x,z-LAY.tortoise.z)<LAY.tortoise.r+1.2) && (layoutPhase || (!inRects(x,z,rad+0.5) && !inLotZone(x,z,rad)))) return [x,z]; }
   return null;
 }
 
@@ -2361,8 +2407,8 @@ function incSpot(k){
     && !INC_IDS.some(o=>o!==k && S.income[o] && S.income[o].at && Math.hypot(x-S.income[o].at[0],z-S.income[o].at[1])<12);
   const clear=(x,z,rad)=>{ for (let i=0;i<=8;i++){ const a=i/8*TAU, rr=i===8?0:rad, px=x+Math.cos(a)*rr, pz=z+Math.sin(a)*rr; if (!walkable(px,pz) || inRects(px,pz,0.2) || gardenAtXZ(px,pz) || keptOut(px,pz)) return false; }
     return !S.plants.some(q=>!q.wild && Math.hypot(q.x-x,q.z-z)<rad+0.8) && !S.placed.some(q=>q.x<500 && Math.hypot(q.x-x,q.z-z)<rad+0.8) && !ents.some(e=>!e.removed && e.solid && Math.hypot(e.pos.x-x,e.pos.z-z)<rad+e.r); };
-  for (let n=0;n<2500;n++){ let x, z;
-    if (k==='boat'){ const a=r()*TAU, d=islandR0(a)*(0.9+r()*0.08); x=Math.cos(a)*d; z=Math.sin(a)*d; if (!isBeach(x,z) || Math.hypot(x-DOCK.x0,z-DOCK.z)<16) continue;
+  for (let n=0;n<2500;n++){ let x, z;   // v1.62 the boat goes on the beach wherever the coast is now
+    if (k==='boat'){ const a=r()*TAU, d=islandR(a)-islandR0(a)*(0.1-r()*0.08); x=Math.cos(a)*d; z=Math.sin(a)*d; if (!isBeach(x,z) || Math.hypot(x-DOCK.x0,z-DOCK.z)<16) continue;
       const ox=Math.cos(a), oz=Math.sin(a); if (!isFishWater(x+ox*4.5, z+oz*4.5)) continue; if (!far(x,z,9) || !clear(x,z,1.6)) continue; return [+x.toFixed(1), +z.toFixed(1), +a.toFixed(3)]; }
     if (k==='orchard'){ const fr=trees.filter(t=>!t.removed && t.fruit && t.fruit!=='coconut'); if (!fr.length) return null; const t=fr[Math.floor(r()*fr.length)], a=r()*TAU; x=t.pos.x+Math.cos(a)*3; z=t.pos.z+Math.sin(a)*3; }
     else if (k==='books'){ const p=PLACES.shop; if (!p) return null; const a=r()*TAU, d=6.5+r()*4; x=p[0]+Math.cos(a)*d; z=p[1]+Math.sin(a)*d; if (visPathDist(x,z)<1) continue;
@@ -3116,7 +3162,7 @@ function isleChoices(menu){
       { label:'Not yet', alt:true, fn:menu } ]); } }]; }
 // a day after an isle rises, Wendell writes about the next one (which way to look, nothing more)
 const COMPASS=['east','northeast','north','northwest','west','southwest','south','southeast'];
-function isleDirWord(kind){ try { const kinds=[...ISLE_K, kind]; mainOnly=true; const plan=ISL.planIsles(kinds, { seed:S.seed|0, SC, shore:a=>islandR(a)*1.03, ok:landingOK, clear:extClear, angles:S.terra.isleA||[] })[ISLE_K.length]; mainOnly=false;
+function isleDirWord(kind){ try { const kinds=[...ISLE_K, kind]; mainOnly=true; const plan=ISL.planIsles(kinds, { seed:S.seed|0, SC, shore:a=>islandR(a)*1.03, ok:landingOK, clear:extClear, angles:S.terra.isleA||[], subSaved:true, prefer:LAY.isleDirs })[ISLE_K.length]; mainOnly=false;
   if (!plan) return null; const a=Math.atan2(-plan.cz, plan.cx); return COMPASS[((Math.round(a/(Math.PI/4))%8)+8)%8]; } catch(e){ mainOnly=false; return null; } }
 function wendellLetter(){ if (VISIT || GUEST || TRIP || !SY.wl || sday2()<=SY.wl.day) return; const kind=nextIsleKind(); delete SY.wl; save(); if (!kind || kind==='starfall') return; const dir=isleDirWord(kind); if (!dir) return;   // v1.41 Starfall gets its own letter, after the charter
   S.letters.inbox.unshift({ id:'L'+Date.now().toString(36)+'w', from:'wendell', name:WIZARD.name, lines:[`I walked the shore last night and felt something under the water to the ${dir}. Older than the last. Come and see me.`, 'Wendell'], gift:null, at:today(), read:false });
@@ -4504,7 +4550,7 @@ function devAsk(what, fn){ if (BOOT.mode!=='account'){ fn(); return; }
 function devAll(stepFn, endWord){ DEVQ=true; const out=[]; try { for (let i=0;i<20;i++){ const m=stepFn(); out.push(m); if (!m || m.startsWith(endWord) || (out.length>1 && m===out[out.length-2])) break; } } finally { DEVQ=false; } save(); applyTown(); toast(out[out.length-1]||'Done.'); }
 function devRaiseAll(){ if (GUEST || VISIT || TRIP){ toast('Isles only rise on your own signed-in island.'); return; }
   const kinds=[...ISLE_K, ...ISL.ISLE_ORDER.filter(k=>!ISLE_K.includes(k))]; if (kinds.length===ISLE_K.length){ toast('Every isle is already up.'); return; }
-  mainOnly=true; const plan=ISL.planIsles(kinds, { seed:S.seed|0, SC, shore:a=>islandR(a)*1.03, ok:landingOK, clear:extClear, angles:S.terra.isleA||[] }); mainOnly=false;
+  mainOnly=true; const plan=ISL.planIsles(kinds, { seed:S.seed|0, SC, shore:a=>islandR(a)*1.03, ok:landingOK, clear:extClear, angles:S.terra.isleA||[], subSaved:true, prefer:LAY.isleDirs }); mainOnly=false;
   if (plan.length<kinds.length){ toast(`Only room for ${plan.length} isles around this island.`); kinds.length=plan.length; }
   S.terra.isleA=plan.map(p=>+p.a.toFixed(4)); S.terra.isles=kinds.length; S.terra.isleK=kinds.slice();
   if (kinds.includes('pines') && !SY.shop) SY.shop={ st:'project', at:sday() };
@@ -4946,11 +4992,12 @@ function talkWizard(){
 const isleNeedName = (id,n) => ITEMS[id] ? (n>1 && !/s$/.test(ITEMS[id].name) ? ITEMS[id].name+'s' : ITEMS[id].name) : (KIND_WORD[id]||[id,id])[n>1?1:0];
 // v1.37: the next isle in ISL.ISLE_ORDER that hasn't risen yet. Each one waits on the island being ready (hidden; Wendell only hints).
 function nextIsleKind(){ return ISL.ISLE_ORDER.find(k=>!ISLE_K.includes(k)) || null; }
-const isleAsk = (q, kind) => q.Qd[kind].map(l=>l.replace(/\{who\}/g, holderName('shop')));
+const ISLE_DIR0 = { meadow:'west', pines:'east', bluff:'north', dunes:'southwest' };   // v1.62 Wendell names the side the isle will really rise on (new islands put them anywhere)
+const isleAsk = (q, kind) => { let dir=null; return q.Qd[kind].map(l=>l.replace(/\{who\}/g, holderName('shop')).replace(/\{dir\}/g, ()=>dir||(dir=isleDirWord(q.Qd.kind)||ISLE_DIR0[q.Qd.kind]||'out to sea'))); };
 // The spell: the camera swings out to sea, the water boils and glows, the island reloads with the new land in place
 function raiseIsle(k, kind){
   kind=kind||nextIsleKind(); if (!kind) return; const kinds=[...ISLE_K.slice(0,k), kind];
-  mainOnly=true; const plan=ISL.planIsles(kinds, { seed:S.seed|0, SC, shore:a=>islandR(a)*1.03, ok:landingOK, clear:extClear, angles:S.terra.isleA||[] })[k]; mainOnly=false; if (!plan) return;
+  mainOnly=true; const plan=ISL.planIsles(kinds, { seed:S.seed|0, SC, shore:a=>islandR(a)*1.03, ok:landingOK, clear:extClear, angles:S.terra.isleA||[], subSaved:true, prefer:LAY.isleDirs })[k]; mainOnly=false; if (!plan) return;
   (S.terra.isleA=S.terra.isleA||[])[k]=+plan.a.toFixed(4); S.terra.isles=k+1; S.terra.isleK=kinds; const st=(S.magic.isleQ=S.magic.isleQ||{}); st.last=dayNum(today()); st.asked=-1; st.askedK=false; SY.wl={ day:dayNum(today()), k:kind };   // v1.38 his letter about the next one
   if (kind==='pines' && SY.shop) SY.shop.st='project';
   save();
@@ -5685,6 +5732,7 @@ const clearForNew = p => !!inRects(p[0],p[1],2.4) || newPathDist(p[0],p[1])<2.3 
     if (EXT ? onOldGround(()=>clearForNew(p)) : clearForNew(p)) continue; rocks.push(new Rock(i,p[0],p[1],r)); }
 }
 layoutPhase=false;
+if (DOCK_OLD!==DOCK){ reserve(DOCK.x0-2,DOCK.z-3,4); reserve(DOCK.x0,DOCK.z,3); }   // v1.62 and nothing new grows on the dock where it is now
 /* v1.58 the far shore grows its own trees and rocks: about half the island's again, as the new land is half its size.
    They have their own keys ('e' trees, rocks from 300), so nothing about the old trees changes. */
 if (EXT){ const r=mulberry32((S.seed|0)+4545), gen=!!LAY.gen, F=LAY.flora||{ fruit:1, palms:1, trees:null }; let idx=0;
@@ -5692,12 +5740,13 @@ if (EXT){ const r=mulberry32((S.seed|0)+4545), gen=!!LAY.gen, F=LAY.flora||{ fru
       if (h<=minH || h>=maxH || !isFree(x,z,rad) || !walkable(x,z) || hillSlope(x,z)>1.2 || visPathDist(x,z)<2.2 || onBridge(x,z) || polyDist(x,z,RIVER)<4.6) continue; return p; } return null; };
   const kindsT=gen ? Object.entries(F.trees) : [['oak',2],['birch',1],['maple',1],['blossom',1],['cedar',1],['pine',2]], tot=kindsT.reduce((s2,k)=>s2+k[1],0);
   const kindAt=p=>{ if (rawHeight(p[0],p[1])>3.3 && r()<0.6) return r()<0.6?'pine':'cedar'; let x=r()*tot; for (const [k,w] of kindsT){ x-=w; if (x<=0) return k; } return kindsT[0][0]; };
-  const add=(type,fruit,minH,maxH)=>{ const p=spot(minH,maxH,2.8); const key='e'+(idx++); if (!p) return; reserve(p[0],p[1],2.3); if (typeof type==='function') type=type(p);
+  const KP=EXT.even ? 'r' : 'e';   // v1.62 the ring of new land has its own keys, so nothing cut on the old one-sided far shore carries over
+  const add=(type,fruit,minH,maxH)=>{ const p=spot(minH,maxH,2.8); const key=KP+(idx++); if (!p) return; reserve(p[0],p[1],2.3); if (typeof type==='function') type=type(p);
     if (S.cut[key]==='gone' || clearForNew(p)) return; trees.push(new Tree(key,p[0],p[1],type,fruit)); };
   for (let i=0;i<Math.round((gen?12*F.fruit:7));i++) add('fruittree', S.nativeFruit, SAND_H+0.2, 12);
   for (let i=0;i<(gen?58:35);i++) add(kindAt, null, SAND_H+0.2, 12);
   for (let i=0;i<Math.round(gen?10*F.palms:9);i++) add('palm', 'coconut', 0.25, SAND_H);
-  for (let i=0;i<(gen?7:5);i++){ const p=spot(SAND_H+0.1, 12, 2.2); if (!p) continue; reserve(p[0],p[1],2); if (clearForNew(p)) continue; rocks.push(new Rock(300+i, p[0], p[1], r)); }
+  for (let i=0;i<(gen?7:5);i++){ const p=spot(SAND_H+0.1, 12, 2.2); if (!p) continue; reserve(p[0],p[1],2); if (clearForNew(p)) continue; rocks.push(new Rock((EXT.even?320:300)+i, p[0], p[1], r)); }
 }
 // lamps go up once the trees are in, so a lamp never ends up inside a tree on islands whose paths were re-laid
 if (REROUTED) LAMPS=LAMPS.filter(([x,z])=>!trees.some(t=>Math.hypot(t.pos.x-x,t.pos.z-z)<1.4) && !rocks.some(r=>Math.hypot(r.pos.x-x,r.pos.z-z)<1.6));
@@ -9618,6 +9667,7 @@ window.__game.v138 = { get SY(){ return SY; }, get S2B(){ return S2B; }, isleQue
 window.__game.v139 = { get SY(){ return SY; }, get S3B(){ return S3B; }, LOGBOOK, BEATS3, STAKES, COMMISSIONS, millAct, openMill, millstoneOffer, millThistle, millWendell, routeTowns, postRoutes, routeWant, openPost, postNewDay, placeVents, digVent, bathSeatOf, bathStage, openBath, gladeConds, gladeStageOf, gladeBugOK, gladeBugSpot, gladeLook, gladeStump, gladeKnock, gladeApprove, gladeStumpDug, gladeLamps, wreckAct, makeWreckRoom, wreckOpen, rollTripChart, openLogbook, openAntiq, antiqStock, story3Stock, storyBeat3, story3Choices, storyNewDay3, story3News, storiesHTML3, storyGossip3, refreshStory3, dev139, landmark3, meadowLM, dunesLM };
 window.__game.v150 = { AUR, PATH_GLOW, PATH_STONES, castSpell4, get cast(){ return S4B.cast; }, get cine(){ return cine; }, set cine(v){ cine=v; } };   // v1.53 test hooks
 window.__game.v141 = { get SY(){ return SY; }, get S4B(){ return S4B; }, refreshStory4, dev141, dev138, dev139, openStoryMap, devRaiseAll, devTravel, devPlaces, blocked: (x,z)=>blocked(x,z,0.3), devTrip, raceStart, raceEnd, raceCourse, raceLength, raceRivals, raceMenu, openReadingRoom, openStall, festDay, festOn, festSpots, refreshFest, refreshShow, showTableAct, showEntries, storyBeat4, story4Choices, storyNewDay4, story4News, storiesHTML4, starAltarAct, skyHour, skyNear, skyIsle, refreshSpells, refreshCharter, charterReqs, charterReady, hall4Choices, newbChoices, CHARTER, get ISLE_K(){ return ISLE_K; } };   // v1.41 test hooks
+window.__game.v162 = { get trees(){ return trees; }, get rocks(){ return rocks; }, PLACES, get ISLES(){ return ISLES; }, DOCK, DOCK_OLD, RIVER, get EXT(){ return EXT; }, get migrate(){ return migrateEven.last||null; }, rawHeight, walkable, isBeach, islandR, islandR0, LAY, get PATHS(){ return PATHS; } };   // v1.62 test hooks
 window.__game.v158 = { get EXT(){ return EXT; }, EXT_BOX, rawHeightOld, baseHeightOld, baseHeight, islandR, islandR0, islandT, HG, devEveryone, mapExtent, townNewDay, refreshIncome, randLand, get extOff(){ return extOff; } };   // v1.58 test hooks
 window.__game.v137 = { get S(){ return S; }, get SY(){ return SY; }, get BAYR(){ return BAYR; }, get ISLES(){ return ISLES; }, get player(){ return player; }, get residents(){ return residents; },
   reefInfo, reefStage, bayPlan, bayPopulate, enterBay, exitBay, bayAct, bayCast, bayDrop, talkGill, talkShop, talkTo, talkHall, talkWizard, talkCurator, openNursery, openWorkshop, openBoard, openHallPanel,

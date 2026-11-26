@@ -11,7 +11,7 @@
    built in wiki.js. Writing rules: plain words, no em dashes, no emoji, only facts the code supports.
    ===================================================================== */
 
-export const GUIDE_VERSION = 'v1.49';
+export const GUIDE_VERSION = 'v1.51';
 export const GUIDE_UPDATED = '2026-11-26';
 
 const tip = s => `<div class="tip"><b>Tip</b> ${s}</div>`;
@@ -132,6 +132,12 @@ ${note('Guest mode caps your wallet at 10,000 clams. Make an account to lift it.
 <li>Ask someone to leave with "Ever think about moving?". They pack overnight. At least 5 always stay, and anyone who left won't come back for 30 days.</li>
 <li>Good pen pals from trip towns can be invited to move in (see Pen pals).</li></ul>
 <p>Clementine also runs every big building project in the island stories (the workshop, tea room, post office, bathhouse).</p>
+<h3>Inside the town hall</h3>
+<p>The tent has no inside, so Clementine works out front. Once the Town Hall is built you walk in and find her at her desk (the same goes for the Charter Hall). Inside:</p>
+<ul><li><b>Island Records</b> board: islanders, museum donations, shops backed, things found, achievements and best friends. Read it for the island stories so far and a shortcut to Town projects.</li>
+<li><b>Our islanders</b>: a portrait of everyone who lives here. Look at it for each islander's friendship hearts.</li>
+<li>A table with a <b>map of the island</b> (Look opens the full map), and benches for town meetings.</li>
+<li>The <b>Grand Town Hall</b> is bigger, with columns, two chandeliers, a grandfather clock and a trophy case that gets a prize for every 10 achievements (up to 8).</li></ul>
 `},
 
 { id:'islanders', group:'island', title:'Islanders and friendship', data:'residents', html:`
@@ -181,8 +187,8 @@ ${note('If the islander a story favor was written for doesn\'t live on your isla
 <p>Once you have a house and have done 50,000 clams of trade (buying plus selling) at a shop, the keeper lets you buy in. Each tier upgrades the building, adds stock slots, makes rare stock more common, and raises what they pay.</p>
 <table class="t"><tr><th>Tier</th><th>Cost</th><th>Pemberton</th><th>Marlo / Sprig</th></tr>
 <tr><td>1</td><td>100,000</td><td>Corner Shop: 5% off, +3% selling</td><td>Pay 130%</td></tr>
-<tr><td>2</td><td>300,000</td><td>General Store: 10% off, +6%</td><td>Pay 140%</td></tr>
-<tr><td>3</td><td>800,000</td><td>Grand Emporium: 15% off, +10%</td><td>Pay 150%</td></tr></table>
+<tr><td>2</td><td>200,000</td><td>General Store: 10% off, +6%</td><td>Pay 140%</td></tr>
+<tr><td>3</td><td>400,000</td><td>Grand Emporium: 15% off, +10%</td><td>Pay 150%</td></tr></table>
 <p>Backing a shop also counts toward the Grand Town Hall, Wendell's spells and isles, and brings Quill the bookkeeper (see Passive income). After investing, the keeper offers to move the shop for free.</p>
 <h3>The top two tiers</h3>
 <p>At tier 2 and tier 3 each shop opens up things you can't get anywhere else. Guests and visitors don't see them.</p>
@@ -208,7 +214,12 @@ ${note('If the islander a story favor was written for doesn\'t live on your isla
 <p>Fix a worn tool before it breaks. Two ways:</p>
 <ul><li><b>Yourself</b>: the Tools tab in the Craft panel, anywhere, no crafting table needed. It costs materials by tier (see the table below), scaled by how worn the tool is, at least 1 of each.</li>
 <li><b>Pemberton</b>: "Fix my tools" at the General Store, for clams. The more worn the tool, the more it costs, and enchanted tools cost a bit more to fix.</li></ul>
-<p>Heirloom tools never wear out, so they never need fixing. You get one warning when an enchanted tool is wearing thin. A tool that breaks is gone, along with any enchantments on it.</p>
+<p>Heirloom tools never wear out, so they never need fixing. You get one warning when an enchanted tool is wearing thin.</p>
+<h3>Broken tools</h3>
+<p>A tool that breaks leaves your hands but isn't gone. It waits in the Tools tab under <b>Broken tools</b>, with its enchantments still on it, until you fix it. Fixing a broken tool needs a crafting table nearby (any one, a Workbench is enough) and costs twice a full repair: Flimsy 4 wood and 4 driftwood branches, Sturdy 6 wood and 2 iron, Golden 8 iron and 8 stone (the Golden Can too; the basic can costs the same as a Flimsy tool). The fixed tool comes back with all its uses and enchantments, and goes straight into your hand. Pemberton only fixes tools that are worn, not broken.</p>
+<ul><li>If you bought or made a cheaper stand-in while it was broken, the fixed tool takes its place, and anything enchanted on the stand-in is lost. The Tools tab asks first.</li>
+<li>Buying or making a tool of that kind that's as good or better scraps the broken one, enchantments and all. Pemberton and the Tools tab warn you first if it had any.</li>
+<li>At a crafting table, the top of Woodworking lists any broken tool, and any tool with a quarter or less of its uses left, with a button to the Tools tab.</li></ul>
 <h3>Making tools</h3>
 <p>The Tools tab's "Make a tool" list makes the same tools Pemberton sells, from materials. You need the same experience as buying (the "Needs" column below). A Flimsy tool (and the basic Watering Can) can be made anywhere; each better tier needs a bigger crafting table: Sturdy at a Workbench, Golden at a Carpenter's Bench, Heirloom at a Master Workbench. The watering can skips Sturdy, so the Golden Can needs only a Workbench and the Heirloom Can a Carpenter's Bench. See <a href="#tables">Crafting tables</a>.</p>
 <p>A new tool of the same kind, bought or made, takes the old one's enchantments with it. The one exception: Tough, Tougher and Ultratough come off when you move up to an Heirloom tool, because it never wears out. The shop and the Tools tab warn you first.</p>
@@ -227,7 +238,7 @@ ${note('If the islander a story favor was written for doesn\'t live on your isla
 <li>Putting on a stronger (or different) enchantment of the same kind replaces the old one. On a full tool you pick which one comes off.</li>
 <li>Double Output, Triple Output and One-Swing are one kind, so a tool never has more than one of them.</li>
 <li>Tough can't go on an Heirloom tool, since it never wears out.</li>
-<li>Your enchantments move over when you buy or make a better tool of the same kind. They're only lost if the tool breaks, so repair it in time.</li></ul>
+<li>Your enchantments move over when you buy or make a better tool of the same kind. A broken tool keeps them until you fix it at a crafting table (see <a href="#tools">Broken tools</a>), but replacing it instead scraps them.</li></ul>
 <h3>What the special ones do</h3>
 <ul><li><b>Bonk</b>: swing at an islander (or a friend) and they fly farther.</li>
 <li><b>Lucky</b>: better odds of rare-or-better finds. On the axe that's things like heartwood, on the shovel fossils and other finds, on the net bugs, on the rod fish. On rocks it counts for whichever of the axe or shovel you hit with.</li>
@@ -259,13 +270,14 @@ ${note('Guests can learn from Pippa and enchant, but don\'t find scrolls. On a f
 `},
 
 { id:'crafting', group:'island', title:'Woodworking', data:'woodwork', html:`
-<p>Make furniture from the Craft panel. Away from a crafting table you can only make a few simple things (Stump Stool, Wooden Fence, Log Pile, Wooden Signpost, Mossy Stump Seat, Cozy Campfire and the Workbench itself); everything else needs a table nearby, and rare showpieces need a Carpenter's Bench. See <a href="#tables">Crafting tables</a>. You start knowing 4 plans (Stump Stool, Fence, Log Pile, Mossy Stump Seat). Making 10 things teaches 6 more (Signpost, Birdhouse, Crate, Bench, Workbench, Campfire).</p>
+<p>Make furniture from the Craft panel. Away from a crafting table you can only make a few simple things (Stump Stool, Wooden Fence, Log Pile, Wooden Signpost, Mossy Stump Seat, Cozy Campfire and the Workbench itself); everything else needs a table nearby, and rare showpieces need a Carpenter's Bench. See <a href="#tables">Crafting tables</a>. You start knowing 4 plans (Stump Stool, Fence, Log Pile, Mossy Stump Seat). Making 3 different ones of those, and 10 things in all, teaches 6 more (Signpost, Birdhouse, Crate, Bench, Workbench, Campfire).</p>
 <p>After that new plans come from:</p>
-<ul><li>A batch of 4 or 5 at 25, 50, 100, 150, 250, 400, 600, 850 and 1,150 things made.</li>
+<ul><li>A batch of 3 at each variety milestone. Each different piece you make counts for up to 3 points: making it once is 1 point, three times is 3, and making it more often adds nothing. The milestones are at 24, 33, 42, 51, 60, 69, 78 and 87 points, so you need to make most of what you know, a few times each, before more comes. You get at most one batch a day; if you pass a milestone after that, the plans come the next day (open the Craft panel).</li>
 <li>Woodworking Plan items: dug up (1.5% of digs), from felled trees (1%), or Pemberton's one-a-day plan.</li>
 <li>Studying a piece you own from the Woodworking panel, once a day.</li></ul>
 <p>Digging up a stump gives a Tree Stump for stump furniture.</p>
-${tip('Making 10 <b>different</b> pieces is what starts Bramble\'s workshop story.')}
+<p>What a piece sells for follows what went into it. A piece made only from wood, branches, stone and weeds sells for about its materials plus 15% (3 fences from 2 wood sell for 45 in all), so woodworking adds a little to chopping rather than replacing it. A piece that needs iron, clay, stumps, planks or rare finds sells for more, and never for less than its materials plus 15%.</p>
+${tip('Making 14 <b>different</b> pieces is what starts Bramble\'s workshop story.')}
 <h3>Rare showpieces</h3>
 <p>Six legendary pieces need a rare plan (found very rarely, Fennick sometimes sells one for 45,000, or pick one at the Plan Library island) and rare ingredients that turn up by chance:</p>
 <ul><li><b>Heartwood</b>: chopping, more when a tree comes down.</li><li><b>Golden Sap</b>: shaking trees.</li>
@@ -279,8 +291,8 @@ ${tip('Making 10 <b>different</b> pieces is what starts Bramble\'s workshop stor
 <table class="t"><tr><th>Table</th><th>How you get it</th><th>What it adds</th></tr>
 <tr><td>None</td><td></td><td>Repair tools, make Flimsy tools and a few simple pieces</td></tr>
 <tr><td>Workbench</td><td>Bramble gives you one when he teaches woodworking; you can make more</td><td>All everyday woodworking, Sturdy tools, first-rank enchantments</td></tr>
-<tr><td>Carpenter's Bench</td><td>Its plan comes once you've made 12 different things</td><td>Rare-plan showpieces, Golden tools, second-rank enchantments and Double Output, plus Rocking Horse, Garden Wagon, Rolltop Desk and Vine Pergola</td></tr>
-<tr><td>Master Workbench</td><td>Its plan comes once you've made 24 different things, one of them a Carpenter's Bench</td><td>Heirloom tools, the strongest enchantments and the Twin Charm's binding, plus Carousel Music Box, Weaving Loom, Garden Windmill and Garden Gazebo</td></tr></table>
+<tr><td>Carpenter's Bench</td><td>Its plan comes once you've made 16 different things</td><td>Rare-plan showpieces, Golden tools, second-rank enchantments and Double Output, plus Rocking Horse, Garden Wagon, Rolltop Desk and Vine Pergola</td></tr>
+<tr><td>Master Workbench</td><td>Its plan comes once you've made 30 different things, one of them a Carpenter's Bench</td><td>Heirloom tools, the strongest enchantments and the Twin Charm's binding, plus Carousel Music Box, Weaving Loom, Garden Windmill and Garden Gazebo</td></tr></table>
 <p>Building a table for the first time teaches its pieces. Materials are in the <a href="#crafting">Woodworking</a> table.</p>
 `},
 
@@ -316,6 +328,9 @@ ${tip('Making 10 <b>different</b> pieces is what starts Bramble\'s workshop stor
 <tr><td>Diviner's Elixir</td><td>3,000</td><td>Fossils, beach finds, swatch books</td></tr><tr><td>Lucky Star Elixir</td><td>8,000</td><td>All three</td></tr></table>
 <h3>Moving buildings</h3>
 <p>Needs a house with 16 floor squares and 2 shops backed. Your house 30,000, anything else 50,000. You see a see-through preview before paying. (Keepers you've invested in will also move their own buildings for free.)</p>
+<p>The check uses the building's real outline, so buildings can stand about a step apart. If a spot is a little off, the preview slides over to the nearest spot that fits. When it can't fit, it says what is in the way (the sea, the beach, a river or pond, a cliff, a bridge, the plaza, a garden, ground that's too uneven, or which building is too close) and a red marker shows where.</p>
+<p>Shop stands, the museum and the town hall are checked at the size they grow to, so there is always room for the next upgrade. That also means other buildings can't go where one of those will grow.</p>
+<p>Things you placed or planted where it lands (furniture, flowers, saplings, dropped items) are set down beside it; if there is no room anywhere near, furniture goes to your bag. Wild flowers and stumps there are cleared.</p>
 <h3>Shaping land</h3>
 <p>Needs a house with 24 squares and all 3 shops backed. Raise or lower terraces, dig ponds and rivers, fill them in, priced per square. A preview shows the plan first.</p>
 <p>Wendell also raises new isles from the sea, below.</p>
@@ -409,7 +424,7 @@ ${note('Relics can\'t be sold, gifted, mailed or traded. A storage chest holds t
 `},
 
 { id:'special', group:'away', title:'Rare and legendary islands', html:`
-<p>Pure luck on a 2,000-clam trip (1.5% rare, 0.5% legendary). Clams plus sell value gathered on one of these is capped at 200,000; one-off gifts don't count.</p>
+<p>Pure luck on a 2,000-clam trip (1.5% rare, 0.5% legendary). There is no cap on what you gather; how much you can carry home is the limit. Clamstone Isle's rocks and Golden Grove's trees each pay once, and Stardrift Isle's star shower drops a star every 10 to 14 seconds and ends after 100 falling stars (on top of the 22 lying about when you land), about 20 minutes of falling.</p>
 <table class="t"><tr><th>Island</th><th>Tier</th><th>What happens</th></tr>
 <tr><td>Clamstone Isle</td><td>Rare</td><td>Every rock pays clams</td></tr>
 <tr><td>Golden Grove</td><td>Rare</td><td>Golden sap from every shake, heartwood from every first chop</td></tr>
@@ -466,24 +481,24 @@ ${note('Relics can\'t be sold, gifted, mailed or traded. A storage chest holds t
 { id:'income', group:'money', title:'Passive income', html:`
 <p>Four characters turn up once you've progressed. Fund them and they work while you're away. Each fills over <b>3 days</b> and then waits for you to collect. Upgrades are offered after a tier has run a week.</p>
 <table class="t"><tr><th>Who</th><th>Appears when</th><th>Tiers (cost, per day)</th></tr>
-<tr><td>Gill the fisherman, on a beach</td><td>Town Hall built and 40 fish caught. Now tied to the reef story.</td><td>Dinghy 25,000; Trawler 150,000 + 40 planks; Driftwood Queen 400,000 + 60 planks + 10 iron fittings. Catch scales with the reef.</td></tr>
-<tr><td>Hollis the beekeeper, in a meadow</td><td>Town Hall and 5 planted flowers (or 45 things discovered)</td><td>Beehive 20,000 (2 honey); Three Hives 90,000 (5); Apiary 300,000 (9); Grand Apiary 500,000 (14) after his story</td></tr>
-<tr><td>Russet the orchard keeper</td><td>Town Hall, 10 days on the island, a fruit tree</td><td>Fruit Ladder 20,000 (4 fruit); Pony Cart 100,000 (8); Cider Shed 300,000 (14)</td></tr>
-<tr><td>Quill the bookkeeper, by the general store</td><td>One shop backed</td><td>Ledger 25,000 (800 clams per shop backed); Counting House 120,000 (2,000); Trading Office 400,000 (4,500)</td></tr></table>
-<p>More flowers near Hollis's hives give a little more honey. Hollis, Russet and Quill offer to move their spot for free after you fund or upgrade them.</p>
+<tr><td>Gill the fisherman, on a beach</td><td>Town Hall built and 40 fish caught. Now tied to the reef story.</td><td>Dinghy 25,000; Trawler 125,000 + 40 planks; Driftwood Queen 300,000 + 60 planks + 10 iron fittings. Catch scales with the reef.</td></tr>
+<tr><td>Hollis the beekeeper, in a meadow</td><td>Town Hall and 5 planted flowers (or 45 things discovered)</td><td>Beehive 13,000 (2 honey); Three Hives 35,000 (5); Apiary 60,000 (9); Grand Apiary 185,000 (14) after his story</td></tr>
+<tr><td>Russet the orchard keeper</td><td>Town Hall, 10 days on the island, a fruit tree</td><td>Fruit Ladder 14,000 (4 fruit); Pony Cart 30,000 (8); Cider Shed 50,000 (14)</td></tr>
+<tr><td>Quill the bookkeeper, by the general store</td><td>One shop backed</td><td>Ledger 24,000 (800 clams per shop backed); Counting House 60,000 (2,000); Trading Office 135,000 (4,500)</td></tr></table>
+<p>Every tier, here and in the thank-you stakes, costs about a month of what it brings in, so each one pays for itself in roughly 30 days. More flowers near Hollis's hives give a little more honey. Hollis, Russet and Quill offer to move their spot for free after you fund or upgrade them.</p>
 `},
 
 { id:'stakes', group:'money', title:'Thank-you stakes', html:`
 <p>Every island-story business offers you a share once it's running, as a thanks. Like passive income, a stake fills over 3 days, pays clams plus a little of what the business makes, and has 3 tiers (upgrade after a week). If the keeper moves away and sells the business, your stake carries over.</p>
 <table class="t"><tr><th>Business</th><th>Offered when</th><th>Tiers (cost / clams a day)</th><th>Extra</th></tr>
-<tr><td>Bramble's Workshop</td><td>Open a week, 100 planks made</td><td>30k / 900, 140k / 2,200, 420k / 4,800</td><td>Planks</td></tr>
-<tr><td>Pemberton's Forge</td><td>After 10 fittings</td><td>30k / 900, 140k / 2,200, 420k / 4,800</td><td>Iron fittings</td></tr>
-<tr><td>Mabel's Tea Room</td><td>Open a week, 30 sales</td><td>25k / 800, 120k / 2,000, 400k / 4,500</td><td>Tea cakes</td></tr>
-<tr><td>Wick's night voyages</td><td>After your first night voyage</td><td>25k / 800, 120k / 2,000, 400k / 4,500</td><td>A Moonlit ticket now and then</td></tr>
-<tr><td>Barley's Mill</td><td>Water wheel built</td><td>25k / 800, 120k / 2,000, 400k / 4,500</td><td>Flour</td></tr>
-<tr><td>Wren's Post Office</td><td>3 routes at level 2</td><td>25k / 800, 120k / 2,000, 400k / 4,500</td><td>Foreign seeds</td></tr>
-<tr><td>Tobin's Bathhouse</td><td>Steam room built</td><td>25k / 800, 120k / 2,000, 400k / 4,500</td><td>Bath salts</td></tr>
-<tr><td>Hazel's Antiques</td><td>Shop open</td><td>25k / 800, 120k / 2,000, 400k / 4,500</td><td>Salvage now and then</td></tr></table>
+<tr><td>Bramble's Workshop</td><td>Open a week, 100 planks made</td><td>30k / 900, 85k / 2,200, 170k / 4,800</td><td>Planks</td></tr>
+<tr><td>Pemberton's Forge</td><td>After 10 fittings</td><td>30k / 900, 120k / 2,200, 225k / 4,800</td><td>Iron fittings</td></tr>
+<tr><td>Mabel's Tea Room</td><td>Open a week, 30 sales</td><td>25k / 800, 100k / 2,000, 195k / 4,500</td><td>Tea cakes</td></tr>
+<tr><td>Wick's night voyages</td><td>After your first night voyage</td><td>25k / 800, 65k / 2,000, 145k / 4,500</td><td>A Moonlit ticket now and then</td></tr>
+<tr><td>Barley's Mill</td><td>Water wheel built</td><td>25k / 800, 75k / 2,000, 160k / 4,500</td><td>Flour</td></tr>
+<tr><td>Wren's Post Office</td><td>3 routes at level 2</td><td>25k / 800, 75k / 2,000, 160k / 4,500</td><td>Foreign seeds</td></tr>
+<tr><td>Tobin's Bathhouse</td><td>Steam room built</td><td>25k / 800, 80k / 2,000, 160k / 4,500</td><td>Bath salts</td></tr>
+<tr><td>Hazel's Antiques</td><td>Shop open</td><td>25k / 800, 70k / 2,000, 155k / 4,500</td><td>Salvage now and then</td></tr></table>
 `},
 
 /* ============================== STORIES ============================== */
@@ -523,9 +538,9 @@ ${steps([
 <tr><td>Barren</td><td>0</td><td>Grey rubble</td></tr><tr><td>First Fins</td><td>6</td><td>A few fish shadows</td></tr>
 <tr><td>Stirring</td><td>15</td><td>Small schools. Gill offers the Dinghy (25,000)</td></tr>
 <tr><td>Schooling</td><td>30</td><td>Schools at each patch; bay fish in Gill's crate; night fish if the lighthouse is lit</td></tr>
-<tr><td>Teeming</td><td>50</td><td>Big shadows, a sea turtle. Trawler (150,000 + 40 planks). Needed for Hollow Crags</td></tr>
+<tr><td>Teeming</td><td>50</td><td>Big shadows, a sea turtle. Trawler (125,000 + 40 planks). Needed for Hollow Crags</td></tr>
 <tr><td>Thriving</td><td>75</td><td>Rays. 24 outer reef plots open. Thistle's Reef Hall dream</td></tr>
-<tr><td>Restored</td><td>100, every kind 15+</td><td>Dolphins. Driftwood Queen (400,000 + 60 planks + 10 fittings)</td></tr></table>
+<tr><td>Restored</td><td>100, every kind 15+</td><td>Dolphins. Driftwood Queen (300,000 + 60 planks + 10 fittings)</td></tr></table>
 <p>The bay has 72 plots in 6 patches, so Restored needs the outer reef.</p>
 <h3>Bay fish</h3>
 <p>Each coral kind brings two species once 5 of that kind have grown: brain (Sunset Wrasse, Coral Grouper), staghorn (Lantern Goby, Bannerfin), sea fan (Fan Blenny, Velvet Ray), table (Reef Parrotfish, Gilded Seahorse). The first of each you catch, Gill buys at 3x. Two night fish (Moonlight Cardinalfish, Flashlight Fish) come once the lighthouse is lit and the reef is Schooling.</p>
@@ -533,7 +548,7 @@ ${tip('Plant a mix. Table coral is the bottleneck and its fish include the 30,00
 `},
 
 { id:'workshop', group:'stories', title:'Bramble\'s Workshop', html:`
-<p><b>Who:</b> Bramble, Wendell, Clementine. <b>Starts:</b> after you've made 10 different woodworking pieces.</p>
+<p><b>Who:</b> Bramble, Wendell, Clementine. <b>Starts:</b> after you've made 14 different woodworking pieces.</p>
 ${steps([
  'Bramble admits he always wanted a real workshop, but there are hardly any pines. Next he wonders if Wendell could help.',
  'Wendell raises <b>Old Pinewood</b> (needs Grand Town Hall, Pemberton backed, 3 relics, 180,000 + 60 wood + 20 stone). Pines there grow back overnight and Mossby doesn\'t mind.',
@@ -553,7 +568,7 @@ ${steps([
 <h3>The apiary</h3>
 <p><b>Starts:</b> once Clover Meadow rises (and you've funded Hollis). Hollis says the bees are restless and want variety.</p>
 ${steps(['Get flowers of <b>6 different color families</b> in bloom within 16 m of the hives (white, red, pink, orange, yellow, blue, purple, green).',
- 'Honey output doubles and the fourth tier opens: <b>Grand Apiary</b> (500,000, 14 honey a day).'])}
+ 'Honey output doubles and the fourth tier opens: <b>Grand Apiary</b> (185,000, 14 honey a day).'])}
 <h3>The tea room</h3>
 <p><b>Starts:</b> the day after the apiary is happy and Russet's orchard is funded. Mabel (or whoever holds her dream) wants a tea room.</p>
 ${steps(['Clementine runs the project: <b>150,000 + 40 planks + 20 stone</b>. Opens the next morning near the plaza.',
@@ -693,7 +708,7 @@ ${steps(['Talk to them and pick <b>Come and meet people</b>. They follow you for
 { id:'fossils', group:'catalog', title:'Fossils and beach finds', data:'dig', html:`<p>Dig cracks with a shovel for fossils. Beach finds wash up daily. Very rare finds come up about 0.4% of the time as a group, legendary about 1 in 5,000.</p>` },
 { id:'fruit', group:'catalog', title:'Fruit, flowers and plants', data:'plants', html:`<p>Your island has one native fruit (100). Every other fruit sells for 250.</p>` },
 { id:'materials', group:'catalog', title:'Materials and special items', data:'materials', html:`` },
-{ id:'furniture', group:'catalog', title:'Furniture', data:'furniture', html:`<p>Sell price is a quarter of the buy price. "Where" shows where a piece comes from.</p>` },
+{ id:'furniture', group:'catalog', title:'Furniture', data:'furniture', html:`<p>Shop furniture sells for a quarter of its buy price. Pieces you make sell for about what went into them (see Woodworking). "Where" shows where a piece comes from.</p>` },
 { id:'clothes', group:'catalog', title:'Clothes', data:'clothes', html:`` },
 { id:'achievements', group:'catalog', title:'Achievements', data:'achievements', html:`<p>Hidden in game until you earn them. Spoilers below.</p>` },
 
@@ -724,7 +739,10 @@ ${steps(['Talk to them and pick <b>Come and meet people</b>. They follow you for
 { id:'changes', group:'done', title:'What\'s changed', html:`
 <p>Recent updates, newest first.</p>
 <ul>
-<li><b>v1.49</b>: Hover over an item in your bag (or tap it on a phone) to see its name and what it sells for, and who pays the most for it. Story items say they can't be sold instead of showing 0.</li>
+<li><b>v1.51</b>: Hover over an item in your bag (or tap it on a phone) to see its name and what it sells for, and who pays the most for it. Story items say they can't be sold instead of showing 0.</li>
+<li><b>v1.50</b>: Fewer fish swimming about (at most 2 near you and 5 on the island, turning up about half as often). Broken tools aren't gone: fix them at any crafting table, enchantments and all. New woodworking plans now come from making lots of different things (making the same piece over and over no longer counts), at most one batch a day. The Carpenter's Bench now needs 16 different things made, the Master Workbench 30, and Bramble's workshop story 14.</li>
+<li><b>v1.49</b>: The Town Hall has an inside, with Clementine's desk, the Island Records and the islanders' portraits. Moving a building is much more forgiving and says what's in the way.</li>
+<li><b>v1.48</b>: Less grind. Wood sells for 20. Pieces made only from wood, branches, stone and weeds sell for about their materials plus 15% (no more fence fortunes); pieces with iron, clay, stumps or planks never sell below their materials. Shop investing costs 100,000, 200,000 and 400,000. Every passive income and stake tier pays itself back in about a month, and the Heirloom tools (50,000, the can 40,000) and the Grand Expedition Pack (200,000) cost less. Rare and legendary trip islands no longer stop at 200,000; your bag is the limit, and Stardrift Isle's star shower drops a star every 10 to 14 seconds until 100 have fallen.</li>
 <li><b>v1.47</b>: You can go inside Wendell's tower. He works at his cauldron in a round workroom full of books, candles and a scrying bowl, and a stair leads up to an observatory with a telescope. See Wendell the wizard.</li>
 <li><b>v1.44</b>: Shop rewards and fishing tips. At the top two tiers Pemberton opens his back room (one piece a week, sometimes a rare plan), Marlo adds a rare shelf and Sprig sells rare flower colors, hybrids and the glowing Lantern Bloom. Marlo and Gill tell you what's biting, more exactly as their shop and boat grow.</li>
 <li><b>v1.41</b>: Juniper's reading nook, Otis's race course, Marigold's flower show and a spring show every April, the newcomer, the Island Charter and Charter Hall, the Driftwood Festival every season, and Starfall Isle with its own bugs and Wendell's two spells. The legendary trip island Starfall Isle is now called Stardrift Isle.</li>

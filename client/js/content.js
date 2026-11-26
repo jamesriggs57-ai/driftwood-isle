@@ -1198,3 +1198,49 @@ def('bottle_note', { name:'Message in a Bottle', kind:'note', price:0, stack:1, 
 // v1.34: one Woodworking Plan item per piece that isn't a starting plan
 for (const r of WOODWORK){ if (WOOD_START.includes(r.id) || WOOD_TEN.includes(r.id) || !ITEMS[r.id]) continue;
   def('wplan_'+r.id, { name:'Woodworking Plan: '+ITEMS[r.id].name, kind:'plan', learns:r.id, wood:true, price:Math.round(ITEMS[r.id].price*0.6/10)*10+100, rarity:FR.r, stack:1, model:{t:'plan', of:r.id} }); }
+
+/* =====================================================================
+   v1.44 SHOP REWARDS: what the top two tiers of each shop unlock, and the fishing tip-offs.
+   Builders for every piece and flower here are in shoprare-models.js; the game side is in shoprare.js.
+   ===================================================================== */
+// Pemberton's back room (General Store and Grand Emporium): one piece a week, sold nowhere else
+furn('jukebox','Seashell Jukebox',32000,0.5,{ shop:'backroom', glow:true, stack:1, ...V });
+furn('sewingmachine','Treadle Sewing Machine',18000,0.55,{ shop:'backroom', stack:1, ...V });
+furn('cuckooclock','Cuckoo Clock',22000,0.4,{ shop:'backroom', stack:1, ...V });
+furn('steamtrunk','Steamer Trunk',16000,0.6,{ shop:'backroom', stack:1, ...V });
+furn('pennyfarthing','Penny-Farthing',24000,0.7,{ shop:'backroom', stack:1, ...V });
+furn('chesstable','Marble Chess Table',20000,0.55,{ shop:'backroom', stack:1, ...V });
+furn('typewriter','Old Typewriter',15000,0.45,{ shop:'backroom', stack:1, ...V });
+furn('hourglass','Grand Hourglass',28000,0.45,{ shop:'backroom', glow:true, stack:1, ...V });
+export const BACKROOM = { ids:['jukebox','sewingmachine','cuckooclock','steamtrunk','pennyfarthing','chesstable','typewriter','hourglass'],
+  minTier:2, planOdds:[0,0,0.25,0.5] };   // chance each week that a rare woodworking plan is in the back room too, by General Store tier
+// Marlo's rare shelf: one piece a day at Tidepool Aquarium (tier 3 of 4), two a day at the Grand Aquarium Hall
+furn('jellylamp','Jellyfish Lamp',6500,0.4,{ shop:'aquarium', tier:2, special:true, glow:true, ...R });
+furn('seahorsetank','Seahorse Column Tank',8800,0.45,{ shop:'aquarium', tier:2, special:true, ...R });
+furn('nautiluslamp','Nautilus Shell Lamp',5800,0.4,{ shop:'aquarium', tier:2, special:true, glow:true, ...R });
+furn('kelptank','Kelp Forest Tank',18000,1.0,{ shop:'aquarium', tier:3, special:true, ...V });
+furn('portholetank','Porthole Aquarium',14000,0.55,{ shop:'aquarium', tier:3, special:true, ...V });
+furn('octolamp','Octopus Lamp',12000,0.45,{ shop:'aquarium', tier:3, special:true, glow:true, ...V });
+// Sprig's rare seeds: rare flower colors and a hybrid at the Greenhouse (tier 3 of 4); two more hybrids and a glowing night plant at the Conservatory
+// sprig = shop tier that sells it, fk = color | hybrid | glow. story:true keeps them out of wildflowers and the everyday seed shelf.
+const SPRIG_RARE = {
+  bluerose:    { name:'Blue Rose',        days:4, colors:[0x4a7ae8], c2:0xc8dcff, shape:'bluerose',   sprig:2, fk:'color',  price:200, buy:900 },
+  blacktulip:  { name:'Black Tulip',      days:3, colors:[0x2a1a30], c2:0x8a3a6a, shape:'blacktulip', sprig:2, fk:'color',  price:200, buy:900 },
+  jadehyacinth:{ name:'Jade Hyacinth',    days:3, tall:0.5, colors:[0x3ac08a], c2:0xe8fff4, shape:'jadespike',  sprig:2, fk:'color',  price:200, buy:900 },
+  rainbowpansy:{ name:'Rainbow Pansy',    days:2, colors:[0xe8503a,0xf8c030,0x5ac06a,0x4a7ae8,0x9a5ad8], shape:'rainbow', sprig:2, fk:'color', price:220, buy:1000 },
+  starbell:    { name:'Starbell',         days:3, colors:[0x7a8af0], c2:0xffffff, shape:'starbell',   sprig:2, fk:'hybrid', price:260, buy:1200, of:'Bellflower and Lily' },
+  sunburst:    { name:'Sunburst Daisy',   days:3, colors:[0xf8d040], c2:0xf06a2a, shape:'sunburst',   sprig:3, fk:'hybrid', price:320, buy:1500, of:'Daisy and Marigold' },
+  peppermint:  { name:'Peppermint Poppy', days:2, colors:[0xffffff], c2:0xe8303a, shape:'peppermint', sprig:3, fk:'hybrid', price:320, buy:1500, of:'Poppy and Tulip' },
+  lanternbloom:{ name:'Lantern Bloom',    days:4, tall:0.62, colors:[0x9af0ff], c2:0x3a6a8a, shape:'lantern',    sprig:3, fk:'glow',   price:400, buy:2000, night:true },
+};
+for (const [id,p] of Object.entries(SPRIG_RARE)){
+  PLANTS[id] = Object.assign({ ptype:'flower', story:true }, p);
+  def(id, { name:p.name, kind:'flower', price:p.price, story:true, sprig:p.sprig, fk:p.fk, glow:p.fk==='glow'||undefined, model:{t:'flower', sp:id} });
+  def(id+'_seeds', { name:p.name+' Seeds', kind:'seed', plant:id, price:Math.round(p.buy/4), buy:p.buy, story:true, sprig:p.sprig, fk:p.fk, model:{t:'seed', sp:id} });
+}
+export const SPRIG_RARE_IDS = Object.keys(SPRIG_RARE);
+// How many of the special things are on the shelf each day, by shop tier (index = tier 0..3)
+export const RARE_SHELF = { aquarium:[0,0,1,2], garden:[0,0,2,3] };
+// Fishing tip-offs. Marlo's get sharper with Marlo's shop tier, Gill's with his boat (none, Rowboat... up to his best).
+// A fish someone tips is really biting: each new shadow in its water has this chance to be that fish instead, by rarity.
+export const TIPS = { minRarity:0.8, maxRarity:3.5, swap:{ 'Uncommon':0.12, 'Rare':0.08, 'Very rare':0.05 } };   // tip fish: uncommon to very rare (no commons, no legendaries); swap = chance a spawn becomes the tipped fish while it's biting

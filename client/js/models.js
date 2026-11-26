@@ -168,11 +168,12 @@ export function buildShrub(sp, stage=3, color){
       mk(P.berries?G.sph(0.06,8,6):G.ico(sp==='hydrangea'||sp==='lilac'?0.16:0.1,1), M(c), p.x,p.y,p.z,body).castShadow=false; } }
   return g;
 }
-function petalRing(g, n, len, wid, tilt, color, y, thick=0.02, mat){ for(let i=0;i<n;i++){ const a=i/n*TAU; const p=new THREE.Group(); p.position.y=y; p.rotation.y=a; g.add(p); const m=mk(G.sph(0.5,10,6), mat||M(color), 0,0,len*0.5,p); m.scale.set(wid,thick,len); m.rotation.x=-tilt; m.position.y=Math.sin(tilt)*len*0.5; m.position.z=Math.cos(tilt)*len*0.5; m.castShadow=false; } }
+export const FLOWER_SHAPES = {};   // v1.44: extra flower heads by shape name, filled in by shoprare-models.js
+export function petalRing(g, n, len, wid, tilt, color, y, thick=0.02, mat){ for(let i=0;i<n;i++){ const a=i/n*TAU; const p=new THREE.Group(); p.position.y=y; p.rotation.y=a; g.add(p); const m=mk(G.sph(0.5,10,6), mat||M(color), 0,0,len*0.5,p); m.scale.set(wid,thick,len); m.rotation.x=-tilt; m.position.y=Math.sin(tilt)*len*0.5; m.position.z=Math.cos(tilt)*len*0.5; m.castShadow=false; } }
 export function buildFlower(sp, stage=3, color){
   const g=new THREE.Group(), P=PLANTS[sp]; const c=color!==undefined?color:P.colors[0];
   if (stage===0){ const m=mk(G.sph(0.22,10,6), M(0x7a5a3a), 0,0,0,g); m.scale.y=0.35; return g; }
-  const tall = P.shape==='sun' ? 1.0 : (P.shape==='lav'||P.shape==='spike'?0.5:0.42);
+  const tall = P.tall || (P.shape==='sun' ? 1.0 : (P.shape==='lav'||P.shape==='spike'?0.5:0.42));
   const h = stage===1 ? 0.15 : (stage===2 ? tall*0.75 : tall);
   const stem=M(0x4f9a3a);
   for(const s of [1,-1]){ const l=mk(G.sph(0.09,8,4), stem, s*0.07,0.06,0,g); l.scale.set(1.6,0.25,0.6); l.rotation.z=s*0.4; l.castShadow=false; }
@@ -191,6 +192,7 @@ export function buildFlower(sp, stage=3, color){
     case 'lav': for(let k=0;k<4;k++){ const a=k/4*TAU; const sx=Math.cos(a)*0.04, sz=Math.sin(a)*0.04; mk(G.cyl(0.01,0.012,0.38,4),stem,sx,0.19,sz,g); for(let i=0;i<5;i++) mk(G.sph(0.028,6,4),M(c),sx,0.34+i*0.04,sz,g).castShadow=false; } break;
     case 'bell': for(let i=0;i<3;i++){ const b=mk(G.cone(0.05,0.08,8,1,true),M(c),0.06*(i-1),-0.04-i*0.02,0.02,head); b.rotation.x=Math.PI; b.castShadow=false; } break;
     case 'pom': mk(G.ico(0.08,1),M(c),0,0.02,0,head); for(let i=0;i<8;i++){ const a=i/8*TAU; mk(G.ico(0.04,0),M(c),Math.cos(a)*0.07,0.01,Math.sin(a)*0.07,head); } break;
+    default: if (FLOWER_SHAPES[P.shape]) FLOWER_SHAPES[P.shape](head, c, P, g, h);   // v1.44 Sprig's rare flowers (shoprare-models.js)
   }
   return g;
 }

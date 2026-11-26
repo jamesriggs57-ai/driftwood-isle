@@ -84,6 +84,12 @@ function migrate(s){
   if (!s.museum.items) s.museum={ items:{}, met:false, gifts:0 };
   return s;
 }
+// v1.61 museum lists, defined up here because the day turning over at load (rollDay, the firefly glade's trigger) reads them;
+// further down they were not ready yet, and a signed-in island with a town hall stuck on "Building the island..." on a new day
+const MUSEUM_IDS = Object.fromEntries(MUSEUM.kinds.map(k=>[k, Object.values(ITEMS).filter(i=>i.kind===k).map(i=>i.id)]));
+const MUSEUM_TOTAL = Object.values(MUSEUM_IDS).reduce((a,l)=>a+l.length,0);
+const donatedCount = () => Object.keys(S.museum.items).length;
+const MUSEUM_ORDER = MUSEUM.kinds.flatMap(k=>MUSEUM_IDS[k]);
 const BOOT = window.__BOOT || { mode:'guest' };
 const GUEST = BOOT.mode==='guest', VISIT = BOOT.mode==='visit', CAN_EDIT = !VISIT || BOOT.role==='resident';
 // v1.26: on a boat trip to a little island with no town. Your own things come along; the island is gone when you sail home.
@@ -6932,10 +6938,7 @@ function openShop(which, startTab){
 
 /* ---------- Museum ----------
    Professor Thistle takes one of every fish, bug, fossil and beach find. Each donation gets its own display inside. */
-const MUSEUM_IDS = Object.fromEntries(MUSEUM.kinds.map(k=>[k, Object.values(ITEMS).filter(i=>i.kind===k).map(i=>i.id)]));
-const MUSEUM_TOTAL = Object.values(MUSEUM_IDS).reduce((a,l)=>a+l.length,0);
-const donatedCount = () => Object.keys(S.museum.items).length;
-const MUSEUM_ORDER = MUSEUM.kinds.flatMap(k=>MUSEUM_IDS[k]);
+// MUSEUM_IDS, MUSEUM_TOTAL, donatedCount and MUSEUM_ORDER live near the top of this file (v1.61: the day turning over at load reads them)
 function exhibitInfo(id){ const it=ITEMS[id], when=new Date(S.museum.items[id]), R=S.rec[id], anon=S.museum.anon&&S.museum.anon[id];
   return `${anon?'Given by an anonymous islander':'Donated'} ${when.toLocaleDateString('en-US',{month:'short',day:'numeric'})}${R&&!anon?` · your biggest: ${it.kind==='fish'?R.l+' cm':R.l+' mm'}`:''}${it.kind==='fish'||it.kind==='bug'?' · '+rarityTag(it):''}`; }
 // A fossil pedestal (empty ones stay, waiting) or a beach find in the glass case

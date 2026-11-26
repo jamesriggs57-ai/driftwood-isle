@@ -9,6 +9,7 @@ import { TICKET_THEMES } from './content.js';   // v1.39 fixes: captain's partin
 import { ITEMS, NATIVE_FRUITS, PLANTS, TOOLS, WOODWORK, BACKPACKS, BASE_SLOTS, HOUSE_LEVELS, RESIDENTS, DIALOGUE, PEDDLER, EVENTS, rarityLabel, RARITY_COLORS, SHOPS, INVEST, KEEPERS, MUSEUM, BUILD,
   FOREIGN_FRUIT_PRICE, FRUIT_REGROW_DAYS, POTIONS, WIZARD, MAGIC, STORY, FAVOR_ASKS, CROPS, RECIPES, ARRIVE, MENTOR, islandSeedPool, ISLAND_SEED_BUY, islandFlowerPool, WILDFLOWER_SEEDS, GARDEN_FENCES, GARDEN_DECOR, FR, RARE_WORK, RARE_ODDS, PLAN_PRICE,
   WEAR_IDS, FAVOR_THEMES, DO_TASKS, ORIGINAL_RESIDENTS, LETTERS, LETTER_IDS, CORAL_KINDS, CORAL_NAMES, CORAL_FISH, NIGHT_BAY } from './content.js';
+import { whereText, BAY_MORE } from './content.js';   // v1.50 wave 1: isle, trip and late reef fish
 import * as S2 from './story2.js';   // v1.38 phase 2 buildings and furniture
 import * as S3 from './story3.js';   // v1.39 phase 3 buildings and furniture
 import * as S4 from './story4.js';   // v1.41 phase 4 buildings, festival and Starfall spells
@@ -1341,7 +1342,7 @@ const bugs=[];
 const CATCH_BASE = { 'Common':0.85, 'Uncommon':0.72, 'Rare':0.58, 'Very rare':0.48, 'Legendary':0.4 };
 const SKITTISH = { 'Common':0.7, 'Uncommon':1.1, 'Rare':1.6, 'Very rare':2.2, 'Legendary':3 };
 class Bug extends Ent {
-  constructor(id, x, z, extra={}){ super('bug',x,z,0.3); this.id=id; this.it=ITEMS[id]; this.where=['glade','starfall'].includes(this.it.where)?'air':this.it.where; this.reach=1.5;   // v1.39 glade bugs fly like the rest
+  constructor(id, x, z, extra={}){ super('bug',x,z,0.3); this.id=id; this.it=ITEMS[id]; this.where=['glade','starfall'].includes(this.it.where)?'air':(this.it.move||this.it.where); this.reach=1.5;   // v1.39 glade bugs fly like the rest
     const m=buildItemModel(id); m.scale.setScalar(this.where==='air'?1.1:0.9); const g=new THREE.Group(); g.add(m); this.m=m; this.attach(g); this.hitSphere(0.8,0.5);
     this.home=new THREE.Vector3(x,0,z); this.ph=Math.random()*10; this.alt= this.where==='air' ? 0.8+Math.random()*1.4 : (this.where==='trunk'?1.1+Math.random()*0.6:0.05); this.flee=0; this.hop=0; this.trunk=extra.trunk||null;
     // trunk bugs sit on the side of the tree that faces the camera, so you can see them before you walk up
@@ -1382,6 +1383,7 @@ class Bug extends Ent {
       if (this.tx!==undefined){ const dx=this.tx-this.pos.x, dz=this.tz-this.pos.z, L=Math.hypot(dx,dz); if(L>0.05){ const s=Math.min(L, dt*(W==='beach'?1.2:2.5)); this.pos.x+=dx/L*s; this.pos.z+=dz/L*s; this.obj.rotation.y=Math.atan2(dx,dz)+(W==='beach'?Math.PI/2:0); } }
       this.pos.y=groundY(this.pos.x,this.pos.z)+(W==='ground'&&this.hop>1.2?Math.sin((this.hop-1.2)*10)*0.2:0)+0.02; }
     else if (W==='pond'){ const w=this.ph*0.4; this.pos.set(this.home.x+Math.sin(w)*1.5, 0.03, this.home.z+Math.cos(w*1.3)*1.5); }
+    if (this.m.userData.idle) this.m.userData.idle(t);   // v1.50 a few new bugs have their own little motion
     if (!this.trunk) this.obj.position.copy(this.pos);
   }
   flap(t,s){ for(const wg of (this.m.userData.wings||[])) wg.rotation.z=wg.userData.side*Math.sin(t*22*s+this.ph)*0.7*Math.min(1,s+0.1); }
@@ -1439,11 +1441,14 @@ const shadowGeo=G.sph(0.5,14,6);
 const shadowMat=new THREE.MeshBasicMaterial({ color:0x163040, transparent:true, opacity:0.5, depthWrite:false });
 const FISH_NIGHT=new THREE.Color(0x9fe0f0);   // at night fish show as a pale glow instead of a dark shadow
 const fishes=[];
-function fishPool(type){ const h=Time.hour(), m=Time.month(); return Object.values(ITEMS).filter(i=>i.kind==='fish' && i.where===type && inMonths(m,i.months) && inHours(h,i.hours)); }
+// v1.50: isle fish live only in the sea right around their isle, trip fish only on those trip islands
+const isleNear = (x,z,t=1.7) => { for (const I of ISLES) if (!I.sky && ISL.isleT(I,x,z)<t) return I; return null; };
+const fishHere = (i,type,I) => i.where===type || (i.where==='isle' && type==='sea' && !!I && I.kind===i.isle) || (i.where==='trip' && TRIP && (i.trip||[]).includes(TRIP_THEME) && (i.water==='any' ? type!=='spring' : i.water===type));
+function fishPool(type, x, z){ const h=Time.hour(), m=Time.month(), I=type==='sea' && x!==undefined ? isleNear(x,z) : null; return Object.values(ITEMS).filter(i=>i.kind==='fish' && fishHere(i,type,I) && inMonths(m,i.months) && inHours(h,i.hours)); }
 function waterSpot(){ for(let k=0;k<40;k++){ const a=Math.random()*TAU, d=4+Math.random()*12; const x=player.pos.x+Math.cos(a)*d, z=player.pos.z+Math.sin(a)*d; if(isFishWater(x,z) && rawHeight(x,z)<-0.45 && !onDock(x,z) && !onBridge(x,z)) return [x,z]; } return null; }
 function spawnFish(){ const p=waterSpot(); if(!p) return; const type=waterType(p[0],p[1]);
   if (TRIP_THEME==='shimmer' && haulLeft()<=0) return;   // v1.27: Shimmer Lagoon only holds so much
-  const pool=(TRIP_THEME==='shimmer' && type!=='spring' ? Object.values(ITEMS).filter(i=>i.kind==='fish' && (i.rarity??5)<1.5) : fishPool(type)).filter(allowedFind); if(!pool.length) return; const sp=SR.tipSwap(tierPick(Math.random, pool, i=>luckW(i,'fish'), 'fish'), pool, 'marlo');   // v1.44 Marlo's tip
+  const pool=(TRIP_THEME==='shimmer' && type!=='spring' ? Object.values(ITEMS).filter(i=>i.kind==='fish' && (i.rarity??5)<1.5) : fishPool(type, p[0], p[1])).filter(allowedFind); if(!pool.length) return; const sp=SR.tipSwap(tierPick(Math.random, pool, i=>luckW(i,'fish'), 'fish'), pool, 'marlo');   // v1.44 Marlo's tip
   // v1.26: the fish's length is decided when it spawns, and its shadow shows it: a big shadow is a big one for its species
   const meta=rollStats(sp.id), sz=(SIZE_SCALE[sp.size]||0.85)*(0.8+0.45*(meta.f||0));
   const m=new THREE.Mesh(shadowGeo, shadowMat); m.scale.set(sz*1.6,0.05,sz*0.8); m.position.set(p[0],-0.25,p[1]); m.visible=false; OUT.add(m);   // the water shader draws the shadow (see Water)
@@ -2236,6 +2241,7 @@ function reefInfo(){
 const reefStage = () => SY.reef ? reefInfo().stage : 0;
 const bayKinds = () => { const by=reefInfo().by; return CORAL_KINDS.filter(k=>by[k]>=5); };
 const baySpecies = () => bayKinds().flatMap(k=>CORAL_FISH[k]).filter(id=>ITEMS[id]);
+const bayMore = () => BAY_MORE.filter(id=>ITEMS[id] && reefStage()>=(ITEMS[id].reef||9) && inMonths(Time.month(), ITEMS[id].months));   // v1.50 the bigger reef fish come back as the reef grows
 const outerOpen = () => reefStage()>=5;
 
 /* ---------- who holds a dream (v1.26 rule: whoever it was written for, else someone who lives here) ---------- */
@@ -2531,10 +2537,10 @@ function bayPopulate(){
 const BAY_OUTER=[6,7];
 function bayPool(){ const h=Time.hour(), m=Time.month(), st=reefStage();
   const sea=Object.values(ITEMS).filter(i=>i.kind==='fish' && i.where==='sea' && (i.rarity??5)>=3 && inMonths(m,i.months) && inHours(h,i.hours));
-  const bay=[...baySpecies(), ...nightBay()].map(id=>ITEMS[id]).filter(i=>inHours(h,i.hours));   // v1.38 night fish once the lighthouse is lit
+  const bay=[...baySpecies(), ...nightBay(), ...bayMore()].map(id=>ITEMS[id]).filter(i=>inHours(h,i.hours));   // v1.38 night fish once the lighthouse is lit
   return (st>=1 ? [...sea.slice(0, st>=3?3:6), ...bay, ...bay] : sea).filter(allowedFind); }
 // v1.44 what Gill can tip you about: the bay's own fish, or before any have come back, the sea fish that turn up in the bay (bayPool without the hour check)
-function bayTipIds(){ const own=[...baySpecies(), ...nightBay()]; if (own.length) return own; const m=Time.month(), st=reefStage();
+function bayTipIds(){ const own=[...baySpecies(), ...nightBay(), ...bayMore()]; if (own.length) return own; const m=Time.month(), st=reefStage();
   const sea=Object.values(ITEMS).filter(i=>i.kind==='fish' && i.where==='sea' && (i.rarity??5)>=3 && inMonths(m,i.months)); return (st>=1 ? sea.slice(0, st>=3?3:6) : sea).map(i=>i.id); }
 function baySpawnShadow(){ const R=BAYR, B=R.B, grownPlots=R.plots.filter(q=>q.rec && plotAge(q.rec)>=2); if (!grownPlots.length) return;
   const q=grownPlots[Math.floor(Math.random()*grownPlots.length)], a=Math.random()*TAU, d=1+Math.random()*4, x=q.p.x+Math.cos(a)*d, z=q.p.z+Math.sin(a)*d;
@@ -5255,13 +5261,13 @@ const ISLE_TREES = {
 const ISLE_ROCKS = { meadow:1, dunes:0, bluff:3, crags:4, pines:2, starfall:2 };
 // the meadow grows a fruit the main island doesn't, the same one every time
 const isleFruit = () => { const pool=NATIVE_FRUITS.filter(f=>f!==S.nativeFruit); return pool[hashStr('isleFruit:'+S.seed)%pool.length]; };
-function isleSpot(I, r, minH, maxH, rad){
+function isleSpot(I, r, minH, maxH, rad, keep=true){   // v1.50 keep=false only looks, so a passing bug doesn't hold the spot (or shift where the isle's trees go)
   for (let k=0;k<90;k++){ const a=r()*TAU, d=Math.sqrt(r())*I.r*0.95, x=I.cx+Math.cos(a)*d, z=I.cz+Math.sin(a)*d, h=rawHeight(x,z);
     if (h<minH || h>maxH || ISL.isleSlope(I,x,z)>0.7 || islePathDist(I,x,z)<2.3) continue;
     if (Math.hypot(x-I.mark[0],z-I.mark[1])<7.5 || onBridge(x,z) || XBR.some(b=>Math.hypot(x-b.a[0],z-b.a[1])<4.5 || Math.hypot(x-b.b[0],z-b.b[1])<4.5)) continue;
     if (I.spires && I.spires.some(([px,pz,pr])=>Math.hypot(x-px,z-pz)<pr*1.3+1.5)) continue;
     if (I.taken.some(([a2,b2,c2])=>Math.hypot(x-a2,z-b2)<c2+rad)) continue;
-    I.taken.push([x,z,rad]); return [x,z]; }
+    if (keep) I.taken.push([x,z,rad]); return [x,z]; }
   return null; }
 function isleCover(I, grp){
   const r=mulberry32((S.seed|0)+I.k*313+7), dummy=new THREE.Object3D(), col=new THREE.Color(), [x0,z0,x1,z1]=I.box, W=x1-x0, rx=()=>x0+r()*W, rz=()=>z0+r()*W;
@@ -5499,7 +5505,9 @@ function updateSnow(dt){
   SNOW_U.value = World.inside ? 0 : lerp(SNOW_U.value, snowTarget, Math.min(1, dt*0.8));
 }
 
-function bugPool(){ const h=Time.hour(), m=Time.month(); return Object.values(ITEMS).filter(i=>i.kind==='bug' && inMonths(m,i.months) && inHours(h,i.hours) && (!i.weather || i.weather===World.weather) && !(World.weather==='rain' && !i.weather && i.where==='air' && i.hours && i.hours[0]<12) && (i.where!=='glade' || gladeBugOK(i.id)) && (i.where!=='starfall' || skyBugOK())); }
+function bugPool(){ const h=Time.hour(), m=Time.month(); return Object.values(ITEMS).filter(i=>i.kind==='bug' && inMonths(m,i.months) && inHours(h,i.hours) && (!i.weather || i.weather===World.weather) && !(World.weather==='rain' && !i.weather && i.where==='air' && i.hours && i.hours[0]<12) && (i.where!=='glade' || gladeBugOK(i.id)) && (i.where!=='starfall' || skyBugOK()) && (i.where!=='isle' || isleBugNear(i.isle)) && (i.where!=='trip' || (TRIP && (i.trip||[]).includes(TRIP_THEME)))); }
+// v1.50 isle bugs only turn up while you're on or right by their isle
+const isleBugNear = kind => { const I=isleNear(player.pos.x, player.pos.z, 1.3); return !!I && I.kind===kind; };
 let bugT=0; const BUG_CAP=3, BUG_ROLL=0.28;
 function updateBugs(dt){
   if (World.inside) return; bugT-=dt; if(bugT>0) return; bugT=2.5;
@@ -5507,15 +5515,20 @@ function updateBugs(dt){
   // v1.34: 60% fewer bugs (was up to 8 at once with a 70% chance per roll)
   if (bugs.length>=BUG_CAP || !pool.length || Math.random()>=BUG_ROLL) return;
   const okPool=pool.filter(allowedFind); if(!okPool.length) return; const sp=tierPick(Math.random,okPool,i=>luckW(i,'bug'),'bug'); const near=[player.pos.x,player.pos.z,22]; let p=null, extra={};
-  switch(sp.where){
+  const isleI = sp.where==='isle' ? isleNear(player.pos.x, player.pos.z, 1.3) : null;
+  for (let tries=0; tries<(sp.where==='isle'?4:1) && !p; tries++){ extra={};
+  if (isleI && (sp.move==='air' || sp.move==='ground')){ p=isleSpot(isleI, Math.random, SAND_H+0.1, isleI.sky?20:14, 0.5, false); continue; }   // v1.50 anywhere on the isle, not just where the main island's land is
+  switch(sp.where==='isle'||sp.where==='trip' ? sp.move : sp.where){
     case 'air': case 'ground': p=randLand(Math.random,SAND_H+0.1,9,0.5,30,near); break;
     case 'flower': { const spots=[...wildFlowerSpots, ...S.plants.filter(q=>PLANTS[q.sp].ptype==='flower'&&q.stage===3).map(q=>[q.x,q.z])].filter(s=>Math.hypot(s[0]-player.pos.x,s[1]-player.pos.z)<26&&Math.hypot(s[0]-player.pos.x,s[1]-player.pos.z)>5); if(spots.length){ const s=spots[Math.floor(Math.random()*spots.length)]; p=[s[0]+(Math.random()-0.5),s[1]+(Math.random()-0.5)]; } break; }
-    case 'trunk': { const ts=trees.filter(t=>!t.removed&&t.stage>=2&&!['palm'].includes(t.type)&&t.pos.distanceTo(player.pos)<26&&t.pos.distanceTo(player.pos)>5&&!bugs.some(b=>b.trunk===t.pos)); if(ts.length){ const t=ts[Math.floor(Math.random()*ts.length)]; p=[t.pos.x,t.pos.z]; extra.trunk=t.pos; } break; }
+    case 'trunk': { const ts=trees.filter(t=>!t.removed&&t.stage>=2&&!['palm'].includes(t.type)&&t.pos.distanceTo(player.pos)<(isleI?40:26)&&t.pos.distanceTo(player.pos)>5&&(!isleI||isleAt(t.pos.x,t.pos.z)===isleI)&&!bugs.some(b=>b.trunk===t.pos)); if(ts.length){ const t=ts[Math.floor(Math.random()*ts.length)]; p=[t.pos.x,t.pos.z]; extra.trunk=t.pos; } break; }
     case 'beach': for(let k=0;k<30&&!p;k++){ const a=Math.random()*TAU, d=4+Math.random()*20; const x=player.pos.x+Math.cos(a)*d, z=player.pos.z+Math.sin(a)*d; if(isBeach(x,z)) p=[x,z]; } break;
     case 'pond': if (Math.hypot(player.pos.x-POND.x,player.pos.z-POND.z)<30) p=[POND.x+(Math.random()-0.5)*4, POND.z+(Math.random()-0.5)*4]; break;
     case 'glade': p=gladeBugSpot(); break;   // v1.39 only in Lumi's glade
     case 'starfall': p=skyBugSpot(); break;   // v1.41 only up on Starfall Isle
   }
+  if (!p && isleI && sp.move==='flower' && tries===3) p=isleSpot(isleI, Math.random, SAND_H+0.1, 14, 0.5, false);   // no flowers out there yet: it sits in the grass
+  if (p && sp.where==='isle'){ const I=isleAt(p[0],p[1]); if (!I || I.kind!==sp.isle) p=null; } }   // v1.50 an isle bug has to land on its own isle
   if (p) new Bug(sp.id, p[0], p[1], extra);
 }
 
@@ -6062,7 +6075,7 @@ function openBook(tab='fish'){
     let h='<div class="tabs">'+tabs.map(([k,n])=>`<button class="tab${k===tab?' on':''}" data-t="${k}">${n}</button>`).join('')+'</div>';
     h+=`<div class="muted" style="margin-bottom:8px">${got} of ${list.length} discovered</div><div class="bar" style="margin-bottom:12px"><div style="width:${got/list.length*100}%"></div></div>`;
     for(const it of list){ const k=!!S.seen[it.id]; let sub='';
-      if (it.kind==='fish'||it.kind==='bug'){ const R=S.rec[it.id]; sub = k ? `${WHERE[it.where]} · ${monthsText(it.months)} · ${hoursText(it.hours)}${it.weather?' · rain only':''}<br>${rarityTag(it)} ${R?`Caught ${R.n} · Biggest ${it.kind==='fish'?R.l+' cm':R.l+' mm'}`:''}${S.museum.items[it.id]?' · <b>In the museum</b>':''}` : `${WHERE[it.where]} · Not found yet`; }
+      if (it.kind==='fish'||it.kind==='bug'){ const R=S.rec[it.id]; sub = k ? `${whereText(it)} · ${monthsText(it.months)} · ${hoursText(it.hours)}${it.weather?' · rain only':''}<br>${rarityTag(it)} ${R?`Caught ${R.n} · Biggest ${it.kind==='fish'?R.l+' cm':R.l+' mm'}`:''}${S.museum.items[it.id]?' · <b>In the museum</b>':''}` : `${whereText(it)} · Not found yet`; }
       else sub = k ? 'Worth '+fmt(it.price)+' clams'+(S.museum.items[it.id]?' · <b>In the museum</b>':'') : 'Not found yet';
       h+=`<div class="row" style="${k?'':'opacity:.72'}"><div class="slot ${k?'':'unk'}" style="width:56px;border-width:2px"><img src="${thumb(it.id)}"></div><div class="grow"><div class="nm">${k?it.name:'???'}</div><div class="sub">${sub}</div></div></div>`; }
     pBody.innerHTML=h; pBody.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>{ tab=b.dataset.t; Snd.click(); render(); pBody.scrollTop=0; });
@@ -6382,8 +6395,8 @@ function tankSelect(id, follow){ const V=tankView; if (!V) return; const card=tv
   tvEl.querySelectorAll('.tvChip').forEach(b=>b.classList.toggle('sel', !!id && b.dataset.id===id));
   if (id===''){ card.innerHTML=`<div><b>An empty space</b><div class="sub">This tank is shared until the ${V.group.kind==='fish'?'Aquarium':'Insectarium'} gets its own wing. Each new ${V.group.kind==='fish'?'fish':'bug'} you donate fills a space.</div></div>`; card.classList.add('show'); V.view.follow=null; return; }
   if (!id){ card.classList.remove('show'); V.view.follow=null; V.sel=null; return; } V.sel=id; const it=ITEMS[id];
-  if (!S.museum.items[id]){ const seen=!!S.rec[id]; card.innerHTML=`<div><b>${seen?it.name:'Not in the collection yet'}</b><div class="sub">${seen?'You have caught one before. Bring one to Professor Thistle to add it here.':`Somewhere out there: ${WHERE[it.where]||'on the island'}.`}</div></div>`; card.classList.add('show'); V.view.follow=null; return; }
-  card.innerHTML=`<img src="${thumb(id)}" alt=""><div><b>${it.name}</b><div class="sub">${WHERE[it.where]||''} · ${monthsText(it.months)} · ${hoursText(it.hours)}<br>${exhibitInfo(id)}</div></div>`; card.classList.add('show');
+  if (!S.museum.items[id]){ const seen=!!S.rec[id]; card.innerHTML=`<div><b>${seen?it.name:'Not in the collection yet'}</b><div class="sub">${seen?'You have caught one before. Bring one to Professor Thistle to add it here.':`Somewhere out there: ${(whereText(it)||'on the island')}.`}</div></div>`; card.classList.add('show'); V.view.follow=null; return; }
+  card.innerHTML=`<img src="${thumb(id)}" alt=""><div><b>${it.name}</b><div class="sub">${whereText(it)} · ${monthsText(it.months)} · ${hoursText(it.hours)}<br>${exhibitInfo(id)}</div></div>`; card.classList.add('show');
   V.view.follow = follow ? V.specs.find(s=>s.id===id)||null : null; }
 tvEl.querySelector('.tvX').onclick=e=>{ e.stopPropagation(); closeTankView(); };
 { let pd=null;
@@ -8942,6 +8955,9 @@ function runWorldSync(){
 window.__game = { v140:EN.dev, v140b:BN.dev, v123:{ toolPitch, pitchTool, buyTool, talkShop, get storeVisit(){ return storeVisit; } }, v120:{ track, checkAch, achValue, grantWear, ownsWear, openAchievements, makeFavor, rollFavors, favorChoices, npcOf, clothesStock, wardrobeOwned, get Q(){ return Q; } }, party:PARTY, v119:{ tierPick, openChest, townCap:()=>townCap() }, v13:{ shopStock:w=>shopStock(w), learnPlan, rareRoll, knowsPlan, unfoundPlans, stockWeight, RARE_WORK, GroundItem, ShopItem, Furniture }, v1:{ scene, camera, OUT, updateSky, updateHUD, snowPass, SNOW_U, townNewDay, applyTown, talkHall, openHallPanel, buildPlaza, refreshStoreItems, buildStoreAll, buildShop, buildMuseumAll, spawnExhibits, mentorMoment, teachWoodworking, openCraft, doCook, nearStation, toggleSled, setSled, get sledding(){ return sledding; }, sledV, eatFood, Plant, fullBagCatch, KB, landSeaTap, terraLand, LAMPS:()=>LAMPS, hasUpstairs, ShopItem, Stairs, get exhibits(){ return exhibits; }, onDisplay, museumNeeds, museumExpand, museumFitState, museumTanks, renderer, nearestEnt:()=>nearestEnt(), doAction:()=>doAction(), openTankView, closeTankView, get tankView(){ return tankView; }, KEEPOUT, dayKeyOf, World, startPlacing, checkPlace, get placing(){ return placing; }, FX, homeStock, buyHome, draftUnowned, get homeRack(){ return homeRack; }, openShop, openBuild:(o)=>openBuild(o), closeBuild, get buildMode(){ return buildMode; }, ents, Tree, Stump, Weed, Bug, bugs, player, interact, layoutBar, pickNote, itemToast, reel, Fishing, fishes, spawnFish, WU, relayout, enterRoom:(id)=>enterRoom(id), trees }, get S(){ return S; }, dbg:{ setCine:(c)=>{ cine=c; }, showChoices:(t,c)=>showChoices(t,c), dialog:(...a)=>dialog(...a), setRiding:(v)=>setRiding(v), enterRoom:(id)=>enterRoom(id), openBuild:()=>openBuild(), rooms:()=>Object.keys(ROOMS), get yaw(){ return camYaw; }, set yaw(v){ camYaw=v; }, get riding(){ return riding; }, get snow(){ return SNOW_U.value; }, setWeather:(w)=>{ weatherOverride=w; World.weather=w; snowT=0; }, get dlg(){ return !!dlgState; } }, walkable, blocked, groundY, launchRag, ragdolls, swing, meBody, refreshPortals, portalArches, get portalEnt(){ return portalEnt; }, enterRoom, PLACES, net:{ party:(id,d)=>PARTY.onNet(id,d), trip:(id,name,d)=>onTripNet(id,name,d), bonked, visibleRemotes:()=>[...remotes.values()].filter(r=>r.obj.visible).map(r=>[r.name,+r.pos.x.toFixed(1),+r.pos.z.toFixed(1)]), remoteUpsert, remotePos, remoteLeave, remoteEmote, playerState, setInventory, toast:(m)=>toast(m), updateHUD:()=>updateHUD(), get started(){ return started; } }, ITEMS, itemThumb:(id)=>thumb(id), layoutInfo:()=>({ id:LAYOUT_ID, PLACES, PATHS, LOT, rects:RECTS.map(r=>r.slice(0,4)), lot:lotRect() }), terrainH:(x,z)=>rawHeight(x,z), terrainSlope:(x,z)=>hillSlope(x,z), interact, spawnBug:(id,x,z)=>new Bug(id,x,z), tapOdds:()=>Object.fromEntries(Object.keys(TAP_BASE).map(k=>[k, +tapChance({rarity:k}).toFixed(2)])), placingObj:()=>placing&&placing.m, toScreen:v=>{ const p=v.clone().project(camera); return [(p.x*0.5+0.5)*innerWidth, (-p.y*0.5+0.5)*innerHeight]; }, rebuildHome:()=>{ buildPlayerHouse(); rebuildHomeRoom(); }, openBuild, closeBuild, get buildMode(){ return buildMode; }, talkShop, openDonate, talkCurator, spawnMossby, onFelled, findPath, startPlacing, LOT, RECTS, shopEnts, museumEnt, houseEnt:()=>houseEnt, Time, player, ents, ITEMS, residents, World, ROOMS, goTo, handleTap, doAction, updateSky, rollDay, spawnDaily, castAt, Fishing, fishes, bugs, openBag, openBook, openShop, openBoard, openMenu, openCraft, doCraft, WOODWORK, enterRoom, exitRoom, equip, startLayout, endLayout, trees, applyControls, magic:{ startMagic, endMagic, landTap, magicPlace, castMagic, get mode(){ return magicMode; }, raiseTower, talkWizard, drinkPotion, potionOn, luckW, rollFavors, Q, favorChoices, findTowerSpot, get tower(){ return towerEnt; }, PLACES, TERRA, FALLS } };
 window.__game.net.applyWorld = applyWorld;
 window.__game.v144 = Object.assign({ SR, shopStock:w=>shopStock(w), talkGill:()=>talkGill(), spawnFish:()=>spawnFish(), baySpawnShadow:()=>baySpawnShadow(), bayPool:()=>bayPool(), fishPool, incOf }, SR.dev);   // v1.44 tests   // v1.34 live island sync (online.js)
+// v1.50 test hooks: where the new fish and bugs turn up
+window.__game.v145 = { fishPool, bugPool, isleNear, isleAt, bayMore, bayTipIds, bayPool:()=>bayPool(), waterType, isleSpot, get trees(){ return trees; }, get bugs(){ return bugs; }, newBug:(id,x,z,e)=>new Bug(id,x,z,e||{}), updateBugs:dt=>{ bugT=0; updateBugs(dt||3); }, spawnFish:()=>spawnFish(), get fishes(){ return fishes; },
+  openDonate:()=>openDonate(), museumExpand:()=>museumExpand(), buildMuseumAll:()=>buildMuseumAll(), enterRoom:id=>enterRoom(id), tanks:()=>ents.filter(e=>e instanceof MuseumTank), openTankView:e=>openTankView(e), closeTankView:()=>closeTankView(), get tankView(){ return tankView; } };
 // v1.26 test hooks
 window.__game.v126 = { townNewDay, applyTown, findHomeSpot, claimHomeSpot, townCap, incomeNewDay, refreshIncome, talkIncome, incCollect, incOf, INCOME, incEnts, openMap, talkSkipperHome, talkSkipperTrip, tripGoHome, tripRecap, storyWho, askToLeave, canAskToLeave, pitchOnBuy, merchantDay, get peddler(){ return peddler; }, get skipper(){ return skipper; }, newSquares, LOAN_MAX_SQ, TRIP, TRIP_THEME, residents, residentHomes, plotEnts, KEEPOUT, Q, PATHS, camTarget, updateCamera, set camDist(v){ camDist=v; }, get camDist(){ return camDist; }, set camYaw(v){ camYaw=v; } };
 window.__game.LETTERS = LETTERS;

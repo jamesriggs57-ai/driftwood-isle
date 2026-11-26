@@ -11,7 +11,7 @@
    built in wiki.js. Writing rules: plain words, no em dashes, no emoji, only facts the code supports.
    ===================================================================== */
 
-export const GUIDE_VERSION = 'v1.44';
+export const GUIDE_VERSION = 'v1.50';
 export const GUIDE_UPDATED = '2026-11-26';
 
 const tip = s => `<div class="tip"><b>Tip</b> ${s}</div>`;
@@ -160,7 +160,7 @@ ${note('If the islander a story favor was written for doesn\'t live on your isla
 <p>Professor Thistle the tortoise takes one of every fish, bug, fossil and beach find. Each donation is displayed for good.</p>
 <h3>How it grows</h3>
 <p>It starts as one small room: a shared tank (8 fish), a shared terrarium (8 bugs), 3 fossil pedestals and a 4-space case of beach finds. When a section runs out of room, the donation waits in the back room and builders expand that night:</p>
-<ul><li>Fish or bugs past 8: an <b>Aquarium</b> wing (left) or <b>Insectarium</b> wing (right) with one themed tank per group.</li>
+<ul><li>Fish or bugs past 8: an <b>Aquarium</b> wing (left) or <b>Insectarium</b> wing (right) with one themed tank per group. A group's tank is built the night after its first donation, so the wings get longer as you fill them. Fish groups: Pond &amp; Marsh, River Run, Coastal Shallows, Cay Bay Reef, Sandy Shallows, Reef Wonders, Rapids &amp; Riverbed, Lily Pool, Isles &amp; Far Shores, The Deep, Reef &amp; Open Ocean. Bug groups: Butterfly Garden, Garden &amp; Pond, Woodland &amp; Shore, Butterfly House, Flies, Wasps &amp; Lacewings, Beetle Hall, Creepy Crawlies, Hoppers, Mimics &amp; Shore, Moon Moths, Moths &amp; Night Lights.</li>
 <li>Fossils past 3: a <b>Fossil Hall</b> across the back; past 6, more rows.</li>
 <li>Beach finds past 4: an 8-space case.</li></ul>
 <p>The outside building grows a step per wing. The first wing counts as "outgrowing its cottage" for the Grand Town Hall. All three wings are needed for Lantern Bluff.</p>
@@ -514,6 +514,7 @@ ${steps([
 <p>The bay has 72 plots in 6 patches, so Restored needs the outer reef.</p>
 <h3>Bay fish</h3>
 <p>Each coral kind brings two species once 5 of that kind have grown: brain (Sunset Wrasse, Coral Grouper), staghorn (Lantern Goby, Bannerfin), sea fan (Fan Blenny, Velvet Ray), table (Reef Parrotfish, Gilded Seahorse). The first of each you catch, Gill buys at 3x. Two night fish (Moonlight Cardinalfish, Flashlight Fish) come once the lighthouse is lit and the reef is Schooling.</p>
+<p>Six bigger reef fish come back as the whole reef grows, whatever coral you planted: Picasso Triggerfish and Mandarin Dragonet at Stirring, Spiny Lobster and Pinecone Fish at Schooling, the Leafy Seadragon at Teeming, and the Whale Shark (May to August) once the reef is Restored. Gill counts them as bay fish, so the first of each is worth 3x to him too, and he can tip you about them.</p>
 ${tip('Plant a mix. Table coral is the bottleneck and its fish include the 30,000-clam Gilded Seahorse.')}
 `},
 
@@ -673,8 +674,14 @@ ${steps(['Talk to them and pick <b>Come and meet people</b>. They follow you for
 `},
 
 /* ============================== CATALOG (live) ============================== */
-{ id:'fish', group:'catalog', title:'Fish', data:'fish', html:`<p>Sea fish are caught from the beach, river fish in the river, pond fish in ponds, and bay fish only in Cay Bay. A fish's shadow shows its size. Hours are 24-hour. Sell to Marlo for more. Marlo and Gill can tell you what's biting today (see Shops and investing).</p>` },
-{ id:'bugs', group:'catalog', title:'Bugs', data:'bugs', html:`<p>At most 3 bugs are out at once. Sell to Sprig for more.</p>` },
+{ id:'fish', group:'catalog', title:'Fish', data:'fish', html:`<p>Sea fish are caught from the beach, river fish in the river, pond fish in ponds, and bay fish only in Cay Bay. A fish's shadow shows its size. Hours are 24-hour. Sell to Marlo for more. Marlo and Gill can tell you what's biting today (see Shops and investing).</p>
+<h3>Isle and trip fish</h3>
+<p>Some fish live only in the sea right around one of Wendell's isles: stand on or near that isle and cast into the sea. Clover Meadow has the Red-lipped Batfish, Sandpiper Dunes the Spotted Moray and Stargazer, Old Pinewood the Ghost Ratfish, Lantern Bluff the Lumpsucker and Wolffish, and Hollow Crags the Hollow Blindfish and the Coelacanth. Others turn up only on certain boat trips: Castaway Isle (Four-eyed Fish, any water), Coral Atoll (Unicornfish and Humphead Wrasse, sea), Frost Isle (Icefish, any water), Fossil Bluffs (Dragon Bichir, any water), Moonlit Isle (Viperfish and Gulper Eel, sea) and Shipwreck Cove (Barreleye, sea). Marlo's tips only cover your home waters, so he won't tip you about these.</p>
+<p>Cay Bay also has six bigger reef fish that come back as the reef grows (see The Reef and Cay Bay).</p>` },
+{ id:'bugs', group:'catalog', title:'Bugs', data:'bugs', html:`<p>At most 3 bugs are out at once. Sell to Sprig for more.</p>
+<h3>Isle, Starfall and trip bugs</h3>
+<p>Isle bugs only come out while you're on or right by their isle, and they always land on it. Clover Meadow: Spittlebug (flowers) and Cuckoo Wasp (flying). Old Pinewood: Longhorn Beetle and Moss Katydid (tree trunks). Sandpiper Dunes: Antlion (ground) and Mole Crab (beach). Lantern Bluff: Garden Tiger Moth (flying) and Lanternfly (tree trunks). Hollow Crags: Cave Cricket and Rock Scorpion (ground) and the Atlas Beetle (tree trunks). Starfall Isle adds the Star Plume Moth and the Ribbontail Moth to its sky bugs.</p>
+<p>Trip bugs: Orchard Isle (Shield Bug), Bloom Isle (Bee Fly), Castaway Isle (Giraffe Weevil, Atlas Moth, Golden Birdwing), Fossil Bluffs (Scorpionfly), Moonlit Isle (Moonlit Glow-worm) and Frost Isle (Ice Crawler).</p>` },
 { id:'fossils', group:'catalog', title:'Fossils and beach finds', data:'dig', html:`<p>Dig cracks with a shovel for fossils. Beach finds wash up daily. Very rare finds come up about 0.4% of the time as a group, legendary about 1 in 5,000.</p>` },
 { id:'fruit', group:'catalog', title:'Fruit, flowers and plants', data:'plants', html:`<p>Your island has one native fruit (100). Every other fruit sells for 250.</p>` },
 { id:'materials', group:'catalog', title:'Materials and special items', data:'materials', html:`` },
@@ -709,6 +716,7 @@ ${steps(['Talk to them and pick <b>Come and meet people</b>. They follow you for
 { id:'changes', group:'done', title:'What\'s changed', html:`
 <p>Recent updates, newest first.</p>
 <ul>
+<li><b>v1.50</b>: 54 new fish and 57 new bugs, so there are now 100 of each, every one with its own model. New homes: the sea around each of Wendell's isles, the isles themselves, Starfall Isle, the boat trip islands, and six bigger reef fish that come back to Cay Bay as the reef grows. The museum gets new tanks for them, and there are new achievement tiers for 60 and 100 kinds of fish or bugs and 150 and 200 museum displays.</li>
 <li><b>v1.44</b>: Shop rewards and fishing tips. At the top two tiers Pemberton opens his back room (one piece a week, sometimes a rare plan), Marlo adds a rare shelf and Sprig sells rare flower colors, hybrids and the glowing Lantern Bloom. Marlo and Gill tell you what's biting, more exactly as their shop and boat grow.</li>
 <li><b>v1.41</b>: Juniper's reading nook, Otis's race course, Marigold's flower show and a spring show every April, the newcomer, the Island Charter and Charter Hall, the Driftwood Festival every season, and Starfall Isle with its own bugs and Wendell's two spells. The legendary trip island Starfall Isle is now called Stardrift Isle.</li>
 <li><b>v1.40</b>: Repair, make and enchant your tools. Pippa and Wendell teach enchantments, and scrolls turn up now and then (Fennick sometimes sells one). Two bigger crafting tables, the Carpenter's Bench and the Master Workbench, with pieces of their own. Most woodworking now needs a table nearby.</li>

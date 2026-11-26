@@ -14,11 +14,25 @@ const GROUPS0 = {
     { id:'river', name:'River Run',         theme:'river', ids:['dace','loach','carp','smelt','trout','darter','catfish','salmon','pike','char'] },
     { id:'coast', name:'Coastal Shallows',  theme:'coast', ids:['minnow','silverbream','sardine','mackerel','flounder','snapper','cod'] },
     { id:'bay',   name:'Cay Bay Reef',      theme:'ocean', ids:['wrasse','goby','blenny','bannerfin','velvetray','parrotfish','grouper','goldseahorse','cardinal','flashlight'] },
+    // v1.50 wave 1 (before the last tank, which keeps catching anything without a group)
+    { id:'shallows', name:'Sandy Shallows',  theme:'coast', ids:['needlefish','gardeneel','sole','flyingfish','searobin','boxfish','cuttlefish','mantisshrimp'] },
+    { id:'wonders',  name:'Reef Wonders',    theme:'ocean', ids:['butterflyfish','lionfish','triggerfish','mandarin','lobster','pinecone','unicornfish','humphead','seadragon','whaleshark'] },
+    { id:'rapids',   name:'Rapids & Riverbed', theme:'river', ids:['sculpin','hatchetfish','mudskipper','lamprey','piranha','grayling','paddlefish','arowana','sturgeon'] },
+    { id:'lily',     name:'Lily Pool',       theme:'pond',  ids:['frog','stickleback','glassfish','angelfish','betta','elephantnose','lungfish','axolotl'] },
+    { id:'faraway',  name:'Isles & Far Shores', theme:'coast', ids:['batfish','moray','stargazer','ratfish','lumpsucker','wolffish','blindfish','coelacanth','foureyes','icefish','bichir'] },
+    { id:'deep',     name:'The Deep',        theme:'ocean', ids:['angler','frilledshark','oarfish','swordfish','hammerhead','viperfish','gulper','barreleye'] },
     { id:'ocean', name:'Reef & Open Ocean', theme:'ocean', ids:['coraldart','puffer','seahorse','octopus','squid','eel','lanternfish','barrel','ray','sunfish','shark'] } ],
   bug:[
     { id:'butterfly', name:'Butterfly Garden',    theme:'meadow', ids:['sunwing','ember','bluebell','peacock','swallowtail','wanderer','leafdancer','rainwing'] },
     { id:'garden',    name:'Garden & Pond',       theme:'garden', ids:['bee','bumblebee','ladybug','mantis','orchidmantis','dragonfly','damselfly','skater','snail'] },
     { id:'wood',      name:'Woodland & Shore',    theme:'wood',   ids:['cicada','barkbeetle','treecricket','walkingstick','stag','rhino','grasshopper','cricket','pillbug','fiddler','hermit','sandhopper'] },
+    // v1.50 wave 1
+    { id:'wings2',   name:'Butterfly House',     theme:'meadow', ids:['skipper','comma','hairstreak','longwing','glasswing','morpho','birdwing'] },
+    { id:'flyers',   name:'Flies, Wasps & Lacewings', theme:'garden', ids:['cranefly','hoverfly','mayfly','lacewing','paperwasp','robberfly','cuckoowasp','beefly','scorpionfly'] },
+    { id:'beetles',  name:'Beetle Hall',         theme:'wood',   ids:['chafer','jewelbeetle','tortoisebeetle','weevil','tigerbeetle','dungbeetle','longhorn','atlasbeetle','giraffeweevil','divingbeetle'] },
+    { id:'creepers', name:'Creepy Crawlies',     theme:'wood',   ids:['earwig','centipede','millipede','tarantula','peacockspider','crabspider','scorpion','cavecricket','molecricket','velvetant','icecrawler','leafcutter'] },
+    { id:'oddities', name:'Hoppers, Mimics & Shore', theme:'garden', ids:['assassin','treehopper','leafinsect','treesnail','spittlebug','mosskatydid','shieldbug','antlion','molecrab','horseshoe','waterscorpion'] },
+    { id:'moonmoths',name:'Moon Moths',          theme:'night',  ids:['rosymaple','hawkmoth','tigermoth','lanternfly','plumemoth','ribbonmoth','atlasmoth','glowworm'] },
     { id:'night',     name:'Moths & Night Lights',theme:'night',  ids:['moth','snowmoth','frostmoth','starmoth','lunamoth','owlmoth','glowbug'] } ] };
 // Anything added to the game later that isn't in a group yet goes in the last tank of its kind
 export const TANK_GROUPS = (() => { const out={};
@@ -282,6 +296,12 @@ function floorTexOf(theme){ const T=THEME[theme]; return ctex('fl:'+theme, 256, 
 /* ---------- Tank / terrarium in the hall ---------- */
 // Length runs along x, the glass faces +z. Returns a group with userData.update(t,dt).
 const SIZE_ROOM = { S:0.2, M:0.28, L:0.38, XL:0.5 };
+// v1.50 bugs have their own models (model.x) and no model.w: how they move comes from where they live, their size from how long they grow
+const MOTHS2 = new Set(['rosymaple','hawkmoth','tigermoth','plumemoth','ribbonmoth','atlasmoth']);
+const MOVE2 = { treesnail:'snail', cavecricket:'hopper', mosskatydid:'hopper', spittlebug:'hopper', treehopper:'hopper', waterscorpion:'skater' };
+export const bugMove = it => it.model.w || MOVE2[it.id] || (['air','starfall'].includes(it.move||it.where) ? (MOTHS2.has(it.id) ? 'moth' : 'fly') : 'beetle');
+const bugLen = it => Math.min(1.45, Math.max(0.55, 0.42+0.36*Math.log10(Math.max(4, (it.len||[10,20])[1]))));
+const BOTTOM2 = new Set(), BOT2 = new Set(['flounder','crayfish','octopus']), HOVER2 = new Set(['seahorse','squid','seadragon','boxfish','pinecone','frog']);
 const BUG_SIZE = { fly:0.3, moth:0.3, dragon:0.32, bee:0.17, lady:0.13, mantis:0.26, cicada:0.2, beetle:0.17, hopper:0.2, stick:0.34, stag:0.24, rhino:0.24, pill:0.14, snail:0.18, crab:0.2, hermit:0.2, skater:0.22 };
 export function buildTank(group, len, have){
   const g=new THREE.Group(), fish=group.kind==='fish', T=THEME[group.theme], Dp=1.05, y0=0.82, y1=2.02, hgt=y1-y0, anims=[]; const r=mulberry32(group.id.length*97);
@@ -313,17 +333,18 @@ export function buildTank(group, len, have){
   lightPool(g, len*0.9, hgt*0.95, 0,y0+hgt*0.55,-Dp/2+0.06, fish?0xbfe8ff:0xfff0c0, fish?0.22:0.16, true);
   // specimens
   for (const id of have){ const it=ITEMS[id];
-    if (fish){ const m=wrapModel(id, SIZE_ROOM[it.size]||0.28, 'x'); inner.add(m); const bottom=['flounder','crayfish','octopus'].includes(id);
+    if (fish){ const m=wrapModel(id, SIZE_ROOM[it.size]||0.28, 'x'); inner.add(m); const bottom=BOT2.has(id) || !!m.userData.u.bottom;
       const A={ m, ph:r()*TAU, w:0.25+r()*0.25, ax:len/2-0.25-(SIZE_ROOM[it.size]||0.28)/2, az:Dp/2-0.22, y: bottom?0.12+m.userData.h/2+0.04:0.3+r()*(hgt-0.7), bob:r()*TAU, bottom };
       anims.push((t)=>{ const s=t*A.w+A.ph, x=Math.sin(s)*A.ax, z=Math.sin(s*2+A.bob)*A.az*0.6, dx=Math.cos(s)*A.ax, dz=Math.cos(s*2+A.bob)*A.az*1.2;
-        A.m.position.set(x, A.y+(A.bottom?0:Math.sin(t*0.9+A.bob)*0.06), z); A.m.rotation.y=Math.atan2(-dz,dx); const tl=A.m.userData.u.tail; if (tl) tl.rotation.y=Math.sin(t*7+A.ph)*0.35; }); }
-    else { const w=it.model.w, m=wrapModel(id, BUG_SIZE[w]||0.2); inner.add(m); const fly=['fly','moth','dragon'].includes(w)||(w==='beetle'&&it.model.glow);
+        A.m.position.set(x, A.y+(A.bottom?0:Math.sin(t*0.9+A.bob)*0.06), z); A.m.rotation.y=Math.atan2(-dz,dx); const tl=A.m.userData.u.tail; if (tl) tl.rotation.y=Math.sin(t*7+A.ph)*0.35; if (A.m.userData.u.idle) A.m.userData.u.idle(t); }); }
+    else { const w=bugMove(it), m=wrapModel(id, it.model.w ? (BUG_SIZE[w]||0.2) : bugLen(it)*0.25); inner.add(m); const fly=['fly','moth','dragon'].includes(w)||(w==='beetle'&&it.model.glow);
       const px=(r()-0.5)*(len-0.5), pz=(r()-0.3)*(Dp-0.4)*0.6; const A={ m, ph:r()*TAU, fly, base:new THREE.Vector3(px, 0.12+m.userData.h/2+(fly?0.35+r()*0.5:0), pz), rot:r()*TAU };
       m.position.copy(A.base); m.rotation.y=A.rot;
       anims.push((t)=>{ const wings=A.m.userData.u.wings||[];
         if (A.fly){ A.m.position.set(A.base.x+Math.sin(t*0.5+A.ph)*0.3, A.base.y+Math.sin(t*1.3+A.ph)*0.08, A.base.z+Math.sin(t*0.8+A.ph)*0.12); A.m.rotation.y=A.rot+Math.sin(t*0.5+A.ph)*0.8;
           for (const wg of wings) wg.rotation.z=wg.userData.side*(0.3+Math.sin(t*14+A.ph)*0.5); }
-        else for (const wg of wings) wg.rotation.z=wg.userData.side*(0.1+Math.max(0,Math.sin(t*0.7+A.ph))*0.25); }); } }
+        else for (const wg of wings) wg.rotation.z=wg.userData.side*(0.1+Math.max(0,Math.sin(t*0.7+A.ph))*0.25);
+        if (A.m.userData.u.idle) A.m.userData.u.idle(t); }); } }
   g.userData.update=(t,dt)=>{ for (const f of anims) f(t,dt); };
   return g;
 }
@@ -445,8 +466,8 @@ export function buildTankView(group, have){
       const pts=new THREE.Points(pg, new THREE.PointsMaterial({ color:group.theme==='ocean'?0xd8e8ff:0xd8e8b0, size:0.035, transparent:true, opacity:0.6, depthWrite:false })); scene.add(pts);
       anims.push((t,dt)=>{ for (let i=0;i<N;i++){ pa[i*3+1]-=dt*0.05; pa[i*3]+=Math.sin(t*0.3+i)*dt*0.03; if (pa[i*3+1]<0) pa[i*3+1]=TH; } pg.attributes.position.needsUpdate=true; }); }
     // fish
-    const BOT=new Set(['flounder','crayfish','octopus']), HOVER=new Set(['seahorse','squid']);
-    for (const id of have){ const it=ITEMS[id], L=SIZE_VIEW[it.size]||1.1, m=wrapModel(id, L, 'x'); scene.add(m); m.userData.id=id;
+    const BOT={ has:id=>BOT2.has(id) || !!(ITEMS[id] && ITEMS[id].model.x && BOTTOM2.has(id)) }, HOVER=HOVER2;
+    for (const id of have){ const it=ITEMS[id], L=SIZE_VIEW[it.size]||1.1, m=wrapModel(id, L, 'x'); scene.add(m); m.userData.id=id; if (m.userData.u.bottom) BOTTOM2.add(id);
       const F={ id, m, L, p:new THREE.Vector3((r()-0.5)*(TW-L-1), BOT.has(id)?0.1+m.userData.h/2:0.8+r()*(TH-1.8), (r()-0.5)*(TD-1.6)), v:new THREE.Vector3(r()-0.5,0,r()-0.5).normalize().multiplyScalar(0.4),
         tgt:new THREE.Vector3(), tt:0, sp:(it.size==='XL'?0.55:it.size==='L'?0.7:0.85)*(BOT.has(id)?0.35:HOVER.has(id)?0.3:1), ph:r()*TAU, bottom:BOT.has(id), hover:HOVER.has(id), yaw:0 };
       F.pick=()=>{ const mx=TW/2-F.L/2-0.3, mz=TD/2-0.9; F.tgt.set((r()*2-1)*mx, F.bottom?F.p.y:Math.max(0.6+m.userData.h/2, Math.min(TH-0.8, F.p.y+(r()-0.5)*(F.hover?1:2.4))), (r()*2-1)*mz); F.tt=(F.hover?6:3)+r()*5; };
@@ -462,15 +483,15 @@ export function buildTankView(group, have){
         else if (F.hover){ const want=F.v.x>=0?0:Math.PI; let df=want-F.yaw; df=Math.atan2(Math.sin(df),Math.cos(df)); F.yaw+=df*Math.min(1,dt*0.8); }
         F.m.position.set(F.p.x, F.p.y+(F.bottom?0:Math.sin(t*1.1+F.ph)*0.05), F.p.z); F.m.rotation.set(0, F.yaw, F.bottom?0:THREE.MathUtils.clamp(F.v.y*0.6,-0.4,0.4), 'YZX');
         const tl=F.m.userData.u.tail; if (tl) tl.rotation.y=Math.sin(t*(4+sp*8)+F.ph)*(0.2+Math.min(0.35,sp*0.6));
-        if (F.id==='ray') F.m.rotation.x=Math.sin(t*1.6+F.ph)*0.12; } });
+        if (F.id==='ray') F.m.rotation.x=Math.sin(t*1.6+F.ph)*0.12; if (F.m.userData.u.idle) F.m.userData.u.idle(t); } });
   } else {
     // bugs: flyers drift between flowers and branches and rest with their wings slowly opening; crawlers potter about
     const FLY=new Set(['fly','moth','dragon','bee']);
     const ofKind=k=>perches.filter(p=>p.kind===k), ground=perches.find(p=>p.kind==='ground');
     const spot=(P)=>{ if (P.r){ const a=r()*TAU, d=Math.sqrt(r())*P.r; return P.p.clone().add(new THREE.Vector3(Math.cos(a)*d, 0, Math.sin(a)*d*0.6)); } return P.p.clone(); };
     const used=new Map();
-    for (const id of have){ const it=ITEMS[id], w=it.model.w, L=BUG_VIEW[w]||0.6, m=wrapModel(id, L); scene.add(m); m.userData.id=id; const fly=FLY.has(w)||(w==='beetle'&&!!it.model.glow);
-      let home; const wh=it.where;
+    for (const id of have){ const it=ITEMS[id], w=bugMove(it), L=it.model.w ? (BUG_VIEW[w]||0.6) : bugLen(it), m=wrapModel(id, L); scene.add(m); m.userData.id=id; const fly=FLY.has(w)||(w==='beetle'&&!!it.model.glow);
+      let home; const wh=it.move||it.where;
       const pools = wh==='pond' ? ofKind('pool') : wh==='beach' ? ofKind('sand') : wh==='trunk' ? [...ofKind('branch'),...ofKind('stump'),...ofKind('trunk')] : wh==='flower' ? (ofKind('flower').length?ofKind('flower'):ofKind('branch')) : wh==='ground' ? [ground] : [...ofKind('flower'),...ofKind('branch'),...ofKind('stump'),...ofKind('lamp')];
       const list=pools.filter(Boolean).length?pools.filter(Boolean):[ground];
       const pickPerch=()=>{ let best=null, bn=1e9; for (const P of list){ const n=(used.get(P)||0)+r()*0.8; if (n<bn){ bn=n; best=P; } } used.set(best,(used.get(best)||0)+1); return best; };

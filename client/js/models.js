@@ -4,6 +4,7 @@ import { TAU, hash2, mulberry32 } from './util.js';
 import { ITEMS, PLANTS } from './content.js';
 import { canopyGeo, coniferGeo, trunkGeo, frondsGeo, foliageMat, barkMat, leafy, treeTint } from './trees.js';
 import * as CR from './critters.js';
+import * as C2 from './critters2.js';
 import * as CH from './chars.js';
 const buildFossilInto=CR.buildFossilInto;
 import { felt, knit, eyeMat, noseMat, glintMat, threadMat, fabricMat, fishSkin, fishLook, finMat, wingTex, wingLook, clearWingMat, shellMat, fuzzMat, woodMat, glassMat, brass, ceramic, waterMat2 } from './look.js';
@@ -236,8 +237,8 @@ export function buildItemModel(id){
     else if(d.s==='pearl'){ const a=mk(G.sph(0.28,12,6,0,TAU,0,Math.PI/2), M(d.c), 0, 0.05, 0, g); a.scale.set(1,0.4,0.9); const b=mk(G.sph(0.28,12,6), M(0xb8c0c8), -0.05, 0.25, -0.12, g); b.scale.set(1,0.25,0.9); b.rotation.x=-0.7; mk(G.sph(0.1,14,12), M(0xfdf8f0,{roughness:0.15,metalness:0.3}), 0, 0.14, 0.02, g); }
   }
   else if (d.t==='fossil') buildFossilInto(g, d);
-  else if (d.t==='fish') CR.buildFishInto(g, d, id);
-  else if (d.t==='bug') CR.buildBugInto(g, d, id);
+  else if (d.t==='fish') (d.x?C2.buildFishInto:CR.buildFishInto)(g, d, id);
+  else if (d.t==='bug') (d.x?C2.buildBugInto:CR.buildBugInto)(g, d, id);
   else if (d.t==='furn') FURN_BUILDERS[d.b](g);
   else if (ITEM_BUILDERS[d.t]) ITEM_BUILDERS[d.t](g, d, id);
   else if (d.t==='flower'){ g.add(buildFlower(d.sp, 3)); }

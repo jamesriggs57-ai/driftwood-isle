@@ -1,7 +1,7 @@
 /* Driftwood Isle wiki. Guide text lives in guide.js; every catalog table is built here from the game's own
    data (../js/content.js, ../js/achieve.js), so prices, seasons and rarities always match the live game. */
 import { ITEMS, rarityLabel, RARITY_COLORS, RESIDENTS, TOOLS, BACKPACKS, CROPS, RECIPES, WOODWORK, RARE_WORK,
-  WOOD_START, WOOD_TEN, PLANTS, FOREIGN_FRUIT_PRICE, SHOPS } from '../js/content.js';
+  WOOD_START, WOOD_TEN, PLANTS, FOREIGN_FRUIT_PRICE, SHOPS, whereText } from '../js/content.js';
 import { ACHIEVEMENTS, ACH_GROUPS } from '../js/achieve.js';
 // v1.40: these add the new tables, table pieces and Enchanting Scrolls to ITEMS/WOODWORK, and hold the enchanting rules (no DOM, no THREE)
 import { benchFor, toolBench, BENCH_IDS, NEW_BENCHES, BENCH_PIECES } from '../js/benches-core.js';
@@ -41,7 +41,9 @@ function table(id, rows, cols, opts={}){
 }
 const TABLES = {};
 
-const WHERE = { sea:'Sea', river:'River', pond:'Pond', bay:'Cay Bay', air:'Flying', flower:'On flowers', trunk:'Tree trunks', ground:'Ground', beach:'Beach', glade:'Lumi\'s glade' };
+const WHERE = { sea:'Sea', river:'River', pond:'Pond', bay:'Cay Bay', air:'Flying', flower:'On flowers', trunk:'Tree trunks', ground:'Ground', beach:'Beach', glade:'Lumi\'s glade', starfall:'Starfall Isle' };
+// v1.50 isle and trip critters (and the late reef fish) say exactly where: 'Sea off Hollow Crags', 'Castaway Isle trips, flying'
+const whereOf = r => (r.where==='isle'||r.where==='trip'||r.reef) ? whereText(r) : (WHERE[r.where]||r.where);
 const SIZE = { S:'Small', M:'Medium', L:'Large', XL:'Huge' };
 const items = k => Object.values(ITEMS).filter(i=>i.kind===k);
 const byPrice = (a,b)=>a.price-b.price;
@@ -127,15 +129,15 @@ const DATA = {
   },
   fish(){
     const rows = items('fish').sort(byPrice);
-    return table('tFish', rows, [['Fish', r=>`<b>${esc(r.name)}</b>`, r=>r.name], ['Where', r=>WHERE[r.where]||r.where, r=>r.where], ['Shadow', r=>SIZE[r.size]||r.size, r=>'SMLX'.indexOf(r.size[0])+r.size.length],
+    return table('tFish', rows, [['Fish', r=>`<b>${esc(r.name)}</b>`, r=>r.name], ['Where', r=>esc(whereOf(r)), r=>r.where], ['Shadow', r=>SIZE[r.size]||r.size, r=>'SMLX'.indexOf(r.size[0])+r.size.length],
       ['Months', r=>months(r.months)], ['Hours', r=>hours(r.hours)], ['Rarity', r=>rarity(r.rarity), r=>RANK[rarityLabel(r.rarity)]], ['Sells', r=>fmt(r.price), r=>r.price]],
-      { filters:[['','All'],['sea','Sea'],['river','River'],['pond','Pond'],['bay','Cay Bay']], tag:r=>r.where });
+      { filters:[['','All'],['sea','Sea'],['river','River'],['pond','Pond'],['bay','Cay Bay'],['isle','Isles'],['trip','Trips']], tag:r=>r.where });
   },
   bugs(){
     const rows = items('bug').sort(byPrice);
-    return table('tBugs', rows, [['Bug', r=>`<b>${esc(r.name)}</b>${r.weather==='rain'?' <span class="tag">rain</span>':''}`, r=>r.name], ['Where', r=>WHERE[r.where]||r.where, r=>r.where],
+    return table('tBugs', rows, [['Bug', r=>`<b>${esc(r.name)}</b>${r.weather==='rain'?' <span class="tag">rain</span>':''}`, r=>r.name], ['Where', r=>esc(whereOf(r)), r=>r.where],
       ['Months', r=>months(r.months)], ['Hours', r=>hours(r.hours)], ['Rarity', r=>rarity(r.rarity), r=>RANK[rarityLabel(r.rarity)]], ['Sells', r=>fmt(r.price), r=>r.price]],
-      { filters:[['','All'],['air','Flying'],['flower','Flowers'],['trunk','Trunks'],['ground','Ground'],['beach','Beach'],['pond','Pond'],['glade','Glade']], tag:r=>r.where });
+      { filters:[['','All'],['air','Flying'],['flower','Flowers'],['trunk','Trunks'],['ground','Ground'],['beach','Beach'],['pond','Pond'],['glade','Glade'],['isle','Isles'],['starfall','Starfall'],['trip','Trips']], tag:r=>r.where });
   },
   dig(){
     const cols = [['Name', r=>`<b>${esc(r.name)}</b>`, r=>r.name], ['Rarity', r=>rarity(r.rarity), r=>RANK[rarityLabel(r.rarity)]], ['Sells', r=>fmt(r.price), r=>r.price]];

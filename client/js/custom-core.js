@@ -158,12 +158,12 @@ export const BASES = {
   shelf: { letter:'s', name:'Shelf', r:0.7, slots:['body','crown','foot','fill'], key:'body',
     labels:{ body:'Body', crown:'Crown', foot:'Base', fill:'On the shelves' },
     body:[
-      O('Open shelves','Open','rustic cottage modern',2,0,1,{ wood:5 }),
+      O('Open shelves','Open','rustic cottage modern woodland',2,0,1,{ wood:5 }),
       O('Cubbies','Cubby','modern cottage',2,1,1,{ wood:6 }),
       O('Ladder shelf','Ladder','modern cottage',1,1,1,{ wood:4 }),
       O('Glass-front cabinet','Glass-front','antique',2,2,2,{ wood:6, clay:1 }),
       O('Arched niche','Arched','cottage antique',2,2,2,{ wood:6 }),
-      O('Log shelves','Log','rustic',3,0,1,{ wood:6 }),
+      O('Log shelves','Log','rustic woodland',3,0,1,{ wood:6 }),
       O('Hollow trunk','Hollow-trunk','woodland',3,3,3,{ stump:2 },'find') ],
     crown:[
       O('No crown','','rustic cottage antique modern woodland',1,0,1),

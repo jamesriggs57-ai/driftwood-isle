@@ -3165,7 +3165,7 @@ function storySmoke3(add){ for (const e of [S3B.post, S3B.bath, S3B.antiq]) if (
 function landmark3(kind, lm){
   if (kind==='meadow' && lm.userData.setMill){ const M0=SY.mill; lm.userData.setMill({ sails:!!(M0 && M0.sails), wheel:!!(M0 && M0.wheel) }); }
   if (kind==='dunes' && SY.wreck && SY.wreck.bell) addBell(lm); }
-function addBell(lm){ if (lm.userData.bell3) return; const b=S3.buildDivingBell(); b.position.set(3.4,0,3.2); b.rotation.y=-0.5; lm.add(b); lm.userData.bell3=b; }
+function addBell(lm){ if (lm.userData.bell3) return; const b=S3.buildDivingBell(); b.position.set(3.6,0,4.3); b.rotation.y=-0.5; lm.add(b); lm.userData.bell3=b; }
 const meadowLM = () => { const I=ISLES.find(I=>I.kind==='meadow'); return I && I.lmObj; };
 const dunesLM = () => { const I=ISLES.find(I=>I.kind==='dunes'); return I && I.lmObj; };
 
@@ -3461,7 +3461,7 @@ function wreckAct(lm){
     { label:'Not yet', alt:true, fn:()=>{} } ]);
   dialog(nm, 420, L); }
 function makeWreckRoom(){
-  const exit=(()=>{ const lm=dunesLM(); if (!lm) return [0,0]; const p=lm.getWorldPosition(new THREE.Vector3()); return [p.x+3.4, p.z+5.4]; })();
+  const exit=(()=>{ const lm=dunesLM(); if (!lm) return [0,0]; lm.updateMatrixWorld(true); const p=lm.localToWorld(new THREE.Vector3(3.6,0,6.4)); return [p.x, p.z]; })();   // you climb out just in front of the bell, on the island side
   if (ROOMS.wreck){ ROOMS.wreck.exit=exit; wreckGates(); return; }
   const W=8, D=26, [ox,oz]=roomOrigin(91), container=new THREE.Group(); container.visible=false; scene.add(container);
   const shell=S3.buildWreckRoom(W, D, hashStr('wreck:'+S.seed)); shell.position.set(ox,0,oz); container.add(shell);

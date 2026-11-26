@@ -19,6 +19,7 @@ import * as VY from './voyage.js';
 import * as TALK from './talk.js';
 import * as ISL from './expand.js';
 import * as RF from './reef.js';
+import * as TH from './townhall.js';   // v1.41 town hall inside
 import { buildBike, MODEL, M, mk, G, outline, windowMat, glowMats, glowMat, glowSprites, addGlow, textSprite, PALETTE, buildItemModel, thumb, toolThumb, FURN_BUILDERS, MF,
   buildTree, buildStump, buildShrub, buildFlower, buildWildFlower, buildTool, buildAnimal, buildPlayer, buildHouse, buildStall, buildBoard, buildPlankDeck, buildRoom, buildBird, buildGull, buildDuck, buildWeedClump } from './models.js';
 import './furn.js';
@@ -1882,18 +1883,65 @@ for (const R of RESIDENTS) if (!isOrig(R.id) && R.home) KEEPOUT.push([R.home[0],
 function initTownBuildings(){ buildStoreAll(); for (const id of ['aquarium','garden']) buildShop(id); buildMuseumAll(); buildHall(); buildPlaza(); refreshSmoke(); }
 let rebuildOnExit={};   // a shop you're standing in is rebuilt when you step outside
 function rebuildPlace(id){ const room = id==='general'?'store':id; if (World.inside===room){ rebuildOnExit[id]=true; return; }
-  if (id==='general') buildStoreAll(); else if (id==='museum') buildMuseumAll(); else buildShop(id); }
+  if (id==='general') buildStoreAll(); else if (id==='museum') buildMuseumAll(); else if (id==='hall') buildHall(); else buildShop(id); }
 
 /* ---------- Town hall ---------- */
 const HALL_COST=[0,60000,220000], HALL_NEED=[null,{ house:true },{ museum:1, shops:1 }];
 let hallEnt=null, clerk=null;
 function buildHall(){
-  if (hallEnt){ hallEnt.remove(); hallEnt=null; } if (clerk){ clerk.remove(); clerk=null; } setRects('hall',[]);
+  if (World.inside==='hall'){ rebuildOnExit.hall=true; return; }   // v1.41 rebuilt when you step outside
+  if (hallEnt){ hallEnt.remove(); hallEnt=null; } if (clerk){ clerk.remove(); clerk=null; } setRects('hall',[]); clearRoom('hall');
   if (!PLACES.hall) return;
   const [hx,hz]=PLACES.hall, t=S.town.hall||0;
-  hallEnt=placeBuilding('hall', hx, hz, buildTownHall(t), 'Read', ()=>talkHall());
-  const [dx,dz]=hallEnt.doorPt; clerk=new Keeper(KEEPERS.clementine, dx+(t===0?1.9:1.6), dz-(t===0?0.6:0.3), ()=>talkHall()); clerk.rest=0; hallEnt.tier=t;
+  // v1.41 the Town Hall and the Grand Town Hall have an inside, with Clementine at her desk; the tent is still just a tent
+  hallEnt=placeBuilding('hall', hx, hz, buildTownHall(t), t>=1?'Enter':'Read', ()=>t>=1?enterRoom('hall'):talkHall()); hallEnt.tier=t;
+  if (t>=1){ buildHallInside(t); return; }
+  const [dx,dz]=hallEnt.doorPt; clerk=new Keeper(KEEPERS.clementine, dx+(t===0?1.9:1.6), dz-(t===0?0.6:0.3), ()=>talkHall()); clerk.rest=0;
 }
+/* v1.41 inside the town hall (the models are in townhall.js). Clementine sits at her desk under the island's crest.
+   The Island Records board and the portraits of everyone who lives here are on the side walls, the island's map is
+   on the table in the middle, and there are benches for town meetings. The Grand Town Hall is bigger, with columns,
+   a chandelier, a grandfather clock and a trophy case that gets a new prize for every ten achievements.
+   The boards are redrawn each time you walk in. */
+const HALL_IDX=96;
+let hallIn=null;
+function buildHallInside(t){
+  const [ox,oz]=roomOrigin(HALL_IDX), container=new THREE.Group(); container.visible=false; scene.add(container);
+  const L=TH.buildHallRoom(t, S.island); L.shell.position.set(ox,0,oz); container.add(L.shell); hallIn=L;
+  const { W, D, solid }=L;
+  ROOMS.hall={ id:'hall', ox, oz, w:W, d:D, group:container, shell:L.shell, spec:{ mood:'hall' }, entry:[ox, oz+D/2-1.2], exit:[hallEnt.doorPt[0], hallEnt.doorPt[1]+0.2], bed:[ox,oz],
+    walk:(x,z)=>{ const lx=x-ox, lz=z-oz; if (!(Math.abs(lx)<W/2-0.4 && lz>-D/2+0.4 && lz<D/2-0.05)) return false; for (const b of solid) if (lx>b[0]-0.28 && lx<b[2]+0.28 && lz>b[1]-0.28 && lz<b[3]+0.28) return false; return true; } };
+  const ck=new Keeper(KEEPERS.clementine, ox+L.clerkAt[0], oz+L.clerkAt[1], ()=>talkHall()); ck.rest=0;
+  const spot=(kind, x, z, hit, label, act)=>new Thing(kind, ox+x, oz+z, 0.4, new THREE.Group(), label, act, { solid:false, reach:1.9, hit });
+  spot('hallrec', -W/2+0.7, L.boardSpot[1], [1.0,1.6], 'Read', ()=>openRecords());
+  spot('hallpics', W/2-0.7, L.wallSpot[1], [1.0,1.6], 'Look', ()=>openIslanders());
+  spot('hallmap', L.mapAt[0], L.mapAt[1], [1.0,0.8], 'Look', ()=>openMap());
+  if (L.trophies) spot('halltro', W/2-1.0, 2.4, [0.9,1.1], 'Look', ()=>{ const n=achCount(), p=Math.min(8,Math.floor(n/10)); toast(p ? `${p} prize${p>1?'s':''} in the case: one for every ten achievements. You have ${n}.` : `The case is empty for now. Every ten achievements earn a prize. You have ${n}.`); });
+  refreshHallInside();
+}
+function hallRecords(){ const T=S.town;
+  return [['Islanders', String(T.res.length), 'live here'], ['Museum', String(donatedCount()), 'pieces donated'], ['Shops backed', `${shopsBacked()} of 3`, ''],
+    ['Things found', String(discovered()), 'in your catalog'], ['Achievements', String(achCount()), `of ${ACHIEVEMENTS.length}`], ['Best friends', String(bestFriends()), 'islanders']]; }
+const SHIRTS=[0x6a9ad8,0xe0745a,0x7cb85a,0xe8b84a,0x9a7ab8,0x4ab0a8,0xe88aa8,0x8a6a4a];
+function hallPortraits(){ return S.town.res.map(id=>RESIDENTS.find(R=>R.id===id)).filter(Boolean).map((R,i)=>({ name:R.name, shirt:SHIRTS[i%SHIRTS.length], ...TH.lookColors(CH.parseLook(resLook(R))) })); }
+function refreshHallInside(){ const L=hallIn; if (!L || !ROOMS.hall) return;
+  TH.drawRecords(L.board, hallRecords()); TH.drawPortraits(L.wall, hallPortraits()); L.crest.userData.setName(S.island);
+  drawIslandMap(L.map.userData.canvas); TH.mapRefresh(L.map); if (L.trophies) TH.setTrophies(L.trophies, Math.floor(achCount()/10)); }
+// #dev: go straight into the town hall (building it first if it's still a tent), or switch between Town Hall and Grand
+function devHall(render){ const a=$('#dvH'), b=$('#dvHg'); if (!a) return;
+  const setTier=t=>{ S.town.hall=t; S.town.hallPend=false; save(); };
+  a.onclick=()=>{ closePanel(); if ((S.town.hall||0)<1){ setTier(1); buildHall(); buildPlaza(); } if (World.inside==='hall') return; if (World.inside) exitRoom(); setTimeout(()=>enterRoom('hall'), World.inside?700:0); };
+  b.onclick=()=>{ closePanel(); const was=World.inside==='hall'; setTier((S.town.hall||0)>=2?1:2);
+    const go=()=>{ buildHall(); buildPlaza(); if (was) setTimeout(()=>enterRoom('hall'), 100); toast(`It's the ${HALL_NAMES[S.town.hall]} now.`); };
+    if (was){ exitRoom(); setTimeout(go, 700); } else go(); }; }
+function openRecords(){ openPanel(`${S.island||'Island'} records`);
+  let h=`<div class="notice"><b>${HALL_NAMES[S.town.hall||0]}</b><br>`+hallRecords().map(r=>`${r[0]}: <b>${r[1]}</b>${r[2]?' '+r[2]:''}`).join('<br>')+'</div>';
+  const st=storiesHTML(); if (st) h+=st;
+  h+=`<button class="btn" id="hrProj">Town projects</button>`; pBody.innerHTML=h; $('#hrProj').onclick=()=>{ closePanel(); setTimeout(()=>openHallPanel(), 60); }; }
+function openIslanders(){ openPanel('Our islanders');
+  const list=S.town.res.map(id=>RESIDENTS.find(R=>R.id===id)).filter(Boolean);
+  pBody.innerHTML=`<div class="notice">${list.length} islanders live on ${S.island||'the island'}.</div>`+list.map(R=>{ const L=CH.parseLook(resLook(R)), sp=(CH.SPECIES[L.sp]||{}).name||'';
+    return `<div class="notice"><b>${R.name}</b> <span class="muted">${sp}</span><br>${hearts(R.id)}</div>`; }).join(''); }
 const HALL_NAMES=['Town Tent','Town Hall','Grand Town Hall'];
 /* v1.26: nobody new moves in while the town is just a tent. Once the town hall is built, newcomers turn up every few
    days (at least MOVE_GAP days after the last one, then a coin flip each day) until 10 islanders live here.
@@ -4324,7 +4372,7 @@ function ghostOf(src, from){
   g.userData.tint=bad=>{ for (const m of mats) if (m.emissive) m.emissive.setHex(bad?0xb03a2a:0x6a4ab8); };
   g.userData.solid=()=>{ for (const [c,orig] of swaps){ c.material=orig; c.castShadow=true; } };
   return g; }
-/* v1.40 easier moving. The old check put a big circle around every building, kept it a quarter of the island away from
+/* v1.41 easier moving. The old check put a big circle around every building, kept it a quarter of the island away from
    the shore and nine meters from the river, and counted a wild flower as "furniture", so most of a crowded island showed red.
    Now the building's own outline (its walls, or the house lot) is checked with a small gap, the message names what's in the way
    and a red marker shows where, and a tap that's a little off slides to the nearest spot that fits. Wild flowers, stumps,
@@ -4498,7 +4546,7 @@ function landTap(x,z){
   if (Object.keys(pend).length) M.pend[k]=pend; else delete M.pend[k];
   Snd.pop(); drawMarks(); renderMagicBar();
 }
-// v1.40 what else the move does, under the 'Looks good!' line
+// v1.41 what else the move does, under the 'Looks good!' line
 function moveNote(M){ const U=M.under, n=U ? U.placed.length+U.plants.length+U.ground.length : 0, L=[];
   if (M.nudged) L.push('Moved over a little to fit.'); if (n) L.push(`${n===1?'One thing':n+' things'} there will be set down beside it.`);
   return L.length ? `<br><span class="muted">${L.join(' ')}</span>` : ''; }
@@ -5108,6 +5156,7 @@ function fade(cb){ fadeEl.classList.add('show'); setTimeout(()=>{ cb(); setTimeo
 function enterRoom(id){
   if (id==='store') storeVisit++;
   if (id==='portal') setTimeout(()=>refreshPortals(), 400);
+  if (id==='hall') refreshHallInside();   // v1.41
   fade(()=>{ const R=ROOMS[id]; World.inside=id; camYaw=0; OUT.visible=false; for(const k in ROOMS) ROOMS[k].group.visible=(k===id);
     if (Fishing.state!=='idle') reel(); stopMove(); player.pos.set(R.entry[0],0,R.entry[1]); player.face=Math.PI; player.obj.rotation.y=Math.PI; camTarget.copy(player.pos); updateSky(); updateCamera(1);
     const res=residents.find(r=>r.spec.id===id); if (res && res.loc==='in' && !res.asleep){ const P=DIALOGUE[res.spec.personality]; setTimeout(()=>dialog(res.spec.name,res.spec.voice,[fill(P.home[Math.floor(Math.random()*P.home.length)],{c:res.spec.catch})]),350); } });
@@ -7339,6 +7388,7 @@ function openMenu(){
       <label class="f">Preview time: <span id="mOffT"></span></label><input type="range" id="mOff" min="-23" max="23" step="1" value="${Time.offsetH}">
       <label class="f">Weather <select id="mW"><option value="">Today's weather</option><option>sunny</option><option>cloudy</option><option>rain</option><option>snow</option></select></label>
       ${DEV?`<div style="margin-top:8px"><b>Shortcuts</b> <span class="muted">(only on this device)</span><br><button class="btn alt" id="dvC">+50,000 clams</button> <button class="btn alt" id="dvT">${S.magic.tower?'Tower is up':'Raise the wizard tower'}</button> ${!GUEST&&!VISIT&&nextIsleKind()?'<button class="btn alt" id="dvI">Raise the next isle</button>':''} <button class="btn alt" id="dvM">${S.devMagic?'Wizard needs requirements again':'Skip wizard requirements'}</button> <button class="btn alt" id="dvF">New favors now</button> <button class="btn alt" id="dvD">Town: skip a day</button> <button class="btn alt" id="dvR">Rare kit</button> <button class="btn alt" id="dvRf">Reef: skip to the rowboat</button> <button class="btn alt" id="dvRg">Reef: grow 12 coral</button> <button class="btn alt" id="dvWs">Workshop: skip ahead</button> <button class="btn alt" id="dvRl">Relics for the next isle</button> <button class="btn alt" id="dvSt">Phase 2: next story</button> <button class="btn alt" id="dvS3">Phase 3: next story</button> <button class="btn alt" id="dvOff">Hide shortcuts</button></div>`:''}
+      ${DEV&&PLACES.hall?`<div style="margin-top:6px"><b>Town hall</b> <button class="btn alt" id="dvH">Into the town hall</button> <button class="btn alt" id="dvHg">${(S.town.hall||0)>=2?'Make it the Town Hall':'Make it the Grand Town Hall'}</button></div>`:''}
     </div>
     <button class="btn warn" id="mReset">Start a new island</button>${saveOK?'':'<div class="muted" style="margin-top:8px">Saving isn\'t available in this browser.</div>'}`;
     $('#mParty').onclick=()=>{ closePanel(); setTimeout(()=>PARTY.open(), 50); };
@@ -7378,6 +7428,7 @@ function openMenu(){
       $('#dvD').onclick=()=>{ S.town.devDays=(S.town.devDays||0)+1; townNewDay(dayKeyOf(dayNum(today())+S.town.devDays)); applyTown(); toast(`Town moved ahead ${S.town.devDays} day${S.town.devDays>1?'s':''}: ${S.town.res.length} islanders${S.town.next?', '+S.town.next.id+' moving in next':''}.`); };
       $('#dvF').onclick=()=>{ Q.rolledFor=null; Q.offers={}; rollFavors(Math.random); Q.rolledFor=S.day.key; save(); toast('Islanders have new favors to ask.'); };
       $('#dvOff').onclick=()=>{ try{ localStorage.removeItem('dwDev'); }catch(e){} toast('Shortcuts hidden. Open the game with #dev at the end of the address to bring them back.'); render(); }; }
+    if (DEV) devHall(render);   // v1.41
     const w=$('#mW'); w.value=weatherOverride||''; w.onchange=()=>{ weatherOverride=w.value||null; World.weather=weatherOverride||S.day.weather; updateSky(); updateHUD(); };
     $('#mReset').onclick=()=>{
       if (VISIT){ pBody.innerHTML=`<p>You're visiting a friend's island. Go back to your own island to start a new one.</p><button class="btn alt" id="rN">OK</button>`; $('#rN').onclick=render; return; }
@@ -7899,7 +7950,7 @@ canvas.addEventListener('pointermove', e=>{ const p=ptrs.get(e.pointerId); if(!p
       if (p.mg){ const g=groundAtScreen(e.clientX,e.clientY); if(g) magicPlace(g.x,g.z,true); } else magicPan(e.clientX-px, e.clientY-py); p.held=true; } return; }
   if (e.pointerType==='mouse' && ptrs.size===1 && !(placing && placing.drag) && Math.hypot(p.x-p.sx,p.y-p.sy)>5){ camYaw-=(e.clientX-px)*0.008; lookDragT=performance.now(); p.held=true; return; }   // computer: drag to look around
   if (placing && placing.drag && placing.drag.id===e.pointerId && Math.hypot(p.x-p.sx,p.y-p.sy)>4){ const g=groundAtScreen(e.clientX,e.clientY); if(g){ const x=g.x+placing.drag.ox, z=g.z+placing.drag.oz; placing.m.position.set(x, World.inside?0:groundY(x,z), z); placing.dragged=true; p.held=true; checkPlace(); } } });
-function endPtr(e){ const p=ptrs.get(e.pointerId); if(!p) return; ptrs.delete(e.pointerId); if (p.mg && magicMode && magicMode.at) magicPlace(magicMode.at[0], magicMode.at[1]);   // v1.40 a drag that ends a little off slides to a spot that fits
+function endPtr(e){ const p=ptrs.get(e.pointerId); if(!p) return; ptrs.delete(e.pointerId); if (p.mg && magicMode && magicMode.at) magicPlace(magicMode.at[0], magicMode.at[1]);   // v1.41 a drag that ends a little off slides to a spot that fits
   const moved=Math.hypot(p.x-p.sx,p.y-p.sy), dt=performance.now()-p.t;
   const tap = ptrs.size===0 && !p.held && moved<14 && dt<450 && !layoutMode;
   if (tap && dlgState){ if (!dlgChoices.children.length) advanceDialog(); }

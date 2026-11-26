@@ -11,8 +11,8 @@
    built in wiki.js. Writing rules: plain words, no em dashes, no emoji, only facts the code supports.
    ===================================================================== */
 
-export const GUIDE_VERSION = 'v1.39';
-export const GUIDE_UPDATED = '2026-11-25';
+export const GUIDE_VERSION = 'v1.41';
+export const GUIDE_UPDATED = '2026-11-26';
 
 const tip = s => `<div class="tip"><b>Tip</b> ${s}</div>`;
 const note = s => `<div class="note">${s}</div>`;
@@ -131,6 +131,12 @@ ${note('Guest mode caps your wallet at 10,000 clams. Make an account to lift it.
 <li>Ask someone to leave with "Ever think about moving?". They pack overnight. At least 5 always stay, and anyone who left won't come back for 30 days.</li>
 <li>Good pen pals from trip towns can be invited to move in (see Pen pals).</li></ul>
 <p>Clementine also runs every big building project in the island stories (the workshop, tea room, post office, bathhouse).</p>
+<h3>Inside the town hall</h3>
+<p>The tent has no inside, so Clementine works out front. Once the Town Hall is built you walk in and find her at her desk. Inside:</p>
+<ul><li><b>Island Records</b> board: islanders, museum donations, shops backed, things found, achievements and best friends. Read it for the island stories so far and a shortcut to Town projects.</li>
+<li><b>Our islanders</b>: a portrait of everyone who lives here. Look at it for each islander's friendship hearts.</li>
+<li>A table with a <b>map of the island</b> (Look opens the full map), and benches for town meetings.</li>
+<li>The <b>Grand Town Hall</b> is bigger, with columns, a chandelier, a grandfather clock and a trophy case that gets a prize for every 10 achievements (up to 8).</li></ul>
 `},
 
 { id:'islanders', group:'island', title:'Islanders and friendship', data:'residents', html:`
@@ -243,6 +249,8 @@ ${tip('Making 10 <b>different</b> pieces is what starts Bramble\'s workshop stor
 <tr><td>Diviner's Elixir</td><td>3,000</td><td>Fossils, beach finds, swatch books</td></tr><tr><td>Lucky Star Elixir</td><td>8,000</td><td>All three</td></tr></table>
 <h3>Moving buildings</h3>
 <p>Needs a house with 16 floor squares and 2 shops backed. Your house 30,000, anything else 50,000. You see a see-through preview before paying. (Keepers you've invested in will also move their own buildings for free.)</p>
+<p>The check uses the building's real outline, so buildings can stand about a step apart. If a spot is a little off, the preview slides over to the nearest spot that fits. When it can't fit, it says what is in the way (the sea, the beach, a river or pond, a cliff, a bridge, the plaza, a garden, ground that's too uneven, or which building is too close) and a red marker shows where.</p>
+<p>Things you placed or planted where it lands (furniture, flowers, saplings, dropped items) are set down beside it; if there is no room anywhere near, furniture goes to your bag. Wild flowers and stumps there are cleared.</p>
 <h3>Shaping land</h3>
 <p>Needs a house with 24 squares and all 3 shops backed. Raise or lower terraces, dig ponds and rivers, fill them in, priced per square. A preview shows the plan first.</p>
 <p>Wendell also raises new isles from the sea, below.</p>
@@ -590,6 +598,7 @@ ${steps(['<b>Diving bell</b>: Marlo\'s glass (20,000, on the sand the next day),
 { id:'changes', group:'done', title:'What\'s changed', html:`
 <p>Recent updates, newest first.</p>
 <ul>
+<li><b>v1.41</b>: The Town Hall has an inside, with Clementine's desk, the Island Records and the islanders' portraits. Moving a building is much more forgiving and says what's in the way.</li>
 <li><b>v1.39</b>: Barley's mill, Wren's trade routes, Tobin's bathhouse, Lumi's firefly glade, Hazel's wreck. Wood now sells for 30.</li>
 <li><b>v1.38</b>: Relics for Wendell's isles, Hollis's apiary, Mabel's tea room, the lighthouse and night voyages, Pemberton's forge, the Reef Hall, workshop commissions.</li>
 <li><b>v1.37</b>: The reef and Cay Bay, Bramble's workshop and Old Pinewood, thank-you stakes, helpers.</li>

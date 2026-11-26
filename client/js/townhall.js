@@ -1,4 +1,4 @@
-// v1.48 the town hall's inside: Clementine's office desk, the island crest, the Island Records board, a wall of islander
+// v1.49 the town hall's inside: Clementine's office desk, the island crest, the Island Records board, a wall of islander
 // portraits, a table with a map of the island, benches for town meetings, and on the Grand Town Hall columns, a chandelier,
 // a long runner and a trophy case. main.js builds the room around these (makeHallRoom) and fills the boards when you walk in.
 import * as THREE from 'three';

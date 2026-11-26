@@ -18,7 +18,6 @@ import * as CH from './chars.js';
 export const TRIP_ODDS = { quiet:0.38, town:0.38, themed:0.20, special:0.02, rare:0.015, legendary:0.005 };
 export const RARE_ISLANDS = ['clamstone','grove','wizgarden','library'];
 export const LEGEND_ISLANDS = ['workshop','starfall','attic','shimmer'];
-export const HAUL_CAP = 200000;   // most clams plus sell value one rare or legendary island can hand out (gifts don't count)
 
 const pick = (a, r) => a[Math.floor(r()*a.length)%a.length];
 export function rollTrip(r=Math.random){

@@ -4,7 +4,13 @@
    ===================================================================== */
 import { range } from './util.js';
 const ALL='all';
-export const ITEMS = {};
+// v1.62: items can also be made up on demand (custom furniture, whose whole design is in its id: see custom-core.js).
+// A resolver gets any id that isn't defined yet and may define it.
+const RESOLVERS = [];
+export const ITEMS = new Proxy({}, { get(t, k){
+  if (k==='__resolve') return fn => RESOLVERS.push(fn);
+  if (typeof k==='string' && !(k in t) && RESOLVERS.length) for (const f of RESOLVERS){ const it=f(k); if (it) return it; }
+  return t[k]; } });
 export function def(id, o){ ITEMS[id] = Object.assign({ id, stack: 30 }, o); return ITEMS[id]; }
 
 /* Rarity: weight used when rolling spawns. Higher = more common. */

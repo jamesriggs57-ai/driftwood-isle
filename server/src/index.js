@@ -10,6 +10,7 @@
    ===================================================================== */
 import { ITEMS, BACKPACKS, BASE_SLOTS, LETTERS } from '../../client/js/content.js';
 import '../../client/js/enchant-core.js';   // v1.40: Enchanting Scroll items (define themselves in ITEMS)
+import '../../client/js/custom-core.js';   // v1.62: custom furniture items (cf_ ids carry their whole design)
 import '../../client/js/benches-core.js';  // v1.40: crafting tables and their pieces
 
 const KEEP_IDS = /^(relic_|lampframe$|cutting$|millsails$|bellframe$|crowbar$|wrecklens$|chartpiece$)/;   // v1.38, v1.39 story items that can't be mailed or traded

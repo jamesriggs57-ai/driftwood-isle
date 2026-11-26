@@ -477,3 +477,15 @@ Code: `extend.js` (the shape, `chooseExt`, `extDepth`, `extMounds`, `extBox`), t
 - **Slower arrivals.** A newcomer comes at least 5 days after the last one, then on a 40% chance each day (was 2 days and 50%), so about a week apart. Order: Lumi, Otis, Clover, Juniper, then Barley, Wren, Tobin, Hazel, Marigold (`STORY_ORDER`). A keeper (Gill, Hollis, Russet, Quill) turns up at least 3 days after anyone new, one at a time, never while someone is about to move in.
 - Also fixed: the waterfall plateau on cliff islands used the wrong grid row.
 - #dev Story map: "Everyone moves in now" (`devEveryone`) still brings every resident and keeper in at once. Test hooks: `window.__game.v158`.
+
+## v1.62: custom furniture
+Code: `custom-core.js` (parts catalog, design codes, styles, generator, prices, request matching; no THREE, the server imports it), `custom-models.js` (the 3D parts), `custom.js` (Design tab, requests, sketches, first-sale bonus). main.js only has small hooks (search for `v1.62`).
+- **Design tab** in crafting once you've made 10 different woodworking pieces. Six bases (chair, table, bed, shelf, lamp, dresser), each with 4 or 5 slots: 68,412 shapes, plus 16 woods and paints, a second wood, 5 metals, 14 fabrics and 9 patterns. Spinning preview; "Surprise me" makes a matching set in one style.
+- **The design is the item id.** `cf_` + base letter + one base-36 digit per slot and material, so any client, the server and mail can rebuild a piece from its id. `ITEMS` in content.js is now a Proxy with resolvers (`ITEMS.__resolve(fn)`), and custom-core.js defines any `cf_` id the moment something asks for it. Never reorder or remove options in custom-core.js; only append.
+- **No Frankenstein plans.** Every option has styles (rustic, cottage, antique, modern, woodland), a visual weight (1-3) and a detail level. Generated plans (sketches, Surprise me, islanders' requests) only use one style, keep every part within one weight step of the first, and pick colors from that style's palette. Players can still build anything by hand.
+- **Unlocks:** each option needs a crafting table tier (Workbench, Carpenter's Bench, Master Workbench, from v1.40). Options marked `find` only come from sketches: 1.2% of digs, 2% of felled trees, 0.4% of catches.
+- **Prices:** a copy sells for its materials plus 15%. The first sale of a design you made yourself adds a craftsmanship bonus (`firstBonus`: detail plus materials you can't farm), at most 2 new designs a day.
+- **Requests:** an islander at friendship 3+ sometimes (about 1 day in 4) shows you a sketch in their personality's style. Hand over a piece of the same base; `likeness` scores shape, wood and fabric; 50% or better pays and gives +2 or +3 friendship. 2 open at once, once per islander per 14 days.
+- Custom pieces don't count toward "discovered" (backpacks) or furniture-kind achievements.
+- Save: `S.craft.custom` (designs, crafted, sold, found, made, req, bonusDay); no new keys.
+- Test hooks (#dev): `window.__game.custom` (learnAll, sketch, request, choices, make, deliver, sold, generate).

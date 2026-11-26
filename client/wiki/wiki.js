@@ -3,6 +3,9 @@
 import { ITEMS, rarityLabel, RARITY_COLORS, RESIDENTS, TOOLS, BACKPACKS, CROPS, RECIPES, WOODWORK, RARE_WORK,
   WOOD_START, WOOD_TEN, PLANTS, FOREIGN_FRUIT_PRICE, SHOPS } from '../js/content.js';
 import { ACHIEVEMENTS, ACH_GROUPS } from '../js/achieve.js';
+// v1.40: these add the new tables, table pieces and Enchanting Scrolls to ITEMS/WOODWORK, and hold the enchanting rules (no DOM, no THREE)
+import { benchFor, toolBench, BENCH_IDS, NEW_BENCHES, BENCH_PIECES } from '../js/benches-core.js';
+import { ENCH, FAMILIES, WORDS, CRAFT, REPAIR, toolsText, describe } from '../js/enchant-core.js';
 import { PAGES, GROUPS, GUIDE_VERSION, GUIDE_UPDATED } from './guide.js';
 
 const $ = s => document.querySelector(s);
@@ -55,6 +58,13 @@ function furnWhere(i){
   return esc(i.shop||'');
 }
 
+const TABLE_NAME = ['Anywhere', 'Workbench', 'Carpenter\'s Bench', 'Master Workbench'];
+function woodLearn(r, start, ten){
+  const b=NEW_BENCHES.find(x=>x.id===r.id); if (b) return `After ${b.kinds} different things made${b.after?`, one a ${esc(name(b.after))}`:''}`;
+  const p=BENCH_PIECES.find(x=>x.id===r.id); if (p) return `Build a ${esc(name(BENCH_IDS[p.bench-1]))}`;
+  return start.has(r.id)?'Known from the start':ten.has(r.id)?'After 10 things made':'Milestone, plan or study';
+}
+
 const DATA = {
   residents(){
     const rows = RESIDENTS.map(r=>({ ...r }));
@@ -70,9 +80,15 @@ const DATA = {
   },
   tools(){
     let h = '<h3>Tools</h3>';
-    const rows=[]; for (const [k,t] of Object.entries(TOOLS)) t.tiers.forEach((x,i)=>rows.push({ name:x.name, tool:t.name, does:t.does, ...x, tier:i }));
+    const rows=[]; for (const [k,t] of Object.entries(TOOLS)) t.tiers.forEach((x,i)=>rows.push({ name:x.name, tool:t.name, does:t.does, ...x, tier:i, key:k }));
     h += table('tTools', rows, [['Tool', r=>`<b>${esc(r.name)}</b>`, r=>r.name], ['Price', r=>fmt(r.cost), r=>r.cost], ['Uses', r=>r.forever?'Never breaks':fmt(r.uses), r=>r.forever?1e9:r.uses],
       ['Needs', r=>esc(r.req ? r.req.desc : '')]], { filters:[['','All'], ...Object.values(TOOLS).map(t=>[t.name,t.name])], tag:r=>r.tool });
+    const mk=rows.filter(r=>CRAFT[r.key] && CRAFT[r.key][r.tier]);
+    h += '<h3>Making tools</h3><p>Same experience needed as buying.</p>' + table('tToolMake', mk, [['Tool', r=>`<b>${esc(r.name)}</b>`, r=>r.name], ['Materials', r=>mats(Object.fromEntries(CRAFT[r.key][r.tier]))],
+      ['Make it at', r=>TABLE_NAME[toolBench(r.tier)], r=>toolBench(r.tier)]], { filters:[['','All'], ...Object.values(TOOLS).map(t=>[t.name,t.name])], tag:r=>r.tool });
+    h += '<h3>Repair materials</h3><p>For a fully worn tool. A part-worn one needs that share of it, at least 1 of each. Heirloom tools never need fixing.</p>'
+      + table('tRepair', [['Flimsy tools and the basic Watering Can', 0], ['Sturdy tools', 1], ['Golden tools and the Golden Can', 2]].map(([n,k])=>({ n, k })),
+        [['Tier', r=>`<b>${esc(r.n)}</b>`], ['Materials', r=>mats(Object.fromEntries(REPAIR[r.k]))]]);
     h += '<h3>Backpacks</h3><p>You start with 20 bag slots.</p>';
     h += table('tBags', BACKPACKS, [['Bag', r=>`<b>${esc(r.name)}</b>`], ['Slots', r=>r.slots], ['Price', r=>fmt(r.cost)], ['Needs', r=>esc(r.req ? r.req.desc : '')]]);
     return h;
@@ -88,10 +104,20 @@ const DATA = {
     const start=new Set(WOOD_START), ten=new Set(WOOD_TEN);
     const rows = WOODWORK.filter(w=>ITEMS[w.id]).map(w=>({ ...w, name:ITEMS[w.id].name, it:ITEMS[w.id] }));
     let h = '<h3>Woodworking plans</h3>' + table('tWood', rows, [['Piece', r=>`<b>${esc(r.name)}</b>${r.out?` (x${r.out})`:''}`, r=>r.name], ['Materials', r=>mats(r.mats)],
-      ['How you learn it', r=>start.has(r.id)?'Known from the start':ten.has(r.id)?'After 10 things made':'Milestone, plan or study'], ['Sells', r=>fmt(r.it.price), r=>r.it.price]]);
+      ['How you learn it', r=>woodLearn(r, start, ten)], ['Make it at', r=>TABLE_NAME[benchFor(r)], r=>benchFor(r)], ['Sells', r=>fmt(r.it.price), r=>r.it.price]]);
     const rr = RARE_WORK.map(w=>({ ...w, name:ITEMS[w.id].name, it:ITEMS[w.id] }));
-    h += '<h3>Legendary showpieces</h3>' + table('tRareWork', rr, [['Piece', r=>`<b>${esc(r.name)}</b>`], ['Materials', r=>mats(r.mats)], ['Worth', r=>fmt(r.it.buy)]]);
+    h += '<h3>Legendary showpieces</h3><p>Made at a Carpenter\'s Bench or bigger.</p>' + table('tRareWork', rr, [['Piece', r=>`<b>${esc(r.name)}</b>`], ['Materials', r=>mats(r.mats)], ['Worth', r=>fmt(r.it.buy)]]);
     return h;
+  },
+  enchanting(){
+    const fam = e => { const w=FAMILIES[e.fam].what; if (e.id==='oneswing' || typeof w==='string') return esc(describe(e.id));
+      const by={}; for (const [t,x] of Object.entries(w)) (by[x]||(by[x]=[])).push(TOOLS[t].name.toLowerCase());
+      return `${esc(WORDS[e.rank])} increased ` + Object.entries(by).map(([x,ts])=>`${esc(x)} (${esc(ts.join(', '))})`).join('; '); };
+    const from = e => e.learn==='pippa' ? `Pippa, free${e.later?' (her second lesson)':''}` : `Wendell, ${fmt(e.price)}`;
+    const rows = Object.values(ENCH).map(e=>({ ...e }));
+    return '<h3>Enchantments</h3>' + table('tEnch', rows, [['Enchantment', r=>`<b>${esc(r.name)}</b>`, r=>r.name], ['What it does', fam], ['Goes on', r=>esc(toolsText(r.id))],
+      ['Learn from', r=>from(r)+' or a scroll', r=>r.price||0], ['Ingredients each time', r=>mats(Object.fromEntries(r.need))], ['Put on at', r=>TABLE_NAME[Math.max(1, r.rank)], r=>r.rank]],
+      { filters:[['','All'], ['tough','Durability'], ['bonk','Bonk'], ['lucky','Luck'], ['output','Output'], ['sure','Catching'], ['big','Big catches'], ['spray','Watering']], tag:r=>r.fam });
   },
   recipes(){
     const rows = RECIPES.map(r=>({ ...r, it:ITEMS[r.id] }));
@@ -196,7 +222,7 @@ function search(q){
     furniture:'furniture', wear:'clothes', material:'materials', relic:'relics', potion:'wendell', ticket:'trips', food:'cooking', plan:'crafting', gear:'tools' };
   const its = Object.values(ITEMS).filter(i=>i.name && i.name.toLowerCase().includes(q)).slice(0,12);
   let h='';
-  if (its.length) h += `<div class="rh">Items</div>` + its.map(i=>`<a href="#${CAT[i.kind]||'materials'}" data-hl="${esc(i.name)}">${esc(i.name)} <span>${esc(byId[CAT[i.kind]]?byId[CAT[i.kind]].title:'')}${i.price&&!i.noSell?` · sells ${fmt(i.price)}`:''}</span></a>`).join('');
+  if (its.length) h += `<div class="rh">Items</div>` + its.map(i=>{ const pg=i.ench ? 'enchanting' : CAT[i.kind]||'materials'; return `<a href="#${pg}" data-hl="${esc(i.ench ? ENCH[i.ench].name : i.name)}">${esc(i.name)} <span>${esc(byId[pg]?byId[pg].title:'')}${i.price&&!i.noSell?` · sells ${fmt(i.price)}`:''}</span></a>`; }).join('');
   if (pages.length) h += `<div class="rh">Guide pages</div>` + pages.map(p=>`<a href="#${p.id}">${esc(p.title)}</a>`).join('');
   box.innerHTML = h || '<div class="rh">Nothing found</div>'; box.hidden=false;
 }

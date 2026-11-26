@@ -11,7 +11,7 @@
    built in wiki.js. Writing rules: plain words, no em dashes, no emoji, only facts the code supports.
    ===================================================================== */
 
-export const GUIDE_VERSION = 'v1.47';
+export const GUIDE_VERSION = 'v1.50';
 export const GUIDE_UPDATED = '2026-11-26';
 
 const tip = s => `<div class="tip"><b>Tip</b> ${s}</div>`;
@@ -323,13 +323,21 @@ ${tip('Making 10 <b>different</b> pieces is what starts Bramble\'s workshop stor
 { id:'isles', group:'magic', title:'Wendell\'s isles', html:`
 <p>Once the tower is up and the island is ready, Wendell starts talking about old land sunk under the sea ("You look distracted"). He raises six isles, one at a time, at least 3 days apart. He never lists requirements: he says one hint for the first thing missing, in this order: relics, then the town hall, trade (shops), the museum, a neighbor's dream, then the price.</p>
 <table class="t"><tr><th>#</th><th>Isle</th><th>Hidden requirements</th><th>Relics</th><th>Clams and materials</th><th>What's there</th></tr>
-<tr><td>1</td><td>Clover Meadow</td><td>Town Hall, one shop backed</td><td>Heartwood Acorn</td><td>60,000, 30 wood, 15 stone, 10 flowers</td><td>Grass, wildflowers, an orchard of a fruit you don't grow, an old windmill</td></tr>
-<tr><td>2</td><td>Sandpiper Dunes</td><td>Marlo backed, museum's first wing</td><td>Sunken Ley Stone</td><td>120,000, 10 beach finds, 20 branches, 6 coconuts</td><td>Sand hills, palms, a shipwreck, good beachcombing, extra coral</td></tr>
-<tr><td>3</td><td>Old Pinewood</td><td>Grand Town Hall, Pemberton backed, Bramble's workshop dream open</td><td>Frostpine Cone, Amber Sliver, Heartwood Acorn</td><td>180,000, 60 wood, 20 stone</td><td>Misty pines that grow back overnight, the Grandfather Stump, site of Bramble's workshop</td></tr>
-<tr><td>4</td><td>Lantern Bluff</td><td>All three museum wings, the workshop open</td><td>Moonsap Vial</td><td>220,000, 30 planks, 8 iron, 10 clay</td><td>Cliff-top plateau, pines, good rocks, the old lighthouse</td></tr>
-<tr><td>5</td><td>Hollow Crags</td><td>All three shops at tier 2, the reef at Teeming</td><td>Amber Sliver, Living Coral Crown</td><td>350,000, 15 iron, 30 stone, 2 fossils</td><td>Mossy stone spires, ruins, iron-rich rocks; site of Pemberton's forge</td></tr>
+<tr><td>1</td><td>Clover Meadow</td><td>Town Hall, one shop backed</td><td>Heartwood Acorn</td><td>60,000, 30 wood, 15 stone, 10 flowers</td><td>Grass and wildflower fields, an orchard of a fruit you don't grow, a fishing pond with a brook and a footbridge, low hills, an old windmill</td></tr>
+<tr><td>2</td><td>Sandpiper Dunes</td><td>Marlo backed, museum's first wing</td><td>Sunken Ley Stone</td><td>120,000, 10 beach finds, 20 branches, 6 coconuts</td><td>All sand and palms, a long spit of dunes running out to sea, a big shipwreck, the best beachcombing</td></tr>
+<tr><td>3</td><td>Old Pinewood</td><td>Grand Town Hall, Pemberton backed, Bramble's workshop dream open</td><td>Frostpine Cone, Amber Sliver, Heartwood Acorn</td><td>180,000, 60 wood, 20 stone</td><td>Big misty pines that grow back overnight, the Grandfather Stump, site of Bramble's workshop</td></tr>
+<tr><td>4</td><td>Lantern Bluff</td><td>All three museum wings, the workshop open</td><td>Moonsap Vial</td><td>220,000, 30 planks, 8 iron, 10 clay</td><td>Cliff-top plateau with raised knolls, a spring that spills over the cliff as a waterfall, sea stacks offshore, pines, good rocks, the old lighthouse</td></tr>
+<tr><td>5</td><td>Hollow Crags</td><td>All three shops at tier 2, the reef at Teeming</td><td>Amber Sliver, Living Coral Crown</td><td>350,000, 15 iron, 30 stone, 2 fossils</td><td>A quarry of iron-rich rocks, mossy stone spires, old ruins, a sunken grotto with steps down to a pool; site of Pemberton's forge</td></tr>
 <tr><td>6</td><td>Starfall Isle</td><td>The Island Charter signed and Wendell's last letter</td><td>Living Coral Crown, Starglass Shard, Moonsap Vial</td><td>500,000, and one each of: plank, honey, tea cake, iron fitting, flour, bath salts</td><td>A small isle in the sky beside Hollow Crags, up a stair of glowing stones. Always night up there, with its own bugs and the star altar</td></tr></table>
 <p>The first isle isn't mentioned at all until the island is ready for it. The day after each isle rises, Wendell writes a letter hinting which way to look for the next. Starfall Isle is different: Wendell says nothing about it until the Island Charter is signed, and his letter the day after is the hint.</p>
+<h3>What each isle gives</h3>
+<ul><li><b>Clover Meadow</b>: the pond and the brook are fishable (pond fish and river fish). 7 fruit trees, an orchard of 12 more, and 28 other trees (was 15).</li>
+<li><b>Sandpiper Dunes</b>: 34 palms (was 12, plus 2 oaks) and nothing else grows there. Every day it has 12 shells (was 6), 5 pieces of coral (was 3) and 5 dig spots (was 3). The shipwreck is much bigger; Hazel's wreck story and the diving bell work as before.</li>
+<li><b>Old Pinewood</b>: same layout and the same 32 trees, but the pines and cedars are bigger and each gives 1 more wood when it falls (5 instead of 4 with a plain axe, 7 instead of 6 with One-Swing). They still grow back the next day.</li>
+<li><b>Lantern Bluff</b>: 5 rocks (was 3) and 34 trees (was 20).</li>
+<li><b>Hollow Crags</b>: 8 rocks (was 4, and often only 3 found room). A crags rock is iron-rich: each hit gives iron half the time (stone 30%, clay 20%), plus a 1 in 5 chance of an extra iron and a 4% chance of a fossil. That is about 2.8 iron per rock per day, against about half an iron from a rock on your island. 21 trees (was 10), ferns and boulders between the spires. The grotto pool at the bottom of the steps is fishable.</li>
+<li><b>Starfall Isle</b>: a glowing pool, a garden of glowing mushrooms and crystals, and small rocks drifting round the edge. 18 trees (was 11).</li></ul>
+<p>Trees cut on the isles grow back: Old Pinewood's the next day, the other isles' after 3 days. Isles that rose before v1.50 grow outward on their far side the next time you load; nothing you placed is moved, and new hills, ponds and rocks keep clear of it.</p>
 <h3>Starfall Isle</h3>
 <p>The stair climbs from Hollow Crags. Up top it is always night, whatever the clock says, and three bugs live nowhere else: the Sky Drifter, the Comet Beetle and the rare Nebula Moth. They're in the bug catalog under "On Starfall Isle".</p>
 <p>The <b>star altar</b> takes two of Wendell's spells. Leave the clams in the bowl:</p>
@@ -723,6 +731,7 @@ ${steps(['Talk to them and pick <b>Come and meet people</b>. They follow you for
 { id:'changes', group:'done', title:'What\'s changed', html:`
 <p>Recent updates, newest first.</p>
 <ul>
+<li><b>v1.50</b>: Wendell's isles are fuller. Hollow Crags is a quarry of iron-rich rocks with spires, ruins and a sunken grotto; Sandpiper Dunes is all sand and palms, longer, with a much bigger shipwreck and more beach finds; Old Pinewood's trees are bigger and give 1 more wood; Clover Meadow has a pond, a brook and an orchard; Lantern Bluff has a spring, a waterfall and sea stacks; Starfall has a glowing pool and garden. Isle trees now grow back. See Wendell's isles.</li>
 <li><b>v1.47</b>: You can go inside Wendell's tower. He works at his cauldron in a round workroom full of books, candles and a scrying bowl, and a stair leads up to an observatory with a telescope. See Wendell the wizard.</li>
 <li><b>v1.44</b>: Shop rewards and fishing tips. At the top two tiers Pemberton opens his back room (one piece a week, sometimes a rare plan), Marlo adds a rare shelf and Sprig sells rare flower colors, hybrids and the glowing Lantern Bloom. Marlo and Gill tell you what's biting, more exactly as their shop and boat grow.</li>
 <li><b>v1.41</b>: Juniper's reading nook, Otis's race course, Marigold's flower show and a spring show every April, the newcomer, the Island Charter and Charter Hall, the Driftwood Festival every season, and Starfall Isle with its own bugs and Wendell's two spells. The legendary trip island Starfall Isle is now called Stardrift Isle.</li>

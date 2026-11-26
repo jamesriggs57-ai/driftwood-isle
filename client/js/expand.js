@@ -104,7 +104,7 @@ export function planIsles(kinds, o){
   return out;
 }
 
-/* ---------- v1.45 RICHER ISLES ----------
+/* ---------- v1.50 RICHER ISLES ----------
    Each isle grows out on the side away from its bridges (I.gr: a radius multiplier for each of 72 directions), and carries a list
    of features (I.fxPlan) planned from the seed in the isle's own frame: hills, a pond and its brook, a spring with a waterfall,
    sea stacks, more spires, a sunken grotto, old ruins, an orchard, flower fields. main.js settles them once per save with
@@ -144,13 +144,13 @@ function planFx(I, seed){
     add('field0','field', [[0.62,-s*0.28],[0.85,-s*0.1],[0.5,-s*0.55]].map(([u,v])=>({ c:at(u,v), r:7 })));
     add('field1','field', [[0.82,s*0.32],[0.95,s*0.1],[0.6,s*0.3]].map(([u,v])=>({ c:at(u,v), r:6 })));
     add('hill0','hill', [[1.0,-s*0.12],[0.92,s*0.05],[0.75,-s*0.35]].map(([u,v])=>({ c:at(u,v), r:9, h:1.15 })));
-    add('hill1','hill', [[-0.45,-s*0.72],[-0.35,-s*0.8]].map(([u,v])=>({ c:at(u,v), r:6.5, h:0.6 })));
+    add('hill1','hill', [[-0.45,-s*0.72],[-0.35,-s*0.8],[-0.5,s*0.75],[0.95,s*0.62]].map(([u,v])=>({ c:at(u,v), r:6.5, h:0.6 })));
   }
   if (K==='dunes'){   // long rolling dunes running out to the far point
-    add('dune0','dune', [[0.55,0.22],[0.55,-0.22]].map(([u,v])=>({ c:at(u,v), r:10, h:1.3 })));
-    add('dune1','dune', [[1.05,-0.18],[1.05,0.18]].map(([u,v])=>({ c:at(u,v), r:9.5, h:1.15 })));
-    add('dune2','dune', [[1.55,0.08],[1.5,-0.1]].map(([u,v])=>({ c:at(u,v), r:7.5, h:0.85 })));
-    add('dune3','dune', [[-0.35,-0.55],[-0.35,0.55]].map(([u,v])=>({ c:at(u,v), r:6.5, h:0.7 })));
+    add('dune0','dune', [[1.3,-ms*0.2],[1.25,ms*0.35],[0.5,-ms*0.75]].map(([u,v])=>({ c:at(u,v), r:10, h:1.3 })));   // clear of the wreck, which sits about 0.62 out
+    add('dune1','dune', [[1.85,ms*0.15],[1.8,-ms*0.3],[-0.1,ms*0.6]].map(([u,v])=>({ c:at(u,v), r:9.5, h:1.15 })));
+    add('dune2','dune', [[0.05,-ms*0.55],[1.0,-ms*0.65],[0.0,ms*0.62]].map(([u,v])=>({ c:at(u,v), r:7.5, h:0.85 })));
+    add('dune3','dune', [[-0.5,-ms*0.5],[-0.5,ms*0.5]].map(([u,v])=>({ c:at(u,v), r:6.5, h:0.7 })));
   }
   if (K==='bluff'){
     add('knoll0','knoll', [[0.85,-ms*0.2],[0.7,-ms*0.45],[-0.2,-ms*0.6]].map(([u,v])=>({ c:at(u,v), r:5.5, h:ISLE_STEP*2 })));
@@ -159,15 +159,15 @@ function planFx(I, seed){
     add('stacks','stacks', [{ list:[[0.3,7,3.2,0.82],[-0.1,11,2.4,0.62],[-0.5,8,2.8,0.74],[0.95,6,2.2,0.55],[-1.05,9,2.0,0.5]] }]);   // [turn from straight out, metres past the cliff, width, height as a share of the plateau]
   }
   if (K==='crags'){
-    add('grotto','grotto', [[0.95,-ms*0.28],[0.8,-ms*0.45],[0.5,-ms*0.6],[1.05,ms*0.3],[0.15,-ms*0.62]].map(([u,v])=>({ c:at(u,v), R:10.5, rp:3.4 })));
+    add('grotto','grotto', [[0.5,-ms*0.55],[0.5,ms*0.55],[0.2,-ms*0.6],[0.2,ms*0.6],[-0.35,-ms*0.55],[-0.35,ms*0.55],[0.9,-ms*0.4],[0.9,ms*0.4]].map(([u,v])=>({ c:at(u,v), R:8.5, rp:3.0 })));
     for (let i=0;i<6;i++){ const u=-0.35+r()*1.5, v=(r()-0.5)*1.5, rr=2.0+r()*1.6, hh=3.2+r()*4;
       add('spire'+i,'spire', [0,1,2].map(j=>({ c:at(u+(j?(r()-0.5)*0.4:0), v+(j?(r()-0.5)*0.4:0)), r:rr, h:hh }))); }
-    for (let i=0;i<4;i++){ const u=-0.2+r()*1.1, v=(r()-0.5)*1.3;
-      add('ruin'+i,'ruin', [0,1,2].map(j=>({ c:at(u+(j?(r()-0.5)*0.5:0), v+(j?(r()-0.5)*0.5:0)), rot:r()*TAU, kind:['wall','colonnade','tower','wall'][i], r:i===2?3.0:3.4 }))); }
+    for (let i=0;i<4;i++){ const u=-0.2+r()*1.1, v=(r()-0.5)*1.3, rot=r()*TAU;   // the first spot, then others spread round the isle
+      add('ruin'+i,'ruin', [0,1,2,3,4].map(j=>{ const a=j ? i*1.7+j*1.25 : 0, uu=j ? 0.35+0.55*Math.cos(a) : u, vv=j ? 0.6*Math.sin(a) : v; return { c:at(uu,vv), rot:rot+j, kind:['wall','colonnade','tower','wall'][i], r:i===2?3.0:3.4 }; })); }
   }
   if (K==='starfall'){
-    add('glowpool','skypool', [[0.45,s*0.35],[0.55,-s*0.3],[0.2,s*0.5]].map(([u,v])=>({ c:at(u,v), r:2.9 })));
-    add('garden','garden', [[0.75,-s*0.15],[0.6,s*0.45],[0.0,-s*0.5]].map(([u,v])=>({ c:at(u,v), r:6 })));
+    add('glowpool','skypool', [[-0.2,-ms*0.55],[0.1,-ms*0.65],[-0.3,ms*0.55],[0.95,-ms*0.4],[0.95,ms*0.4]].map(([u,v])=>({ c:at(u,v), r:2.9 })));
+    add('garden','garden', [[1.0,ms*0.2],[0.75,-ms*0.55],[-0.3,ms*0.5],[0.3,-ms*0.62]].map(([u,v])=>({ c:at(u,v), r:6 })));
   }
   return L;
 }
@@ -194,17 +194,21 @@ function makeFx(I, f, A){
 /* o: { pick: saved {id: spot index or -1} or null, avoid(F)->true if F would cover a bridge, path, landmark, story spot or something placed }
    Returns the picks to keep. Raised water levels (the bluff's spring, Starfall's pool) are read off the ground before carving. */
 export function finalizeFx(I, o={}){
-  const pick={}, act=[], plan=I.fxPlan||[];
+  const pick={}, act=[], plan=I.fxPlan||[]; I.fxWhy={};
   for (const f of plan){
     let j = o.pick && Number.isInteger(o.pick[f.id]) ? o.pick[f.id] : null;
     if (j!==null && (j>=f.alts.length || j<-1)) j=null;
-    if (j===null){ j=-1;
+    if (j===null){ j=-1; const why=I.fxWhy[f.id]=[];
       if (!(f.needs && pick[f.needs]===-1)) for (let k=0;k<f.alts.length;k++){ const F=makeFx(I, f, f.alts[k]);
-        if (f.needs==='pond'){ const P=act.find(a=>a.id==='pond'); if (!P || Math.hypot(F.pts[0][0]-P.x, F.pts[0][1]-P.z)>P.r+3) continue; }   // the brook leaves the pond
-        if (o.avoid && o.avoid(F)) continue;
-        if (act.some(a=>!a.soft && !F.soft && a.foot && F.foot.some(([x,z,rr])=>a.foot.some(([x2,z2,r2])=>Math.hypot(x-x2,z-z2)<rr+r2)))) continue;   // features keep clear of each other
+        if (f.needs==='pond'){ const P=act.find(a=>a.id==='pond'); if (!P || Math.hypot(F.pts[0][0]-P.x, F.pts[0][1]-P.z)>P.r+3){ why.push('not at the pond'); continue; } }   // the brook leaves the pond
+        const av=o.avoid && o.avoid(F); if (av){ why.push(av); continue; }
+        if (!F.lift && !F.sea && F.t!=='grotto' && I.spires && I.spires.some(([px,pz,pr])=>F.foot.some(([x,z,rr])=>Math.hypot(x-px,z-pz)<rr+pr*1.3))){ why.push('on a spire'); continue; }   // (the grotto may take an old spire's place)
+        const hit=act.find(a=>a.id!==f.needs && !a.soft && !F.soft && a.foot && F.foot.some(([x,z,rr])=>a.foot.some(([x2,z2,r2])=>Math.hypot(x-x2,z-z2)<rr+r2))); if (hit){ why.push('on '+hit.id); continue; }   // features keep clear of each other
         j=k; break; } }
-    pick[f.id]=j; if (j>=0){ const F=makeFx(I, f, f.alts[j]); if (F.t==='stacks' && o.seaOK) F.list=F.list.filter(([x,z,rr])=>o.seaOK(x,z,rr+5)); act.push(F); } }
+    pick[f.id]=j; if (j>=0){ const F=makeFx(I, f, f.alts[j]); if (F.t==='stacks' && o.seaOK) F.list=F.list.filter(([x,z,rr])=>o.seaOK(x,z,rr+5));
+      if (F.t==='grotto' && I.spires) I.spires=I.spires.filter(([px,pz,pr])=>Math.hypot(F.x-px,F.z-pz)>F.R+1.5+pr*1.3);
+      if (F.spires && o.keepRock){ F.spires=F.spires.filter(([x,z,rr])=>o.keepRock(x,z,rr*1.3)); F.foot=[F.foot[0], ...F.spires.map(([x,z,rr])=>[x,z,rr*1.3])]; }   // the grotto's rocks never stand on a path
+      act.push(F); } }
   I.fxOn=act.filter(F=>F.lift);   // read the ground with only the hills on to set water levels
   for (const F of act){
     if (F.t==='spring'){ let lo=99; for (let k=0;k<16;k++){ const a=k/16*TAU; lo=Math.min(lo, isleRaw(I, F.x+Math.cos(a)*(F.r+0.6), F.z+Math.sin(a)*(F.r+0.6))); }
@@ -278,7 +282,7 @@ function isleBase(I, x, z){
   const rim=t+(fbm(sx*2.2,sz*2.2)-0.5)*0.09;
   let top=PLATEAU + smooth(0.86,0.5,rim)*(K==='bluff' ? quant(ISLE_OFF+1.2*smooth(0.35,0.8,fbm(sx,sz)))-ISLE_OFF : 0.55*Math.floor(2*smooth(0.3,0.85,fbm(sx*1.7,sz*1.7))));
   if (K==='bluff' && I.mark){ const d=Math.hypot(x-I.mark[0],z-I.mark[1]); top=Math.max(top, lerp(top, PLATEAU+ISLE_STEP*2, smooth(9,5,d))); }
-  if (L>0) top=quant(top+L*smooth(0.9,0.6,rim), 0.3);   // v1.45 knolls: a terrace or two up
+  if (L>0) top=quant(top+L*smooth(0.9,0.6,rim), 0.3);   // v1.50 knolls: a terrace or two up
   let h = lerp(-2.7, top, smooth(0.985, 0.93, rim));
   for (const S of [I.spires, I.fxSpires]) if (S) for (const [px,pz,pr,ph] of S){ const d=Math.hypot(x-px,z-pz)/(pr*(1+0.18*Math.sin(Math.atan2(z-pz,x-px)*5+px))); if (d<1.25) h=Math.max(h, PLATEAU+ph*smooth(1.08,0.82,d)); }
   if (I.fxStacks) for (const [px,pz,pr,ph] of I.fxStacks){ const d=Math.hypot(x-px,z-pz)/(pr*(1+0.2*Math.sin(Math.atan2(z-pz,x-px)*4+pz))); if (d<1.3) h=Math.max(h, lerp(-2.7, PLATEAU*ph, smooth(1.12,0.9,d))); }   // sea stacks off the bluff
@@ -414,7 +418,7 @@ export function buildLandmark(kind, seed){
     g.userData.setMill({ sails:false });
     g.userData.rects=[[-2.3,-2.3,3.3,2.3]]; }
   if (kind==='dunes'){ // a shipwreck half buried in the sand
-    const WS=2.3, hull=new THREE.Group(); hull.rotation.z=0.22; hull.rotation.y=0.3; hull.position.y=2.9; hull.scale.setScalar(WS); g.add(hull);   // v1.45 a much bigger ship, the Saltwren as she was   // the keel sits just under the sand, the ribs stick up out of it
+    const WS=2.3, hull=new THREE.Group(); hull.rotation.z=0.22; hull.rotation.y=0.3; hull.position.y=2.9; hull.scale.setScalar(WS); g.add(hull);   // v1.50 a much bigger ship, the Saltwren as she was   // the keel sits just under the sand, the ribs stick up out of it
     for (let i=0;i<9;i++){ const x=-4+i*1.0, s=Math.sin((i+0.5)/9*Math.PI); const rib=mk(new THREE.TorusGeometry(1.6*s+0.4, 0.12, 6, 14, Math.PI), dark, x, 0.2, 0, hull); rib.rotation.y=Math.PI/2; rib.rotation.x=Math.PI; }
     for (let k=0;k<5;k++){ const pl=mk(G.box(7.2,0.12,0.5), wood, 0, -0.3-k*0.32+0.1, (k%2?1:-1)*(1.6-k*0.25), hull); pl.rotation.x=(k%2?1:-1)*(0.5+k*0.12); }
     const mast=mk(G.cyl(0.16,0.2,4.6,8), dark, 0.6, 0.6, 0.1, hull); mast.rotation.z=-0.5; mk(G.box(1.8,0.12,0.12), dark, 1.4, 2.0, 0.1, hull).rotation.z=0.4;
@@ -422,7 +426,9 @@ export function buildLandmark(kind, seed){
     const m2=mk(G.cyl(0.13,0.17,3.0,8), dark, -2.2, 0.4, -0.1, hull); m2.rotation.z=0.35; m2.rotation.x=0.2;
     const bs=mk(G.cyl(0.08,0.12,2.6,6), dark, 4.6, 0.2, 0, hull); bs.rotation.z=-1.2;
     mk(G.box(0.18,1.3,0.9), wood, -4.3, -0.2, 0, hull).rotation.z=0.2;
-    const sail=mk(G.box(2.6,0.04,1.6), M(0xe8dcc0,{ side:THREE.DoubleSide }), 1.0, -0.25, 1.9, hull); sail.rotation.set(0.5,0.2,0.1);
+    { const sg=new THREE.PlaneGeometry(5.2,3.4,10,6), P=sg.attributes.position;   // the old sail, torn and lying in folds on the sand beside her
+      for (let i=0;i<P.count;i++){ const x=P.getX(i), y=P.getY(i); P.setZ(i, 0.22*Math.sin(x*1.9+y*0.7)+0.12*Math.sin(y*2.6)+0.1); } sg.computeVertexNormals();
+      const sail=mk(sg, M(0xe8dcc0,{ side:THREE.DoubleSide, roughness:0.95 }), 2.0, 0.05, -6.2, g); sail.rotation.set(-Math.PI/2, 0, 0.5); sail.castShadow=false; }
     const crate=M(0x9a6a3a), band=M(0x5a5048,{ metalness:0.3, roughness:0.6 });
     for (let i=0;i<7;i++){ const a=r()*TAU, d=7+r()*6, x=Math.cos(a)*d, z=Math.sin(a)*d*0.7, y=0.15;
       if (i%2){ const c=mk(G.box(0.8,0.7,0.8), crate, x, y+0.2, z, g); c.rotation.set((r()-0.5)*0.4, r()*TAU, (r()-0.5)*0.3); }
@@ -460,7 +466,7 @@ export function buildLandmark(kind, seed){
   return g;
 }
 
-/* ---------- v1.45 what the features look like ----------
+/* ---------- v1.50 what the features look like ----------
    gy(x,z) is the ground height. Returns a group; userData.rects are solid boxes (world [x0,z0,x1,z1]) for the ruins,
    userData.tick(dt,t) moves the waterfall and the glowing things, userData.solid lists [x,z,r] for round solid bits. */
 let _fallTex=null;
@@ -508,11 +514,11 @@ export function buildIsleFx(I, gy, seed){
     else if (F.t==='stream'){ const P=densify(F.pts, 1.4); for (let k=1;k<P.length-1;k++) if (r()<0.55){ const [x,z]=P[k], s2=(r()<0.5?1:-1)*(F.hw+0.4+r()*0.5), dx=P[k+1][0]-P[k-1][0], dz=P[k+1][1]-P[k-1][1], L=Math.hypot(dx,dz)||1, xx=x-dz/L*s2, zz=z+dx/L*s2, y=gy(xx,zz);
         if (y<0.8) for (let j=0;j<3;j++){ const h=0.6+r()*0.5; mk(G.cyl(0.025,0.035,h,4), reedM, xx+(r()-0.5)*0.4, Math.max(y,-0.1)+h/2, zz+(r()-0.5)*0.4, g).castShadow=false; } } }
     else if ((F.t==='spring' || F.t==='skypool') && F.lvl!==undefined){
-      const glow=F.t==='skypool', wm=glow ? new THREE.MeshStandardMaterial({ color:0x7ad8ff, emissive:0x3a9ad8, emissiveIntensity:0.6, transparent:true, opacity:0.85, roughness:0.15 }) : waterM;
+      const glow=F.t==='skypool', wm=glow ? new THREE.MeshStandardMaterial({ color:0x6ac8f0, emissive:0x2a7ab8, emissiveIntensity:0.45, transparent:true, opacity:0.85, roughness:0.15 }) : waterM;
       const pool=new THREE.Mesh(new THREE.CircleGeometry(F.r+0.25, 32), wm); pool.rotation.x=-Math.PI/2; pool.position.set(F.x, F.lvl, F.z); pool.receiveShadow=true; g.add(pool);
       for (let k=0;k<12;k++){ const a=k/12*TAU+r()*0.3, d=F.r+0.5+r()*0.4, x=F.x+Math.cos(a)*d, z=F.z+Math.sin(a)*d; if (F.run && polyD(x,z,F.run)<F.hw+0.6) continue; const b=mk(G.dod(0.3+r()*0.3), stone2, x, gy(x,z)+0.1, z, g); b.rotation.set(r()*3,r()*3,0); }
       if (glow){ for (let k=0;k<7;k++){ const a=r()*TAU, d=r()*F.r*0.7, s=mk(G.sph(0.06,6,4), glowMat(0xd8f4ff), F.x+Math.cos(a)*d, F.lvl+0.3+r()*0.8, F.z+Math.sin(a)*d, g); s.castShadow=false; s.userData.ph=r()*TAU; s.userData.y0=s.position.y; keep.push(s); ticks.push((dt,t)=>{ s.position.y=s.userData.y0+Math.sin(t*0.8+s.userData.ph)*0.25; }); }
-        addGlow(pool, 0.2, F.r*2.2, 0x9ad8ff).position.set(0,0,0.3); }
+        addGlow(pool, 0.2, F.r*1.2, 0x9ad8ff).position.set(0,0,0.25); }
       if (F.run && F.run.length>1){ g.add(ribbon(densify(F.run,0.5), F.hw+0.2, F.lvl-0.02, wm));
         // the waterfall: over the cliff edge and down to the sea
         const [lx,lz]=F.lip, pr=F.run[F.run.length-2], dx=lx-pr[0], dz=lz-pr[1], L=Math.hypot(dx,dz)||1, ux=dx/L, uz=dz/L;

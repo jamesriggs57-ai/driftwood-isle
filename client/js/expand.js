@@ -60,7 +60,8 @@ export const SKY = PLATEAU + ISLE_STEP*14;   // v1.41 13.0 m: Starfall Isle's to
 export const SKY_CUT = SKY - 4;
 
 /* ---------- Where they go ----------
-   o: { seed, SC, shore(a) -> main island shore radius at angle a, ok(a) -> can a bridge land on the main island there }
+   o: { seed, SC, shore(a) -> main island shore radius at angle a, ok(a) -> can a bridge land on the main island there,
+        clear(x,z,r,k) -> optional, is isle k clear of the main island's far shore there (v1.58) }
    Meadow, dunes and bluff each hang off the main island at their own angle; the crags hang off the bluff. */
 export function planIsles(kinds, o){
   if (typeof kinds==='number') kinds=OLD_ORDER.slice(0,kinds);
@@ -83,12 +84,13 @@ export function planIsles(kinds, o){
       const B=out.find(J=>J.kind==='bluff'); if (!B) break;
       // out past the bluff, turned away from the main island so it never comes back toward it
       let a=Math.atan2(B.cz, B.cx) + 0.75; const tryAt=aa=>[B.cx+Math.cos(aa)*(B.r*0.97+I.br.gap+I.r*0.97), B.cz+Math.sin(aa)*(B.r*0.97+I.br.gap+I.r*0.97)];
-      let [x,z]=tryAt(a); if (out.some(J=>J!==B && Math.hypot(x-J.cx,z-J.cz)<J.r+I.r+20)){ a=Math.atan2(B.cz,B.cx)-0.75; [x,z]=tryAt(a); }
+      const crowded=(x,z)=>out.some(J=>J!==B && Math.hypot(x-J.cx,z-J.cz)<J.r+I.r+20) || (o.clear && !o.clear(x,z,I.r,k));   // v1.58 also clear of the main island's far shore
+      let [x,z]=tryAt(a); if (crowded(x,z)){ a=Math.atan2(B.cz,B.cx)-0.75; [x,z]=tryAt(a); }
       I.a=a; I.dir=[Math.cos(a), Math.sin(a)]; I.from=out.indexOf(B); I.cx=x; I.cz=z;
     } else {   // v1.41 Starfall: up a stair from the crags, further out again, clear of everything else
       const C=out.find(J=>J.kind==='crags'); if (!C) break; const base=Math.atan2(C.cz, C.cx);
       const at=aa=>[C.cx+Math.cos(aa)*(C.r*0.97+I.br.gap+I.r*0.97), C.cz+Math.sin(aa)*(C.r*0.97+I.br.gap+I.r*0.97)];
-      let a=base, x, z; for (const d of [0.55,-0.55,1.1,-1.1,0,1.6,-1.6]){ a=base+d; [x,z]=at(a); if (!out.some(J=>J!==C && Math.hypot(x-J.cx,z-J.cz)<J.r+I.r+16) && Math.hypot(x,z)>R*1.3+I.r) break; }
+      let a=base, x, z; for (const d of [0.55,-0.55,1.1,-1.1,0,1.6,-1.6]){ a=base+d; [x,z]=at(a); if (!out.some(J=>J!==C && Math.hypot(x-J.cx,z-J.cz)<J.r+I.r+16) && Math.hypot(x,z)>R*1.3+I.r && (!o.clear || o.clear(x,z,I.r,k))) break; }
       I.a=a; I.dir=[Math.cos(a), Math.sin(a)]; I.from=out.indexOf(C); I.cx=x; I.cz=z;
     }
     const ext=I.r*1.3+8; I.box=[I.cx-ext, I.cz-ext, I.cx+ext, I.cz+ext];

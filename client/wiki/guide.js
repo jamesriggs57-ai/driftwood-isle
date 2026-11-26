@@ -11,7 +11,7 @@
    built in wiki.js. Writing rules: plain words, no em dashes, no emoji, only facts the code supports.
    ===================================================================== */
 
-export const GUIDE_VERSION = 'v1.57';
+export const GUIDE_VERSION = 'v1.58';
 export const GUIDE_UPDATED = '2026-11-26';
 
 const tip = s => `<div class="tip"><b>Tip</b> ${s}</div>`;
@@ -130,7 +130,8 @@ ${note('Guest mode caps your wallet at 10,000 clams. Make an account to lift it.
 <tr><td>Grand Town Hall</td><td>220,000</td><td>Museum outgrows its cottage, one shop backed</td><td>Fountain, Old Pinewood (with other conditions)</td></tr></table>
 <h3>Islanders moving in and out</h3>
 <ul><li>New islands start with <b>Pippa, Bramble and Mabel</b>.</li>
-<li>Nobody moves in while the town is a tent. After the Town Hall, a newcomer arrives every few days (at least 2 days apart, then a coin flip each day) until 10 live there. A "Moving in!" sign and boxes appear the day before.</li>
+<li>Nobody moves in while the town is a tent. After the Town Hall, newcomers come about a week apart: nobody new for 5 days after the last arrival, then a 40% chance each day, until 10 live there. A "Moving in!" sign and boxes appear the day before. A keeper turning up (see Passive income) also resets the 5 days.</li>
+<li>Who comes: Lumi, Otis, Clover and Juniper first, in that order. Then Barley, Wren, Tobin, Hazel and Marigold, in that order (anyone among them whose dream has already stirred jumps ahead), so their stories start one at a time. Anyone else after that.</li>
 <li>Ask someone to leave with "Ever think about moving?". They pack overnight. At least 5 always stay, and anyone who left won't come back for 30 days.</li>
 <li>Good pen pals from trip towns can be invited to move in (see Pen pals).</li></ul>
 <p>Clementine also runs every big building project in the island stories (the workshop, tea room, post office, bathhouse).</p>
@@ -140,6 +141,16 @@ ${note('Guest mode caps your wallet at 10,000 clams. Make an account to lift it.
 <li><b>Our islanders</b>: a portrait of everyone who lives here. Look at it for each islander's friendship hearts.</li>
 <li>A table with a <b>map of the island</b> (Look opens the full map), and benches for town meetings.</li>
 <li>The <b>Grand Town Hall</b> is bigger, with columns, two chandeliers, a grandfather clock and a trophy case that gets a prize for every 10 achievements (up to 8).</li></ul>
+`},
+
+{ id:'farshore', group:'island', title:'The far shore', html:`
+<p>Since v1.58 one side of your island reaches further out to sea: about half as much land again, all on that one side. It's left wild.</p>
+<ul><li><b>Which side</b>: picked once for each island, the first time it loads after v1.58, and it never moves after that. It stays clear of the dock, the river mouth, the waterfall, Wendell's isles (raised or still to come) and their bridges. Usually that is the northwest, between where Clover Meadow and Lantern Bluff rise; on an island where some isles were already up it can be another side.</li>
+<li><b>What grows there</b>: a few low hills, grass and wild flowers, trees, fruit trees of your island's fruit, palms along its beach, and a few rocks to hit.</li>
+<li><b>What turns up</b>: bugs, dig spots, weeds and beach finds, like anywhere else on the island.</li>
+<li><b>What doesn't</b>: no paths, and nobody moves in out there. New islanders' houses, the keepers and the town's buildings all go on the old part of the island.</li>
+<li>It's still yours to use: place furniture, plant, have Wendell move a building out there, or shape the land.</li></ul>
+${note('Everything you had keeps its place. On that one side the old beach is now inland, so a few trees and things near it sit a little higher or lower than before.')}
 `},
 
 { id:'islanders', group:'island', title:'Islanders and friendship', data:'residents', html:`
@@ -347,6 +358,7 @@ ${tip('Making 14 <b>different</b> pieces is what starts Bramble\'s workshop stor
 <tr><td>4</td><td>Lantern Bluff</td><td>All three museum wings, the workshop open</td><td>Moonsap Vial</td><td>220,000, 30 planks, 8 iron, 10 clay</td><td>Cliff-top plateau with raised knolls, a spring that spills over the cliff as a waterfall, sea stacks offshore, pines, good rocks, the old lighthouse</td></tr>
 <tr><td>5</td><td>Hollow Crags</td><td>All three shops at tier 2, the reef at Teeming</td><td>Amber Sliver, Living Coral Crown</td><td>350,000, 15 iron, 30 stone, 2 fossils</td><td>A quarry of iron-rich rocks, mossy stone spires, old ruins, a sunken grotto with steps down to a pool; site of Pemberton's forge</td></tr>
 <tr><td>6</td><td>Starfall Isle</td><td>The Island Charter signed and Wendell's last letter</td><td>Living Coral Crown, Starglass Shard, Moonsap Vial</td><td>500,000, and one each of: plank, honey, tea cake, iron fitting, flour, bath salts</td><td>A small isle in the sky beside Hollow Crags, up a stair of glowing stones. Always night up there, with its own bugs and the star altar</td></tr></table>
+<p>Isles never rise off the far shore (see The far shore), and nothing about the far shore moves an isle that's already up.</p>
 <p>The first isle isn't mentioned at all until the island is ready for it. The day after each isle rises, Wendell writes a letter hinting which way to look for the next. Starfall Isle is different: Wendell says nothing about it until the Island Charter is signed, and his letter the day after is the hint.</p>
 <h3>What each isle gives</h3>
 <ul><li><b>Clover Meadow</b>: the pond and the brook are fishable (pond fish and river fish). 7 fruit trees, an orchard of 12 more, and 28 other trees (was 15).</li>
@@ -497,6 +509,7 @@ ${note('Relics can\'t be sold, gifted, mailed or traded. A storage chest holds t
 <tr><td>Hollis the beekeeper, in a meadow</td><td>Town Hall and 5 planted flowers (or 45 things discovered)</td><td>Beehive 13,000 (2 honey); Three Hives 35,000 (5); Apiary 60,000 (9); Grand Apiary 185,000 (14) after his story</td></tr>
 <tr><td>Russet the orchard keeper</td><td>Town Hall, 10 days on the island, a fruit tree</td><td>Fruit Ladder 14,000 (4 fruit); Pony Cart 30,000 (8); Cider Shed 50,000 (14)</td></tr>
 <tr><td>Quill the bookkeeper, by the general store</td><td>One shop backed</td><td>Ledger 24,000 (800 clams per shop backed); Counting House 60,000 (2,000); Trading Office 135,000 (4,500)</td></tr></table>
+<p>Keepers turn up one at a time: at least 3 days after anyone new arrived (an islander or another keeper), and never while someone is about to move in. If two are ready, the second waits.</p>
 <p>Every tier, here and in the thank-you stakes, costs about a month of what it brings in, so each one pays for itself in roughly 30 days. More flowers near Hollis's hives give a little more honey. Hollis, Russet and Quill offer to move their spot for free after you fund or upgrade them.</p>
 `},
 
@@ -758,6 +771,7 @@ ${steps(['Talk to them and pick <b>Come and meet people</b>. They follow you for
 { id:'changes', group:'done', title:'What\'s changed', html:`
 <p>Recent updates, newest first.</p>
 <ul>
+<li><b>v1.58</b>: The far shore: one side of your island now reaches further out to sea, about half as much land again, left wild (see The far shore). Newcomers move in about a week apart, in story order, and the four keepers turn up one at a time.</li>
 <li><b>v1.57</b>: Wendell's isles are fuller. Hollow Crags is a quarry of iron-rich rocks with spires, ruins and a sunken grotto; Sandpiper Dunes is all sand and palms, longer, with a much bigger shipwreck and more beach finds; Old Pinewood's trees are bigger and give 1 more wood; Clover Meadow has a pond, a brook and an orchard; Lantern Bluff has a spring, a waterfall and sea stacks; Starfall has a glowing pool and garden. Isle trees now grow back. See Wendell's isles.</li>
 <li><b>v1.56</b>: Click (or tap) one thing a tree or rock dropped and you pick up everything else it dropped too, as much as fits in your bag. E and the Act button still pick up one at a time.</li>
 <li><b>v1.55</b>: Invite friends over from the Friends tab without a new link. Anyone you're already friends with who can't visit you (because only they invited you, or their one visit was used) shows under Invite a friend over, and they get a letter when you invite them.</li>

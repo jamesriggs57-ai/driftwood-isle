@@ -13,7 +13,7 @@ import * as S2 from './story2.js';   // v1.38 phase 2 buildings and furniture
 import * as S3 from './story3.js';   // v1.39 phase 3 buildings and furniture
 import * as S4 from './story4.js';   // v1.41 phase 4 buildings, festival and Starfall spells
 import * as LH from './lighthouse.js';   // v1.39 fixes: the climbable lighthouse on Lighthouse Point
-import * as TW from './towerroom.js';   // v1.46 inside Wendell's tower
+import * as TW from './towerroom.js';   // v1.47 inside Wendell's tower
 import { ACHIEVEMENTS, ACH_GROUPS } from './achieve.js';
 import { BY_SLOT, SLOT_NAMES } from './wardrobe-data.js';
 import { CELL, buildSoil, buildFences, buildStake, buildGardenSign, buildScarecrow, buildLanternPost, buildFlowerArch } from './farm.js';
@@ -4227,7 +4227,7 @@ function openStoryMap(){
       bay:()=>{ closePanel(); enterBay(); },
       wreck:()=>{ if (!dunesLM()){ toast('The wreck isn\'t up yet.'); return; } closePanel(); makeWreckRoom(); enterRoom('wreck'); },
       nook:()=>openReadingRoom(),
-      tower:()=>{ if (!towerEnt) return; closePanel(); makeTowerRooms(); enterRoom('tower'); towerHello(); },   // v1.46
+      tower:()=>{ if (!towerEnt) return; closePanel(); makeTowerRooms(); enterRoom('tower'); towerHello(); },   // v1.47
       towertop:()=>{ if (!towerEnt) return; closePanel(); makeTowerRooms(); enterRoom('tower'); setTimeout(()=>towerFloor('towertop'), 450); } };
     pBody.querySelectorAll('[data-dv]').forEach(b=>b.onclick=()=>{ const f=A[b.dataset.dv]; if (f) f(); }); };
   render(); }
@@ -4341,11 +4341,11 @@ const spinOrbs = t => { const orbs=towerEnt && towerEnt.model.userData.orbs; if(
 function buildTowerEnt(){
   if (towerEnt){ towerEnt.remove(); setRects('tower',[]); towerEnt=null; }
   if (!PLACES.tower) return;
-  towerEnt=placeBuilding('tower', PLACES.tower[0], PLACES.tower[1], buildTower(), 'Enter', ()=>{ makeTowerRooms(); enterRoom('tower'); towerHello(); });   // v1.46 Wendell works inside now
+  towerEnt=placeBuilding('tower', PLACES.tower[0], PLACES.tower[1], buildTower(), 'Enter', ()=>{ makeTowerRooms(); enterRoom('tower'); towerHello(); });   // v1.47 Wendell works inside now
   towerEnt.update=(dt,t)=>spinOrbs(t);
   if (ROOMS.tower) ROOMS.tower.exit=ROOMS.towertop.exit=[towerEnt.doorPt[0], towerEnt.doorPt[1]+0.2];
 }
-/* ---------- v1.46 inside Wendell's tower (models and words in towerroom.js) ----------
+/* ---------- v1.47 inside Wendell's tower (models and words in towerroom.js) ----------
    Ground floor ('tower'): Wendell at his cauldron, and things to tap: the cauldron (potions), the shelves (a book),
    the lectern (enchanting), the scrying bowl (moving buildings, shaping land), the star chart, the owl, the chair.
    A stair goes up to the observatory ('towertop'): the telescope, the orrery, the star globe, the Starglass cushion. */
@@ -4583,7 +4583,7 @@ function talkWizard(){
     { label:'Potions', fn:()=>openPotionShop() },
     ...EN.teachChoices('wendell', ()=>menu()),   // v1.40
     { label:'Chat', fn:()=>keeperChat(WIZARD, ()=>menu()) },
-    { label:'Move a building', fn:()=>{ if (noEdit()) return; if (!moveUnlocked()){ dialog(W.name, v, [W.moveLock], menu); return; } outdoors(()=>openMoveList()); } },   // v1.46 he's indoors now: the spell happens outside
+    { label:'Move a building', fn:()=>{ if (noEdit()) return; if (!moveUnlocked()){ dialog(W.name, v, [W.moveLock], menu); return; } outdoors(()=>openMoveList()); } },   // v1.47 he's indoors now: the spell happens outside
     { label:'Shape the land', fn:()=>{ if (noEdit()) return; if (!landUnlocked()){ dialog(W.name, v, [W.landLock], menu); return; } outdoors(()=>startMagic('land')); } },
     { label:'Bye!', alt:true, fn:()=>{} } ]);
   if (!S.magic.met){ S.magic.met=true; save(); dialog(W.name, v, W.first, menu); return; }
@@ -5611,7 +5611,7 @@ function updateSky(){
     hemi.color.setHex(0xfff0dc); hemi.groundColor.setHex(0x8a6a50); hemi.intensity=1.6-World.night*0.35; sun.color.setHex(0xfff0dc); sun.intensity=1.3; sunDir.set(0.3,1,0.45).normalize();
     if (homeFloorOf(World.inside)>=0 && S.home && S.home.built){ hemi.color.setHex(0xfff0dc); hemi.groundColor.setHex(0x6a5040); hemi.intensity=LT.amb-World.night*0.2; sun.color.setHex(0xfff0dc); sun.intensity=LT.sun; sunDir.set(0.3,1,0.45).normalize(); }
     if (World.inside==='museum'){ hemi.color.setHex(0xffe4c4); hemi.groundColor.setHex(0x5a3e2c); hemi.intensity=0.85; sun.color.setHex(0xffdcb0); sun.intensity=0.6; sunDir.set(0.15,1,0.35).normalize(); }
-    if (World.inside==='tower'){ hemi.color.setHex(0xf0e6ff); hemi.groundColor.setHex(0x4e4060); hemi.intensity=1.25-World.night*0.15; sun.color.setHex(0xffe4c4); sun.intensity=0.85; sunDir.set(0.2,1,0.4).normalize(); }   // v1.46 Wendell's workroom
+    if (World.inside==='tower'){ hemi.color.setHex(0xf0e6ff); hemi.groundColor.setHex(0x4e4060); hemi.intensity=1.25-World.night*0.15; sun.color.setHex(0xffe4c4); sun.intensity=0.85; sunDir.set(0.2,1,0.4).normalize(); }   // v1.47 Wendell's workroom
     if (World.inside==='towertop'){ const n=World.night; hemi.color.setHex(n>0.5?0xd0d4ff:0xfff4e4); hemi.groundColor.setHex(0x4e4060); hemi.intensity=1.45-n*0.35; sun.color.setHex(n>0.5?0xc8d0ff:0xfff0dc); sun.intensity=1.1-n*0.45; sunDir.set(0.3,1,0.5).normalize(); }
     renderer.toneMappingExposure = 1.15*(S.settings.bright||1); return; }
   sky.visible=stars.visible=true; scene.background=null; scene.fog.near=42; scene.fog.far=150;
@@ -9024,7 +9024,7 @@ window.__game.v144 = Object.assign({ SR, shopStock:w=>shopStock(w), talkGill:()=
 // v1.26 test hooks
 window.__game.v126 = { townNewDay, applyTown, findHomeSpot, claimHomeSpot, townCap, incomeNewDay, refreshIncome, talkIncome, incCollect, incOf, INCOME, incEnts, openMap, talkSkipperHome, talkSkipperTrip, tripGoHome, tripRecap, storyWho, askToLeave, canAskToLeave, pitchOnBuy, merchantDay, get peddler(){ return peddler; }, get skipper(){ return skipper; }, newSquares, LOAN_MAX_SQ, TRIP, TRIP_THEME, residents, residentHomes, plotEnts, KEEPOUT, Q, PATHS, camTarget, updateCamera, set camDist(v){ camDist=v; }, get camDist(){ return camDist; }, set camYaw(v){ camYaw=v; } };
 window.__game.LETTERS = LETTERS;
-window.__game.v146 = { makeTowerRooms, towerFloor, towerHello, openEyepiece, refreshTowerLook, outdoors, get towerL(){ return towerL; }, get topL(){ return topL; }, get wizard(){ return wizard; }, get tower(){ return towerEnt; }, TW };   // v1.46 test hooks
+window.__game.v147 = { makeTowerRooms, towerFloor, towerHello, openEyepiece, refreshTowerLook, outdoors, get towerL(){ return towerL; }, get topL(){ return topL; }, get wizard(){ return wizard; }, get tower(){ return towerEnt; }, TW };   // v1.47 test hooks
 window.__game.v127 = { roleMenu, folkMenu, smugglerShop, openNoticeBoard, shellGame, talkWorkshop, talkAttic, talkWizGarden, talkLibrary, anglerWants, get perch(){ return PERCH; }, setupTown, get PLAN(){ return PLAN; }, get TX(){ return TX; }, LAY, haulValue, haulLeft, openContacts, deliverReplies, sendLetter, addContact, canInvite, invitePenpal, readTreasureMap, bottleLetter, openNote, contactPerson, XW, POOLS, lowTide, BRIDGES, DOCK, waterType, VY, Thing };
 // v1.25 test hooks for the house builder
 window.__game.house = { LT, previewBuild:(w)=>previewBuild(w), renderBuild:(k)=>renderBuild(k), homeBlocked, planIssue, setBuildView:(v)=>setBuildView(v), mossPaintAt, buildMossLayer, roofHit, houseFrame, rebuildFloor, HOME_IDS, get houseEnt(){ return houseEnt; }, edgeTap, stairsTap, landProblem, closeBuild };

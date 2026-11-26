@@ -11,7 +11,7 @@
    built in wiki.js. Writing rules: plain words, no em dashes, no emoji, only facts the code supports.
    ===================================================================== */
 
-export const GUIDE_VERSION = 'v1.46';
+export const GUIDE_VERSION = 'v1.47';
 export const GUIDE_UPDATED = '2026-11-26';
 
 const tip = s => `<div class="tip"><b>Tip</b> ${s}</div>`;
@@ -295,7 +295,7 @@ ${tip('Making 10 <b>different</b> pieces is what starts Bramble\'s workshop stor
 { id:'wendell', group:'magic', title:'Wendell the wizard', html:`
 <p>Wendell is a semi-retired wizard whose tower appears near the plaza after Lumi's wish (2 starfish and a sand dollar).</p>
 <h3>Inside the tower</h3>
-<p>Wendell works inside his tower (before v1.46 he stood by the door). Walk up to the door and press Enter. The first time you go in, he introduces himself if you haven't met yet, or says hello and tells you where things are if you have.</p>
+<p>Wendell works inside his tower (before v1.47 he stood by the door). Walk up to the door and press Enter. The first time you go in, he introduces himself if you haven't met yet, or says hello and tells you where things are if you have.</p>
 <p><b>Downstairs, the workroom:</b></p>
 <ul><li><b>Wendell</b>, by his cauldron. Talk to him for everything on this page: potions, enchanting lessons, moving buildings, shaping land and the isles.</li>
 <li><b>The cauldron</b>: tap it to go straight to the potion shop.</li>
@@ -723,7 +723,7 @@ ${steps(['Talk to them and pick <b>Come and meet people</b>. They follow you for
 { id:'changes', group:'done', title:'What\'s changed', html:`
 <p>Recent updates, newest first.</p>
 <ul>
-<li><b>v1.46</b>: You can go inside Wendell's tower. He works at his cauldron in a round workroom full of books, candles and a scrying bowl, and a stair leads up to an observatory with a telescope. See Wendell the wizard.</li>
+<li><b>v1.47</b>: You can go inside Wendell's tower. He works at his cauldron in a round workroom full of books, candles and a scrying bowl, and a stair leads up to an observatory with a telescope. See Wendell the wizard.</li>
 <li><b>v1.44</b>: Shop rewards and fishing tips. At the top two tiers Pemberton opens his back room (one piece a week, sometimes a rare plan), Marlo adds a rare shelf and Sprig sells rare flower colors, hybrids and the glowing Lantern Bloom. Marlo and Gill tell you what's biting, more exactly as their shop and boat grow.</li>
 <li><b>v1.41</b>: Juniper's reading nook, Otis's race course, Marigold's flower show and a spring show every April, the newcomer, the Island Charter and Charter Hall, the Driftwood Festival every season, and Starfall Isle with its own bugs and Wendell's two spells. The legendary trip island Starfall Isle is now called Stardrift Isle.</li>
 <li><b>v1.40</b>: Repair, make and enchant your tools. Pippa and Wendell teach enchantments, and scrolls turn up now and then (Fennick sometimes sells one). Two bigger crafting tables, the Carpenter's Bench and the Master Workbench, with pieces of their own. Most woodworking now needs a table nearby.</li>

@@ -1,5 +1,5 @@
 /* =====================================================================
-   v1.46 the inside of Wendell's tower. It's roomier in here than it looks from outside.
+   v1.47 the inside of Wendell's tower. It's roomier in here than it looks from outside.
 
    Ground floor, the workroom: Wendell at his bubbling cauldron, curved bookshelves with a rolling ladder, a star chart,
    floating candles, a workbench and lectern where he teaches enchanting, a scrying bowl that shows the island (moving

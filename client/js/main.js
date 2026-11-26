@@ -989,7 +989,8 @@ class Tree extends Ent {
     const v=S.day.fruit[this.key]; return v===undefined?3:v; }
   refresh(){ const n=this.fruitLeft(), fr=this.obj.userData.fruits||[], per=fr.length>3?2:1; fr.forEach((m,i)=>m.visible=i<n*per); }
   label(){ if (S.equip==='axe' && this.stage>=2) return 'Chop'; if (S.equip==='shovel' && this.stage<=1) return 'Dig up'; if (S.equip==='can' && this.stage<3 && this.rec && this.rec.watered!==today()) return 'Water'; return this.stage>=2 ? 'Shake' : 'Look'; }
-  act(){
+  act(){ return dropGroup('tree:'+this.key, ()=>this.act0()); }   // v1.56 one click picks up everything this tree drops
+  act0(){
     const lab=this.label();
     if ((lab==='Chop'||lab==='Dig up'||lab==='Water') && noEdit()) return;
     if (lab==='Chop') return this.chop();
@@ -998,9 +999,9 @@ class Tree extends Ent {
     if (lab==='Look') return;
     this.shake=1; Snd.rustle(); const tp=this.pos.clone(); tp.y+=2.8; puff(tp, World.season==='winter'?0xffffff:0x6cc050, 6, 0.8, 1, 1.2, 1);
     const n=this.fruitLeft();
-    if (n>0){ track('shake'); S.day.fruit[this.key]=0; if (!VISIT) (S.fruitPicked=S.fruitPicked||{})[this.key]=dayNum(today()); for(let i=0;i<n;i++) setTimeout(()=>dropNear(this.fruit, this.pos, 1.6), 250+i*120); }
-    else if (!S.day.branch[this.key] && Math.random()<0.7){ S.day.branch[this.key]=true; setTimeout(()=>dropNear('softwood', this.pos, 1.6), 300); }
-    const sap=(S.day.sap=S.day.sap||{}); if (!sap[this.key]){ sap[this.key]=1; if (TRIP_THEME==='grove' && !this.rec){ const p=this.pos.clone(); setTimeout(()=>{ dropNear('goldsap', p, 1.4); sparkle(p.clone().add(new THREE.Vector3(0,1.4,0))); }, 380); } else rareRoll('shake', 'goldsap', this.pos); }
+    if (n>0){ track('shake'); S.day.fruit[this.key]=0; if (!VISIT) (S.fruitPicked=S.fruitPicked||{})[this.key]=dayNum(today()); const g=DROP_GRP; for(let i=0;i<n;i++) setTimeout(()=>dropNear(this.fruit, this.pos, 1.6, false, undefined, g), 250+i*120); }
+    else if (!S.day.branch[this.key] && Math.random()<0.7){ S.day.branch[this.key]=true; const g=DROP_GRP; setTimeout(()=>dropNear('softwood', this.pos, 1.6, false, undefined, g), 300); }
+    const sap=(S.day.sap=S.day.sap||{}); if (!sap[this.key]){ sap[this.key]=1; if (TRIP_THEME==='grove' && !this.rec){ const p=this.pos.clone(), g=DROP_GRP; setTimeout(()=>{ dropNear('goldsap', p, 1.4, false, undefined, g); sparkle(p.clone().add(new THREE.Vector3(0,1.4,0))); }, 380); } else rareRoll('shake', 'goldsap', this.pos); }
     save(); setTimeout(()=>this.refresh(),250);
   }
   chop(){
@@ -1030,7 +1031,8 @@ function buildRockModel(r){ const g=new THREE.Group(); const c=[0x9aa1a8,0x8a919
 class Rock extends Ent {
   constructor(idx,x,z,r){ super('rock',x,z,0.95); this.idx=idx; this.solid=true; this.reach=1.9; this.hit=0; this.attach(buildRockModel(r)); }
   label(){ return 'Hit'; }
-  act(){
+  act(){ return dropGroup('rock:'+this.idx, ()=>this.act0()); }   // v1.56 one click picks up everything this rock drops
+  act0(){
     const t = (S.equip==='shovel'||S.equip==='axe') ? S.equip : (hasTool('shovel')?'shovel':(hasTool('axe')?'axe':null));
     if (!t){ toast('Needs a shovel or an axe.'); Snd.fail(); return; }
     if (S.equip!==t) equip(t);
@@ -1063,14 +1065,22 @@ class GroundItem extends Ent {
   constructor(rec){ super('item',rec.x,rec.z,0.35); this.rec=rec; this.reach=1.2; const it=ITEMS[rec.id]; const m=rec.bottle?buildBottle(rec.id):buildItemModel(rec.id); m.scale.setScalar(it.kind==='furniture'?0.6:0.95); const g=new THREE.Group(); g.add(m);
     if (it.rare || it.kind==='plan') this.aura=addAura(g, RARITY_COLORS[rarityLabel(it.rarity)], 0.35, 1.3); this.attach(g); this.hitSphere(0.45,0.3); this.spin=Math.random()*TAU; this.bounce=rec.fresh?1:0; delete rec.fresh; }
   label(){ return 'Pick up'; }
-  act(){ if (this.rec.note){ const i=S.ground.indexOf(this.rec); if (i>=0) S.ground.splice(i,1); this.remove(); save(); Snd.pop(); openNote(this.rec); return; }   // v1.27 bottles with a map or a letter
-    if (!this.rec.beach && noEdit()) return; const id=this.rec.id;
+  act(mode){ if (this.rec.note){ const i=S.ground.indexOf(this.rec); if (i>=0) S.ground.splice(i,1); this.remove(); save(); Snd.pop(); openNote(this.rec); return; }   // v1.27 bottles with a map or a letter
+    if (!this.rec.beach && noEdit()) return;
+    if (!this.take()){ toast('Your bag is full. Sell or drop something first.'); return; }
+    // v1.56: a click or tap (not the keys or the Act button) also picks up the rest of what the same tree or rock dropped
+    if (mode==='tap' && this.rec.g) for (const e of groundGroup(this)){ if (!e.take(true)){ toast('Your bag is full, so the rest is still on the ground.'); break; } } }
+  // into the bag; false if it won't fit. quiet: no pop sound (the first item of a group already made one)
+  take(quiet){ const id=this.rec.id;
     if (ITEMS[id].kind==='plan'){ const fresh=learnPlan(id); if (!fresh){ addClams(ITEMS[id].price); toast(`You already know that plan. Pemberton gave you ${fmt(ITEMS[id].price)} clams for the paper.`); }
-      Snd.pop(); const i=S.ground.indexOf(this.rec); if(i>=0) S.ground.splice(i,1); this.remove(); save(); return; }
-    const res=addItem(id, this.rec.m); if(!res){ toast('Your bag is full. Sell or drop something first.'); return; }
-    for (let k=1;k<(this.rec.n||1);k++){ if (!addItem(id)) break; pickNote(id,'Picked up'); } Snd.pop(); const i=S.ground.indexOf(this.rec); if(i>=0) S.ground.splice(i,1); if (VISIT && this.rec.beach){ (S.day.vpicked=S.day.vpicked||[]).push(Math.round(this.rec.x*10)+','+Math.round(this.rec.z*10)); } this.remove(); { const kd=ITEMS[id].kind; if (kd==='fruit') track('fruit', this.rec.n||1); else if (kd==='shell') track('shell', this.rec.n||1); } save(); itemToast(id, res==='new', 'Picked up'); craftNudge(id); }
+      if (!quiet) Snd.pop(); const i=S.ground.indexOf(this.rec); if(i>=0) S.ground.splice(i,1); this.remove(); save(); return true; }
+    const res=addItem(id, this.rec.m); if(!res) return false;
+    for (let k=1;k<(this.rec.n||1);k++){ if (!addItem(id)) break; pickNote(id,'Picked up'); } if (!quiet) Snd.pop(); const i=S.ground.indexOf(this.rec); if(i>=0) S.ground.splice(i,1); if (VISIT && this.rec.beach){ (S.day.vpicked=S.day.vpicked||[]).push(Math.round(this.rec.x*10)+','+Math.round(this.rec.z*10)); } this.remove(); { const kd=ITEMS[id].kind; if (kd==='fruit') track('fruit', this.rec.n||1); else if (kd==='shell') track('shell', this.rec.n||1); } save(); itemToast(id, res==='new', 'Picked up'); craftNudge(id); return true; }
   update(dt,t){ if (this.aura) this.aura(t,dt); this.obj.children[0].rotation.y=this.spin+Math.sin(t*1.5+this.spin)*0.2; if(this.bounce>0){ this.bounce=Math.max(0,this.bounce-dt*2.2); this.obj.position.y=this.pos.y+Math.abs(Math.sin(this.bounce*Math.PI*2))*this.bounce*1.4; } }
 }
+// v1.56: the other things on the ground from the same drop as e (same tree or rock), nearest first
+function groundGroup(e){ const g=e.rec.g; if (!g) return []; const d=o=>Math.hypot(o.pos.x-e.pos.x, o.pos.z-e.pos.z);
+  return ents.filter(o=>o!==e && o instanceof GroundItem && !o.removed && o.rec.g===g && !o.rec.note && d(o)<8 && Math.abs(o.pos.y-e.pos.y)<4).sort((a,b)=>d(a)-d(b)); }
 class Weed extends Ent {
   constructor(i,x,z){ super('weed',x,z,0.5); this.i=i; this.reach=1.4; const g=buildWeedClump(hashStr(today()+':'+i)%9973+1, 1.45); g.rotation.y=i*1.7; this.attach(g); this.hitSphere(0.6,0.35); }
   label(){ return 'Pull'; }
@@ -1670,13 +1680,16 @@ function hiddenSpot(x,z){
   for (const r of rocks){ if (r.removed) continue; const dz=r.pos.z-z; if (dz>-0.3 && dz<1.7 && Math.abs(r.pos.x-x)<1.15) return true; }
   if (inRects(x, z+1.4, 0.2) || inRects(x, z+2.8, 0.2)) return true;
   return false; }
-function dropNear(id, at, rad=1.4, exact=false, meta){
+/* v1.56: things a tree or rock drops share a group (rec.g). Clicking or tapping one picks up the rest of its group too. */
+var DROP_GRP=null;   // var, not let: dropNear can run before this line does
+function dropGroup(g, fn){ const o=DROP_GRP; DROP_GRP=g; try { return fn(); } finally { DROP_GRP=o; } }
+function dropNear(id, at, rad=1.4, exact=false, meta, grp=DROP_GRP){
   let x=at.x, z=at.z, fallback=null;
   // look for open ground on the camera's side first, and never tuck it behind a tree, rock or building
   for(let k=0;k<40;k++){ const a = k<20 ? Math.random()*Math.PI : Math.random()*TAU, d=exact?0:(rad*0.7+Math.random()*rad*0.6)*(k<30?1:1.6); const tx=at.x+Math.cos(a)*d, tz=at.z+Math.sin(a)*d;
     if(walkable(tx,tz) && !blocked(tx,tz,0.3)){ if (!hiddenSpot(tx,tz)){ x=tx; z=tz; fallback=null; break; } if (!fallback) fallback=[tx,tz]; } }
   if (fallback){ x=fallback[0]; z=fallback[1]; }
-  const rec={ id, x, z, fresh:true }; if(meta) rec.m=meta; S.ground.push(rec); new GroundItem(rec); Snd.pop(); save();
+  const rec={ id, x, z, fresh:true }; if(meta) rec.m=meta; if(grp) rec.g=grp; S.ground.push(rec); new GroundItem(rec); Snd.pop(); save();
 }
 /* Part 3: building the island, rooms, daily reset, sky, dialogue, UI, input, main loop */
 
@@ -4436,7 +4449,7 @@ const unfoundPlans = () => RARE_WORK.filter(r=>!knowsPlan(r.id));
 const rareChance = (k, potion) => RARE_ODDS[k]*(potion && potionOn(potion) ? 2 : 1)*EN.rareMult(k);
 function rareRoll(k, id, at, potion){
   if (GUEST || Math.random()>=rareChance(k, potion)) return false;
-  const p=at.clone(); setTimeout(()=>{ dropNear(id, p, 1.4); sparkle(p.clone().add(new THREE.Vector3(0,1.4,0))); Snd.jingle(); toast('Rare find!', thumb(id), 'new', `${ITEMS[id].name} ${rarityTag(ITEMS[id])}`); }, 450);
+  const p=at.clone(), g=DROP_GRP; setTimeout(()=>{ dropNear(id, p, 1.4, false, undefined, g); sparkle(p.clone().add(new THREE.Vector3(0,1.4,0))); Snd.jingle(); toast('Rare find!', thumb(id), 'new', `${ITEMS[id].name} ${rarityTag(ITEMS[id])}`); }, 450);
   return true; }
 function learnPlan(planId){ if (ITEMS[planId].ench) return EN.learnScroll(planId); const fid=ITEMS[planId].learns;
   if (ITEMS[planId].wood){ if (!learnWood(fid)) return false; Snd.fanfare(); toast(`Woodworking plan: ${ITEMS[fid].name}!`, thumb(fid), 'new', S.craft ? 'It\'s in Woodworking now.' : 'Once Bramble teaches you woodworking, you can make it.'); return true; }
@@ -4445,8 +4458,8 @@ function learnPlan(planId){ if (ITEMS[planId].ench) return EN.learnScroll(planId
   return true; }
 // v1.34: a Woodworking Plan for something you don't know yet (not the starting ones)
 const randomWoodPlan = (r=Math.random) => { const u=woodUnknown().filter(id=>ITEMS['wplan_'+id]); return u.length ? 'wplan_'+u[Math.floor(r()*u.length)] : null; };
-function woodPlanRoll(chance, at){ if (!S.craft || Math.random()>=chance) return false; const pl=randomWoodPlan(); if (!pl) return false; const p=at.clone();
-  setTimeout(()=>{ dropNear(pl, p, 1.2); sparkle(p.clone().add(new THREE.Vector3(0,1,0))); Snd.jingle(); toast('A rolled-up woodworking plan!', thumb(ITEMS[pl].learns), 'new', ITEMS[ITEMS[pl].learns].name); }, 1000); return true; }
+function woodPlanRoll(chance, at){ if (!S.craft || Math.random()>=chance) return false; const pl=randomWoodPlan(); if (!pl) return false; const p=at.clone(), g=DROP_GRP;
+  setTimeout(()=>{ dropNear(pl, p, 1.2, false, undefined, g); sparkle(p.clone().add(new THREE.Vector3(0,1,0))); Snd.jingle(); toast('A rolled-up woodworking plan!', thumb(ITEMS[pl].learns), 'new', ITEMS[ITEMS[pl].learns].name); }, 1000); return true; }
 const randomPlan = (r=Math.random) => { const u=unfoundPlans(); return u.length ? u[Math.floor(r()*u.length)].plan : null; };
 function beachSpot(r){ for(let k=0;k<40;k++){ const a=r()*TAU, d=(40+r()*16)*SC; const x=Math.cos(a)*d, z=Math.sin(a)*d; if(isBeach(x,z) && !onDock(x,z)) return [x,z]; } return null; }
 // v1.13: daily stock is rolled by rarity. Investing in a shop makes rare and very rare pieces more likely.

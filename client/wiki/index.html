@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Driftwood Isle Wiki</title>
+<meta name="description" content="The complete guide to Driftwood Isle: fish, bugs, furniture, Wendell's isles, boat trips, pen pals and every island story.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{ --cream:#fff8ea; --paper:#fffdf6; --line:#e7d1a6; --brown:#5b4332; --soft:#8a7058; --leaf:#7cc35a; --leafd:#4f9a3a; --peach:#f3a072; --sky:#7fd3e8; --sea:#2f7f9a; }
+*{ box-sizing:border-box }
+html{ -webkit-text-size-adjust:100% }
+body{ margin:0; font-family:'Nunito',system-ui,sans-serif; color:var(--brown); background:var(--cream); line-height:1.55; font-size:16px }
+a{ color:var(--sea) }
+header{ position:sticky; top:0; z-index:20; display:flex; align-items:center; gap:12px; padding:10px 18px; background:linear-gradient(180deg,#8fdcec,#6cc6dc); color:#fff; box-shadow:0 2px 0 #4fa9c0 }
+header .logo{ font-family:'Fredoka',sans-serif; font-weight:700; font-size:22px; color:#fff; text-decoration:none; text-shadow:0 2px 0 rgba(0,0,0,.12); white-space:nowrap }
+header .logo small{ font-weight:500; opacity:.9; font-size:15px; margin-left:4px }
+header .play{ margin-left:auto; background:var(--leaf); color:#fff; font-family:'Fredoka',sans-serif; font-weight:600; text-decoration:none; padding:7px 14px; border-radius:999px; box-shadow:0 3px 0 var(--leafd); white-space:nowrap }
+#menuBtn{ display:none; background:rgba(255,255,255,.25); border:0; color:#fff; border-radius:10px; width:38px; height:38px; font-size:20px; cursor:pointer }
+.search{ position:relative; flex:1; max-width:420px }
+#q{ width:100%; padding:9px 14px; border-radius:999px; border:0; font:inherit; color:var(--brown); background:#fff; outline:none; box-shadow:inset 0 1px 3px rgba(0,0,0,.12) }
+#results{ position:absolute; top:44px; left:0; right:0; background:#fff; border:2px solid var(--line); border-radius:14px; box-shadow:0 10px 30px rgba(91,67,50,.2); max-height:70vh; overflow:auto; padding:6px }
+#results a{ display:block; padding:7px 10px; border-radius:8px; color:var(--brown); text-decoration:none; font-weight:700 }
+#results a span{ font-weight:400; color:var(--soft); font-size:13px; margin-left:6px }
+#results a:hover{ background:var(--cream) }
+.rh{ font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--soft); padding:6px 10px 2px }
+.wrap{ display:flex; max-width:1280px; margin:0 auto }
+nav{ width:260px; flex:none; padding:18px 10px 40px 18px; position:sticky; top:58px; align-self:flex-start; max-height:calc(100vh - 58px); overflow:auto }
+.ng{ margin-bottom:14px }
+.ngt{ font-family:'Fredoka',sans-serif; font-weight:600; font-size:13px; text-transform:uppercase; letter-spacing:.07em; color:var(--peach); padding:0 10px 4px }
+nav a{ display:block; padding:5px 10px; border-radius:9px; color:var(--brown); text-decoration:none; font-size:15px }
+nav a:hover{ background:#fbecd0 }
+nav a.on{ background:#fff; box-shadow:0 0 0 2px var(--line); font-weight:800 }
+#ver{ font-size:12px; color:var(--soft); padding:6px 10px }
+main{ flex:1; min-width:0; padding:22px 28px 60px }
+#page{ background:var(--paper); border:2px solid var(--line); border-radius:22px; padding:26px 32px 30px; box-shadow:0 4px 0 var(--line) }
+.crumb{ font-size:13px; color:var(--peach); font-weight:800; text-transform:uppercase; letter-spacing:.06em }
+h1{ font-family:'Fredoka',sans-serif; font-weight:700; font-size:32px; margin:2px 0 14px; line-height:1.15 }
+h3{ font-family:'Fredoka',sans-serif; font-weight:600; font-size:20px; margin:26px 0 8px }
+p,li{ max-width:78ch }
+ul,ol{ padding-left:22px }
+li{ margin:4px 0 }
+ol.steps{ counter-reset:s; list-style:none; padding:0 }
+ol.steps li{ counter-increment:s; position:relative; padding:8px 12px 8px 46px; margin:8px 0; background:#fff; border-radius:12px; border:1px solid #f0e2c4 }
+ol.steps li::before{ content:counter(s); position:absolute; left:10px; top:8px; width:26px; height:26px; border-radius:50%; background:var(--sky); color:#fff; font-family:'Fredoka',sans-serif; font-weight:600; text-align:center; line-height:26px }
+ul.check{ list-style:none; padding:0 }
+ul.check li{ padding:6px 0 6px 30px; position:relative; border-bottom:1px dashed #efdcb8 }
+ul.check li::before{ content:''; position:absolute; left:2px; top:9px; width:16px; height:16px; border:2px solid var(--leafd); border-radius:5px }
+.tip,.note{ margin:16px 0; padding:11px 15px; border-radius:12px; max-width:78ch }
+.tip{ background:#eaf7df; border-left:5px solid var(--leaf) }
+.tip b{ color:var(--leafd); margin-right:4px }
+.note{ background:#e8f6fb; border-left:5px solid var(--sky) }
+.tw{ overflow-x:auto; margin:10px 0 4px; border-radius:12px; border:1px solid #efdcb8 }
+table.t{ border-collapse:collapse; width:100%; font-size:14.5px; background:#fff }
+.tw table.t{ border:0 }
+table.t:not(.data){ border:1px solid #efdcb8; border-radius:12px; overflow:hidden; margin:10px 0 }
+table.t th{ text-align:left; background:#fbefd6; font-family:'Fredoka',sans-serif; font-weight:600; padding:8px 10px; white-space:nowrap; position:sticky; top:0 }
+table.t td{ padding:7px 10px; border-top:1px solid #f4e7cc; vertical-align:top }
+table.t tr:nth-child(even) td{ background:#fffaf0 }
+th.sortable{ cursor:pointer } th.sortable::after{ content:' \2195'; opacity:.35 }
+th[data-dir=asc]::after{ content:' \2191'; opacity:.9 } th[data-dir=desc]::after{ content:' \2193'; opacity:.9 }
+tr.hl td{ background:#fff1b8 !important; transition:background 2s }
+.rar{ display:inline-block; font-size:12px; font-weight:800; color:#fff; background:var(--rc); padding:1px 8px; border-radius:999px; white-space:nowrap }
+.tag{ display:inline-block; font-size:11px; font-weight:800; color:var(--sea); background:#e2f4f9; padding:0 6px; border-radius:6px; vertical-align:1px }
+.chips{ display:flex; flex-wrap:wrap; gap:6px; margin:12px 0 4px }
+.chip{ font:inherit; font-size:13px; font-weight:700; border:2px solid var(--line); background:#fff; color:var(--brown); border-radius:999px; padding:3px 11px; cursor:pointer }
+.chip.on{ background:var(--brown); border-color:var(--brown); color:#fff }
+.count,.muted{ font-size:13px; color:var(--soft) }
+.pn{ display:flex; justify-content:space-between; gap:10px; margin-top:34px; padding-top:16px; border-top:2px dashed var(--line) }
+.pn a{ font-weight:800; text-decoration:none }
+@media (max-width:860px){
+  #menuBtn{ display:block }
+  header{ padding:8px 10px; gap:8px; flex-wrap:wrap }
+  header .logo small{ display:none }
+  header .play{ padding:6px 11px; font-size:14px }
+  .search{ order:5; flex-basis:100%; max-width:none }
+  nav{ position:fixed; top:0; bottom:0; left:0; z-index:30; background:var(--cream); width:280px; max-height:none; transform:translateX(-105%); transition:transform .2s; box-shadow:4px 0 20px rgba(0,0,0,.15); padding-top:16px }
+  body.menu nav{ transform:none }
+  body.menu::after{ content:''; position:fixed; inset:0; background:rgba(60,40,20,.3); z-index:25 }
+  main{ padding:12px 10px 40px }
+  #page{ padding:18px 16px 22px; border-radius:16px }
+  h1{ font-size:26px }
+}
+</style>
+</head>
+<body>
+<header>
+  <button id="menuBtn" aria-label="Menu">&#9776;</button>
+  <a class="logo" href="#welcome">Driftwood Isle <small>Wiki</small></a>
+  <div class="search"><input id="q" type="search" placeholder="Search fish, furniture, Wendell, reef..." autocomplete="off"><div id="results" hidden></div></div>
+  <a class="play" href="/">Play</a>
+</header>
+<div class="wrap">
+  <nav><div id="nav"></div><div id="ver"></div></nav>
+  <main><article id="page"><p>Loading the guide...</p></article></main>
+</div>
+<script type="module" src="./wiki.js"></script>
+</body>
+</html>

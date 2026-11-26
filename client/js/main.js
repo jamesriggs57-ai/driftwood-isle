@@ -947,14 +947,14 @@ class Tree extends Ent {
     const n=this.fruitLeft();
     if (n>0){ track('shake'); S.day.fruit[this.key]=0; if (!VISIT) (S.fruitPicked=S.fruitPicked||{})[this.key]=dayNum(today()); for(let i=0;i<n;i++) setTimeout(()=>dropNear(this.fruit, this.pos, 1.6), 250+i*120); }
     else if (!S.day.branch[this.key] && Math.random()<0.7){ S.day.branch[this.key]=true; setTimeout(()=>dropNear('softwood', this.pos, 1.6), 300); }
-    const sap=(S.day.sap=S.day.sap||{}); if (!sap[this.key]){ sap[this.key]=1; if (TRIP_THEME==='grove' && !this.rec){ if (haulLeft()>0){ const p=this.pos.clone(); setTimeout(()=>{ dropNear('goldsap', p, 1.4); sparkle(p.clone().add(new THREE.Vector3(0,1.4,0))); }, 380); } else capNote(); } else rareRoll('shake', 'goldsap', this.pos); }
+    const sap=(S.day.sap=S.day.sap||{}); if (!sap[this.key]){ sap[this.key]=1; if (TRIP_THEME==='grove' && !this.rec){ const p=this.pos.clone(); setTimeout(()=>{ dropNear('goldsap', p, 1.4); sparkle(p.clone().add(new THREE.Vector3(0,1.4,0))); }, 380); } else rareRoll('shake', 'goldsap', this.pos); }
     save(); setTimeout(()=>this.refresh(),250);
   }
   chop(){
     const tier=toolTier('axe'), one=EN.oneSwing('axe'), out=EN.output('axe'); if(!useTool('axe')) return;   // v1.40
     const n=one?3:(S.day.chop[this.key]||0); S.day.chop[this.key]=n+1; S.stats.chopped++; track('chop');
     this.shake=0.7; Snd.chop(); puff(this.pos.clone().add(new THREE.Vector3(0,1,0)), 0xd8b080, 5, 0.4, 1.5, 0.8, 0.5);
-    if (n<3){ for (let k=0;k<out;k++){ dropNear('wood', this.pos, 1.6); if (tier>=2) dropNear('wood', this.pos, 1.6); } if (TRIP_THEME==='grove' && !this.rec && n===0){ if (haulLeft()>0) dropNear('heartwood', this.pos, 1.6); else capNote(); } else rareRoll('chop', 'heartwood', this.pos); }
+    if (n<3){ for (let k=0;k<out;k++){ dropNear('wood', this.pos, 1.6); if (tier>=2) dropNear('wood', this.pos, 1.6); } if (TRIP_THEME==='grove' && !this.rec && n===0) dropNear('heartwood', this.pos, 1.6); else rareRoll('chop', 'heartwood', this.pos); }
     else if (TOOLS.axe.tiers[tier].nofell && !one) toast('Too flimsy to fell it.');
     else { Snd.timber(); for (let k=0;k<(one?EN.ONE_SWING_WOOD:out);k++) dropNear('wood', this.pos, 1.6); EN.scrollRoll('fell', this.pos);
       if (this.rec){ S.plants.splice(S.plants.indexOf(this.rec),1); } else S.cut[this.key]='gone';
@@ -985,7 +985,7 @@ class Rock extends Ent {
     if (used>=4){ toast('The rock is all tapped out for today.'); return; }
     if (!useTool(t)) return; const hits=t==='shovel'&&EN.oneSwing('shovel') ? 4-used : 1, out=EN.output(t);   // v1.40: One-Swing taps the rock out at once
     for (let h=0;h<hits;h++){ const u=used+h; S.day.rock[this.idx]=u+1;
-    if (TRIP_THEME==='clamstone'){ const left=haulLeft(); if (left<=0){ capNote(); dropNear('stone', this.pos, 1.7); } else { const amt=Math.min(left, [1000,2000,4000,8000][u]); addClams(amt); Snd.coin(); toast('A pouch of '+fmt(amt)+' clams popped out!'); } }   // v1.27
+    if (TRIP_THEME==='clamstone'){ const amt=[1000,2000,4000,8000][u]; addClams(amt); Snd.coin(); toast('A pouch of '+fmt(amt)+' clams popped out!'); }   // v1.27; v1.48 no haul cap
     else if (this.idx===S.day.lucky){ const amt=[100,200,400,800][u]; addClams(amt); Snd.coin(); toast('A pouch of '+amt+' clams popped out!'); }
     else { for (let k=0;k<out;k++){ const x=Math.random(), q=this.rich?[0.35,0.6]:[0.6,0.88]; dropNear(x<q[0]?'stone':(x<q[1]?'clay':'iron'), this.pos, 1.7); } rareRoll(World.night>0.5?'rockNight':'rock', 'starstone', this.pos); } }
     save();
@@ -1443,7 +1443,6 @@ const fishes=[];
 function fishPool(type){ const h=Time.hour(), m=Time.month(); return Object.values(ITEMS).filter(i=>i.kind==='fish' && i.where===type && inMonths(m,i.months) && inHours(h,i.hours)); }
 function waterSpot(){ for(let k=0;k<40;k++){ const a=Math.random()*TAU, d=4+Math.random()*12; const x=player.pos.x+Math.cos(a)*d, z=player.pos.z+Math.sin(a)*d; if(isFishWater(x,z) && rawHeight(x,z)<-0.45 && !onDock(x,z) && !onBridge(x,z)) return [x,z]; } return null; }
 function spawnFish(){ const p=waterSpot(); if(!p) return; const type=waterType(p[0],p[1]);
-  if (TRIP_THEME==='shimmer' && haulLeft()<=0) return;   // v1.27: Shimmer Lagoon only holds so much
   const pool=(TRIP_THEME==='shimmer' && type!=='spring' ? Object.values(ITEMS).filter(i=>i.kind==='fish' && (i.rarity??5)<1.5) : fishPool(type)).filter(allowedFind); if(!pool.length) return; const sp=SR.tipSwap(tierPick(Math.random, pool, i=>luckW(i,'fish'), 'fish'), pool, 'marlo');   // v1.44 Marlo's tip
   // v1.26: the fish's length is decided when it spawns, and its shadow shows it: a big shadow is a big one for its species
   const meta=rollStats(sp.id), sz=(SIZE_SCALE[sp.size]||0.85)*(0.8+0.45*(meta.f||0));
@@ -2055,25 +2054,26 @@ function openHallPanel(){
    Each one fills up over 3 days and then waits for you. Fish come at the usual odds, so a rare one is still rare.
    ===================================================================== */
 const INC_DAYS=3, INC_UPGRADE_WAIT=7;
+// v1.48: every tier here and every stake costs about a month of what it brings in (see the wiki's passive income page)
 const INCOME = {
   boat:{ who:'Gill', voice:400, acc:['beanie'], accC:0x3a6ab0, unit:['fish','fish'], hint:'a fisherman sitting by a wrecked rowboat on the beach',
     // v1.37: Gill's boats wait on the reef in Cay Bay (talkGill). Bigger boats need planks from the workshop, and iron fittings.
-    tiers:[{ name:'Dinghy', cost:25000, per:2 }, { name:'Trawler', cost:150000, per:5, need:[['plank',40]] }, { name:'Driftwood Queen', cost:400000, per:9, need:[['plank',60],['fitting',10]] }],
+    tiers:[{ name:'Dinghy', cost:25000, per:2 }, { name:'Trawler', cost:125000, per:5, need:[['plank',40]] }, { name:'Driftwood Queen', cost:300000, per:9, need:[['plank',60],['fitting',10]] }],
     meet:['Oh, hey there. Don\'t mind me. Just sitting with what\'s left of my boat.','Storm took her right out from under me. I fished these waters my whole life.',
       'Tell you what. If you bought me a new rowboat, I\'d split the catch with you. A couple of fish a day, and I\'ll keep them in a crate right here.'],
     up:['Business is good! The rowboat\'s doing fine, but she can only carry so much.','Get me a {name} and I could bring in a lot more for you.'] },
   bees:{ who:'Hollis', voice:300, acc:['beanie'], accC:0xe8b020, unit:['honey jar','honey jars'], hint:'a beekeeper out in a quiet meadow',
-    tiers:[{ name:'Beehive', cost:20000, per:2 }, { name:'Three Hives', cost:90000, per:5 }, { name:'Apiary', cost:300000, per:9 }],
+    tiers:[{ name:'Beehive', cost:13000, per:2 }, { name:'Three Hives', cost:35000, per:5 }, { name:'Apiary', cost:60000, per:9 }],
     meet:['Shh. Careful now. The bees are deciding whether they like you.','I keep bees, or I did. My last hive got blown over and the colony moved on.',
       'Buy me a new hive and I\'ll share the honey. More flowers nearby means more honey, so plant some if you like.'],
     up:['The bees are thriving. They want more room, I think.','A {name} would mean a lot more honey for both of us.'] },
   orchard:{ who:'Russet', voice:520, acc:['headband'], accC:0x7ab04a, unit:['piece of fruit','pieces of fruit'], hint:'an orchard keeper among the fruit trees',
-    tiers:[{ name:'Fruit Ladder', cost:20000, per:4 }, { name:'Pony Cart', cost:100000, per:8 }, { name:'Cider Shed', cost:300000, per:14 }],
+    tiers:[{ name:'Fruit Ladder', cost:14000, per:4 }, { name:'Pony Cart', cost:30000, per:8 }, { name:'Cider Shed', cost:50000, per:14 }],
     meet:['Hello! Just admiring these trees. Somebody ought to be picking them properly.','I used to run an orchard back home. All I need is a good ladder.',
       'Get me one and I\'ll pick fruit while you\'re busy, and keep it in baskets for you.'],
     up:['These trees could give a lot more, you know.','With a {name}, I could get through twice the orchard.'] },
   books:{ who:'Quill', voice:640, acc:['glasses'], accC:0x2a2a2a, unit:['clam','clams'], hint:'a bookkeeper by the general store',
-    tiers:[{ name:'Ledger', cost:25000, per:800 }, { name:'Counting House', cost:120000, per:2000 }, { name:'Trading Office', cost:400000, per:4500 }],
+    tiers:[{ name:'Ledger', cost:24000, per:800 }, { name:'Counting House', cost:60000, per:2000 }, { name:'Trading Office', cost:135000, per:4500 }],
     meet:['Ah! You\'re the one who\'s been backing the shops. I\'ve been watching the numbers.','Nobody is collecting your share of the profits! It\'s a scandal.',
       'Buy me a proper ledger and I\'ll keep the books. Your cut piles up here every day, for each shop you\'ve backed.'],
     up:['The shops are doing well, and the paperwork is piling up.','A {name} and I could squeeze a lot more out of every shop you back.'] },
@@ -2729,7 +2729,7 @@ function pinesRegrow(){
    ===================================================================== */
 if (!S.stakes) S.stakes={};
 const STAKES = {
-  shop:{ unit:'plank', tiers:[{ name:'A share', cost:30000, per:900, extra:1 }, { name:'Partner', cost:140000, per:2200, extra:2 }, { name:'Co-owner', cost:420000, per:4800, extra:3 }],
+  shop:{ unit:'plank', tiers:[{ name:'A share', cost:30000, per:900, extra:1 }, { name:'Partner', cost:85000, per:2200, extra:2 }, { name:'Co-owner', cost:170000, per:4800, extra:3 }],
     due:()=>SY.shop && SY.shop.st==='open' && sday()-(SY.shop.built||0)>=7 && (SY.shop.made||0)>=100,
     offer:['You raised a whole forest for me. And you keep bringing wood.','Least I can do is cut you in. Put some clams into the shop and you get a share of every plank I sell, plus a few planks.','Come by the workshop and we\'ll sort it out.'] },
 };
@@ -2856,7 +2856,7 @@ function wendellLetter(){ if (VISIT || GUEST || TRIP || !SY.wl || sday2()<=SY.wl
 
 /* ---------- Hollis's apiary ---------- */
 const BEE_COLORS=6;
-INCOME.bees.tiers.push({ name:'Grand Apiary', cost:500000, per:14, gate:()=>!!(SY.apiary && SY.apiary.st==='done') });
+INCOME.bees.tiers.push({ name:'Grand Apiary', cost:185000, per:14, gate:()=>!!(SY.apiary && SY.apiary.st==='done') });
 function colorFam(c){ const r=(c>>16&255)/255, g=(c>>8&255)/255, b=(c&255)/255, mx=Math.max(r,g,b), mn=Math.min(r,g,b), l=(mx+mn)/2, d=mx-mn;
   if (l<0.2) return 'dark'; if (d<0.12) return l>0.6 ? 'white' : 'dark';
   let h = mx===r ? ((g-b)/d)%6 : mx===g ? (b-r)/d+2 : (r-g)/d+4; h*=60; if (h<0) h+=360;
@@ -2990,7 +2990,7 @@ function lightChoicesMarlo(k, menu){
     { label:`Order it (${fmt(LENS_COST)})`, fn:()=>{ if (noEdit()) return; if (S.clams<LENS_COST){ dialog(nm, v, ['Bit short, mate. No rush.'], menu); return; } S.clams-=LENS_COST; L.lens=1; L.lensDay=sday2(); updateHUD(); save(); Snd.coin(); dialog(nm, v, ['Lovely. It\'ll be up there by morning.'], menu); } },
     { label:'Not yet', alt:true, fn:menu } ]) }]; }
 STAKES.wick={ unit:'ticket_moonlit', place:'in the night voyages', extraWord:t=>`now and then a Moonlit ticket`,
-  tiers:[{ name:'A share', cost:25000, per:800, extra:0.15 }, { name:'Partner', cost:120000, per:2000, extra:0.3 }, { name:'Co-owner', cost:400000, per:4500, extra:0.5 }],
+  tiers:[{ name:'A share', cost:25000, per:800, extra:0.15 }, { name:'Partner', cost:65000, per:2000, extra:0.3 }, { name:'Co-owner', cost:145000, per:4500, extra:0.5 }],
   due:()=>!!(SY.light && (SY.light.nv||0)>=1),
   offer:['Folks will pay for the dark. You\'ll get a cut of every fare.','Put some clams into the boat and a share of the takings is yours, with a ticket now and then.'] };
 // what Wick says about the lighthouse (called from his menu)
@@ -3007,10 +3007,10 @@ function wickChoices(go, back){
 /* ---------- Pemberton's Forge on Hollow Crags ---------- */
 const FORGE_PROJECT={ clams:200000, need:[['iron',30],['stone',30],['plank',20]] }, FIT_IRON=5, fitCap=()=>10, FORGE_FURN=[['ironlantern',4,1500],['irongate',8,2500],['weathervane',5,2000]];
 const cragsIsle = () => ISLES.find(I=>I.kind==='crags');
-STAKES.forge={ unit:'fitting', place:'in the forge', tiers:[{ name:'A share', cost:30000, per:900, extra:1 }, { name:'Partner', cost:140000, per:2200, extra:2 }, { name:'Co-owner', cost:420000, per:4800, extra:3 }],
+STAKES.forge={ unit:'fitting', place:'in the forge', tiers:[{ name:'A share', cost:30000, per:900, extra:1 }, { name:'Partner', cost:120000, per:2200, extra:2 }, { name:'Co-owner', cost:225000, per:4800, extra:3 }],
   due:()=>!!(SY.forge && SY.forge.st==='open' && (SY.forge.made||0)>=10),
   offer:['You found the iron. A share of the forge is only right.','Put some clams in and you get a cut of what it brings in, and a few fittings besides. Come by the forge.'] };
-STAKES.tea={ unit:'teacake', place:'in the tea room', tiers:[{ name:'A share', cost:25000, per:800, extra:1 }, { name:'Partner', cost:120000, per:2000, extra:2 }, { name:'Co-owner', cost:400000, per:4500, extra:3 }],
+STAKES.tea={ unit:'teacake', place:'in the tea room', tiers:[{ name:'A share', cost:25000, per:800, extra:1 }, { name:'Partner', cost:100000, per:2000, extra:2 }, { name:'Co-owner', cost:195000, per:4500, extra:3 }],
   due:()=>!!(SY.tea && SY.tea.st==='open' && sday2()-(SY.tea.built||0)>=7 && (SY.tea.nsold||0)>=30),
   offer:['The tea room\'s paying for itself already. I want you to have a slice.','Put some clams in and a share of the takings is yours, with a few cakes besides. Come by the tea room.'] };
 function forgeChoices(k, menu){
@@ -3217,7 +3217,7 @@ const dunesLM = () => { const I=ISLES.find(I=>I.kind==='dunes'); return I && I.l
 const MILL_GRIND=2, millCap = () => SY.mill && SY.mill.wheel ? 20 : 10, WHEEL_COST=15000;
 const millOpen = () => !!(SY.mill && SY.mill.st==='grain');
 const millName = () => `${npcName(SY.mill.owner||dreamHolder('mill'))}'s Mill`;
-STAKES.mill={ unit:'flour', place:'in the mill', tiers:[{ name:'A share', cost:25000, per:800, extra:2 }, { name:'Partner', cost:120000, per:2000, extra:3 }, { name:'Co-owner', cost:400000, per:4500, extra:5 }],
+STAKES.mill={ unit:'flour', place:'in the mill', tiers:[{ name:'A share', cost:25000, per:800, extra:2 }, { name:'Partner', cost:75000, per:2000, extra:3 }, { name:'Co-owner', cost:160000, per:4500, extra:5 }],
   due:()=>!!(SY.mill && SY.mill.wheel),
   offer:['Half this flour\'s yours by rights. You found the sails and the stone and the water.','Put some clams in and you get a cut of what the mill brings in, and a sack of flour or two besides. Come by the mill.'] };
 COMMISSIONS.push({ id:'millsails', need:[['plank',15],['sailcloth',3]], clams:0, days:1, gate:()=>!!(SY.mill && SY.mill.st==='sails') && !countItem('millsails') && !(SY.shop.comm && SY.shop.comm.id==='millsails') });
@@ -3291,7 +3291,7 @@ function postRoutes(){ const P=SY.post, R=(P.routes=P.routes||{}), T=routeTowns(
   for (const [town,o] of Object.entries(T)){ if (!R[town]) R[town]={ kind:o.kind, lvl:0, pal:o.pal }; else if (!S.contacts[R[town].pal]) R[town].pal=o.pal; }
   return Object.entries(R).filter(([town,r])=>S.contacts[r.pal]); }
 STAKES.post={ unit:'melon_seeds', place:'in the post office', extraWord:t=>`now and then a packet of foreign seeds`,
-  tiers:[{ name:'A share', cost:25000, per:800, extra:0.5 }, { name:'Partner', cost:120000, per:2000, extra:1 }, { name:'Co-owner', cost:400000, per:4500, extra:1.5 }],
+  tiers:[{ name:'A share', cost:25000, per:800, extra:0.5 }, { name:'Partner', cost:75000, per:2000, extra:1 }, { name:'Co-owner', cost:160000, per:4500, extra:1.5 }],
   due:()=>!!(SY.post && Object.values(SY.post.routes||{}).filter(r=>r.lvl>=2).length>=3),
   offer:['Postage adds up. Let me share it.','Put some clams in and you get a cut of every stamp, and seeds from the far towns now and then. Come by the post office.'] };
 function refreshPost(){
@@ -3334,7 +3334,7 @@ const BATH_PROJECT={ clams:100000, need:[['plank',60],['stone',20]] }, PIPE={ cl
 const BATH_UP=[{ key:'steam', clams:40000, need:[['stone',20],['plank',10]], name:'a steam room' }, { key:'rock', clams:80000, need:[['stone',30]], name:'rock pools looking out to sea' }];
 const bathOpen = () => !!(SY.bath && SY.bath.st==='open');
 const bathStage = () => !SY.bath ? 0 : SY.bath.st==='open' ? (SY.bath.rock===2 ? 4 : SY.bath.steam===2 ? 3 : 2) : ['pool','building'].includes(SY.bath.st) ? 1 : 0;
-STAKES.bath={ unit:'bathsalts', place:'in the bathhouse', tiers:[{ name:'A share', cost:25000, per:800, extra:1 }, { name:'Partner', cost:120000, per:2000, extra:2 }, { name:'Co-owner', cost:400000, per:4500, extra:3 }],
+STAKES.bath={ unit:'bathsalts', place:'in the bathhouse', tiers:[{ name:'A share', cost:25000, per:800, extra:1 }, { name:'Partner', cost:80000, per:2000, extra:2 }, { name:'Co-owner', cost:160000, per:4500, extra:3 }],
   due:()=>!!(SY.bath && SY.bath.steam===2),
   offer:['You dug the spring. You should get a cut of every soak.','Visitors pay at the door now, merchants and friends from off the island. Put some clams in and a share of that is yours, with bath salts besides. Come by the bathhouse.'] };
 // Wendell's divining: three elixirs, five vents, one of them real
@@ -3471,7 +3471,7 @@ const BELL_GLASS=20000, LENS3=8000, CROW={ iron:3, clams:1500 }, CHARTS=4;
 const wreckOpen = layer => !!(SY.wreck && (layer==='deck' ? SY.wreck.bell : (SY.wreck.layers||{})[layer]));
 COMMISSIONS.push({ id:'bellframe', need:[['plank',25]], clams:0, days:1, gate:()=>!!(SY.wreck && !SY.wreck.bell) && !countItem('bellframe') && !(SY.shop.comm && SY.shop.comm.id==='bellframe') });
 STAKES.antiq={ unit:'shiplantern', place:'in the antiques shop', extraWord:t=>'now and then a piece of salvage',
-  tiers:[{ name:'A share', cost:25000, per:800, extra:0.15 }, { name:'Partner', cost:120000, per:2000, extra:0.3 }, { name:'Co-owner', cost:400000, per:4500, extra:0.5 }],
+  tiers:[{ name:'A share', cost:25000, per:800, extra:0.15 }, { name:'Partner', cost:70000, per:2000, extra:0.3 }, { name:'Co-owner', cost:155000, per:4500, extra:0.5 }],
   due:()=>!!(SY.antiq && SY.antiq.st==='open'),
   offer:['None of this would be here without you.','Put some clams into the shop and a share of what it makes is yours, and a lantern from the wreck now and then. Come by the shop.'] };
 const LOGBOOK=[
@@ -6644,14 +6644,13 @@ const OWN = TRIP ? (BOOT.own || {}) : S;   // your own island's save, even while
 const tripRand = k => mulberry32(hashStr(S.seed+':v127:'+k));
 const atNight = () => { const h=Time.hour(); return h>=19.5 || h<5; };
 
-/* ---- haul cap for rare and legendary islands: clams plus the sell value of what you've gathered here ---- */
+/* ---- what you've gathered on this island: clams plus the sell value of what you picked up (gifts don't count).
+   v1.48: rare and legendary islands no longer stop at 200,000; your bag is the limit. Kept for the #dev tools. ---- */
 if (TRIP && TX.clams0===undefined){ TX.clams0=S.clams; save(); }
 function haulValue(){
   const t=BOOT.trip||{}, start=t.start||{}, now=invCounts(), gift=(TX&&TX.gifted)||{}; let v=Math.max(0, S.clams-(TX.clams0??S.clams));
   for (const [id,n] of Object.entries(now)){ const d=n-(start[id]||0)-(gift[id]||0); if (d>0 && ITEMS[id]) v+=d*(ITEMS[id].price||0); }
   return v; }
-const haulLeft = () => SPECIAL_ISLE ? VY.HAUL_CAP-haulValue() : 1e12;
-function capNote(){ if (TX.capTold) return; TX.capTold=true; save(); toast('This island has given all it has to give.', null, '', `You've gathered ${fmt(VY.HAUL_CAP)} clams' worth here. Gifts don't count.`); }
 const noteGift = (id, n=1) => { if (!TX) return; (TX.gifted=TX.gifted||{})[id]=((TX.gifted||{})[id]||0)+n; save(); };
 
 /* ---- small models ---- */
@@ -6996,7 +6995,7 @@ function setupSpecial(){
   const th=TRIP_THEME, nearDock=(d=6)=>openSpotNear(DOCK.x0-4, DOCK.z, 3, d, tripRand('sign'));
   const sp=nearDock(); const lines={ clamstone:['Clamstone Isle','Every rock on this island has clams in it. Hit them all!'], grove:['Golden Grove','Shake a tree for golden sap. Chop one for heartwood.'],
     starfall:['Stardrift Isle','The stars fall here every night. Pick them up before the tide takes them.'], shimmer:['Shimmer Lagoon','Only the rarest fish swim in these waters. Bring a good rod.'] }[th];
-  if (sp && lines) placeSign(sp[0], sp[1], lines[0], [lines[1], `(There's only so much on any island. About ${fmt(VY.HAUL_CAP)} clams' worth, then it's spent.)`]);
+  if (sp && lines) placeSign(sp[0], sp[1], lines[0], [lines[1]]);
   const H=HOSTS[th]; if (H && LAY.host){ const [hx,hz]=LAY.host; clearPatch(hx,hz,6);
     const obj=buildCottage('host_'+th, { roofC:H.roof, accent:0xe8c070 }); const b=placeCottage('host', hx, hz, obj, 'Knock', ()=>{ Snd.door(); toast(`${H.name} is outside.`); });
     const d=b.doorPt, p=openSpotNear(d[0], d[1], 1.4, 3, tripRand('host'))||d;
@@ -7038,8 +7037,10 @@ function talkLibrary(H){ const v=H.voice, nm=H.name;
     openPanel('Choose a plan'); pBody.innerHTML=u.map(r=>`<div class="row"><img src="${thumb(r.id)}"><div class="grow"><div class="nm">${ITEMS[r.id].name}</div><div class="sub">Needs ${Object.entries(r.mats).map(([k,n])=>n+' '+ITEMS[k].name).join(', ')}</div></div><button class="btn" data-p="${r.plan}">Take</button></div>`).join('');
     pBody.querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>{ TX.libPlan=b.dataset.p; save(); panelClose=null; closePanel(); learnPlan(b.dataset.p); }); }); }
 let starT=20;
-function starfallTick(dt){ if (TRIP_THEME!=='starfall' || World.inside) return; starT-=dt; if (starT>0) return; starT=25+Math.random()*30;
-  if (haulLeft()<=0) return capNote(); const p=openSpotNear(player.pos.x, player.pos.z, 4, 14, Math.random); if (!p) return;
+const STARFALL_SHOWER=100, STAR_GAP=[10,14];   // v1.48: with no haul cap, one visit's shower is 100 falling stars (plus the 22 already lying about), one every 10 to 14 seconds, so about 20 minutes for all of them
+function starfallTick(dt){ if (TRIP_THEME!=='starfall' || World.inside) return; starT-=dt; if (starT>0) return; starT=STAR_GAP[0]+Math.random()*(STAR_GAP[1]-STAR_GAP[0]);
+  if ((TX.fell||0)>=STARFALL_SHOWER){ if (!TX.showerTold){ TX.showerTold=1; save(); toast('The star shower is over.', null, '', 'Whatever fell is yours. Pick up the last of them before you sail home.'); } return; }
+  const p=openSpotNear(player.pos.x, player.pos.z, 4, 14, Math.random); if (!p) return; TX.fell=(TX.fell||0)+1; save();
   const s=buildStar(), y0=26, from=new THREE.Vector3(p[0]+14, y0, p[1]-10), to=new THREE.Vector3(p[0], groundY(p[0],p[1])+0.3, p[1]); s.position.copy(from); scene.add(s); let t=0;
   FALLING.push(dt=>{ t+=dt/1.4; s.position.lerpVectors(from, to, Math.min(1,t)); if (Math.random()<0.6) puff(s.position.clone(), 0xfff4b0, 1, 0.2, 0, 0.8, 0.5); if (t>=1){ scene.remove(s); Snd.jingle(); puff(to.clone(), 0xfff4b0, 10, 1, 2, 1, 0.8); dropNear('starstone', to, 0.2, true); return true; } return false; }); }
 const FALLING=[];
@@ -9025,7 +9026,7 @@ window.__game.v144 = Object.assign({ SR, shopStock:w=>shopStock(w), talkGill:()=
 window.__game.v126 = { townNewDay, applyTown, findHomeSpot, claimHomeSpot, townCap, incomeNewDay, refreshIncome, talkIncome, incCollect, incOf, INCOME, incEnts, openMap, talkSkipperHome, talkSkipperTrip, tripGoHome, tripRecap, storyWho, askToLeave, canAskToLeave, pitchOnBuy, merchantDay, get peddler(){ return peddler; }, get skipper(){ return skipper; }, newSquares, LOAN_MAX_SQ, TRIP, TRIP_THEME, residents, residentHomes, plotEnts, KEEPOUT, Q, PATHS, camTarget, updateCamera, set camDist(v){ camDist=v; }, get camDist(){ return camDist; }, set camYaw(v){ camYaw=v; } };
 window.__game.LETTERS = LETTERS;
 window.__game.v147 = { makeTowerRooms, towerFloor, towerHello, openEyepiece, refreshTowerLook, outdoors, get towerL(){ return towerL; }, get topL(){ return topL; }, get wizard(){ return wizard; }, get tower(){ return towerEnt; }, TW };   // v1.47 test hooks
-window.__game.v127 = { roleMenu, folkMenu, smugglerShop, openNoticeBoard, shellGame, talkWorkshop, talkAttic, talkWizGarden, talkLibrary, anglerWants, get perch(){ return PERCH; }, setupTown, get PLAN(){ return PLAN; }, get TX(){ return TX; }, LAY, haulValue, haulLeft, openContacts, deliverReplies, sendLetter, addContact, canInvite, invitePenpal, readTreasureMap, bottleLetter, openNote, contactPerson, XW, POOLS, lowTide, BRIDGES, DOCK, waterType, VY, Thing };
+window.__game.v127 = { roleMenu, folkMenu, smugglerShop, openNoticeBoard, shellGame, talkWorkshop, talkAttic, talkWizGarden, talkLibrary, anglerWants, get perch(){ return PERCH; }, setupTown, get PLAN(){ return PLAN; }, get TX(){ return TX; }, LAY, haulValue, openContacts, deliverReplies, sendLetter, addContact, canInvite, invitePenpal, readTreasureMap, bottleLetter, openNote, contactPerson, XW, POOLS, lowTide, BRIDGES, DOCK, waterType, VY, Thing };
 // v1.25 test hooks for the house builder
 window.__game.house = { LT, previewBuild:(w)=>previewBuild(w), renderBuild:(k)=>renderBuild(k), homeBlocked, planIssue, setBuildView:(v)=>setBuildView(v), mossPaintAt, buildMossLayer, roofHit, houseFrame, rebuildFloor, HOME_IDS, get houseEnt(){ return houseEnt; }, edgeTap, stairsTap, landProblem, closeBuild };
 window.__game.farm = { openPlantPanel, startGridPlacing, plantGrid, checkGrid, openGarden, rebuildGardens, gardenAtXZ, islandSeeds, islandFlowers, harvestRec, perimeter, get fenceSegs(){ return FENCE_SEGS; }, fenceHit, get placing(){ return placing; }, plantEnts, gardenEnts, CELL };

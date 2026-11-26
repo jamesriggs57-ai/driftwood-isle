@@ -26,7 +26,7 @@ export const FRUIT_REGROW_DAYS = 3;   // a picked tree grows fruit again after t
 export const NATIVE_FRUITS = ['apple','pear','peach','orange','plum','cherry','lemon'];
 
 /* ---------- Materials ---------- */
-def('wood',     {name:'Wood',           kind:'material', price:30,  model:{t:'log'}});   // v1.39: halved (was 60); regrowing pines made clear-cutting pay too well
+def('wood',     {name:'Wood',           kind:'material', price:20,  model:{t:'log'}});   // v1.39: halved (was 60); v1.48: 20 (was 30), so fish and bugs clearly out-earn chopping
 def('softwood', {name:'Driftwood Branch',kind:'material', price:20, model:{t:'branch'}});
 def('stone',    {name:'Stone',          kind:'material', price:75,  model:{t:'stone'}});
 def('clay',     {name:'Clay',           kind:'material', price:100, model:{t:'clay'}});
@@ -435,26 +435,26 @@ export const TOOLS = {
     { name:'Flimsy Net',   cost:400,   uses:30,  bonus:0 },
     { name:'Sturdy Net',   cost:2500,  uses:90,  bonus:0.12, req:{ tool:0, desc:'Own a Flimsy Net first' } },
     { name:'Golden Net',   cost:20000, uses:500, bonus:0.25, req:{ tool:1, stat:40, desc:'Catch 40 bugs' } },
-    { name:'Heirloom Net', cost:120000, uses:0, forever:true, bonus:0.25, req:{ tool:2, stat:120, desc:'Own a Golden Net and catch 120 bugs' } } ] },
+    { name:'Heirloom Net', cost:50000, uses:0, forever:true, bonus:0.25, req:{ tool:2, stat:120, desc:'Own a Golden Net and catch 120 bugs' } } ] },
   rod:    { name:'Fishing Rod',  does:'Catch fish', stat:'fish', tiers:[
     { name:'Flimsy Rod',   cost:400,   uses:30,  bonus:0 },
     { name:'Sturdy Rod',   cost:2500,  uses:90,  bonus:0.12, req:{ tool:0, desc:'Own a Flimsy Rod first' } },
     { name:'Golden Rod',   cost:20000, uses:500, bonus:0.25, req:{ tool:1, stat:40, desc:'Catch 40 fish' } },
-    { name:'Heirloom Rod', cost:120000, uses:0, forever:true, bonus:0.25, req:{ tool:2, stat:120, desc:'Own a Golden Rod and catch 120 fish' } } ] },
+    { name:'Heirloom Rod', cost:50000, uses:0, forever:true, bonus:0.25, req:{ tool:2, stat:120, desc:'Own a Golden Rod and catch 120 fish' } } ] },
   shovel: { name:'Shovel',       does:'Dig fossils, plant saplings, dig up plants and stumps', stat:'dug', tiers:[
     { name:'Flimsy Shovel',cost:500,   uses:30,  bonus:0 },
     { name:'Sturdy Shovel',cost:2500,  uses:90,  bonus:0.15, req:{ tool:0, desc:'Own a Flimsy Shovel first' } },
     { name:'Golden Shovel',cost:20000, uses:500, bonus:0.3, req:{ tool:1, stat:30, desc:'Dig up 30 things' } },
-    { name:'Heirloom Shovel',cost:120000, uses:0, forever:true, bonus:0.3, req:{ tool:2, stat:100, desc:'Own a Golden Shovel and dig up 100 things' } } ] },
+    { name:'Heirloom Shovel',cost:50000, uses:0, forever:true, bonus:0.3, req:{ tool:2, stat:100, desc:'Own a Golden Shovel and dig up 100 things' } } ] },
   axe:    { name:'Axe',          does:'Chop wood. Sturdy and Golden axes can cut trees down', stat:'chopped', tiers:[
     { name:'Flimsy Axe',   cost:600,   uses:30,  bonus:0, nofell:true },
     { name:'Sturdy Axe',   cost:3000,  uses:90,  bonus:0, req:{ tool:0, desc:'Own a Flimsy Axe first' } },
     { name:'Golden Axe',   cost:20000, uses:500, bonus:1, req:{ tool:1, stat:60, desc:'Chop 60 times' } },
-    { name:'Heirloom Axe', cost:120000, uses:0, forever:true, bonus:1, req:{ tool:2, stat:180, desc:'Own a Golden Axe and chop 180 times' } } ] },
+    { name:'Heirloom Axe', cost:50000, uses:0, forever:true, bonus:1, req:{ tool:2, stat:180, desc:'Own a Golden Axe and chop 180 times' } } ] },
   can:    { name:'Watering Can', does:'Water plants so they grow faster', stat:'watered', tiers:[
     { name:'Watering Can', cost:500,   uses:40,  bonus:0 },
     { name:'Golden Can',   cost:20000, uses:500, bonus:1, req:{ tool:0, stat:40, desc:'Water 40 times' } },
-    { name:'Heirloom Can', cost:90000, uses:0, forever:true, bonus:1, req:{ tool:1, stat:120, desc:'Own a Golden Can and water 120 times' } } ] },
+    { name:'Heirloom Can', cost:40000, uses:0, forever:true, bonus:1, req:{ tool:1, stat:120, desc:'Own a Golden Can and water 120 times' } } ] },
 };
 
 /* ---------- Backpacks: each one is harder to get ---------- */
@@ -463,7 +463,7 @@ export const BACKPACKS = [
   { name:'Canvas Backpack',       slots:30, cost:5000 },
   { name:'Explorer Pack',         slots:40, cost:30000,  req:{ caught:25, desc:'Catch 25 fish or bugs' } },
   { name:'Voyager Pack',          slots:50, cost:100000,  req:{ caught:80, discovered:60, desc:'Catch 80 critters and discover 60 items' } },
-  { name:'Grand Expedition Pack', slots:60, cost:300000, req:{ caught:200, discovered:110, bestFriends:3, desc:'Catch 200 critters, discover 110 items and become best friends with 3 islanders' } },
+  { name:'Grand Expedition Pack', slots:60, cost:200000, req:{ caught:200, discovered:110, bestFriends:3, desc:'Catch 200 critters, discover 110 items and become best friends with 3 islanders' } },
 ];
 
 /* ---------- Home upgrades (pay into the Island Board at your own pace). room = interior size [w,d] ---------- */
@@ -654,7 +654,7 @@ export const SHOPS = {
     perks:['', 'Bugs and flowers sell for 130%, saplings and moth lanterns', 'Bugs and flowers sell for 140%, rose arches', 'Bugs and flowers sell for 150%, garden fountains'] },
 };
 // Investing opens once you have a real house and you've done this much trade at the shop (buying plus selling).
-export const INVEST = { cost:[0,100000,300000,800000], trade:50000 };
+export const INVEST = { cost:[0,100000,200000,400000], trade:50000 };   // v1.48: was 300,000 and 800,000
 
 export const KEEPERS = {
   pemberton:{ id:'pemberton', acc:['beanie'], accC:0xf0c040, top:'overalls',  name:'Pemberton', species:'bear', ears:'round', fur:0x8a8a92, muzzle:0xf4f0ea, shirt:0x6a8a4a, cheek:0xe0a0a0, voice:300, stripe:true,
@@ -1194,6 +1194,19 @@ export const LETTER_IDS = Object.keys(LETTERS);
 furn('beaconlamp','Lighthouse Lantern',8000,0.4,{ b:'lantern', shop:'trip', rarity:FR.r, glow:true });
 // A torn page in a bottle (opened where you find it, never kept in the bag)
 def('bottle_note', { name:'Message in a Bottle', kind:'note', price:0, stack:1, model:{ t:'ticket', c:0xc8a060 } });
+
+/* v1.48: what a crafted piece sells for follows what went into it.
+   A piece made only from things you can gather all day (wood, branches, stone, weeds) sells for about its materials
+   plus 15%, so crafting is a small bonus on top of chopping, not a money machine (3 fences from 2 wood paid 225).
+   A piece that needs anything scarcer (iron, clay, stumps, planks, rare finds) keeps its old price, and never sells
+   for less than its materials plus 15%. */
+export const MASS_MATS = ['wood','softwood','stone','weed'];
+export const CRAFT_MARKUP = 1.15;
+export const matsValue = r => Object.entries(r.mats).reduce((a,[m,n])=>a+(ITEMS[m]?ITEMS[m].price:0)*n, 0) / (r.out||1);
+export function repriceCraft(r){ const it=ITEMS[r.id]; if (!it || it.legendary) return;
+  const v=matsValue(r)*CRAFT_MARKUP, mass=Object.keys(r.mats).every(m=>MASS_MATS.includes(m));
+  it.price = mass ? Math.max(5, Math.round(v/5)*5) : Math.max(it.price, Math.round(v/10)*10); }
+for (const r of WOODWORK) repriceCraft(r);
 
 // v1.34: one Woodworking Plan item per piece that isn't a starting plan
 for (const r of WOODWORK){ if (WOOD_START.includes(r.id) || WOOD_TEN.includes(r.id) || !ITEMS[r.id]) continue;

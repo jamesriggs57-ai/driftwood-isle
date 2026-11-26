@@ -207,7 +207,7 @@ ${note('If the islander a story favor was written for doesn\'t live on your isla
 <h3>Learning them</h3>
 <ul><li><b>Pippa</b> teaches the first rank for free. Once your friendship with her reaches 6, talk to her and pick "Charms?" for Tough, Bonk and Lucky. At friendship 10, after you've put 3 enchantments on tools, she has Steady, Hefty and Splash too.</li>
 <li><b>Wendell</b> teaches the stronger ones for clams ("Enchanting", once you've met him). He offers up to 4 at a time. A second rank needs the first rank of that kind known. A third rank needs the second known and 8 enchantments put on tools in all. Double Output needs 3 put on. Triple Output and One-Swing need Double Output known and 15 put on.</li>
-<li><b>Enchanting Scrolls</b> teach one enchantment you don't know yet the moment you pick them up. They're rare finds: now and then when you dig up a fossil or fell a tree, and sometimes in a bottle on the beach. Stronger ones are rarer. Guests don't find them.</li></ul>
+<li><b>Enchanting Scrolls</b> teach one enchantment you don't know yet the moment you pick them up. They're rare finds: now and then when you dig up a fossil, fell a tree or catch a fish, and sometimes in a bottle on the beach. Stronger ones are rarer. Fennick sometimes has one on his cart too (see <a href="#fennick">Fennick's cart</a>). Guests don't find them.</li></ul>
 <h3>Rules</h3>
 <ul><li>A tool holds <b>one</b> enchantment until you learn the Twin Charm.</li>
 <li>Putting on a stronger (or different) enchantment of the same kind replaces the old one. On a full tool you pick which one comes off.</li>
@@ -385,6 +385,7 @@ ${note('Relics can\'t be sold, gifted, mailed or traded. A storage chest holds t
 { id:'fennick', group:'away', title:'Fennick\'s cart', html:`
 <p>Fennick is a traveling frog merchant. He only comes once Otis's beacon favor lights the beacon on the Portal Station (3 iron, 10 wood). After that he arrives through the portal every 3 or 4 days and pushes his cart around the island.</p>
 <p>He carries rare goods you can't get elsewhere: beach umbrellas, campfires, wind chimes, telescopes, the Golden Birdcage, now and then a rare woodworking plan (45,000), and about 1 day in 3 a bolt of <b>Sailcloth</b> for Barley's mill.</p>
+<p>About 1 visit in 20 he also has an <b>Enchanting Scroll</b> for one of Wendell's enchantments you don't know yet, at 60% of Wendell's fee (for example 60,000 for Luckiest). It teaches you the enchantment straight away, without Wendell's conditions. Guests don't get them.</p>
 `},
 
 { id:'penpals', group:'away', title:'Pen pals and letters', html:`
@@ -636,7 +637,7 @@ ${steps(['<b>Diving bell</b>: Marlo\'s glass (20,000, on the sand the next day),
 { id:'changes', group:'done', title:'What\'s changed', html:`
 <p>Recent updates, newest first.</p>
 <ul>
-<li><b>v1.40</b>: Repair, make and enchant your tools. Pippa and Wendell teach enchantments, and scrolls turn up now and then. Two bigger crafting tables, the Carpenter's Bench and the Master Workbench, with pieces of their own. Most woodworking now needs a table nearby.</li>
+<li><b>v1.40</b>: Repair, make and enchant your tools. Pippa and Wendell teach enchantments, and scrolls turn up now and then (Fennick sometimes sells one). Two bigger crafting tables, the Carpenter's Bench and the Master Workbench, with pieces of their own. Most woodworking now needs a table nearby.</li>
 <li><b>v1.39.1</b>: Darker nights. Lamps, windows, fireflies, the lighthouse beam and night fish now stand out. Menu &gt; Brightness lifts the whole scene if it's too dark for you.</li>
 <li><b>v1.39</b>: Barley's mill, Wren's trade routes, Tobin's bathhouse, Lumi's firefly glade, Hazel's wreck. Wood now sells for 30.</li>
 <li><b>v1.38</b>: Relics for Wendell's isles, Hollis's apiary, Mabel's tea room, the lighthouse and night voyages, Pemberton's forge, the Reef Hall, workshop commissions.</li>

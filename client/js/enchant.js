@@ -32,7 +32,8 @@ export function createEnchant(C){
   const S=()=>C.S(); const inv={ count:id=>C.countItem(id), take:(id,n)=>C.removeItem(id,n) };
   const fmt=n=>C.fmt?C.fmt(n):String(n);
   migrate(S());
-  const ok=()=>!C.GUEST() && !C.VISIT();
+  const ok=()=>!C.VISIT();   // guests can enchant with what Pippa teaches; scrolls are rare finds, so guests don't find them (like other rare finds)
+  const finds=()=>!C.GUEST() && !C.VISIT();
   const matsHTML = need => need.map(([m,n])=>{ const have=C.countItem(m), good=have>=n; return `<span style="color:${good?'inherit':'#c0503a'};font-weight:${good?400:700}">${ITEMS[m]?ITEMS[m].name:m} ${have}/${n}</span>`; }).join(' · ');
   const nm = id => id==='twin' ? TWIN.name : ENCH[id].name;
   const thumbE = id => C.thumb('escroll_'+(id==='twin'?'triple':id));
@@ -55,9 +56,9 @@ export function createEnchant(C){
     sure:t=>sureOf(S(),t), big:(kind,r)=>bigRoll(S(),kind,r), spray:()=>sprayOf(S()),
     sprayAround:(rec, day)=>sprayTargets(S(), rec, day),
     // a scroll in a bottle on the beach, rolled with the day's rare stream (r). Returns an item id or null.
-    dailyScroll(r){ if (!ok()) return null; const a=r(); if (a>=SCROLL_ODDS.bottle) return null; return scrollPick(S(), r); },
+    dailyScroll(r){ if (!finds()) return null; const a=r(); if (a>=SCROLL_ODDS.bottle) return null; return scrollPick(S(), r); },
     // a scroll from an ordinary action (dig, fell, catch). at: a THREE.Vector3
-    scrollRoll(kind, at){ if (!ok() || Math.random()>=(SCROLL_ODDS[kind]||0)) return false; const id=scrollPick(S()); if (!id) return false; const p=at.clone();
+    scrollRoll(kind, at){ if (!finds() || Math.random()>=(SCROLL_ODDS[kind]||0)) return false; const id=scrollPick(S()); if (!id) return false; const p=at.clone();
       setTimeout(()=>{ C.dropNear(id, p, 1.2); if (C.sparkle) C.sparkle(p.clone().add(new THREE.Vector3(0,1,0))); C.Snd.jingle(); C.toast('An enchanting scroll!', C.thumb(id), 'new', ENCH[ITEMS[id].ench].name); }, 1000); return true; },
     // picked up an escroll_ item (from learnPlan). Returns true if it was new.
     learnScroll(itemId){ const id=ITEMS[itemId].ench; if (!learn(S(), id)) return false; C.save(); C.Snd.fanfare();

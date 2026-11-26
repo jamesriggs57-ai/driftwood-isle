@@ -173,6 +173,8 @@ export function makeLighthouse(ctx){
     st.camA=W(0); st.camP.copy(at(0, 8.6, 2.6)); st.look.copy(P.pos); st.h0=dp.y-baseY;
     if (!ctx.TX.climbed){ ctx.TX.climbed=1; ctx.save(); }
   }
+  function jumpTop(){   // #dev shortcut: straight to the gallery, skipping the stair and the view
+    if (st.mode!=='off' || ctx.busy()) return false; ctx.prep(); ctx.stopMove(); ctx.setPerch(perch); arrive(); endPan(); return true; }
   function goDown(){
     st.mode='down'; ctx.stopMove(); hud('climb');
     ctx.fade(()=>{ st.mode='off'; P.obj.visible=true; cutaway(false); hud(false); ctx.setPerch(null); ctx.setCamYaw(0);
@@ -248,7 +250,10 @@ export function makeLighthouse(ctx){
         st.lookYaw=clamp(ctx.getCamYaw(), -1.3, 1.3); const a=st.ang+st.lookYaw;
         const want=new THREE.Vector3(cx+Math.sin(st.ang)*(LT.walkR-0.25), Gy+1.65, cz+Math.cos(st.ang)*(LT.walkR-0.25));
         const look=new THREE.Vector3(want.x+Math.sin(a)*12, Gy-1.2, want.z+Math.cos(a)*12);
-        if (keeper && ctx.dialogOpen() && Math.hypot(keeper.pos.x-P.pos.x, keeper.pos.z-P.pos.z)<3) look.set(keeper.pos.x, Gy+0.75, keeper.pos.z);   // chatting: look at the keeper, not the sea
+        if (keeper && ctx.dialogOpen() && Math.hypot(keeper.pos.x-P.pos.x, keeper.pos.z-P.pos.z)<3){   // chatting: step back along the rail and look at the keeper, not the sea
+          // stand by the rail well round from the keeper, so the sightline clears the lamp room's frame and the whole keeper fits
+          const ca=W(keeperA)-Math.sign(angD(W(keeperA), st.ang))*1.6, cr=LT.railR-0.2;
+          want.set(cx+Math.sin(ca)*cr, Gy+1.85, cz+Math.cos(ca)*cr); look.set(keeper.pos.x, Gy+1.05, keeper.pos.z); }
         st.camP.lerp(want, k); st.look.lerp(look, k); c.position.copy(st.camP); c.lookAt(st.look); cutaway(false);
         farFog(); ctx.skyFollow(P.pos); return true; }
       return false;
@@ -270,5 +275,5 @@ export function makeLighthouse(ctx){
 
   // the lamp turns all the time; the beam shows after dusk
   const tick = (dt, t) => { U.lens.rotation.y=t*0.6; const n=ctx.night(); U.beamM.opacity=0.13*smooth(0.35,0.8,n); U.beam.visible=n>0.3; if (U.vane) U.vane.rotation.y=Math.sin(t*0.13)*1.2; };
-  return { perch, keeper, door, hatch, tick, get mode(){ return st.mode; } };
+  return { perch, keeper, door, hatch, tick, jumpTop, get mode(){ return st.mode; } };
 }

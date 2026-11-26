@@ -41,7 +41,7 @@ import { hasUpstairs, winAt, winKey, trelAt, balcAt, buildCustomHouse, buildHome
 const $ = s => document.querySelector(s);
 const World = { weather:'sunny', season:seasonOf(Time.month()), night:0, inside:null };
 let buildMode=null;   // set while the home builder is open
-let PERCH=null;   // v1.39 fixes: set while you're inside or on top of the Lighthouse Point lighthouse (lighthouse.js)
+let PERCH=null, LHC=null;   // v1.39 fixes: set while you're inside or on top of the Lighthouse Point lighthouse (lighthouse.js)
 MODEL.season = World.season; MODEL.month = Time.month();
 
 /* ---------- Save state ---------- */
@@ -6325,7 +6325,21 @@ function setupLighthouse(lh, P){
       return [(keys['d']||keys['arrowright']?1:0)-(keys['a']||keys['arrowleft']?1:0), (keys['s']||keys['arrowdown']?1:0)-(keys['w']||keys['arrowup']?1:0)]; },
     skyFollow:tg=>{ sky.position.copy(camera.position); stars.position.copy(camera.position); sun.target.position.copy(tg); sun.position.copy(tg).addScaledVector(sunDir,50); } };
   const L=LH.makeLighthouse(ctx); let lt=0; FALLING.push(dt=>{ lt+=dt; L.tick(dt, lt); return false; });
+  LHC=L; let devTop=false; if (DEV){ try { devTop=sessionStorage.getItem('dw-dev-lhtop')==='1'; sessionStorage.removeItem('dw-dev-lhtop'); } catch(e){} }
+  if (devTop) FALLING.push(()=>started && !dlgState && !scrim.classList.contains('show') && L.jumpTop());   // #dev: arrived to go straight up
   return L; }
+// #dev: sail straight to a Lighthouse Point (the first seed that rolls one), and with top=true start up on the gallery
+function devLighthouse(top){
+  if (TRIP && LHC && LHC.keeper){ closePanel(); if (PERCH){ toast('You\'re already in the lighthouse.'); return; } if (top){ if (!LHC.jumpTop()) toast('Finish what you\'re doing first.'); }
+    else { const d=LHC.door; player.pos.set(d.pos.x+0.6, groundY(d.pos.x+0.6, d.pos.z+0.6), d.pos.z+0.6); player.obj.position.copy(player.pos); camTarget.copy(player.pos); updateCamera(1); } return; }
+  if (TRIP || VISIT || GUEST){ toast('Sail home first, then use this from your own island.'); return; }
+  let seed=(Math.random()*1e9)|0; for (let i=0;i<500 && VY.tripPlan('town', seed).kind!=='lighthouse';i++) seed=(seed+7919)|0;
+  const plan=VY.tripPlan('town', seed); if (plan.kind!=='lighthouse'){ toast('Couldn\'t find a Lighthouse Point. Try again.'); return; }
+  const fruits=NATIVE_FRUITS.filter(f=>f!==S.nativeFruit);
+  const trip={ seed, theme:'town', name:plan.name, fruit:fruits[Math.floor(Math.random()*fruits.length)], start:invCounts(), seen:Object.keys(S.seen||{}), from:S.island };
+  try { sessionStorage.setItem('dw-trip', JSON.stringify(trip)); sessionStorage.removeItem('dw-trip-world'); if (top) sessionStorage.setItem('dw-dev-lhtop','1'); } catch(e){}
+  closePanel(); save(); document.documentElement.classList.add('magicret');
+  (async()=>{ try { if (BOOT.flush) await BOOT.flush(); } catch(e){} setTimeout(()=>location.reload(), 300); })(); }
 function shellGame(P, back){
   const plays=TX.cups||0; if (plays>=5) return dialog(P.name, P.voice, ['That\'s enough cups for one day! Come back next time the circus is in town.'], back);
   if (S.clams<300) return dialog(P.name, P.voice, ['Three hundred clams a go. Come back when your pockets jingle!'], back);
@@ -7274,7 +7288,7 @@ function openMenu(){
     <div class="notice"><b>Testing tools</b><br><span class="muted">The game runs on your real clock. These preview other times and weather.</span>
       <label class="f">Preview time: <span id="mOffT"></span></label><input type="range" id="mOff" min="-23" max="23" step="1" value="${Time.offsetH}">
       <label class="f">Weather <select id="mW"><option value="">Today's weather</option><option>sunny</option><option>cloudy</option><option>rain</option><option>snow</option></select></label>
-      ${DEV?`<div style="margin-top:8px"><b>Shortcuts</b> <span class="muted">(only on this device)</span><br><button class="btn alt" id="dvC">+50,000 clams</button> <button class="btn alt" id="dvT">${S.magic.tower?'Tower is up':'Raise the wizard tower'}</button> ${!GUEST&&!VISIT&&nextIsleKind()?'<button class="btn alt" id="dvI">Raise the next isle</button>':''} <button class="btn alt" id="dvM">${S.devMagic?'Wizard needs requirements again':'Skip wizard requirements'}</button> <button class="btn alt" id="dvF">New favors now</button> <button class="btn alt" id="dvD">Town: skip a day</button> <button class="btn alt" id="dvR">Rare kit</button> <button class="btn alt" id="dvRf">Reef: skip to the rowboat</button> <button class="btn alt" id="dvRg">Reef: grow 12 coral</button> <button class="btn alt" id="dvWs">Workshop: skip ahead</button> <button class="btn alt" id="dvRl">Relics for the next isle</button> <button class="btn alt" id="dvSt">Phase 2: next story</button> <button class="btn alt" id="dvS3">Phase 3: next story</button> <button class="btn alt" id="dvOff">Hide shortcuts</button></div>`:''}
+      ${DEV?`<div style="margin-top:8px"><b>Shortcuts</b> <span class="muted">(only on this device)</span><br><button class="btn alt" id="dvC">+50,000 clams</button> <button class="btn alt" id="dvLp">Go to Lighthouse Point</button> <button class="btn alt" id="dvLt">Lighthouse top, with the keeper</button> <button class="btn alt" id="dvT">${S.magic.tower?'Tower is up':'Raise the wizard tower'}</button> ${!GUEST&&!VISIT&&nextIsleKind()?'<button class="btn alt" id="dvI">Raise the next isle</button>':''} <button class="btn alt" id="dvM">${S.devMagic?'Wizard needs requirements again':'Skip wizard requirements'}</button> <button class="btn alt" id="dvF">New favors now</button> <button class="btn alt" id="dvD">Town: skip a day</button> <button class="btn alt" id="dvR">Rare kit</button> <button class="btn alt" id="dvRf">Reef: skip to the rowboat</button> <button class="btn alt" id="dvRg">Reef: grow 12 coral</button> <button class="btn alt" id="dvWs">Workshop: skip ahead</button> <button class="btn alt" id="dvRl">Relics for the next isle</button> <button class="btn alt" id="dvSt">Phase 2: next story</button> <button class="btn alt" id="dvS3">Phase 3: next story</button> <button class="btn alt" id="dvOff">Hide shortcuts</button></div>`:''}
     </div>
     <button class="btn warn" id="mReset">Start a new island</button>${saveOK?'':'<div class="muted" style="margin-top:8px">Saving isn\'t available in this browser.</div>'}`;
     $('#mParty').onclick=()=>{ closePanel(); setTimeout(()=>PARTY.open(), 50); };
@@ -7307,6 +7321,7 @@ function openMenu(){
       $('#dvRg').onclick=()=>{ const B=bayPlan(); let n=0; for (const p of B.plots){ if (n>=12) break; if (S.reef.plots[p.i] || BAY_OUTER.includes(p.patch)) continue; S.reef.plots[p.i]={ k:CORAL_KINDS[(p.i+p.patch)%4], d:sday()-3 }; n++; } save(); toast(`Reef grown: ${REEF_STAGES[reefStage()]} (score ${reefInfo().score}).`); };
       $('#dvWs').onclick=()=>{ if (!SY.shop) SY.shop={ st:'wizard', at:sday() }; else if (SY.shop.st==='project'){ SY.shop.fund=SHOP_PROJECT.clams; SY.shop.mats=true; SY.shop.st='building'; SY.shop.bday=sday()-1; storyNewDay(); applyTown(); }
         else if (SY.shop.st==='open'){ SY.shop.built=sday()-8; SY.shop.made=Math.max(100, SY.shop.made||0); SY.shop.ready=(SY.shop.ready||0)+20; } else SY.shop.st='wizard'; save(); toast(`Workshop story: ${SY.shop.st}.`); };
+      $('#dvLp').onclick=()=>devLighthouse(false); $('#dvLt').onclick=()=>devLighthouse(true);   // v1.39 fixes
       $('#dvT').onclick=()=>{ if (!S.magic.tower){ closePanel(); Q.story.wizard='done'; raiseTower(); } };
       $('#dvM').onclick=()=>{ S.devMagic=!S.devMagic; save(); render(); };
       { const a=$('#dvRl'), b=$('#dvSt'); if (a) a.onclick=()=>dev138('relics'); if (b) b.onclick=()=>dev138('stories'); const c3=$('#dvS3'); if (c3) c3.onclick=()=>dev139(); }   // v1.38, v1.39

@@ -578,7 +578,7 @@ ${steps(['<b>Diving bell</b>: Marlo\'s glass (20,000, on the sand the next day),
 <li>Every tool at Heirloom tier, the Grand Expedition Pack and the bike</li>
 <li>All 5 of Wendell's isles</li>
 <li>The reef Restored and the Driftwood Queen</li>
-<li>Every story business: workshop, apiary, tea room, lighthouse, forge, mill, post office (5 routes at level 5), bathhouse with rock pools, glade at full strength, all 4 wreck layers and the antiques shop</li>
+<li>Every story business: workshop, apiary, tea room, lighthouse, forge, mill, post office with routes at level 5, bathhouse with rock pools, glade at full strength, all 4 wreck layers and the antiques shop</li>
 <li>All six legendary woodworking showpieces</li>
 <li>Every passive income and stake at its top tier</li>
 <li>Best friends with everyone</li>

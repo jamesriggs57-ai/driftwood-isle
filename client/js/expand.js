@@ -11,6 +11,7 @@ import { TAU, clamp, lerp, smooth, mulberry32, hashStr, fbm, vnoise } from './ut
 import { M, mk, G, glowMat, addGlow } from './models.js';
 import { mergeStatic } from './cottage.js';
 import { buildGrandfatherStump } from './reef.js';
+import { buildBluffTower } from './bluffhouse.js';   // v1.60 the bigger, walk-in Lantern Bluff lighthouse
 
 // v1.37: Old Pinewood (Bramble's dream) rises third. Islands raised before v1.37 keep the order they rose in (S.terra.isleK).
 export const ISLE_ORDER = ['meadow', 'dunes', 'pines', 'bluff', 'crags', 'starfall'];   // v1.41 Starfall Isle floats above the crags, last of all
@@ -386,6 +387,7 @@ export function buildLandmark(kind, seed){
   const g=new THREE.Group(), r=mulberry32(seed|0), stone=M(0xb8b0a0,{flatShading:true}), stone2=M(0x9a948a,{flatShading:true}), wood=M(0x8a5e3a), dark=M(0x5a3e28), white=M(0xf4efe6), red=M(0xc8503d), moss=M(0x5f8a3e);
   g.userData.spin=null; g.userData.desc='';
   if (kind==='pines') return buildGrandfatherStump();
+  if (kind==='bluff') return buildBluffTower(seed);
   if (kind==='starfall'){ // v1.41 the star altar: a ring of pale stones round a dais, a star turning slowly over it
     const pale=M(0xd8d4e8,{flatShading:true}), lit=glowMat(0xd8e4ff), gold=M(0xf3c35a,{ metalness:0.6, roughness:0.3 });
     mk(G.cyl(2.4,2.7,0.35,16), pale, 0,0.17,0,g); mk(G.cyl(1.6,1.8,0.3,16), stone, 0,0.5,0,g); mk(G.cyl(0.4,0.55,1.1,8), pale, 0,1.2,0,g); mk(G.cyl(0.62,0.62,0.12,10), gold, 0,1.8,0,g);

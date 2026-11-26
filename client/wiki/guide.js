@@ -11,7 +11,7 @@
    built in wiki.js. Writing rules: plain words, no em dashes, no emoji, only facts the code supports.
    ===================================================================== */
 
-export const GUIDE_VERSION = 'v1.59';
+export const GUIDE_VERSION = 'v1.60';
 export const GUIDE_UPDATED = '2026-11-26';
 
 const tip = s => `<div class="tip"><b>Tip</b> ${s}</div>`;
@@ -608,8 +608,17 @@ ${steps(['Clementine runs the project: <b>150,000 + 40 planks + 20 stone</b>. Op
 ${steps(['Marlo grinds a lens: <b>10,000</b>, waiting up the bluff the next day.',
  'Bramble makes a <b>lamp frame</b> (workshop commission: 20 planks + 4 iron).',
  'Bring <b>3 moonpearls</b> (rare: now and then with a catch, or washed up on the beach).',
- 'Fit the lamp at the lighthouse. The beam turns at night.'])}
+ 'Climb to the lamp room at the top of the lighthouse and fit the lamp there. The beam turns at night.'])}
 <p>Payoff: two night fish in Cay Bay (once Schooling), Wick's weekly night voyage to a Moonlit isle (8,000), and a stake after your first voyage.</p>
+<h3>Inside the lighthouse</h3>
+<p>The old lighthouse is a tall striped tower on top of the bluff. Its red and white paint stays faded until the lamp is lit, then it gets a fresh coat. Tap Go in at the tower to walk inside. On the ground floor you can walk about, read the old keeper's logbook pages and tap Climb the stair. The stair winds round the inside wall all the way up to the lamp room and the gallery. At the top, walk round the gallery for the view, look round the lamp room, or tap Head down. Tap Go outside, or walk out through the door, to leave.</p>
+<p>The tower is in a bad way to begin with, and it gets mended as the story moves on:</p>
+<table><tr><th>When</th><th>What you see</th></tr>
+<tr><td>Before the lens</td><td>Treads missing or snapped on the stair (you hop the gaps and keep to the wall), a fallen beam across the floor, puddles, cobwebs, peeling paint and rust, boarded windows, gulls' nests, logbook pages on the floor, and an empty lamp room with cracked glass.</td></tr>
+<tr><td>Marlo's lens is up</td><td>Fresh planks over the gaps in the stair, rope across the gaps in the rail, and the lens waiting in its crate up top.</td></tr>
+<tr><td>The lamp frame is made or being made</td><td>New treads all the way up, the boards off the windows, new glass in the lamp room, the fallen beam gone and fresh plaster on the walls.</td></tr>
+<tr><td>Lit</td><td>Fresh paint inside and out, a brass rail, lamps on the walls, the keeper's logbook back on its desk and the lamp turning.</td></tr></table>
+${note('The tower stands on a bigger stone base than the old one. Anything you had left right next to the old tower is moved just outside the new base the first time you go near it.')}
 `},
 
 { id:'forge', group:'stories', title:'Pemberton\'s Forge', html:`
@@ -771,6 +780,7 @@ ${steps(['Talk to them and pick <b>Come and meet people</b>. They follow you for
 { id:'changes', group:'done', title:'What\'s changed', html:`
 <p>Recent updates, newest first.</p>
 <ul>
+<li><b>v1.60</b>: The old lighthouse on Lantern Bluff is now about two and a half times as tall and you can walk inside and climb it. It starts out broken down and gets mended step by step as the lighthouse story goes on. You now fit the lamp from the lamp room at the top.</li>
 <li><b>v1.59</b>: Hollow Crags is rocky: bare stone and gravel ground, boulders, scree and outcrops, 7 trees (was 21), and 12 rocks to mine (was 8). New item: the Emerald, a very rare gem (2% per hit on a crags rock, sells for 2,500).</li>
 <li><b>v1.58</b>: The far shore: one side of your island now reaches further out to sea, about half as much land again, left wild (see The far shore). Newcomers move in about a week apart, in story order, and the four keepers turn up one at a time.</li>
 <li><b>v1.57</b>: Wendell's isles are fuller. Hollow Crags is a quarry of iron-rich rocks with spires, ruins and a sunken grotto; Sandpiper Dunes is all sand and palms, longer, with a much bigger shipwreck and more beach finds; Old Pinewood's trees are bigger and give 1 more wood; Clover Meadow has a pond, a brook and an orchard; Lantern Bluff has a spring, a waterfall and sea stacks; Starfall has a glowing pool and garden. Isle trees now grow back. See Wendell's isles.</li>

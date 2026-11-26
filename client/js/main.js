@@ -3145,7 +3145,7 @@ function dev138(what){
     else if (!SY.reefhall){ SY.reefhall={ st:'cuttings' }; for (let i=0;i<CUTTINGS;i++) addItem('cutting'); for (const id of bayCore()) S.museum.items[id]=S.museum.items[id]||Date.now(); msg.push('Reef Hall: tank in, cuttings in your bag, bay fish donated.'); }
     else if (!reefHallOpen()){ SY.reefhall.st='open'; msg.push('Reef Hall open.'); }
     else msg.push('Every phase 2 story is open.'); }
-  save(); applyTown(); toast(msg.join(' ') || 'Nothing to do.'); }
+  save(); if (!DEVQ){ applyTown(); toast(msg.join(' ') || 'Nothing to do.'); } return msg.join(' '); }
 
 /* =====================================================================
    v1.39 ISLAND STORIES PHASE 3 (design: claude/driftwood-isle-quests.md, section 6f and 7).
@@ -3711,7 +3711,7 @@ function dev139(){
     if (!wreckOpen('vault')){ SY.wreck.layers={ hold:true, cabin:true, vault:true }; SY.antiq=SY.antiq||{ st:'pending', day:now }; wreckGates(); return 'Every part of the wreck open.'; }
     if (!SY.antiq || SY.antiq.st!=='open'){ SY.antiq={ st:'open', built:now, day:now }; SY.wreck.owner=dreamHolder('wreck'); return 'Antiques shop open.'; }
     return 'Every phase 3 story is open.'; };
-  msg.push(step()); save(); refreshStory3(); applyTown(); toast(msg.join(' ')); }
+  msg.push(step()); save(); refreshStory3(); if (!DEVQ){ applyTown(); toast(msg.join(' ')); } return msg.join(' '); }
 
 /* =====================================================================
    v1.40 ISLAND STORIES PHASE 4 (design: claude/driftwood-isle-quests.md, sections 6e, 8 and 11).
@@ -4119,7 +4119,81 @@ function dev140(){
     if (SY.charter.st!=='done'){ SY.charter.st='done'; SY.charter.done=now-2; SY.charter.news=true; return 'Charter signed, and the festival is on today.'; }
     if (!SY.charter.letter){ SY.charter.letter=true; SY.charter.wl=true; return 'Wendell\'s last letter: Starfall Isle can rise now.'; }
     return 'Every phase 4 story is open.'; };
-  const msg=step(); save(); refreshStory4(); applyTown(); toast(msg); }
+  const msg=step(); save(); refreshStory4(); if (!DEVQ){ applyTown(); toast(msg); } return msg; }
+
+/* ---------- #dev Story map: raise every isle, open every story, go anywhere (only with #dev on this device) ----------
+   On a signed-in island every change asks first, because it changes the real saved island. Going somewhere only moves you. */
+let DEVQ=false;
+function devAsk(what, fn){ if (BOOT.mode!=='account'){ fn(); return; } closePanel();
+  dialog('Dev shortcut', 420, [`${what}`, 'This changes your real saved island, and it can\'t be undone.'], null, [{ label:'Do it', fn }, { label:'Cancel', alt:true, fn:()=>{} }]); }
+function devAll(stepFn, endWord){ DEVQ=true; const out=[]; try { for (let i=0;i<20;i++){ const m=stepFn(); out.push(m); if (!m || m.startsWith(endWord) || (out.length>1 && m===out[out.length-2])) break; } } finally { DEVQ=false; } save(); applyTown(); toast(out[out.length-1]||'Done.'); }
+function devRaiseAll(){ if (GUEST || VISIT || TRIP){ toast('Isles only rise on your own signed-in island.'); return; }
+  const kinds=[...ISLE_K, ...ISL.ISLE_ORDER.filter(k=>!ISLE_K.includes(k))]; if (kinds.length===ISLE_K.length){ toast('Every isle is already up.'); return; }
+  mainOnly=true; const plan=ISL.planIsles(kinds, { seed:S.seed|0, SC, shore:a=>islandR(a)*1.03, ok:landingOK, angles:S.terra.isleA||[] }); mainOnly=false;
+  if (plan.length<kinds.length){ toast(`Only room for ${plan.length} isles around this island.`); kinds.length=plan.length; }
+  S.terra.isleA=plan.map(p=>+p.a.toFixed(4)); S.terra.isles=kinds.length; S.terra.isleK=kinds.slice();
+  if (kinds.includes('pines') && !SY.shop) SY.shop={ st:'project', at:sday() };
+  const last=plan[kinds.length-1]; save(); toast('Raising every isle...'); magicExit({ kind:'isle', at:[last.cx, last.cz], key:String(kinds.length-1) }); }
+// somewhere to stand near a spot
+function devTravel(x, z, label){
+  if (World.inside){ exitRoom(); setTimeout(()=>devTravel(x, z, label), 900); return; }
+  closePanel(); if (riding) setRiding(false); stopMove(); let p=null;
+  for (let r=0; r<14 && !p; r+=0.7) for (let k=0;k<12 && !p;k++){ const a=k/12*TAU, px=x+Math.cos(a)*r, pz=z+Math.sin(a)*r; if (walkable(px,pz) && !blocked(px,pz,0.4)) p=[px,pz]; }
+  if (!p){ toast(`No ground to stand on near ${label}.`); return; }
+  fade(()=>{ player.pos.set(p[0], groundY(p[0],p[1]), p[1]); player.obj.position.copy(player.pos); player.face=Math.atan2(x-p[0], z-p[1]); player.obj.rotation.y=player.face; camTarget.copy(player.pos); updateSky(); updateCamera(1); toast(label); }); }
+const INC_PLACE = { boat:'Gill\'s boats', bees:'Hollis\'s apiary', orchard:'Russet\'s orchard', books:'Quill\'s counting house' };
+function devPlaces(){ const T=[], St=[], Is=[];
+  const P=PLACES, add=(L,label,at)=>{ if (at && isFinite(at[0])) L.push([label, at[0], at[1]]); };
+  add(T,'Town hall',P.hall); add(T,'Museum',P.museum); add(T,'Plaza',P.plaza); add(T,'Notice board',P.board); add(T,'Your house',P.home); add(T,'Wizard tower',P.tower); add(T,'The dock',[DOCK.x0+2, DOCK.z]);
+  for (const k of INC_IDS){ const I=S.income[k]; if (I && I.at) add(T, INC_PLACE[k]||k, I.at); }
+  add(St,'Tea room',SY.tea&&SY.tea.at); add(St,'Reef Hall',SY.reefhall&&SY.reefhall.at); add(St,'Post office',SY.post&&SY.post.at); add(St,'Bathhouse',SY.bath&&SY.bath.at); add(St,'Firefly glade',SY.glade&&SY.glade.at);
+  add(St,'Antique shop',SY.antiq&&SY.antiq.at); add(St,'Reading room',SY.nook&&SY.nook.at); add(St,'Race course',SY.race&&SY.race.at); add(St,'Flower show table',SY.show&&SY.show.at);
+  for (const I of ISLES){ const nm=(ISL.ISLE_INFO[I.kind]||{}).name||I.kind, mk2={ meadow:'the windmill', dunes:'the shipwreck', bluff:'the lighthouse', pines:'the island', crags:'the island', starfall:'the star altar' }[I.kind]||'the landmark';
+    add(Is, `${nm}: ${mk2}`, I.mark);
+    if (I.kind==='pines') add(Is, `${nm}: the workshop`, SY.pinesAt); if (I.kind==='crags') add(Is, `${nm}: the forge`, SY.cragsAt); }
+  return { T, St, Is }; }
+// a free boat trip, straight there (signed-in islands only, like Skipper Wick's)
+function devTrip(theme, kind){
+  if (BOOT.mode!=='account'){ toast('Trips need a signed-in island.'); return; } if (TRIP){ toast('Sail home first.'); return; }
+  let seed=(Math.random()*1e9)|0; if (kind) for (let i=0;i<4000 && VY.tripPlan('town', seed).kind!==kind;i++) seed=(Math.random()*1e9)|0;
+  const plan=VY.tripPlan(theme, seed), T=TRIP_THEMES[theme], fruits=NATIVE_FRUITS.filter(f=>f!==S.nativeFruit);
+  const trip={ seed, theme, name:plan.name||T.name, fruit:fruits[Math.floor(Math.random()*fruits.length)], start:invCounts(), seen:Object.keys(S.seen||{}), from:S.island };
+  const relic=rollTripRelic(theme); if (relic) trip.relic=relic; if (rollTripChart(theme)) trip.chart=1;
+  closePanel(); save(); try { sessionStorage.setItem('dw-trip', JSON.stringify(trip)); sessionStorage.removeItem('dw-trip-world'); } catch(e){}
+  toast(`Sailing to ${trip.name}...`); (async()=>{ try { if (BOOT.flush) await BOOT.flush(); } catch(e){} location.reload(); })(); }
+const TOWN_KIND_NAMES = { hamlet:'Hamlet', monastery:'Abbey', circus:'Circus camp', lighthouse:'Lighthouse Point', smugglers:'Smugglers\' cove' };
+function openStoryMap(){
+  openPanel('Story map (dev)'); const render=()=>{ const { T, St, Is }=devPlaces(), missing=ISL.ISLE_ORDER.filter(k=>!ISLE_K.includes(k)), btn=(id,l,dis)=>`<button class="btn alt" data-dv="${id}" ${dis?'disabled':''}>${l}</button>`;
+    const go=(L,pre)=>L.map(([l],i)=>`<button class="btn alt" data-go="${pre}${i}">${l}</button>`).join(' ');
+    let h=`<div class="notice"><b>Isles</b><br><span class="muted">Up: ${ISLE_K.map(k=>(ISL.ISLE_INFO[k]||{}).name||k).join(', ')||'none'}. ${missing.length?`Still to rise: ${missing.map(k=>(ISL.ISLE_INFO[k]||{}).name||k).join(', ')}.`:''}</span><br>
+      ${GUEST||VISIT||TRIP?'<span class="muted">Isles only rise on your own signed-in island.</span>':btn('isles', missing.length?'Raise every isle now':'Every isle is up', !missing.length)}</div>
+      <div class="notice"><b>Stories</b><br><span class="muted">"Next" moves one story one step. "Open all" finishes every story in that phase.</span><br>
+      ${btn('p2','Phase 2: next')} ${btn('p2a','Phase 2: open all')}<br>${btn('p3','Phase 3: next')} ${btn('p3a','Phase 3: open all')}<br>${btn('p4','Phase 4: next')} ${btn('p4a','Phase 4: open all')}<br>
+      ${btn('fest', festOn()?'The festival is on':'Festival: today')} ${btn('show','Flower show: today')} ${btn('sky','Starfall spells: cast both')}</div>
+      <div class="notice"><b>Go to: town</b><br>${go(T,'T')}</div>
+      <div class="notice"><b>Go to: story places</b><br>${St.length?go(St,'S'):'<span class="muted">None built yet. Open some stories first.</span>'}</div>
+      <div class="notice"><b>Go to: isles</b><br>${Is.length?go(Is,'I'):'<span class="muted">No isles yet.</span>'}</div>
+      <div class="notice"><b>Go inside</b><br>${btn('bay','Cay Bay (row out)', GUEST||VISIT)} ${btn('wreck','Dive the shipwreck', !ISLE_K.includes('dunes')||GUEST||VISIT)} ${btn('nook','Reading room', !nookOpen())}</div>
+      <div class="notice"><b>Trips</b> <span class="muted">· free, straight there${BOOT.mode==='account'?'':' (signed-in islands only)'}</span><br>
+      ${Object.keys(TRIP_THEMES).map(th=>`<button class="btn alt" data-trip="${th}" ${BOOT.mode!=='account'||TRIP?'disabled':''}>${TRIP_THEMES[th].name}</button>`).join(' ')}<br>
+      <span class="muted">Towns:</span> ${Object.entries(TOWN_KIND_NAMES).map(([k,l])=>`<button class="btn alt" data-town="${k}" ${BOOT.mode!=='account'||TRIP?'disabled':''}>${l}</button>`).join(' ')}</div>`;
+    pBody.innerHTML=h; const pl={ T, S:St, I:Is };
+    pBody.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>{ const g=b.dataset.go, [l,x,z]=pl[g[0]][+g.slice(1)]; devTravel(x, z, l); });
+    pBody.querySelectorAll('[data-trip]').forEach(b=>b.onclick=()=>{ const th=b.dataset.trip; devAsk(`Sail to ${TRIP_THEMES[th].name} for free?`, ()=>devTrip(th)); });
+    pBody.querySelectorAll('[data-town]').forEach(b=>b.onclick=()=>{ const k=b.dataset.town; devAsk(`Sail to a ${TOWN_KIND_NAMES[k]} town for free?`, ()=>devTrip('town', k)); });
+    const A={
+      isles:()=>devAsk(`Raise ${missing.length} isle${missing.length>1?'s':''} now (${missing.map(k=>(ISL.ISLE_INFO[k]||{}).name||k).join(', ')})? The island reloads.`, devRaiseAll),
+      p2:()=>devAsk('Move a phase 2 story one step?', ()=>{ dev138('stories'); render(); }), p2a:()=>devAsk('Open every phase 2 story?', ()=>devAll(()=>dev138('stories'), 'Every phase 2')),
+      p3:()=>devAsk('Move a phase 3 story one step?', ()=>{ dev139(); render(); }), p3a:()=>devAsk('Open every phase 3 story?', ()=>devAll(dev139, 'Every phase 3')),
+      p4:()=>devAsk('Move a phase 4 story one step?', ()=>{ dev140(); render(); }), p4a:()=>devAsk('Open every phase 4 story?', ()=>devAll(dev140, 'Every phase 4')),
+      fest:()=>devAsk('Make today a festival day (signs the charter if it isn\'t yet)?', ()=>{ SY.charter=Object.assign(SY.charter||{}, { st:'done', done:sday2()-2 }); if (Time.hour()<9 || Time.hour()>=21) Time.offsetH+=(12-Time.hour()); save(); S4B.festKey='x'; refreshCharter(); refreshFest(); updateSky(); toast(festOn()?'The festival is on around the plaza.':'Could not start the festival here.'); }),
+      show:()=>devAsk('Put the flower show table up today?', ()=>{ SY.show=Object.assign(SY.show||{ sp:SHOW_PICKS[0][0], color:SHOW_PICKS[0][1], cname:SHOW_PICKS[0][2] }, { st:'entered', showDay:sday2() }); save(); S4B.showKey='x'; refreshShow(); toast('The show table is up by the plaza.'); }),
+      sky:()=>devAsk('Cast the aurora and the glowing paths for free?', ()=>{ SY.sky=Object.assign(SY.sky||{}, { aurora:true, paths:true, auroraOff:false, pathsOff:false }); save(); refreshSpells(); toast('Aurora and glowing paths are on. Look at night.'); }),
+      bay:()=>{ closePanel(); enterBay(); },
+      wreck:()=>{ if (!dunesLM()){ toast('The wreck isn\'t up yet.'); return; } closePanel(); makeWreckRoom(); enterRoom('wreck'); },
+      nook:()=>openReadingRoom() };
+    pBody.querySelectorAll('[data-dv]').forEach(b=>b.onclick=()=>{ const f=A[b.dataset.dv]; if (f) f(); }); };
+  render(); }
 
 /* =====================================================================
    v0.9: WENDELL THE WIZARD, POTIONS, FAVORS, SHAPING THE ISLAND
@@ -7677,7 +7751,7 @@ function openMenu(){
     <div class="notice"><b>Testing tools</b><br><span class="muted">The game runs on your real clock. These preview other times and weather.</span>
       <label class="f">Preview time: <span id="mOffT"></span></label><input type="range" id="mOff" min="-23" max="23" step="1" value="${Time.offsetH}">
       <label class="f">Weather <select id="mW"><option value="">Today's weather</option><option>sunny</option><option>cloudy</option><option>rain</option><option>snow</option></select></label>
-      ${DEV?`<div style="margin-top:8px"><b>Shortcuts</b> <span class="muted">(only on this device)</span><br><button class="btn alt" id="dvC">+50,000 clams</button> <button class="btn alt" id="dvT">${S.magic.tower?'Tower is up':'Raise the wizard tower'}</button> ${!GUEST&&!VISIT&&nextIsleKind()?'<button class="btn alt" id="dvI">Raise the next isle</button>':''} <button class="btn alt" id="dvM">${S.devMagic?'Wizard needs requirements again':'Skip wizard requirements'}</button> <button class="btn alt" id="dvF">New favors now</button> <button class="btn alt" id="dvD">Town: skip a day</button> <button class="btn alt" id="dvR">Rare kit</button> <button class="btn alt" id="dvRf">Reef: skip to the rowboat</button> <button class="btn alt" id="dvRg">Reef: grow 12 coral</button> <button class="btn alt" id="dvWs">Workshop: skip ahead</button> <button class="btn alt" id="dvRl">Relics for the next isle</button> <button class="btn alt" id="dvSt">Phase 2: next story</button> <button class="btn alt" id="dvS3">Phase 3: next story</button> <button class="btn alt" id="dvOff">Hide shortcuts</button></div>`:''}
+      ${DEV?`<div style="margin-top:8px"><b>Shortcuts</b> <span class="muted">(only on this device)</span><br><button class="btn alt" id="dvC">+50,000 clams</button> <button class="btn alt" id="dvT">${S.magic.tower?'Tower is up':'Raise the wizard tower'}</button> ${!GUEST&&!VISIT&&nextIsleKind()?'<button class="btn alt" id="dvI">Raise the next isle</button>':''} <button class="btn alt" id="dvM">${S.devMagic?'Wizard needs requirements again':'Skip wizard requirements'}</button> <button class="btn alt" id="dvF">New favors now</button> <button class="btn alt" id="dvD">Town: skip a day</button> <button class="btn alt" id="dvR">Rare kit</button> <button class="btn alt" id="dvRf">Reef: skip to the rowboat</button> <button class="btn alt" id="dvRg">Reef: grow 12 coral</button> <button class="btn alt" id="dvWs">Workshop: skip ahead</button> <button class="btn alt" id="dvRl">Relics for the next isle</button> <button class="btn alt" id="dvSt">Phase 2: next story</button> <button class="btn alt" id="dvS3">Phase 3: next story</button> <button class="btn" id="dvMap">Story map: isles, stories, places</button> <button class="btn alt" id="dvOff">Hide shortcuts</button></div>`:''}
     </div>
     <button class="btn warn" id="mReset">Start a new island</button>${saveOK?'':'<div class="muted" style="margin-top:8px">Saving isn\'t available in this browser.</div>'}`;
     $('#mParty').onclick=()=>{ closePanel(); setTimeout(()=>PARTY.open(), 50); };
@@ -7712,7 +7786,7 @@ function openMenu(){
         else if (SY.shop.st==='open'){ SY.shop.built=sday()-8; SY.shop.made=Math.max(100, SY.shop.made||0); SY.shop.ready=(SY.shop.ready||0)+20; } else SY.shop.st='wizard'; save(); toast(`Workshop story: ${SY.shop.st}.`); };
       $('#dvT').onclick=()=>{ if (!S.magic.tower){ closePanel(); Q.story.wizard='done'; raiseTower(); } };
       $('#dvM').onclick=()=>{ S.devMagic=!S.devMagic; save(); render(); };
-      { const a=$('#dvRl'), b=$('#dvSt'); if (a) a.onclick=()=>dev138('relics'); if (b) b.onclick=()=>dev138('stories'); const c3=$('#dvS3'); if (c3) c3.onclick=()=>dev139(); }   // v1.38, v1.39
+      { const a=$('#dvRl'), b=$('#dvSt'); if (a) a.onclick=()=>dev138('relics'); if (b) b.onclick=()=>dev138('stories'); const c3=$('#dvS3'); if (c3) c3.onclick=()=>dev139(); const mp=$('#dvMap'); if (mp) mp.onclick=()=>openStoryMap(); }   // v1.40 Story map   // v1.38, v1.39
       { const di=$('#dvI'); if (di) di.onclick=()=>{ closePanel(); if (nextIsleKind()==='pines' && !SY.shop) SY.shop={ st:'wizard', at:sday() }; raiseIsle(ISLE_K.length); }; }
       $('#dvD').onclick=()=>{ S.town.devDays=(S.town.devDays||0)+1; townNewDay(dayKeyOf(dayNum(today())+S.town.devDays)); applyTown(); toast(`Town moved ahead ${S.town.devDays} day${S.town.devDays>1?'s':''}: ${S.town.res.length} islanders${S.town.next?', '+S.town.next.id+' moving in next':''}.`); };
       $('#dvF').onclick=()=>{ Q.rolledFor=null; Q.offers={}; rollFavors(Math.random); Q.rolledFor=S.day.key; save(); toast('Islanders have new favors to ask.'); };
@@ -8783,6 +8857,7 @@ window.__game.v136 = { get ISLES(){ return ISLES; }, offerMove, startMagic, magi
 // v1.37 testing hooks (headless checks of the island stories)
 window.__game.v138 = { get SY(){ return SY; }, get S2B(){ return S2B; }, isleQuest, isleChoices, relicMissing, wantedRelics, rollTripRelic, hiveColors, colorFam, apiaryChoices, refreshStory2, refreshTea, refreshForge, refreshReefHall, openTeaRoom, openForge, lighthouseAct, wickChoices, teaSeatOf, storyNewDay2, wendellLetter, isleDirWord, dev138, storySpot, bayCutting, nightBay, lightLit, COMMISSIONS, STAKES, stakeOf, talkSkipperHome, talkIncome, talkWizard };
 window.__game.v139 = { get SY(){ return SY; }, get S3B(){ return S3B; }, LOGBOOK, BEATS3, STAKES, COMMISSIONS, millAct, openMill, millstoneOffer, millThistle, millWendell, routeTowns, postRoutes, routeWant, openPost, postNewDay, placeVents, digVent, bathSeatOf, bathStage, openBath, gladeConds, gladeStageOf, gladeBugOK, gladeBugSpot, gladeLook, gladeStump, gladeKnock, gladeApprove, gladeStumpDug, gladeLamps, wreckAct, makeWreckRoom, wreckOpen, rollTripChart, openLogbook, openAntiq, antiqStock, story3Stock, storyBeat3, story3Choices, storyNewDay3, story3News, storiesHTML3, storyGossip3, refreshStory3, dev139, landmark3, meadowLM, dunesLM };
+window.__game.v140s = { get SY(){ return SY; }, get S4B(){ return S4B; }, refreshStory4, dev140, dev138, dev139, openStoryMap, devRaiseAll, devTravel, devPlaces, devTrip, raceStart, raceEnd, raceCourse, raceLength, raceRivals, raceMenu, openReadingRoom, openStall, festDay, festOn, festSpots, refreshFest, refreshShow, showTableAct, showEntries, storyBeat4, story4Choices, storyNewDay4, story4News, storiesHTML4, starAltarAct, skyHour, skyNear, skyIsle, refreshSpells, refreshCharter, charterReqs, charterReady, hall4Choices, newbChoices, CHARTER, get ISLE_K(){ return ISLE_K; } };   // v1.40 test hooks
 window.__game.v137 = { get S(){ return S; }, get SY(){ return SY; }, get BAYR(){ return BAYR; }, get ISLES(){ return ISLES; }, get player(){ return player; }, get residents(){ return residents; },
   reefInfo, reefStage, bayPlan, bayPopulate, enterBay, exitBay, bayAct, bayCast, bayDrop, talkGill, talkShop, talkTo, talkHall, talkWizard, talkCurator, openNursery, openWorkshop, openBoard, openHallPanel,
   refreshNurseryTank, spawnRowboat, refreshWorkshop, refreshIncome, storyNewDay, townNewDay, applyTown, raiseIsle, nextIsleKind, isleQuest, loadIsle, incOf, incCollect, pinesRegrow,

@@ -1898,7 +1898,7 @@ function buildHall(){
   if (hallEnt){ hallEnt.remove(); hallEnt=null; } if (clerk){ clerk.remove(); clerk=null; } setRects('hall',[]);
   if (!PLACES.hall) return;
   const [hx,hz]=PLACES.hall, t=S.town.hall||0;
-  hallEnt=placeBuilding('hall', hx, hz, buildTownHall(t), 'Read', ()=>talkHall());
+  const chn=t>=2 && !TRIP && charterBuilt(); hallEnt=placeBuilding('hall', hx, hz, buildTownHall(t, chn?'Charter Hall':null), 'Read', ()=>talkHall()); hallEnt.charter=chn;   // v1.40
   const [dx,dz]=hallEnt.doorPt; clerk=new Keeper(KEEPERS.clementine, dx+(t===0?1.9:1.6), dz-(t===0?0.6:0.3), ()=>talkHall()); clerk.rest=0; hallEnt.tier=t;
 }
 const HALL_NAMES=['Town Tent','Town Hall','Grand Town Hall'];
@@ -3812,7 +3812,7 @@ function bindProj4(render){
   const g=pBody.querySelector('#cfGo'); if (g) g.onclick=()=>{ if (noEdit()) return; SY.charter.st='building'; SY.charter.bday=sday2(); save(); Snd.fanfare(); toast('Everyone signs tonight!', null, 'new', 'The Island Charter is official tomorrow.'); render(); }; }
 // the Charter Hall: flags either side of the door, bunting, and the charter plate on a stone
 function refreshCharter(){
-  if (charterBuilt()) HALL_NAMES[2]='Charter Hall';
+  if (charterBuilt()){ HALL_NAMES[2]='Charter Hall'; if (hallEnt && (S.town.hall||0)>=2 && !hallEnt.charter){ buildHall(); buildPlaza(); } }
   const key = charterBuilt() && hallEnt && PLACES.hall ? 'on:'+PLACES.hall.join(',')+':'+(hallEnt.tier||0) : '';
   if (key===S4B.dressKey && (!key || (S4B.dress && S4B.dress.parent))) return; S4B.dressKey=key;
   if (S4B.dress){ if (S4B.dress.parent) S4B.dress.parent.remove(S4B.dress); S4B.dress=null; setRects('charter',[]); } if (!key) return;
@@ -4113,7 +4113,8 @@ function dev140(){
   const step=()=>{
     if (!SY.nook || ['pending','plans'].includes(SY.nook.st)){ SY.nook={ st:'shelves', due:now }; addItem('nookshelves'); return `Reading nook: shelves in your bag. Give them to ${holderName('nook')}.`; }
     if (SY.nook.st!=='open'){ SY.nook.st='open'; SY.nook.built=now; SY.nook.owner=dreamHolder('nook'); return 'Reading room open.'; }
-    if (!SY.race || ['pending','sign'].includes(SY.race.st)){ SY.race={ st:'sign', due:now }; S.bike=true; addItem('racesign'); return `Race: bike and start sign in your bag. Give the sign to ${holderName('race')}.`; }
+    if (!SY.race || SY.race.st==='pending'){ SY.race={ st:'sign', due:now }; S.bike=true; addItem('racesign'); return `Race: bike and start sign in your bag. Give the sign to ${holderName('race')}.`; }
+    if (SY.race.st==='sign'){ const p=storySpot('race', PLACES.plaza||[0,0], 10, 30, 2.6, 0); if (!p) return 'No room for the race course near the plaza.'; if (countItem('racesign')) removeItem('racesign',1); SY.race.at=p; claimSpot(p, 2.6); SY.race.st='open'; SY.race.opened=now; return 'Race course open by the plaza.'; }
     if (!SY.show || ['pending','want'].includes(SY.show.st)){ const [sp,c,cn]=SHOW_PICKS[0]; SY.show={ st:'entered', sp, color:c, cname:cn, showDay:now }; return 'Flower show: entered (the table is up by the plaza today).'; }
     if (SY.show.st!=='won'){ SY.show.st='won'; SY.show.won=now; SY.show.news=true; return 'Flower show won.'; }
     if (!SY.newb || SY.newb.st==='pending'){ const nb=S.town.res.slice().reverse().find(id=>!isOrig(id)) || S.town.res[S.town.res.length-1]; if (!nb) return 'Nobody lives here to be the newcomer.'; SY.newb={ id:nb, st:'intro', met:{}, due:now }; return `${npcName(nb)} is the newcomer: talk to them and walk them round.`; }
@@ -4127,8 +4128,10 @@ function dev140(){
 /* ---------- #dev Story map: raise every isle, open every story, go anywhere (only with #dev on this device) ----------
    On a signed-in island every change asks first, because it changes the real saved island. Going somewhere only moves you. */
 let DEVQ=false;
-function devAsk(what, fn){ if (BOOT.mode!=='account'){ fn(); return; } closePanel();
-  dialog('Dev shortcut', 420, [`${what}`, 'This changes your real saved island, and it can\'t be undone.'], null, [{ label:'Do it', fn }, { label:'Cancel', alt:true, fn:()=>{} }]); }
+function devAsk(what, fn){ if (BOOT.mode!=='account'){ fn(); return; }
+  pBody.innerHTML=`<div class="notice" id="dvAskBox"><b>${esc(what)}</b><br><span class="muted">This changes your real saved island, and it can't be undone.</span><div style="margin-top:8px"><button class="btn" id="dvAskGo">Do it</button> <button class="btn alt" id="dvAskNo">Cancel</button></div></div>`;
+  pBody.querySelector('#dvAskNo').onclick=()=>openStoryMap();
+  pBody.querySelector('#dvAskGo').onclick=()=>{ fn(); if (pBody.querySelector('#dvAskBox') && scrim.classList.contains('show')) openStoryMap(); }; }
 function devAll(stepFn, endWord){ DEVQ=true; const out=[]; try { for (let i=0;i<20;i++){ const m=stepFn(); out.push(m); if (!m || m.startsWith(endWord) || (out.length>1 && m===out[out.length-2])) break; } } finally { DEVQ=false; } save(); applyTown(); toast(out[out.length-1]||'Done.'); }
 function devRaiseAll(){ if (GUEST || VISIT || TRIP){ toast('Isles only rise on your own signed-in island.'); return; }
   const kinds=[...ISLE_K, ...ISL.ISLE_ORDER.filter(k=>!ISLE_K.includes(k))]; if (kinds.length===ISLE_K.length){ toast('Every isle is already up.'); return; }

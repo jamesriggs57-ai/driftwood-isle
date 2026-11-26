@@ -477,3 +477,25 @@ Code: `extend.js` (the shape, `chooseExt`, `extDepth`, `extMounds`, `extBox`), t
 - **Slower arrivals.** A newcomer comes at least 5 days after the last one, then on a 40% chance each day (was 2 days and 50%), so about a week apart. Order: Lumi, Otis, Clover, Juniper, then Barley, Wren, Tobin, Hazel, Marigold (`STORY_ORDER`). A keeper (Gill, Hollis, Russet, Quill) turns up at least 3 days after anyone new, one at a time, never while someone is about to move in.
 - Also fixed: the waterfall plateau on cliff islands used the wrong grid row.
 - #dev Story map: "Everyone moves in now" (`devEveryone`) still brings every resident and keeper in at once. Test hooks: `window.__game.v158`.
+
+## v1.63: custom furniture
+Code: `custom-core.js` (parts catalog, design codes, styles, generator, prices, request matching; no THREE, the server imports it), `custom-models.js` (the 3D parts), `custom.js` (Design tab, requests, sketches, first-sale bonus). main.js only has small hooks (search for `v1.63`).
+- **Design tab** in crafting once you've made 10 different woodworking pieces. Six bases (chair, table, bed, shelf, lamp, dresser), each with 4 or 5 slots: 68,412 shapes, plus 16 woods and paints, a second wood, 5 metals, 14 fabrics and 9 patterns. Spinning preview; "Surprise me" makes a matching set in one style.
+- **The design is the item id.** `cf_` + base letter + one base-36 digit per slot and material, so any client, the server and mail can rebuild a piece from its id. `ITEMS` in content.js is now a Proxy with resolvers (`ITEMS.__resolve(fn)`), and custom-core.js defines any `cf_` id the moment something asks for it. Never reorder or remove options in custom-core.js; only append.
+- **No Frankenstein plans.** Every option has styles (rustic, cottage, antique, modern, woodland), a visual weight (1-3) and a detail level. Generated plans (sketches, Surprise me, islanders' requests) only use one style, keep every part within one weight step of the first, and pick colors from that style's palette. Players can still build anything by hand.
+- **Unlocks:** each option needs a crafting table tier (Workbench, Carpenter's Bench, Master Workbench, from v1.40). Options marked `find` only come from sketches: 1.2% of digs, 2% of felled trees, 0.4% of catches.
+- **Prices:** a copy sells for its materials plus 15%. The first sale of a design you made yourself adds a craftsmanship bonus (`firstBonus`: detail plus materials you can't farm), at most 2 new designs a day.
+- **Requests:** an islander at friendship 3+ sometimes (about 1 day in 4) shows you a sketch in their personality's style. Hand over a piece of the same base; `likeness` scores shape, wood and fabric; 50% or better pays and gives +2 or +3 friendship. 2 open at once, once per islander per 14 days.
+- Custom pieces don't count toward "discovered" (backpacks) or furniture-kind achievements.
+- Save: `S.craft.custom` (designs, crafted, sold, found, made, req, bonusDay); no new keys.
+- Test hooks (#dev): `window.__game.custom` (learnAll, sketch, request, choices, make, deliver, sold, generate).
+
+## v1.64: sewing (rugs and clothes painted pixel by pixel)
+Code: `textile-core.js` (palette, levels, options, codes, prices; no THREE, the server imports it), `textile-models.js` (rug model, sewn clothes on the character rig), `textile.js` (the Sewing panel: options, pixel painter, closet, wear; Pemberton's machine sale `keeperChoices`; `open()`). Sewing needs a placed **Sewing Machine** (`sewmachine`, 12,000 from Pemberton once `S.craft` exists, offered only while you own none; model `buildMachine`). Using it calls `SX.open()`; there is no craft-panel tab. Hooks in main.js (search `v1.64`), chars.js (look codes and the outfit), server (one import and the presence look check).
+- **Codes.** A design is a string: a few base-64 fields then the pixels, run-length coded (a char under 32 is a pixel of that palette colour; 32-63 repeats the last colour 2-33 times). Rugs: `'r' shape w d edge pile edgeColor grid` + pixels, item id `cr_` + code (resolved in ITEMS like `cf_`). Clothes: `'g' base sleeve hem flare alt alt alt grid` + pixels. A worst-case 32x32 painting is about 1,030 chars; codes over 1,400 are refused.
+- **Wearing.** The look code gets `~` + the garment code on the end (`lookCode`/`parseLook` in chars.js). `buildCritter` uses `buildCustomOutfit` when `look.ct` is set, else the normal outfit. Presence messages send a long look only when it changes and every 3 seconds (`lkSend`), and the server's look check accepts the `~g...` suffix up to 1,500 chars.
+- **Skill.** `S.craft.sew.made`: 0/3/8/16/30 pieces = Beginner/Apprentice/Tailor/Artisan/Master, grid 8/12/16/24/32, alterations 0/1/2/3/5. Every option has a level; 18 alterations from pockets to wings.
+- **Prices.** Rugs: copies at materials + 15%; first sale of a rug you designed adds `rugBonus` (colours, grid, shape and edge), 2 new rugs a day. Clothes aren't sold.
+- Sewn rugs and custom furniture don't count toward discoveries, furniture achievements or the catalog.
+- Save: `S.craft.sew` (made, rugs, clothes, closet, sold, bonusDay); no new keys.
+- Test hooks (#dev): `window.__game.sew`.

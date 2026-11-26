@@ -7,7 +7,7 @@ import { ITEMS, TOOLS } from './content.js';
 import { M, mk, G, glowMat, addGlow, ITEM_BUILDERS } from './models.js';
 import { ENCH, FAMILIES, TWIN, TWIN_SLOTS, POWER, CRAFT, REPAIR, SCROLL_ODDS, WORDS, migrate, fits, knows, enchOf, slotsOf, rankOn, describe, toolsText, maxUses,
   canApply, needFor, missing, apply, remove, learn, repairNeed, repairClams, repair, repairForClams, craftNeed, canCraft, craft, teachable, rank3Known, scrollPick,
-  outputOf, oneSwing, luckFor, bonkPower, sureOf, bigRoll, sprayOf, sprayTargets, ONE_SWING_WOOD, carryDrops, upgradeTool } from './enchant-core.js';
+  outputOf, oneSwing, luckFor, bonkPower, sureOf, bigRoll, sprayOf, sprayTargets, ONE_SWING_WOOD, carryDrops, upgradeTool, FENNICK_SCROLL_PRICE } from './enchant-core.js';
 import { toolBench, enchBench, TWIN_BENCH, BENCH_NAME } from './benches-core.js';
 export * from './enchant-core.js';
 
@@ -57,6 +57,10 @@ export function createEnchant(C){
     sprayAround:(rec, day)=>sprayTargets(S(), rec, day),
     // a scroll in a bottle on the beach, rolled with the day's rare stream (r). Returns an item id or null.
     dailyScroll(r){ if (!finds()) return null; const a=r(); if (a>=SCROLL_ODDS.bottle) return null; return scrollPick(S(), r); },
+    // Fennick's cart: now and then a scroll for something Wendell teaches. Rolled on the day's rare stream (r). Returns an item id or null.
+    peddlerScroll(r){ if (!finds()) return null; const a=r(); if (a>=SCROLL_ODDS.peddler) return null; return scrollPick(S(), r, e=>e.learn==='wendell'); },
+    scrollPrice:itemId=>FENNICK_SCROLL_PRICE(ITEMS[itemId].ench),
+    knowsScroll:itemId=>knows(S(), ITEMS[itemId].ench),
     // a scroll from an ordinary action (dig, fell, catch). at: a THREE.Vector3
     scrollRoll(kind, at){ if (!finds() || Math.random()>=(SCROLL_ODDS[kind]||0)) return false; const id=scrollPick(S()); if (!id) return false; const p=at.clone();
       setTimeout(()=>{ C.dropNear(id, p, 1.2); if (C.sparkle) C.sparkle(p.clone().add(new THREE.Vector3(0,1,0))); C.Snd.jingle(); C.toast('An enchanting scroll!', C.thumb(id), 'new', ENCH[ITEMS[id].ench].name); }, 1000); return true; },
@@ -129,7 +133,7 @@ export function createEnchant(C){
             h+=`<div class="row" style="margin:8px 0 0"><img src="${thumbE(id)}"><div class="grow"><div class="nm">${ENCH[id].name}</div><div class="sub">${describe(id,sel)}${note?`<br><i>${note}</i>`:''}<br>${on?'':matsHTML(need)}${!on&&!c.ok&&!c.miss?`<br>${c.why}`:''}${on?'':benchLine(bb)}</div></div><button class="btn" data-eap="${id}" ${c.ok&&at?'':'disabled'}>${on?'On':'Enchant'}</button></div>`; }
           h+='</div>'; } } }
     if (mode==='make'){
-      h+='<div class="muted" style="margin-bottom:8px">Tools you make are the same as the ones Pemberton sells, and need the same experience. A new tool starts with no enchantments. A Flimsy tool can be made anywhere. Better ones need a bigger crafting table.</div>';
+      h+='<div class="muted" style="margin-bottom:8px">Tools you make are the same as the ones Pemberton sells, and need the same experience. Making a better one of a tool you already have moves its enchantments over (an heirloom drops Tough, since it never wears out). A tool you don\'t have yet starts with none. A Flimsy tool can be made anywhere. Better ones need a bigger crafting table.</div>';
       for (const t of tools){ const own=s.tools[t]; h+=`<div class="notice"><b>${TOOLS[t].name}</b> <span class="muted">· ${own?'You have: '+TOOLS[t].tiers[own.tier].name:'You don\'t have one'}</span>`;
         TOOLS[t].tiers.forEach((tr,k)=>{ const c=canCraft(s,t,k,inv,C.reqMet), need=craftNeed(t,k); if (!need) return; if (own && own.tier>=k) return; if (!C.reqMet(t,k) && k>((s.toolEver[t]??-1)+1)) return;
           h+=`<div class="row" style="margin:8px 0 0"><img src="${C.toolThumb(t,k)}"><div class="grow"><div class="nm">${tr.name}</div><div class="sub">${matsHTML(need)}${!C.reqMet(t,k)&&tr.req?`<br>${tr.req.desc}`:''}${benchLine(toolBench(k))}</div></div><button class="btn" data-emk="${t}:${k}" ${c.ok&&toolBench(k)<=here()?'':'disabled'}>Make</button></div>`; });

@@ -91,6 +91,10 @@ export const WENDELL = { rank3Applied:8, doubleApplied:3, lateApplied:15 };
 // scroll drop chances per action (Guests never get them). Roughly: one per 250 digs, rarer from felling and catches.
 export const SCROLL_ODDS = { dig:0.004, fell:0.003, catch:0.0015, bottle:0.004, peddler:0.05 };
 export const SCROLL_PRICE = id => Math.round((ENCH[id].price || 6000)*0.15/100)*100;   // what Pemberton pays for a spare scroll
+// Fennick now and then has a scroll on his cart (SCROLL_ODDS.peddler per visit). Only ones Wendell teaches, at a discount on Wendell's fee,
+// since a scroll also skips Wendell's conditions. About one Fennick visit in 20; he comes every 3 or 4 days.
+export const FENNICK_SCROLL_SHARE = 0.6;
+export const FENNICK_SCROLL_PRICE = id => Math.round((ENCH[id].price||0)*FENNICK_SCROLL_SHARE/1000)*1000;
 
 /* ---------- Repair and crafting ---------- */
 // Materials for a full repair by tier (scaled by how worn the tool is). The can's tiers are 0 basic, 1 golden.
@@ -245,8 +249,8 @@ export function teachable(S, who, friend=0){
 // how many families you know the strongest form of (Triple Output and One-Swing both count for output, once)
 export function rank3Known(S){ const f=new Set(); for (const id of S.rare.ench.known){ const e=ENCH[id]; if (e && e.rank===3) f.add(e.fam); } return f.size; }
 // a scroll for something you don't know yet; rarer for stronger ones
-export function scrollPick(S, r=Math.random){
-  const pool=Object.values(ENCH).filter(e=>!knows(S,e.id)); if (!pool.length) return null;
+export function scrollPick(S, r=Math.random, only=null){
+  const pool=Object.values(ENCH).filter(e=>!knows(S,e.id) && (!only || only(e))); if (!pool.length) return null;
   const w=e=>[0,6,3,1][e.rank]*(e.late?0.5:1); const tot=pool.reduce((a,e)=>a+w(e),0); let x=r()*tot;
   for (const e of pool){ x-=w(e); if (x<=0) return 'escroll_'+e.id; } return 'escroll_'+pool[pool.length-1].id; }
 

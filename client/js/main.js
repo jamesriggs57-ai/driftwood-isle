@@ -206,16 +206,16 @@ sun.castShadow = !S.settings.saver;
 sun.shadow.bias=-0.0006; sun.shadow.normalBias=0.03; scene.add(sun); scene.add(sun.target);
 
 const SKY_KEYS = [
-  { h:0,    top:0x1f3a7c, bot:0x4a64a8, sun:0xc4d2ff, si:1.35, hs:0xa2b6ec, hg:0x56628c, hi:1.55 },
-  { h:4.5,  top:0x284284, bot:0x5c6aa8, sun:0xc8d0ff, si:1.3,  hs:0xa0b0e6, hg:0x565e88, hi:1.5 },
+  { h:0,    top:0x0c1430, bot:0x1c2850, sun:0x9db0f0, si:0.7,  hs:0x5a6ca8, hg:0x262c48, hi:0.85 },   // nights are properly dark; lamps, fireflies, the beam and night fish carry the light (Menu > Brightness still lifts it)
+  { h:4.5,  top:0x111a3a, bot:0x283460, sun:0xa0aef0, si:0.75, hs:0x5e6ca4, hg:0x2a2e48, hi:0.9 },
   { h:6,    top:0x7090d4, bot:0xf8bcae, sun:0xffc8aa, si:1.8,  hs:0xecd4e8, hg:0x8a8090, hi:1.4 },
   { h:7.5,  top:0x7ed0f4, bot:0xffeccc, sun:0xffe0b8, si:2.9,  hs:0xc8d8ff, hg:0x8aa07a, hi:1.3 },
   { h:12,   top:0x62c4f8, bot:0xdcf8ff, sun:0xfff0d8, si:3.1,  hs:0xc4d6ff, hg:0x8cac78, hi:1.35 },
   { h:16.5, top:0x72c0f0, bot:0xfff0cc, sun:0xffd8a0, si:2.9,  hs:0xccd0f4, hg:0x949a7a, hi:1.3 },
   { h:18.5, top:0x6880c8, bot:0xffb490, sun:0xffaa80, si:2.2,  hs:0xfcc8b8, hg:0x9a8080, hi:1.45 },
-  { h:20,   top:0x34488a, bot:0x9276b6, sun:0xbcb4f0, si:1.6,  hs:0xaaa4dc, hg:0x605c80, hi:1.5 },
-  { h:22,   top:0x253f80, bot:0x4a62a6, sun:0xc4d2ff, si:1.35, hs:0xa2b6ec, hg:0x56628c, hi:1.55 },
-  { h:24,   top:0x1f3a7c, bot:0x4a64a8, sun:0xc4d2ff, si:1.35, hs:0xa2b6ec, hg:0x56628c, hi:1.55 },
+  { h:20,   top:0x223070, bot:0x6a5c98, sun:0xb0a8e8, si:1.2,  hs:0x9a94d0, hg:0x4c4a70, hi:1.2 },
+  { h:22,   top:0x0e1634, bot:0x1e2a54, sun:0x9db0f0, si:0.72, hs:0x5a6ca8, hg:0x262c48, hi:0.85 },
+  { h:24,   top:0x0c1430, bot:0x1c2850, sun:0x9db0f0, si:0.7,  hs:0x5a6ca8, hg:0x262c48, hi:0.85 },
 ];
 const _c1=new THREE.Color(), _c2=new THREE.Color();
 function keyLerp(h, f){ let a=SKY_KEYS[0], b=SKY_KEYS[1]; for(let i=0;i<SKY_KEYS.length-1;i++){ if(h>=SKY_KEYS[i].h && h<=SKY_KEYS[i+1].h){ a=SKY_KEYS[i]; b=SKY_KEYS[i+1]; break; } } return [a[f], b[f], (h-a.h)/(b.h-a.h||1)]; }
@@ -5017,7 +5017,7 @@ function updateSky(){
   waterMat.color.copy(WATER_BASE).lerp(_c1.setHex(0x3a64a8), World.night*0.5).lerp(_c2.setHex(0x7a9aa6), dim*0.5);
   { const c=waterMat.color, b=WATER_BASE; WU.uTint.value.set(c.r/b.r, c.g/b.g, c.b/b.b); for (const I of ISLES) if (I.waterMat) I.waterMat.color.copy(c); }
   deepSea.material.color.setHex(0x2a8aa8).lerp(_c1.setHex(0x24427a), World.night*0.6); WU.uSpark.value=(1-World.night)*(1-dim*0.8); WU.uFoamA.value=0.8-World.night*0.3;
-  renderer.toneMappingExposure = (1.15 + World.night*0.2) * (S.settings.bright||1);
+  renderer.toneMappingExposure = (1.15 - World.night*0.05) * (S.settings.bright||1);
   clouds.forEach(c=>c.children.forEach(s=>s.material.color.setHex(0xffffff).lerp(_c1.copy(bot),0.3+World.night*0.25).lerp(_c2.setHex(0x8a94a0),dim)));
 }
 const fadeEl=$('#fade');

@@ -383,3 +383,8 @@ Design: `claude/driftwood-isle-quests.md` in the project, section 6f. Code: the 
 - Letters can now carry more than one of a gift (the routes' seed packets).
 - Testing tools (#dev): "Phase 3: next story" steps through mill, post office, bathhouse, glade and wreck. Test hooks: `window.__game.v139`.
 - Not done yet: pen pals don't visit in person, the glade bugs have no special place in the museum (they go in with the other bugs), and the forge (late game) gates the fittings and the crowbar.
+
+## v1.39.1: darker nights
+
+- Nights were lit almost like an overcast day: the night sky keys had more ambient light than noon, and exposure went up after dark. The night keys in `SKY_KEYS` now have a deep navy sky, a dim blue moonlight and about half the ambient light, and exposure no longer rises at night. Dusk is a step darker too. Day and dawn are unchanged, and so are indoor rooms.
+- Street lamps, house windows, fireflies, the lighthouse beam and night fish glows were left as they were, so they now stand out against the dark. Menu > Brightness still lifts the whole scene for anyone who finds it too dark.

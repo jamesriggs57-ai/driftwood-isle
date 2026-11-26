@@ -502,7 +502,7 @@ export function createParty(C) {
   function ensureUI() {
     if (ui) return ui;
     const st = document.createElement('style'); st.textContent = `
-#partyBox{position:absolute;left:calc(env(safe-area-inset-left) + 10px);top:calc(env(safe-area-inset-top) + 82px);pointer-events:auto;max-width:min(270px,calc(100vw - 130px));display:none;flex-direction:column;align-items:flex-start;gap:5px;padding:7px 10px;font-size:13px;text-align:left;z-index:5}
+#partyBox{position:absolute;left:calc(env(safe-area-inset-left) + 10px);top:calc(env(safe-area-inset-top) + 150px);pointer-events:auto;max-width:min(270px,calc(100vw - 130px));display:none;flex-direction:column;align-items:flex-start;gap:5px;padding:7px 10px;font-size:13px;text-align:left;z-index:5}
 #partyBox.show{display:flex}
 #partyBox .pt{font-weight:700;font-size:14px}
 #partyBox .pt small{font-weight:500;color:var(--brown2);margin-left:6px}

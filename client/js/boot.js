@@ -112,15 +112,17 @@ export function signUpScreen(opts = {}) {
 /* ---------- start ---------- */
 async function start() {
   const B = { mode: 'guest', online: false };
-  const t = await api('/api/time');
-  if (t.ok && t.now) { B.online = true; Time.serverMs = t.now - Date.now(); }
+  // v1.67: one request for server time, who you are, your save and your mail count (was four separate ones)
+  const t0 = Date.now(), bt = await api('/api/boot');
+  if (bt.ok && bt.now) { B.online = true; Time.serverMs = bt.now - t0; }
+  else { const t = await api('/api/time'); if (t.ok && t.now) { B.online = true; Time.serverMs = t.now - Date.now(); } }   // server not updated yet
 
   // links people arrive on
   const h = location.hash;
   if (h.startsWith('#invite=')) sessionStorage.setItem('dw-invite', h.slice(8));
   if (h.startsWith('#invite=') || h === '#signedin') history.replaceState(null, '', location.pathname);
 
-  const me = B.online ? await api('/api/me') : { ok: false };
+  const me = bt.ok && bt.now ? (bt.user ? { ok: true, user: bt.user } : { ok: false }) : B.online ? await api('/api/me') : { ok: false };
   const local = (() => { try { return JSON.parse(localStorage.getItem(SAVE_KEY)); } catch { return null; } })();
 
   // Invite link
@@ -150,9 +152,15 @@ async function start() {
   }
 
   if (me.ok) {
-    B.mode = 'account'; B.user = me.user;
-    const mine = await api('/api/save');
+    B.mode = 'account'; B.user = me.user; B.mailCount = bt.user ? bt.mail | 0 : null;
+    const mine = bt.user && bt.save ? bt.save : await api('/api/save');
     let data = mine.data, version = mine.version || 0;
+    // v1.67: the game now saves online about once a minute when nobody else is around. Every change is also kept in
+    // this browser right away; if the tab closed before it reached the server (and nothing else saved since), use it.
+    const pendKey = 'driftwood-cloud-pending-' + me.user.id;
+    try { const pend = JSON.parse(localStorage.getItem(pendKey) || 'null');
+      if (pend && pend.d && data && pend.v === version) { data = pend.d; B.recovered = true; } else localStorage.removeItem(pendKey); } catch {}
+    try { localStorage.removeItem('driftwood-cloud-cache-' + me.user.id); } catch {}   // old copy, no longer used
     // Menu > Start a new island: make a new one in the island maker and replace the saved island right away
     if (data && sessionStorage.getItem('dw-newisland')) {
       sessionStorage.removeItem('dw-newisland');
@@ -160,7 +168,7 @@ async function start() {
       if (made) {
         const fresh = { v: 2, ...made, player: '', island: '', clams: 1000, inv: [] };
         const r = await api('/api/save', { method: 'PUT', body: { data: fresh, baseVersion: version } });
-        if (r.ok) { data = fresh; version = r.version; B.prefillName = me.user.displayName; try { localStorage.removeItem('driftwood-cloud-cache-' + me.user.id); } catch {} }
+        if (r.ok) { data = fresh; version = r.version; B.prefillName = me.user.displayName; B.recovered = false; try { localStorage.removeItem(pendKey); } catch {} }
         else await info('Could not start over', r.error || 'Your old island is still saved. Try again in a moment.');
       }
     }

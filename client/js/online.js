@@ -14,7 +14,7 @@ const G = () => window.__game;
 let B = null;
 
 /* ---------- saving ---------- */
-let ownVer = 0, hostVer = 0, pending = null, timer = null, inflight = null, lastWorld = '', blocked = false;
+let ownVer = 0, hostVer = 0, timer = null, dueAt = 0, dirty = false, inflight = null, lastWorld = '', blocked = false;
 // Last island copy we know the server has, per part. Used to merge when someone else changed the island meanwhile.
 let base = {};
 const snap = d => Object.fromEntries(WORLD_KEYS.map(k => [k, JSON.stringify(d[k] ?? null)]));
@@ -54,6 +54,13 @@ function mergeWorld(S, server) {
   base = snap(server); return { took: changed.length, changed };
 }
 const own = () => B.mode === 'visit' ? B.own : null;
+// v1.67: the friends list is reused for a minute (Friends tab and Portal Station), and dropped whenever you change it
+let friendsCache = null;
+async function friendsList() {
+  if (friendsCache && Date.now() - friendsCache.at < 60000) return friendsCache.r;
+  const r = await api('/api/friends'); if (r.ok) friendsCache = { at: Date.now(), r }; return r;
+}
+const dropFriends = () => { friendsCache = null; };
 
 export function setup(boot) {
   B = boot; B.flush = flush;   // the wizard's spells save and reload the island
@@ -62,23 +69,45 @@ export function setup(boot) {
   ownVer = (B.mode === 'visit' || B.mode === 'trip') ? B.ownVersion : (B.version || 0); hostVer = B.hostVersion || 0;
   // v1.26 boat trips: your bag and clams save to your own island's save; the trip island lives in this tab only
   if (B.mode === 'trip') B.onSave = S => { try { sessionStorage.setItem('dw-trip-world', JSON.stringify({ ground: S.ground, cut: S.cut, stumps: S.stumps, plants: S.plants, day: S.day, placed: S.placed })); } catch {} queue(); };
-  if (B.mode === 'account') B.onSave = S => { cacheLocal(S); queue(); };
+  if (B.mode === 'account') B.onSave = S => { keepPending(S); queue(); };
   if (B.mode === 'visit') { base = snap(B.save); lastWorld = JSON.stringify(worldForPush(B.save)); B.onSave = () => queue(); }
   if (B.mode === 'account' && B.save) { base = snap(B.save); lastAnnounced = J(pick(B.save, WORLD_KEYS)); }
+  if (B.recovered) { dirty = true; setTimeout(() => flush(), 3000); }   // v1.67: changes kept in this browser last time never reached the server
 }
 const pick = (o, keys) => Object.fromEntries(keys.filter(k => o[k] !== undefined).map(k => [k, o[k]]));
-function cacheLocal(S) { try { localStorage.setItem('driftwood-cloud-cache-' + B.user.id, JSON.stringify(S)); } catch {} }
-function queue() { if (blocked) return; clearTimeout(timer); timer = setTimeout(flush, 2000); }
+/* v1.67 fewer requests: the free Cloudflare plan allows 100,000 a day for everyone together, and saving every couple
+   of seconds used most of them. Now: alone, your island saves online at most once a minute (30 seconds on a visit or
+   trip), and right away when you switch apps, close the tab, travel, trade or send mail. With friends in the room it
+   saves 2 seconds after a change, as before, so live island sync stays quick. Every change is also kept in this
+   browser at once (account islands), so a crash loses nothing: boot.js picks it up next time. */
+const pendKey = () => 'driftwood-cloud-pending-' + B.user.id;
+function keepPending(S) { try { localStorage.setItem(pendKey(), JSON.stringify({ v: ownVer, d: S })); } catch {} }
+function dropPending() { if (B.mode === 'account' && !dirty) try { localStorage.removeItem(pendKey()); } catch {} }
+function queue() {
+  if (blocked) return; dirty = true;
+  if (peers.size) { clearTimeout(timer); dueAt = Date.now() + 2000; timer = setTimeout(flush, 2000); return; }
+  const delay = B.mode === 'account' ? 60000 : 30000, at = Date.now() + delay;
+  if (timer && dueAt <= at) return;   // a save is already coming sooner
+  clearTimeout(timer); dueAt = at; timer = setTimeout(flush, delay);
+}
+// Save only if something changed since the last save (switching apps, closing the tab)
+function flushIfDirty() { return dirty ? flush() : Promise.resolve(true); }
 
 // Push the current state to the server now. Resolves once it's stored (or failed).
 export function flush() {
-  clearTimeout(timer); if (blocked) return Promise.resolve(false); if (B.mode !== 'account' && B.mode !== 'visit' && B.mode !== 'trip') return Promise.resolve(true);
+  clearTimeout(timer); timer = null; if (blocked) return Promise.resolve(false); if (B.mode !== 'account' && B.mode !== 'visit' && B.mode !== 'trip') return Promise.resolve(true);
   // one push at a time, in order, so two pushes never race with the same version
   inflight = (inflight || Promise.resolve()).then(doFlush, doFlush);
   return inflight;
 }
 async function doFlush() {
   if (blocked) return false;
+  dirty = false;   // anything saved from here on marks it again
+  const ok = await pushNow();
+  if (!ok && !blocked) dirty = true; else if (dirty && B.mode === 'account') keepPending(G().S); else dropPending();   // changed while saving: keep it under the new version
+  return ok;
+}
+async function pushNow() {
   {
     const S = G().S;
     if (B.mode === 'account') {
@@ -176,7 +205,8 @@ function onLive(m) {
   const net = G().net;
   switch (m.t) {
     case 'hello': if (m.you) { myId = m.you; B.myId = m.you; } for (const p of m.peers) { peers.set(p.id, p); net.remoteUpsert(p.id, p.name, p.st); } renderHere(); break;
-    case 'join': peers.set(m.id, m); net.remoteUpsert(m.id, m.name); net.toast(`${m.name} ${m.id === liveOwner() ? 'is home' : 'arrived'}!`); renderHere(); break;
+    case 'join': peers.set(m.id, m); lastPos = ''; if (dirty) flush();   // v1.67: show the newcomer where we are and the latest island
+      net.remoteUpsert(m.id, m.name); net.toast(`${m.name} ${m.id === liveOwner() ? 'is home' : 'arrived'}!`); renderHere(); break;
     case 'leave': { const p = peers.get(m.id); peers.delete(m.id); net.remoteLeave(m.id); if (p) net.toast(`${p.name} left.`); if (trade && trade.with === m.id) trade = null; renderHere(); break; }
     case 'pos': { const p = peers.get(m.id); if (p) { p.st = m; net.remoteUpsert(m.id, p.name, m); } break; }
     case 'emote': net.remoteEmote(m.id === myId ? 'me' : m.id, m.e); break;
@@ -198,7 +228,7 @@ function applyServerBag(r) {
   ownVer = r.version; G().net.setInventory(r.inv, r.seen, r.equip);
 }
 function tickPos() {
-  const g = G(); if (!g || !g.net.started || !ws || ws.readyState !== 1) return;
+  const g = G(); if (!g || !g.net.started || !ws || ws.readyState !== 1 || !peers.size) return;   // v1.67: nobody to see it, send nothing
   const st = g.net.playerState(), k = JSON.stringify(st); if (k === lastPos) return; lastPos = k; send({ t: 'pos', ...st });
 }
 
@@ -242,7 +272,7 @@ async function renderPanel() {
   }
   if (panelTab === 'friends') {
     body.innerHTML = '<div class="muted">Loading...</div>';
-    const f = await api('/api/friends'); if (panelTab !== 'friends') return;
+    const f = await friendsList(); if (panelTab !== 'friends') return;
     const canInvite = B.mode === 'account';
     const inv = f.invitable || [];   // v1.55: friends who can't come over right now
     body.innerHTML = `${canInvite ? `<div class="notice"><b>Invite a friend</b><br><span class="muted">Only your friends and people you send a link to can visit. There's no way for strangers to find your island.</span>
@@ -270,15 +300,15 @@ async function renderPanel() {
       b.disabled = true;
       const r = await api(`/api/friends/${b.dataset.inv}/invite`, { method: 'POST', body: { role: role.value, standing: $('#invStand').value === '1' } });
       if (!r.ok) { G().net.toast(r.error || 'Could not invite. Try again.'); b.disabled = false; return; }
-      G().net.toast(`Invited ${b.dataset.name}.${r.letter ? ' A letter is on its way to them.' : ''}`); renderPanel();
+      dropFriends(); G().net.toast(`Invited ${b.dataset.name}.${r.letter ? ' A letter is on its way to them.' : ''}`); renderPanel();
     });
     body.querySelectorAll('[data-visit]').forEach(b => b.onclick = async () => { await flush(); sessionStorage.setItem('dw-visit', b.dataset.visit); location.reload(); });
     body.querySelectorAll('[data-gift]').forEach(b => b.onclick = () => pickGift(b.dataset.gift, b.dataset.name, false));
-    body.querySelectorAll('[data-leave]').forEach(b => b.onclick = async () => { if (!confirmBox('Remove this island from your list? You would need a new invite to visit again.')) return; await api(`/api/links/${b.dataset.leave}/${B.user.id}`, { method: 'DELETE' }); renderPanel(); });
-    body.querySelectorAll('[data-revoke]').forEach(b => b.onclick = async () => { if (!confirmBox('Stop this friend from visiting your island?')) return; await api(`/api/links/${B.user.id}/${b.dataset.revoke}`, { method: 'DELETE' }); renderPanel(); });
+    body.querySelectorAll('[data-leave]').forEach(b => b.onclick = async () => { if (!confirmBox('Remove this island from your list? You would need a new invite to visit again.')) return; await api(`/api/links/${b.dataset.leave}/${B.user.id}`, { method: 'DELETE' }); dropFriends(); renderPanel(); });
+    body.querySelectorAll('[data-revoke]').forEach(b => b.onclick = async () => { if (!confirmBox('Stop this friend from visiting your island?')) return; await api(`/api/links/${B.user.id}/${b.dataset.revoke}`, { method: 'DELETE' }); dropFriends(); renderPanel(); });
     body.querySelectorAll('[data-role]').forEach(b => b.onclick = async () => { const to = b.dataset.r === 'resident' ? 'visitor' : 'resident';
       if (to === 'resident' && !confirmBox('Residents can change or ruin your island. Only do this for people you know in real life and trust.')) return;
-      await api(`/api/links/${B.user.id}/${b.dataset.role}`, { method: 'PATCH', body: { role: to, standing: b.dataset.s === '1' } }); renderPanel(); });
+      await api(`/api/links/${B.user.id}/${b.dataset.role}`, { method: 'PATCH', body: { role: to, standing: b.dataset.s === '1' } }); dropFriends(); renderPanel(); });
   }
   if (panelTab === 'mail') {
     body.innerHTML = '<div class="muted">Loading...</div>';
@@ -375,7 +405,7 @@ export function afterGame() {
     setTimeout(() => banner('Guest island: saved in this browser only, and it can be lost.' + (B.online ? ' Make an account to keep it safe.' : ''), B.online ? 'Make account' : null, () => { $('#netBanner').style.display = 'none'; openPanel('island'); }), 4000); }
   // the Portal Station (main.js) uses these to list islands, travel, and open the invite panel
   B.portal = { online: online(),
-    list: () => api('/api/friends'),
+    list: () => friendsList(),
     visit: async id => { await flush(); sessionStorage.setItem('dw-visit', id); location.reload(); },
     home: async () => { await flush(); location.href = location.pathname; },
     invite: () => openPanel('friends'), friends: () => openPanel('friends'), account: () => openPanel('island'),
@@ -384,12 +414,12 @@ export function afterGame() {
       const r = await api('/api/mail', { method: 'POST', body: { to, letter, ...(it ? { slot, id: it.id } : {}), baseVersion: ownVer } });
       if (r.ok) applyServerBag(r); return r; } };
   if (online() || tripRoom()) {
-    api('/api/me').then(r => { if (r.ok) { myId = r.user.id; B.myId = myId; } });
+    if (B.user) { myId = B.user.id; B.myId = myId; }   // v1.67: from startup, no extra request
     connect(); posTimer = setInterval(tickPos, 200);
-    // mail check
-    setTimeout(async () => { const r = await api('/api/mail'); const n = (r.mail || []).length; if (n) G().net.toast(`You have ${n} gift${n > 1 ? 's' : ''} in your mailbox.`); }, 6000);
-    addEventListener('pagehide', () => { flush(); });
-    document.addEventListener('visibilitychange', () => { if (document.hidden) flush(); });
+    // mail check (the count came with startup)
+    if (B.mailCount) setTimeout(() => { const n = B.mailCount; G().net.toast(`You have ${n} gift${n > 1 ? 's' : ''} in your mailbox.`); }, 6000);
+    addEventListener('pagehide', () => { flushIfDirty(); });
+    document.addEventListener('visibilitychange', () => { if (document.hidden) flushIfDirty(); });
   }
 }
 // let the game send emotes from elsewhere later

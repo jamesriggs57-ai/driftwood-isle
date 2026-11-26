@@ -130,7 +130,7 @@ export function buildStore(tier=0){
 }
 
 /* ---------- Town hall: a tent at first, then a hall, then a grand hall with a clock tower ---------- */
-export function buildTownHall(tier=0, name=null){   // v1.40 name: 'Charter Hall' once the charter is signed
+export function buildTownHall(tier=0, name=null){   // v1.41 name: 'Charter Hall' once the charter is signed
   const g=new THREE.Group();
   if (tier===0){ // a big canvas tent with a little desk out front
     const t=mk(new THREE.ConeGeometry(3.0,3.2,8), M(0xf2e6c8), 0,1.6,0,g); t.castShadow=true; t.rotation.y=Math.PI/8;

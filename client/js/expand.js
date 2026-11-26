@@ -13,7 +13,7 @@ import { mergeStatic } from './cottage.js';
 import { buildGrandfatherStump } from './reef.js';
 
 // v1.37: Old Pinewood (Bramble's dream) rises third. Islands raised before v1.37 keep the order they rose in (S.terra.isleK).
-export const ISLE_ORDER = ['meadow', 'dunes', 'pines', 'bluff', 'crags', 'starfall'];   // v1.40 Starfall Isle floats above the crags, last of all
+export const ISLE_ORDER = ['meadow', 'dunes', 'pines', 'bluff', 'crags', 'starfall'];   // v1.41 Starfall Isle floats above the crags, last of all
 export const OLD_ORDER = ['meadow', 'dunes', 'bluff', 'crags'];
 export const ISLE_INFO = {
   meadow:{ name:'Clover Meadow', bridge:'causeway', gap:26, blurb:'rolling grass, wildflowers and an orchard of fruit that doesn\'t grow on the main island', sand:false },
@@ -45,7 +45,7 @@ export const ISLE_QUESTS = [
     ask:['Out past the bluff there are crags. Old, mossy, a bit grumpy. They used to be part of the bluff before the sea cut them off.','I can lift them, but there\'s no way to reach them from here. You\'d have to cross from the cliff on a rope bridge.',
       'Bring me 15 iron nuggets, 30 stone and 2 fossils. The crags like old things. And 350,000 clams. This is the big one.'],
     done:['Iron, stone, fossils. The crags will be pleased. Well. Less grumpy.'] },
-  // v1.40: the last one. One thing from each of the island's chains (the workshop, the apiary, the tea room, the forge, the mill, the bathhouse).
+  // v1.41: the last one. One thing from each of the island's chains (the workshop, the apiary, the tea room, the forge, the mill, the bathhouse).
   { kind:'starfall', clams:500000, need:[['plank',1],['honey',1],['teacake',1],['fitting',1],['flour',1],['bathsalts',1]], days:3, relics:['relic_coralcrown','relic_starglass','relic_moonsap'],
     ask:['Sit down. No, really, sit. This one is different.','Hazel\'s last page. The island that hung in the sky above the old land. I thought it was a sailor\'s story. It is not. It is still up there, above the crags, waiting.',
       'I can bring it down to where you can reach it, and lay a stair of starlight up from Hollow Crags. But it has to know this island is a real home now.',
@@ -56,7 +56,7 @@ export const isleQuestFor = kind => ISLE_QUESTS.find(q=>q.kind===kind);
 export const ISLE_STEP = 0.55, ISLE_OFF = 0.85;
 const quant = (v, riser=0.2) => { if (v<=ISLE_OFF) return v; const q=(v-ISLE_OFF)/ISLE_STEP, k=Math.floor(q), f=q-k; return ISLE_OFF+ISLE_STEP*(k+smooth(1-riser,1,f)); };
 export const PLATEAU = ISLE_OFF + ISLE_STEP*8;   // 5.25 m: the bluff and crag tops, level with each other so the rope bridge can hang between them
-export const SKY = PLATEAU + ISLE_STEP*14;   // v1.40 13.0 m: Starfall Isle's top. Its ground stops at SKY_CUT; below that is the rocky underside (a model)
+export const SKY = PLATEAU + ISLE_STEP*14;   // v1.41 13.0 m: Starfall Isle's top. Its ground stops at SKY_CUT; below that is the rocky underside (a model)
 export const SKY_CUT = SKY - 4;
 
 /* ---------- Where they go ----------
@@ -85,7 +85,7 @@ export function planIsles(kinds, o){
       let a=Math.atan2(B.cz, B.cx) + 0.75; const tryAt=aa=>[B.cx+Math.cos(aa)*(B.r*0.97+I.br.gap+I.r*0.97), B.cz+Math.sin(aa)*(B.r*0.97+I.br.gap+I.r*0.97)];
       let [x,z]=tryAt(a); if (out.some(J=>J!==B && Math.hypot(x-J.cx,z-J.cz)<J.r+I.r+20)){ a=Math.atan2(B.cz,B.cx)-0.75; [x,z]=tryAt(a); }
       I.a=a; I.dir=[Math.cos(a), Math.sin(a)]; I.from=out.indexOf(B); I.cx=x; I.cz=z;
-    } else {   // v1.40 Starfall: up a stair from the crags, further out again, clear of everything else
+    } else {   // v1.41 Starfall: up a stair from the crags, further out again, clear of everything else
       const C=out.find(J=>J.kind==='crags'); if (!C) break; const base=Math.atan2(C.cz, C.cx);
       const at=aa=>[C.cx+Math.cos(aa)*(C.r*0.97+I.br.gap+I.r*0.97), C.cz+Math.sin(aa)*(C.r*0.97+I.br.gap+I.r*0.97)];
       let a=base, x, z; for (const d of [0.55,-0.55,1.1,-1.1,0,1.6,-1.6]){ a=base+d; [x,z]=at(a); if (!out.some(J=>J!==C && Math.hypot(x-J.cx,z-J.cz)<J.r+I.r+16) && Math.hypot(x,z)>R*1.3+I.r) break; }
@@ -122,7 +122,7 @@ export function isleRaw(I, x, z){
     const base=-2.7+3.05*smooth(1.16,0.97,t)+0.55*smooth(0.8,0.55,t), m=smooth(0.85,0.5,t);
     const ridge=0.5+0.5*Math.sin(x*0.16+z*0.09+fbm(sx,sz)*4);
     return base + m*(0.9*ridge*ridge*smooth(0.25,0.75,fbm(sx*1.3,sz*1.3)) + 0.35*fbm(x*0.11,z*0.11)); }
-  if (K==='starfall'){   // v1.40 a floating plate: a gentle top with two low steps, a short rim, nothing under it (the model hangs below)
+  if (K==='starfall'){   // v1.41 a floating plate: a gentle top with two low steps, a short rim, nothing under it (the model hangs below)
     const rim=t+(fbm(sx*2.2,sz*2.2)-0.5)*0.07; if (rim>1.06) return -2.7;
     const top=SKY + ISLE_STEP*Math.floor(2*smooth(0.35,0.85,fbm(sx*1.4,sz*1.4)))*smooth(0.82,0.5,rim);
     return lerp(SKY_CUT-0.6, top, smooth(1.0, 0.93, rim)); }
@@ -196,7 +196,7 @@ export function buildIsleBridge(B, groundAt){
   mergeStatic(deck); return g;
 }
 
-// v1.40 Wendell's stair of starlight: pale stone steps hanging in the air, each lit from inside, a few loose stones drifting under it
+// v1.41 Wendell's stair of starlight: pale stone steps hanging in the air, each lit from inside, a few loose stones drifting under it
 function buildStair(B){
   const g=new THREE.Group(), L=B.len, w=B.w; g.position.set(B.a[0],0,B.a[1]); g.rotation.y=Math.atan2(-B.uz, B.ux); g.userData.swing=null;
   const stone=M(0xd8d4e8,{ flatShading:true, roughness:0.7 }), lit=glowMat(0xbfd8ff), r=mulberry32(Math.round(L*100));
@@ -230,7 +230,7 @@ export function buildLandmark(kind, seed){
   const g=new THREE.Group(), r=mulberry32(seed|0), stone=M(0xb8b0a0,{flatShading:true}), stone2=M(0x9a948a,{flatShading:true}), wood=M(0x8a5e3a), dark=M(0x5a3e28), white=M(0xf4efe6), red=M(0xc8503d), moss=M(0x5f8a3e);
   g.userData.spin=null; g.userData.desc='';
   if (kind==='pines') return buildGrandfatherStump();
-  if (kind==='starfall'){ // v1.40 the star altar: a ring of pale stones round a dais, a star turning slowly over it
+  if (kind==='starfall'){ // v1.41 the star altar: a ring of pale stones round a dais, a star turning slowly over it
     const pale=M(0xd8d4e8,{flatShading:true}), lit=glowMat(0xd8e4ff), gold=M(0xf3c35a,{ metalness:0.6, roughness:0.3 });
     mk(G.cyl(2.4,2.7,0.35,16), pale, 0,0.17,0,g); mk(G.cyl(1.6,1.8,0.3,16), stone, 0,0.5,0,g); mk(G.cyl(0.4,0.55,1.1,8), pale, 0,1.2,0,g); mk(G.cyl(0.62,0.62,0.12,10), gold, 0,1.8,0,g);
     for (let i=0;i<7;i++){ const a=i/7*TAU, h=1.3+r()*0.9, s=mk(G.box(0.45,h,0.32), pale, Math.cos(a)*3.4, h/2, Math.sin(a)*3.4, g); s.rotation.y=-a; s.rotation.z=(r()-0.5)*0.12;

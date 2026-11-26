@@ -11,7 +11,7 @@ import { ITEMS, NATIVE_FRUITS, PLANTS, TOOLS, WOODWORK, BACKPACKS, BASE_SLOTS, H
   WEAR_IDS, FAVOR_THEMES, DO_TASKS, ORIGINAL_RESIDENTS, LETTERS, LETTER_IDS, CORAL_KINDS, CORAL_NAMES, CORAL_FISH, NIGHT_BAY } from './content.js';
 import * as S2 from './story2.js';   // v1.38 phase 2 buildings and furniture
 import * as S3 from './story3.js';   // v1.39 phase 3 buildings and furniture
-import * as S4 from './story4.js';   // v1.40 phase 4 buildings, festival and Starfall spells
+import * as S4 from './story4.js';   // v1.41 phase 4 buildings, festival and Starfall spells
 import * as LH from './lighthouse.js';   // v1.39 fixes: the climbable lighthouse on Lighthouse Point
 import { ACHIEVEMENTS, ACH_GROUPS } from './achieve.js';
 import { BY_SLOT, SLOT_NAMES } from './wardrobe-data.js';
@@ -229,7 +229,7 @@ function numAt(h, f){ const [a,b,t]=keyLerp(h,f); return lerp(a,b,t); }
 /* ---------- Island shape (heightAt is the single source of truth) ---------- */
 const RIVER = LAY.river;
 // v1.36 new land raised by Wendell (filled in once the island's own heights are ready; see the NEW LAND section)
-let ISLES=[], mainOnly=false, skySkip=false; const XBR=[];   // v1.40 skySkip: the sea floor under Starfall Isle (for the water's depth)
+let ISLES=[], mainOnly=false, skySkip=false; const XBR=[];   // v1.41 skySkip: the sea floor under Starfall Isle (for the water's depth)
 const POND = LAY.pond;
 /* v1.27 trip island shapes: extra channels (XW), round pools (POOLS), an offshore islet with a sandbar or stepping stones,
    and a giant tortoise's shell (a smooth mound the shell model sits on, so you can walk up onto it). */
@@ -689,7 +689,7 @@ function buildTerrain(o={}){
   }
   if (!I) mainOnly=false;
   g.setAttribute('color', new THREE.BufferAttribute(cols,3)); g.setAttribute('grassy', new THREE.BufferAttribute(gw,1));
-  if (I && I.sky){ const ix=g.index.array, keep=[]; for (let i=0;i<ix.length;i+=3){ if (pos.getY(ix[i])>=ISL.SKY_CUT-0.05 && pos.getY(ix[i+1])>=ISL.SKY_CUT-0.05 && pos.getY(ix[i+2])>=ISL.SKY_CUT-0.05) keep.push(ix[i],ix[i+1],ix[i+2]); } g.setIndex(keep); }   // v1.40 a floating isle: only its top
+  if (I && I.sky){ const ix=g.index.array, keep=[]; for (let i=0;i<ix.length;i+=3){ if (pos.getY(ix[i])>=ISL.SKY_CUT-0.05 && pos.getY(ix[i+1])>=ISL.SKY_CUT-0.05 && pos.getY(ix[i+2])>=ISL.SKY_CUT-0.05) keep.push(ix[i],ix[i+1],ix[i+2]); } g.setIndex(keep); }   // v1.41 a floating isle: only its top
   g.computeVertexNormals();
   const m = new THREE.Mesh(g, terrainMat()); m.receiveShadow = true; m.position.set(ox,0,oz); return m;
 }
@@ -805,7 +805,7 @@ for (const [n,I] of ISLES.entries()){
   m.onBeforeCompile=waterCompile({ uDepth:{ value:tex }, uBox:{ value:new THREE.Vector3(x0,z0,size) }, uClip:{ value:clips }, uClipN:{ value:cn } }); m.customProgramCacheKey=()=>'driftwood-water-v2';
   const w=new THREE.Mesh(new THREE.PlaneGeometry(size,size).rotateX(-Math.PI/2), m); w.position.set((x0+x1)/2, 0, (z0+z1)/2); w.receiveShadow=true; OUT.add(w); I.waterMat=m; I.water=w;
   I.lod=buildTerrain({ isle:I, cx:(x0+x1)/2, cz:(z0+z1)/2, size, N:Math.round(size/2.4) }); OUT.add(I.lod);
-  if (I.sky){ I.under=ISL.buildSkyUnder(I); OUT.add(I.under); }   // v1.40 seen from everywhere, so it's always there
+  if (I.sky){ I.under=ISL.buildSkyUnder(I); OUT.add(I.under); }   // v1.41 seen from everywhere, so it's always there
 }
 // Waves only roll on the open sea. Ponds and rivers lie still, so their big flat-shaded triangles no longer flash
 // light and dark as they tilt (that was the glitchy pond lighting).
@@ -1898,7 +1898,7 @@ function buildHall(){
   if (hallEnt){ hallEnt.remove(); hallEnt=null; } if (clerk){ clerk.remove(); clerk=null; } setRects('hall',[]);
   if (!PLACES.hall) return;
   const [hx,hz]=PLACES.hall, t=S.town.hall||0;
-  const chn=t>=2 && !TRIP && charterBuilt(); hallEnt=placeBuilding('hall', hx, hz, buildTownHall(t, chn?'Charter Hall':null), 'Read', ()=>talkHall()); hallEnt.charter=chn;   // v1.40
+  const chn=t>=2 && !TRIP && charterBuilt(); hallEnt=placeBuilding('hall', hx, hz, buildTownHall(t, chn?'Charter Hall':null), 'Read', ()=>talkHall()); hallEnt.charter=chn;   // v1.41
   const [dx,dz]=hallEnt.doorPt; clerk=new Keeper(KEEPERS.clementine, dx+(t===0?1.9:1.6), dz-(t===0?0.6:0.3), ()=>talkHall()); clerk.rest=0; hallEnt.tier=t;
 }
 const HALL_NAMES=['Town Tent','Town Hall','Grand Town Hall'];
@@ -1994,7 +1994,7 @@ function talkHall(){
     ...favorChoices(npcOf('clementine'), ()=>menu()),
     { label:'Town projects', fn:()=>openHallPanel() },
     ...gladeLamp(k, ()=>menu()),   // v1.39
-    ...hall4Choices(k, ()=>menu()),   // v1.40 the Island Charter
+    ...hall4Choices(k, ()=>menu()),   // v1.41 the Island Charter
     ...(VISIT||GUEST?[]:[{ label:'Pen pals and letters', fn:()=>openContacts() }]),
     ...(VISIT?[]:[{ label: !S.home.built ? 'A house?' : loanOpen() ? 'Pay my loan' : 'Home loan', fn:()=>talkLoan(menu) }]),
     { label:'New neighbors?', fn:()=>{ const nxt=T.next && RESIDENTS.find(R=>R.id===T.next.id), cap=townCap();
@@ -2239,7 +2239,7 @@ function storyNewDay(){
   for (const [proj,h] of Object.entries(SY.helpers||{})){ if (!h || !livesHere(h.id)){ delete SY.helpers[proj]; continue; } if ((now-h.since)>0 && (now-h.since)%7===0 && h.paid!==now){ h.paid=now; S.friend[h.id]=(S.friend[h.id]||0)+1; } }
   storyNewDay2(now);   // v1.38
   storyNewDay3(now);   // v1.39
-  storyNewDay4(now);   // v1.40
+  storyNewDay4(now);   // v1.41
   stakeNewDay(now);
 }
 // a keeper who moves away sells their business to whoever takes their place
@@ -2326,7 +2326,7 @@ function helpChoices(res, menu){
   const mine=Object.entries(SY.helpers||{}).find(([p,h])=>h && h.id===id);
   if (mine) return [{ label:'How\'s the helping going?', fn:()=>dialog(nm, v, [fill(`I love it at ${PROJECTS[mine[0]]}, {c}! Want me to keep at it?`, c)], null, [
       { label:'Keep it up!', fn:menu }, { label:'You can stop now', alt:true, fn:()=>{ delete SY.helpers[mine[0]]; save(); dialog(nm, v, [fill('Okay! It was fun, {c}.', c)], menu); } } ]) }];
-  if ((S.friend[id]||0)<10 && !newbHelper(id)) return [];   // v1.40 the newcomer can help once they've met people
+  if ((S.friend[id]||0)<10 && !newbHelper(id)) return [];   // v1.41 the newcomer can help once they've met people
   const open=helperProjects().filter(p=>!helperOf(p)); if (!open.length) return [];
   return [{ label:'Want to help with something?', fn:()=>dialog(nm, v, [fill('Help? With what, {c}?', c)], null, [
     ...open.map(p=>({ label:p==='nursery'?'Sprig\'s coral nursery':'The workshop', fn:()=>{ SY.helpers=SY.helpers||{}; SY.helpers[p]={ id, since:sday() }; save(); Snd.jingle();
@@ -2756,7 +2756,7 @@ function relicGifts(fresh, done){ for (const id of fresh){ const t='ticket_'+REL
 function wantedRelics(){ if (VISIT || GUEST || TRIP || !S.magic || !S.magic.tower) return []; const q=isleQuest(); if (!q || !q.asked) return []; const R=relicSt(); return (q.Qd.relics||[]).filter(id=>R.att[id] && countItem(id)<1); }
 // is one buried on the island you're about to sail to? Its own kind of isle 60%, another themed isle 15%, a plain one 5%
 function rollTripRelic(theme){ const want=wantedRelics(); if (!want.length) return null; const own=want.filter(id=>RELIC_THEME[id]===theme), r=Math.random(), any=()=>want[Math.floor(Math.random()*want.length)];
-  if (want.includes('relic_starglass') && VY.SPECIAL[theme]) return 'relic_starglass';   // v1.40 starglass falls on every rare and legendary isle while Wendell wants it
+  if (want.includes('relic_starglass') && VY.SPECIAL[theme]) return 'relic_starglass';   // v1.41 starglass falls on every rare and legendary isle while Wendell wants it
   if (own.length>1) return r<0.6 ? own[Math.floor(Math.random()*own.length)] : null;
   if (own.length) return r<0.6 ? own[0] : null;
   if (theme && theme!=='plain') return r<0.15 ? any() : null;
@@ -2792,7 +2792,7 @@ function isleBlock(kind){
   if (kind==='pines'){ if (hall<2) return WEN.hall; if (shopTier('general')<1) return WEN.shops; if (!SY.shop || SY.shop.st==='pending') return WEN.dream; }
   if (kind==='bluff'){ if (mt<3) return WEN.museum; if (!(SY.shop && SY.shop.st==='open')) return WEN.timber; }
   if (kind==='crags'){ if (['general','aquarium','garden'].some(k=>shopTier(k)<2)) return WEN.shops; if (reefStage()<4) return WEN.dream; }
-  if (kind==='starfall' && !charterDone()) return WEN.dream;   // v1.40 only after the Island Charter and Wendell's last letter
+  if (kind==='starfall' && !charterDone()) return WEN.dream;   // v1.41 only after the Island Charter and Wendell's last letter
   return null; }
 function isleQuest(){
   const kind=nextIsleKind(); if (!kind) return null; const n=ISLE_K.length, Qd=ISL.isleQuestFor(kind), st=(S.magic.isleQ=S.magic.isleQ||{}), now=dayNum(today());
@@ -2822,7 +2822,7 @@ function isleChoices(menu){
 const COMPASS=['east','northeast','north','northwest','west','southwest','south','southeast'];
 function isleDirWord(kind){ try { const kinds=[...ISLE_K, kind]; mainOnly=true; const plan=ISL.planIsles(kinds, { seed:S.seed|0, SC, shore:a=>islandR(a)*1.03, ok:landingOK, angles:S.terra.isleA||[] })[ISLE_K.length]; mainOnly=false;
   if (!plan) return null; const a=Math.atan2(-plan.cz, plan.cx); return COMPASS[((Math.round(a/(Math.PI/4))%8)+8)%8]; } catch(e){ mainOnly=false; return null; } }
-function wendellLetter(){ if (VISIT || GUEST || TRIP || !SY.wl || sday2()<=SY.wl.day) return; const kind=nextIsleKind(); delete SY.wl; save(); if (!kind || kind==='starfall') return; const dir=isleDirWord(kind); if (!dir) return;   // v1.40 Starfall gets its own letter, after the charter
+function wendellLetter(){ if (VISIT || GUEST || TRIP || !SY.wl || sday2()<=SY.wl.day) return; const kind=nextIsleKind(); delete SY.wl; save(); if (!kind || kind==='starfall') return; const dir=isleDirWord(kind); if (!dir) return;   // v1.41 Starfall gets its own letter, after the charter
   S.letters.inbox.unshift({ id:'L'+Date.now().toString(36)+'w', from:'wendell', name:WIZARD.name, lines:[`I walked the shore last night and felt something under the water to the ${dir}. Older than the last. Come and see me.`, 'Wendell'], gift:null, at:today(), read:false });
   save(); setTimeout(()=>toast('A letter from Wendell', null, 'new', 'Read it from Menu > Pen pals.'), 2600); }
 
@@ -2914,21 +2914,21 @@ function bindTeaProject(render){
   const m=pBody.querySelector('#tfMat'); if (m) m.onclick=()=>{ if (noEdit() || !TEA_PROJECT.need.every(x=>haveNeed(x))) return; takeFor(TEA_PROJECT.need); SY.tea.mats=true; save(); Snd.thunk(); render(); };
   const g=pBody.querySelector('#tfGo'); if (g) g.onclick=()=>{ if (noEdit()) return; SY.tea.st='building'; SY.tea.bday=sday2(); save(); Snd.fanfare(); toast('The builders start tonight!', null, 'new', `${holderName('tea')}'s Tea Room will open tomorrow.`); refreshTea(); render(); }; }
 // islanders take tea on the terrace: each chair goes to whoever the day's roll picks, in 40-minute sittings, 10 to 6
-function teaSeatOf(res){ { const f=festSeatOf(res); if (f!==null) return f; } { const b=bathSeatOf(res); if (b!==null) return b; }   // v1.40 minding a festival stall   // v1.39 an evening soak at Tobin's
+function teaSeatOf(res){ { const f=festSeatOf(res); if (f!==null) return f; } { const b=bathSeatOf(res); if (b!==null) return b; }   // v1.41 minding a festival stall   // v1.39 an evening soak at Tobin's
   if (!teaOpen() || !S2B.tea || !SY.tea.at) return null; const h=Time.hour(); if (h<10 || h>=18) return null;
   const pool=S.town.res, slot=Math.floor(h*60/40);
   for (let k=0;k<S2.TEA_SEATS.length;k++){ const pick=pool[Math.floor(mulberry32(hashStr(today()+':tea:'+k+':'+slot+':'+S.seed))()*pool.length*1.7)]; if (pick===res.spec.id) return k; }
   return null; }
 function teaUnsit(res){ if (res.teaK===undefined) return; res.teaK=undefined; const u=res.obj.userData; (u.legs||[]).forEach(l=>l.rotation.x=0); res.pos.y=groundY(res.pos.x,res.pos.z); res.obj.position.copy(res.pos); }
 function teaSit(res, dt, t){
-  if (newbFollow(res, dt, t)){ teaUnsit(res); return true; }   // v1.40 the newcomer tags along
+  if (newbFollow(res, dt, t)){ teaUnsit(res); return true; }   // v1.41 the newcomer tags along
   if (res.loc!=='out'){ teaUnsit(res); return false; } const k=teaSeatOf(res); if (k===null){ teaUnsit(res); return false; }
   const [x,z,ry,dy]=seatXZ(k), bath=typeof k==='string';
   if (res.teaK!==k){ teaUnsit(res); const d=Math.hypot(x-res.pos.x, z-res.pos.z);
     if (d>0.3){ if (d>45 || !res.moveToward(new THREE.Vector3(x,0,z), dt, 1.7, t)){ if (d>45 || (res.stuckT=(res.stuckT||0)+dt)>5){ res.pos.set(x,groundY(x,z),z); res.obj.position.copy(res.pos); res.stuckT=0; } } res.applyFace(dt); return true; }
     res.teaK=k; }
   res.pos.set(x, groundY(x,z), z); res.obj.position.set(x, res.pos.y+dy, z); res.face=ry; res.obj.rotation.y=ry; const u=res.obj.userData; (u.legs||[]).forEach(l=>l.rotation.x=bath?0:-1.4); if (u.body) u.body.position.y=0; return true; }
-function seatXZ(k){ if (typeof k==='string' && k[0]==='f') return festSeatXZ(k);   // v1.40
+function seatXZ(k){ if (typeof k==='string' && k[0]==='f') return festSeatXZ(k);   // v1.41
   if (typeof k==='string'){ const [sx,sz,ry]=S3.BATH_SEATS[+k.slice(1)], [cx,cz]=SY.bath.at; return [cx+sx, cz+1.2+sz, ry, -0.32]; }
   const [sx,sz,ry]=S2.TEA_SEATS[k], [cx,cz]=SY.tea.at; return [cx+sx, cz+sz, ry, 0.3]; }
 // a pot of tea with someone on the terrace: a little friendship, once a day each
@@ -3717,7 +3717,7 @@ function dev139(){
   msg.push(step()); save(); refreshStory3(); if (!DEVQ){ applyTown(); toast(msg.join(' ')); } return msg.join(' '); }
 
 /* =====================================================================
-   v1.40 ISLAND STORIES PHASE 4 (design: claude/driftwood-isle-quests.md, sections 6e, 8 and 11).
+   v1.41 ISLAND STORIES PHASE 4 (design: claude/driftwood-isle-quests.md, sections 6e, 8 and 11).
    - Juniper's reading nook: five rare plans found and shelves from the workshop. A reading room beside the museum
      where you can reread your letters, the island's stories and the Saltwren's logbook.
    - Otis's race course: the bike, three isles, and a sign from the workshop. A timed lap of the island against the
@@ -3735,7 +3735,7 @@ function dev139(){
 Object.assign(DREAM_FOR, { nook:'juniper', race:'otis', show:'marigold' });
 var S4B = { nook:null, nookKey:'', arch:null, archKey:'', show:null, showKey:'', dress:null, dressKey:'', fest:null, festKey:'', stalls:[], stallIds:[], aurora:null, glow:null, glowKey:'', race:null, cps:[], festT:0 };
 for (const [D,rad] of [[SY.nook,3.4],[SY.race,2.6],[SY.show,1.6]]) if (D && D.at) KEEPOUT.push([D.at[0], D.at[1], rad]);
-function refreshStory4(){ if (TRIP || GUEST || !S4B) return; for (const f of [refreshNook, refreshArch, refreshShow, refreshCharter, refreshFest, refreshSpells]){ try { f(); } catch(e){ console.warn('v1.40', e); } } }
+function refreshStory4(){ if (TRIP || GUEST || !S4B) return; for (const f of [refreshNook, refreshArch, refreshShow, refreshCharter, refreshFest, refreshSpells]){ try { f(); } catch(e){ console.warn('v1.41', e); } } }
 function storySmoke4(add){ if (S4B.nook && !S4B.nook.removed) add(S4B.nook); }
 function charterBuilt(){ return !!(SY.charter && SY.charter.st==='done'); }
 function charterDone(){ return charterBuilt() && !!SY.charter.letter; }   // Wendell has written, so Starfall Isle can rise
@@ -4104,11 +4104,11 @@ function storiesHTML4(){ const L=[];
 function story4Tick(dt, t){
   if (S4B.aurora){ const a=!World.inside && World.weather!=='rain' ? smooth(0.35,0.85,World.night||0)*(World.weather==='cloudy'?0.5:1) : 0; S4B.aurora.userData.tick(t, a*0.9); }
   if (S4B.glow) S4B.glow.visible=!World.inside && (World.night||0)>0.15;
-  if ((S4B.festT-=dt)<=0){ S4B.festT=4; if (!TRIP && !GUEST){ try { refreshFest(); refreshShow(); } catch(e){ console.warn('v1.40', e); } } }
+  if ((S4B.festT-=dt)<=0){ S4B.festT=4; if (!TRIP && !GUEST){ try { refreshFest(); refreshShow(); } catch(e){ console.warn('v1.41', e); } } }
   raceTick(); }
 
 /* ---------- dev shortcuts ---------- */
-function dev140(){
+function dev141(){
   const now=sday2();
   const step=()=>{
     if (!SY.nook || ['pending','plans'].includes(SY.nook.st)){ SY.nook={ st:'shelves', due:now }; addItem('nookshelves'); return `Reading nook: shelves in your bag. Give them to ${holderName('nook')}.`; }
@@ -4191,7 +4191,7 @@ function openStoryMap(){
       isles:()=>devAsk(`Raise ${missing.length} isle${missing.length>1?'s':''} now (${missing.map(k=>(ISL.ISLE_INFO[k]||{}).name||k).join(', ')})? The island reloads.`, devRaiseAll),
       p2:()=>devAsk('Move a phase 2 story one step?', ()=>{ dev138('stories'); render(); }), p2a:()=>devAsk('Open every phase 2 story?', ()=>devAll(()=>dev138('stories'), 'Every phase 2')),
       p3:()=>devAsk('Move a phase 3 story one step?', ()=>{ dev139(); render(); }), p3a:()=>devAsk('Open every phase 3 story?', ()=>devAll(dev139, 'Every phase 3')),
-      p4:()=>devAsk('Move a phase 4 story one step?', ()=>{ dev140(); render(); }), p4a:()=>devAsk('Open every phase 4 story?', ()=>devAll(dev140, 'Every phase 4')),
+      p4:()=>devAsk('Move a phase 4 story one step?', ()=>{ dev141(); render(); }), p4a:()=>devAsk('Open every phase 4 story?', ()=>devAll(dev141, 'Every phase 4')),
       fest:()=>devAsk('Make today a festival day (signs the charter if it isn\'t yet)?', ()=>{ SY.charter=Object.assign(SY.charter||{}, { st:'done', done:sday2()-2 }); if (Time.hour()<9 || Time.hour()>=21) Time.offsetH+=(12-Time.hour()); save(); S4B.festKey='x'; refreshCharter(); refreshFest(); updateSky(); toast(festOn()?'The festival is on around the plaza.':'Could not start the festival here.'); }),
       show:()=>devAsk('Put the flower show table up today?', ()=>{ SY.show=Object.assign(SY.show||{ sp:SHOW_PICKS[0][0], color:SHOW_PICKS[0][1], cname:SHOW_PICKS[0][2] }, { st:'entered', showDay:sday2() }); save(); S4B.showKey='x'; refreshShow(); toast('The show table is up by the plaza.'); }),
       sky:()=>devAsk('Cast the aurora and the glowing paths for free?', ()=>{ SY.sky=Object.assign(SY.sky||{}, { aurora:true, paths:true, auroraOff:false, pathsOff:false }); save(); refreshSpells(); toast('Aurora and glowing paths are on. Look at night.'); }),
@@ -5277,7 +5277,7 @@ function isleDaily(I){
     if (h<minH || h>maxH || !walkable(x,z) || blocked(x,z,rad) || onBridge(x,z) || islePathDist(I,x,z)<1.2) continue; return [x,z]; } return null; };
   for (let i=0;i<nD;i++){ const p=spot(SAND_H+0.15, I.sky?20:12, 1.2); if (!p) continue; S.day.digs.push({ x:p[0], z:p[1], dug:false }); dailyEnts.push(new DigSpot(S.day.digs.length-1, p[0], p[1])); }
   for (let i=0;i<nW;i++){ const p=spot(SAND_H+0.2, I.sky?20:12, 0.6); if (!p) continue; S.day.weeds.push({ x:p[0], z:p[1], pulled:false }); dailyEnts.push(new Weed(S.day.weeds.length-1, p[0], p[1])); }
-  if (I.sky && !VISIT){ const p=spot(ISL.SKY_CUT, 20, 0.6); if (p){ const rec={ id:'starstone', x:p[0], z:p[1], beach:true }; S.ground.push(rec); new GroundItem(rec); } }   // v1.40 a fallen star, every day
+  if (I.sky && !VISIT){ const p=spot(ISL.SKY_CUT, 20, 0.6); if (p){ const rec={ id:'starstone', x:p[0], z:p[1], beach:true }; S.ground.push(rec); new GroundItem(rec); } }   // v1.41 a fallen star, every day
   const shellPool=Object.values(ITEMS).filter(i=>i.kind==='shell' && allowedFind(i));
   for (let i=0;i<nS;i++){ for (let k=0;k<40;k++){ const a=r()*TAU, d=I.r*(0.6+r()*0.45), x=I.cx+Math.cos(a)*d, z=I.cz+Math.sin(a)*d; if (!isBeach(x,z) || onBridge(x,z)) continue;
       const rec={ id:tierPick(r,shellPool,i=>i.rarity).id, x, z, beach:true }; S.ground.push(rec); new GroundItem(rec); break; } }
@@ -5483,7 +5483,7 @@ function updateBugs(dt){
     case 'beach': for(let k=0;k<30&&!p;k++){ const a=Math.random()*TAU, d=4+Math.random()*20; const x=player.pos.x+Math.cos(a)*d, z=player.pos.z+Math.sin(a)*d; if(isBeach(x,z)) p=[x,z]; } break;
     case 'pond': if (Math.hypot(player.pos.x-POND.x,player.pos.z-POND.z)<30) p=[POND.x+(Math.random()-0.5)*4, POND.z+(Math.random()-0.5)*4]; break;
     case 'glade': p=gladeBugSpot(); break;   // v1.39 only in Lumi's glade
-    case 'starfall': p=skyBugSpot(); break;   // v1.40 only up on Starfall Isle
+    case 'starfall': p=skyBugSpot(); break;   // v1.41 only up on Starfall Isle
   }
   if (p) new Bug(sp.id, p[0], p[1], extra);
 }
@@ -5493,7 +5493,7 @@ const sunDir=new THREE.Vector3();
 const lanterns=[]; { for(let i=0;i<22;i++){ const g=new THREE.Group(); mk(G.cyl(0.22,0.28,0.45,8),glowMat(0xffb070),0,0,0,g).castShadow=false; const s=addGlow(g,0,2.4,0xffb070); s.userData.event=true; g.visible=false; g.userData={ a:Math.random()*TAU, d:(58+Math.random()*30)*SC, y:Math.random()*14, s:0.4+Math.random()*0.5 }; OUT.add(g); lanterns.push(g); } }
 const activeEvents = () => { const d=Time.now(), h=Time.hour(); return EVENTS.filter(e=>e.active(d,h)); };
 function updateSky(){
-  const h=skyHour(); const night = 1-smooth(5.2,7,h)+smooth(18.8,20.5,h); World.night=clamp(night,0,1);   // v1.40 always night up on Starfall Isle
+  const h=skyHour(); const night = 1-smooth(5.2,7,h)+smooth(18.8,20.5,h); World.night=clamp(night,0,1);   // v1.41 always night up on Starfall Isle
   windowMat.emissiveIntensity = World.night*1.4;
   WU.uFishCol.value.setHex(0x10283a).lerp(FISH_NIGHT, smooth(0.2,0.5,World.night)); WU.uFishA.value = 0.7 - World.night*0.1;
   for(const m of glowMats) m.emissiveIntensity = 0.15 + World.night*1.6;
@@ -5602,7 +5602,7 @@ function talkTo(res){
     ...helpChoices(res, ()=>menu()),
     ...teaChoices(res, ()=>menu()),
     ...story3Choices(res, ()=>menu()),   // v1.39
-    ...story4Choices(res, ()=>menu()),   // v1.40
+    ...story4Choices(res, ()=>menu()),   // v1.41
     ...(canAskToLeave(res.spec.id) ? [{ label:'Ever think about moving?', fn:()=>askToLeave(res, menu) }] : []),
     { label:'Bye!', alt:true, fn:end } ]);
   if (!VISIT){ const tk=(S.day.talked=S.day.talked||{}); if (!tk[res.spec.id]){ tk[res.spec.id]=1; track('talk'); } }
@@ -7823,7 +7823,7 @@ function openMenu(){
       $('#dvLp').onclick=()=>devLighthouse(false); $('#dvLt').onclick=()=>devLighthouse(true);   // v1.39 fixes
       $('#dvT').onclick=()=>{ if (!S.magic.tower){ closePanel(); Q.story.wizard='done'; raiseTower(); } };
       $('#dvM').onclick=()=>{ S.devMagic=!S.devMagic; save(); render(); };
-      { const a=$('#dvRl'), b=$('#dvSt'); if (a) a.onclick=()=>dev138('relics'); if (b) b.onclick=()=>dev138('stories'); const c3=$('#dvS3'); if (c3) c3.onclick=()=>dev139(); const mp=$('#dvMap'); if (mp) mp.onclick=()=>openStoryMap(); }   // v1.40 Story map   // v1.38, v1.39
+      { const a=$('#dvRl'), b=$('#dvSt'); if (a) a.onclick=()=>dev138('relics'); if (b) b.onclick=()=>dev138('stories'); const c3=$('#dvS3'); if (c3) c3.onclick=()=>dev139(); const mp=$('#dvMap'); if (mp) mp.onclick=()=>openStoryMap(); }   // v1.41 Story map   // v1.38, v1.39
       { const di=$('#dvI'); if (di) di.onclick=()=>{ closePanel(); if (nextIsleKind()==='pines' && !SY.shop) SY.shop={ st:'wizard', at:sday() }; raiseIsle(ISLE_K.length); }; }
       $('#dvD').onclick=()=>{ S.town.devDays=(S.town.devDays||0)+1; townNewDay(dayKeyOf(dayNum(today())+S.town.devDays)); applyTown(); toast(`Town moved ahead ${S.town.devDays} day${S.town.devDays>1?'s':''}: ${S.town.res.length} islanders${S.town.next?', '+S.town.next.id+' moving in next':''}.`); };
       $('#dvF').onclick=()=>{ Q.rolledFor=null; Q.offers={}; rollFavors(Math.random); Q.rolledFor=S.day.key; save(); toast('Islanders have new favors to ask.'); };
@@ -8481,7 +8481,7 @@ function frame(now){
   if (started && !tankView){ updateHold(dt); if (meBody.rag) updateRag(meBody,dt,t); else movePlayer(dt,t); bonkCool=Math.max(0,bonkCool-dt); updateBugs(dt); updateFishing(dt,t); updateCatchMeter(dt); tickDialog(dt); updateActButton(); updateCutaway(); }
   if (World.inside==='reefhall' && ROOMS.reefhall) S2.swimReefHall(ROOMS.reefhall.shell, t);   // v1.38
   story3Tick(dt, t);   // v1.39
-  story4Tick(dt, t);   // v1.40
+  story4Tick(dt, t);   // v1.41
   for(const e of ents.slice()){ if (e.removed) continue; if (e.rag){ updateRag(e,dt,t); continue; } if (e instanceof Resident || e instanceof Peddler || Math.abs(e.pos.x-player.pos.x)<40) e.update(dt,t); }
   WU.uTime.value=t; if (!World.inside){ updateWater(t); updateAmbient(dt,t); updateFalls(dt,t); updateStreaming(dt,t);
     for(const c of clouds){ c.position.x+=c.userData.v*dt; if(c.position.x>150) c.position.x=-150; }
@@ -8899,7 +8899,7 @@ window.__game.v136 = { get ISLES(){ return ISLES; }, offerMove, startMagic, magi
 // v1.37 testing hooks (headless checks of the island stories)
 window.__game.v138 = { get SY(){ return SY; }, get S2B(){ return S2B; }, isleQuest, isleChoices, relicMissing, wantedRelics, rollTripRelic, hiveColors, colorFam, apiaryChoices, refreshStory2, refreshTea, refreshForge, refreshReefHall, openTeaRoom, openForge, lighthouseAct, wickChoices, teaSeatOf, storyNewDay2, wendellLetter, isleDirWord, dev138, storySpot, bayCutting, nightBay, lightLit, COMMISSIONS, STAKES, stakeOf, talkSkipperHome, talkIncome, talkWizard };
 window.__game.v139 = { get SY(){ return SY; }, get S3B(){ return S3B; }, LOGBOOK, BEATS3, STAKES, COMMISSIONS, millAct, openMill, millstoneOffer, millThistle, millWendell, routeTowns, postRoutes, routeWant, openPost, postNewDay, placeVents, digVent, bathSeatOf, bathStage, openBath, gladeConds, gladeStageOf, gladeBugOK, gladeBugSpot, gladeLook, gladeStump, gladeKnock, gladeApprove, gladeStumpDug, gladeLamps, wreckAct, makeWreckRoom, wreckOpen, rollTripChart, openLogbook, openAntiq, antiqStock, story3Stock, storyBeat3, story3Choices, storyNewDay3, story3News, storiesHTML3, storyGossip3, refreshStory3, dev139, landmark3, meadowLM, dunesLM };
-window.__game.v140s = { get SY(){ return SY; }, get S4B(){ return S4B; }, refreshStory4, dev140, dev138, dev139, openStoryMap, devRaiseAll, devTravel, devPlaces, devTrip, raceStart, raceEnd, raceCourse, raceLength, raceRivals, raceMenu, openReadingRoom, openStall, festDay, festOn, festSpots, refreshFest, refreshShow, showTableAct, showEntries, storyBeat4, story4Choices, storyNewDay4, story4News, storiesHTML4, starAltarAct, skyHour, skyNear, skyIsle, refreshSpells, refreshCharter, charterReqs, charterReady, hall4Choices, newbChoices, CHARTER, get ISLE_K(){ return ISLE_K; } };   // v1.40 test hooks
+window.__game.v141 = { get SY(){ return SY; }, get S4B(){ return S4B; }, refreshStory4, dev141, dev138, dev139, openStoryMap, devRaiseAll, devTravel, devPlaces, devTrip, raceStart, raceEnd, raceCourse, raceLength, raceRivals, raceMenu, openReadingRoom, openStall, festDay, festOn, festSpots, refreshFest, refreshShow, showTableAct, showEntries, storyBeat4, story4Choices, storyNewDay4, story4News, storiesHTML4, starAltarAct, skyHour, skyNear, skyIsle, refreshSpells, refreshCharter, charterReqs, charterReady, hall4Choices, newbChoices, CHARTER, get ISLE_K(){ return ISLE_K; } };   // v1.41 test hooks
 window.__game.v137 = { get S(){ return S; }, get SY(){ return SY; }, get BAYR(){ return BAYR; }, get ISLES(){ return ISLES; }, get player(){ return player; }, get residents(){ return residents; },
   reefInfo, reefStage, bayPlan, bayPopulate, enterBay, exitBay, bayAct, bayCast, bayDrop, talkGill, talkShop, talkTo, talkHall, talkWizard, talkCurator, openNursery, openWorkshop, openBoard, openHallPanel,
   refreshNurseryTank, spawnRowboat, refreshWorkshop, refreshIncome, storyNewDay, townNewDay, applyTown, raiseIsle, nextIsleKind, isleQuest, loadIsle, incOf, incCollect, pinesRegrow,

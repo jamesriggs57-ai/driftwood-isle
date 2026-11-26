@@ -1,5 +1,5 @@
 /* =====================================================================
-   v1.40 ISLAND STORIES PHASE 4: models only (main.js decides what happens).
+   v1.41 ISLAND STORIES PHASE 4: models only (main.js decides what happens).
    - the reading room beside the museum (Juniper's reading nook)
    - the race course: start-and-finish arch and checkpoint flags
    - the flower show table

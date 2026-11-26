@@ -121,6 +121,29 @@ export function buildCustomOutfit(body, arms, code, sc, ctx={}){
       if (ctx.anim) ctx.anim(t=>{ w.rotation.y=s*(0.5+Math.sin(t*5)*0.25); }); } }
   return true; }
 
-/* register the rug model with the item builder table (models.js imports nothing from here, so main wires it) */
-export function registerRug(ITEM_BUILDERS){ ITEM_BUILDERS.rug = (g, d, id) => buildRug(g, id || d.code); }
+/* the Sewing Machine: a cast-iron treadle machine on a little wooden table */
+export function buildMachine(g){
+  const wood=once('smw', ()=>new THREE.MeshStandardMaterial({ color:0x8a5a3a, roughness:0.55 })), iron=plain(0x2a2826,{ metalness:0.5, roughness:0.45 }), body=once('smb', ()=>new THREE.MeshPhysicalMaterial({ color:0x1e1e22, roughness:0.25, clearcoat:1 })), gold=plain(0xd8a840,{ metalness:0.8, roughness:0.3 }), steel=plain(0xc8ccd2,{ metalness:0.9, roughness:0.25 });
+  // table top and drawers
+  mesh(new THREE.BoxGeometry(0.95,0.05,0.5), wood, 0,0.74,0,g); for (const s of [-1,1]){ mesh(new THREE.BoxGeometry(0.2,0.14,0.44), wood, s*0.36,0.64,0,g); mesh(new THREE.SphereGeometry(0.016,8,6), gold, s*0.36,0.64,0.225,g); }
+  // treadle legs: two cast iron side frames with a scroll, a treadle plate and the big wheel
+  for (const s of [-1,1]){ const x=s*0.4; mesh(new THREE.BoxGeometry(0.03,0.62,0.04), iron, x,0.36,0.17,g); mesh(new THREE.BoxGeometry(0.03,0.62,0.04), iron, x,0.36,-0.17,g); mesh(new THREE.BoxGeometry(0.035,0.04,0.46), iron, x,0.04,0,g);
+    const sc=mesh(new THREE.TorusGeometry(0.1,0.012,6,20), iron, x,0.34,0,g); sc.rotation.y=Math.PI/2; }
+  mesh(new THREE.BoxGeometry(0.62,0.025,0.26), iron, 0,0.12,0.05,g).rotation.x=0.12;
+  const wh=mesh(new THREE.TorusGeometry(0.16,0.014,6,28), iron, 0.32,0.38,0,g); wh.rotation.y=Math.PI/2; for (let k=0;k<4;k++){ const sp=mesh(new THREE.BoxGeometry(0.01,0.3,0.01), iron, 0.32,0.38,0,g); sp.rotation.x=k*Math.PI/4; }
+  // the machine: base, pillar, curved arm, head with needle, hand wheel, spool
+  mesh(new THREE.BoxGeometry(0.5,0.04,0.24), body, 0,0.785,0,g);
+  mesh(new THREE.BoxGeometry(0.1,0.2,0.12), body, 0.16,0.9,0,g);
+  const arm=mesh(new THREE.CylinderGeometry(0.055,0.06,0.36,16), body, 0,1.0,0,g); arm.rotation.z=Math.PI/2;
+  mesh(new THREE.BoxGeometry(0.09,0.16,0.11), body, -0.19,0.92,0,g);
+  mesh(new THREE.CylinderGeometry(0.004,0.004,0.06,6), steel, -0.2,0.82,0.03,g);
+  const hw=mesh(new THREE.CylinderGeometry(0.07,0.07,0.03,20), steel, 0.24,0.97,0,g); hw.rotation.z=Math.PI/2;
+  for (const [x,z] of [[0.05,0.06],[-0.08,0.06]]){ const d=mesh(new THREE.BoxGeometry(0.06,0.04,0.004), gold, x,1.0,z,g); d.position.z=0.061; }
+  mesh(new THREE.CylinderGeometry(0.004,0.004,0.06,6), steel, 0.04,1.08,0,g); mesh(new THREE.CylinderGeometry(0.022,0.022,0.04,12), plain(0xe2483d), 0.04,1.1,0,g);
+  // a bit of cloth under the needle
+  const cl=mesh(new THREE.BoxGeometry(0.22,0.006,0.18), plain(0x8ad0e8), -0.17,0.81,0.06,g); cl.rotation.y=0.3;
+  return g; }
+
+/* register the rug and machine models with the item builder table (main passes it in, to avoid an import loop) */
+export function registerRug(ITEM_BUILDERS){ ITEM_BUILDERS.rug = (g, d, id) => buildRug(g, id || d.code); ITEM_BUILDERS.sewmachine = g => buildMachine(g); }
 export { isRugId };

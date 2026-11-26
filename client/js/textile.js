@@ -4,7 +4,9 @@
    alterations your clothes can carry. Rugs go in your bag; clothes go in your closet and you wear them.
    main.js builds C and calls createSewing(C). C needs:
      S(), save(), toast(msg,img,cls,sub), Snd, thumb(id), fmt(n), countItem(id), removeItem(id,n), addItem(id), canAdd(id),
-     pBody(), pTitle(), setFoot(html), addClams(n), noEdit(), VISIT(), today(), track(k,n), buildPlayer(look), setLook(code), look()
+     pBody(), pTitle(), setFoot(html), addClams(n), noEdit(), VISIT(), today(), track(k,n), buildPlayer(look), setLook(code), look(),
+     openPanel(title), dialog(name,voice,lines,done,choices), owns(id) (in the bag, a chest or placed)
+   You sew at a Sewing Machine (bought from Pemberton): using a placed machine calls open().
    Saved in S.craft.sew (craft is already a player key).
    ===================================================================== */
 import * as THREE from 'three';
@@ -168,6 +170,17 @@ export function createSewing(C){
   function sellNote(id){ if (!T.isRugId(id)) return ''; const c=st(), code=id.slice(3); if (!c || !c.rugs.includes(code) || c.sold.includes(code)) return ''; const b=T.rugBonus(T.decodeRug(code)); if (!b) return '';
     return bonusLeft() ? `<br><b>First sale of your rug: +${C.fmt(b)} for the art</b>` : '<br><span class="muted">You\'ve had today\'s art bonuses. Sell this one tomorrow for its bonus.</span>'; }
 
-  return { hasTab:ok, renderTab, sold, sellNote,
+  /* ---------- the machine ---------- */
+  function open(){ if (C.VISIT()){ C.toast('It\'s not your machine. Ask whoever lives here.'); return; } if (!ok()){ C.toast('Learn woodworking from Bramble first, then you can sew.'); return; } C.openPanel('Sewing'); renderTab('', null); }
+  function keeperChoices(k, menu){
+    if (!ok() || C.owns(T.MACHINE)) return [];
+    return [{ label:'Do you sell sewing machines?', fn:()=>C.dialog(k.name, k.voice, ['A sewing machine? I\'ve got one in the back. Treadle, cast iron, runs like a dream.', `${C.fmt(T.MACHINE_PRICE)} clams and she's yours.`], null, [
+      { label:`Buy it (${C.fmt(T.MACHINE_PRICE)})`, fn:()=>{ if (C.noEdit()) return; if (S().clams<T.MACHINE_PRICE){ C.Snd.fail(); C.dialog(k.name, k.voice, ['Come back when you\'ve saved up. It\'ll keep.'], menu); return; }
+          if (!C.canAdd(T.MACHINE)){ C.Snd.fail(); C.dialog(k.name, k.voice, ['Your bag\'s full. Make some room and come back.'], menu); return; }
+          C.addClams(-T.MACHINE_PRICE); C.addItem(T.MACHINE); C.save(); C.Snd.coin();
+          C.dialog(k.name, k.voice, ['There you go. Put it somewhere with good light.', 'Weeds make decent yarn, if you didn\'t know.'], ()=>C.toast('Sewing Machine', C.thumb(T.MACHINE), 'new', 'Place it, then use it to sew rugs and clothes.')); } },
+      { label:'Not right now', alt:true, fn:menu } ]) }]; }
+
+  return { hasTab:ok, renderTab, open, keeperChoices, sold, sellNote,
     dev:{ setMade(n){ st().made=n; C.save(); }, newRug, newGarment, make, encodeRug:T.encodeRug, encodeGarment:T.encodeGarment, wear, st, draft:()=>draft, setDraft(d){ draft=d; mode='edit'; } } };
 }

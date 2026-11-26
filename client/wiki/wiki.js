@@ -56,6 +56,7 @@ function furnWhere(i){
     party:'Party game prize', gift:'Museum gift', favor:'Favor gift' }[i.shop];
   if (s) return s;
   if (i.shop==='backroom') return 'Pemberton\'s back room';   // v1.44
+  if (i.shop==='pemberton-order') return 'Ask Pemberton (after woodworking)';   // v1.63 sewing machine
   if (i.shop==='aquarium') return `Tidepool${i.special?' rare shelf':''}${i.tier?` (tier ${i.tier})`:''}`;
   if (i.shop==='garden') return `Bug &amp; Bloom${i.tier?` (tier ${i.tier})`:''}`;
   return esc(i.shop||'');

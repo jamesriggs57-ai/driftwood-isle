@@ -339,7 +339,8 @@ ${tip('Making 14 <b>different</b> pieces is what starts Bramble\'s workshop stor
 ${tip('Your saved designs are kept, so making a matching set of chairs is quick: press Make on the saved design.')}
 `},
 { id:'sewing', group:'island', title:'Sewing: rugs and clothes', html:`
-<p>Once you know woodworking, crafting has a <b>Sewing</b> tab. Weeds are your yarn. Pick a rug or a piece of clothing, set its shape and size, then <b>paint it pixel by pixel</b> from 32 yarn colours. You can sew anywhere; no table needed.</p>
+<p>You sew at a <b>Sewing Machine</b>. Once you know woodworking, ask Pemberton <i>"Do you sell sewing machines?"</i> and he'll sell you one for <b>12,000 clams</b> (he only offers it while you don't already own one). Place it on your island or in your house, walk up and press <b>Sew</b>. Weeds are your yarn. Pick a rug or a piece of clothing, set its shape and size, then <b>paint it pixel by pixel</b> from 32 yarn colours.</p>
+<p>The machine sells back for 3,000. You can't use a machine on a friend's island.</p>
 <h3>Getting better</h3>
 <p>Every piece you sew counts toward your sewing skill. The better you get, the finer your grid (more detail) and the more alterations your clothes can carry.</p>
 <table class="t"><tr><th>Skill</th><th>Pieces sewn</th><th>Grid</th><th>Alterations</th><th>Opens</th></tr>
@@ -360,7 +361,7 @@ ${tip('Your saved designs are kept, so making a matching set of chairs is quick:
 <li>The first time you sell a rug you designed, you get an art bonus for the work: more colours, a finer grid and fancier shapes and edges pay more (from a few hundred for a simple two-colour rug to about 3,000 for a big, detailed one). Up to 2 new rugs a day get the bonus.</li></ul>
 <h3>Clothes</h3>
 <p>Choose a garment (shirt, dress, coat, overalls, robe), sleeves, length and, for dresses and robes, how full the skirt is. Then add alterations. Clothes take weeds, plus a little extra for some alterations (iron for studs, branches for a leaf mantle, clay for toadstools, glimmer moss for glowing trim, a starstone for orbiting stars, heartwood for wings).</p>
-<p>Finished clothes go in your <b>closet</b> in the Sewing tab. Press <b>Wear</b> to put one on, <b>Take off</b> to go back to your usual outfit. Friends see what you're wearing, painting and all. Picking a different outfit in Menu &gt; Change my look takes sewn clothes off.</p>
+<p>Finished clothes go in your <b>closet</b> at the Sewing Machine. Press <b>Wear</b> to put one on, <b>Take off</b> to go back to your usual outfit. Friends see what you're wearing, painting and all. Picking a different outfit in Menu &gt; Change my look takes sewn clothes off.</p>
 `},
 { id:'cooking', group:'island', title:'Cooking', data:'recipes', html:`
 <p>Mabel teaches cooking once she knows you. Cook at a <b>campfire</b> (craftable; simple dishes marked "fire") or a <b>Wood Stove</b> (anything). Dishes sell well, islanders love them, and eating one makes you walk a little faster for 5 minutes. "Fish" or "fruit" in a recipe means any fish or fruit.</p>
@@ -834,7 +835,7 @@ ${steps(['Talk to them and pick <b>Come and meet people</b>. They follow you for
 { id:'changes', group:'done', title:'What\'s changed', html:`
 <p>Recent updates, newest first.</p>
 <ul>
-<li><b>v1.63</b>: Sewing. Make rugs and clothes and paint them pixel by pixel; the more you sew, the finer the grid and the stranger the alterations (up to glowing trim, orbiting stars and little wings).</li>
+<li><b>v1.63</b>: Sewing. Buy a Sewing Machine from Pemberton (12,000), place it and use it to make rugs and clothes and paint them pixel by pixel; the more you sew, the finer the grid and the stranger the alterations (up to glowing trim, orbiting stars and little wings).</li>
 <li><b>v1.62</b>: Custom furniture. Design your own chairs, tables, beds, shelves, lamps and dressers part by part, find sketches, and make pieces islanders ask for.</li>
 <li><b>v1.61</b>: Fixed signed-in islands with a town hall getting stuck on "Building the island..." the first time they loaded on a new day. Nothing on the island was lost.</li>
 <li><b>v1.60</b>: The old lighthouse on Lantern Bluff is now about two and a half times as tall and you can walk inside and climb it. It starts out broken down and gets mended step by step as the lighthouse story goes on. You now fit the lamp from the lamp room at the top.</li>

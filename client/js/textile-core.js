@@ -101,6 +101,11 @@ export function rugItem(id){ if (!isRugId(id)) return null; const d=decodeRug(id
     desc:`A hand-made rug, ${rugSize(d.w)} by ${rugSize(d.d)} m, ${colorsUsed(d.px)} colours on a ${d.G} by ${d.G} grid.`, model:{ t:'rug', code:id } }); }
 if (typeof ITEMS.__resolve === 'function') ITEMS.__resolve(rugItem);
 
+/* the Sewing Machine: you sew at one. Pemberton sells it; it isn't in any random shop stock. */
+export const MACHINE = 'sewmachine', MACHINE_PRICE = 12000;
+def(MACHINE, { name:'Sewing Machine', kind:'furniture', buy:MACHINE_PRICE, price:3000, r:0.55, shop:'pemberton-order', stack:1,
+  desc:'A treadle sewing machine on its own little table. Place it, then use it to sew rugs and clothes.', model:{ t:'sewmachine' } });
+
 /* ---------- starting points: a blank, or a simple pattern to paint over ---------- */
 export function blankPixels(G, fill=1){ return new Array(G*G).fill(fill); }
 export function starterPattern(G, kind, a, b){ const px=new Array(G*G);

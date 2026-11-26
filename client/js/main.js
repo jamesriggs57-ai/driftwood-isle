@@ -132,7 +132,8 @@ const CU = createCustom({ S:()=>S, save:()=>save(), toast:(...a)=>toast(...a), S
 registerRug(ITEM_BUILDERS);
 const SX = createSewing({ S:()=>S, save:()=>save(), toast:(...a)=>toast(...a), Snd, thumb:id=>thumb(id), fmt:n=>fmt(n), countItem:id=>countItem(id), removeItem:(id,n)=>removeItem(id,n), addItem:id=>addItem(id), canAdd:id=>canAdd(id),
   pBody:()=>pBody, pTitle:()=>pTitle, setFoot:h=>setFoot(h), addClams:n=>addClams(n), noEdit:()=>noEdit(), VISIT:()=>VISIT, today:()=>today(), track:(k,n)=>track(k,n),
-  buildPlayer:look=>buildPlayer({ look }), setLook:code=>setPlayerLook(code), look:()=>S.look||CH.lookCode(CH.defaultLook()) });
+  buildPlayer:look=>buildPlayer({ look }), setLook:code=>setPlayerLook(code), look:()=>S.look||CH.lookCode(CH.defaultLook()),
+  openPanel:t=>openPanel(t), dialog:(...a)=>dialog(...a), owns:id=>countItem(id)>0 || S.placed.some(p=>p.id===id || (Array.isArray(p.store) && p.store.some(x=>x&&x.id===id))) });
 /* The town: who lives here so far, who's moving in next, the town hall and the island's public projects.
    New islands start with three neighbors; the rest move in rarely, and only once the town gets upgrades (see townCap). Islands from before v1.0
    (they already have a day on the clock or a player name) keep everyone they had. */
@@ -1359,10 +1360,11 @@ function rebuildGardens(){
 class Furniture extends Ent {
   constructor(rec){ const it=ITEMS[rec.id]; super('furn',rec.x,rec.z,it.r); this.rec=rec; this.solid=!it.flat; this.reach=it.r+1.1; const m=buildItemModel(rec.id); m.rotation.y=rec.rot||0; const g=new THREE.Group(); g.add(m); this.attach(g); this.model=m; if(it.flat) this.hitSphere(0.9,0.1); }
   get station(){ return (this.rec.id==='stove'||this.rec.id==='campfire') && S.cook; }
-  label(){ return BN.isBench(this.rec.id) && S.craft ? 'Craft' : this.station ? 'Cook' : ITEMS[this.rec.id].store ? 'Open' : 'Arrange'; }
+  label(){ return BN.isBench(this.rec.id) && S.craft ? 'Craft' : this.rec.id==='sewmachine' ? 'Sew' : this.station ? 'Cook' : ITEMS[this.rec.id].store ? 'Open' : 'Arrange'; }
   act(){ const store=ITEMS[this.rec.id].store;
-    if (!CAN_EDIT){ if (BN.isBench(this.rec.id) && S.craft) openCraft(); else if (this.station) openCraft('cook'); else if (store) toast('It\'s locked. Only the islanders who live here can open it.'); else toast('Nice, isn\'t it?'); return; }
+    if (!CAN_EDIT){ if (this.rec.id==='sewmachine') SX.open(); else if (BN.isBench(this.rec.id) && S.craft) openCraft(); else if (this.station) openCraft('cook'); else if (store) toast('It\'s locked. Only the islanders who live here can open it.'); else toast('Nice, isn\'t it?'); return; }
     showChoices(ITEMS[this.rec.id].name, [
+    ...(this.rec.id==='sewmachine' ? [{ label:'Sew', fn:()=>SX.open() }] : []),   // v1.63
     ...(this.station ? [{ label:'Cook', fn:()=>openCraft('cook') }] : []),
     ...(store ? [{ label:'Open', fn:()=>openChest(this.rec) }] : []),
     ...(BN.isBench(this.rec.id) && S.craft ? [{ label:'Woodworking', fn:()=>openCraft() }] : []),
@@ -6658,12 +6660,11 @@ function openCraft(start){
   if (S.craft && !VISIT && !TRIP){ const got=woodProgress(); if (got.length) setTimeout(()=>{ Snd.fanfare(); toast('You slept on it: new woodworking plans!', thumb(got[0]), 'new', got.map(x=>ITEMS[x].name).join(', ')); }, 300); }   // v1.50: a milestone held over from yesterday
   let filter='all', tab = start || (S.craft ? 'wood' : 'cook'); const qty={};
   const render=()=>{
-    const tabsH = (S.craft && S.cook) || EN.hasTab() || CU.hasTab() || SX.hasTab() ? '<div class="tabs">'+[...(S.craft?[['wood','Woodworking']]:[]),...(CU.hasTab()?[['design','Design']]:[]),...(SX.hasTab()?[['sew','Sewing']]:[]),...(S.cook?[['cook','Cooking']]:[]),...(EN.hasTab()?[['tools','Tools']]:[])].map(([k,n])=>`<button class="tab${k===tab?' on':''}" data-ct="${k}">${n}</button>`).join('')+'</div>' : '';
+    const tabsH = (S.craft && S.cook) || EN.hasTab() || CU.hasTab() ? '<div class="tabs">'+[...(S.craft?[['wood','Woodworking']]:[]),...(CU.hasTab()?[['design','Design']]:[]),...(S.cook?[['cook','Cooking']]:[]),...(EN.hasTab()?[['tools','Tools']]:[])].map(([k,n])=>`<button class="tab${k===tab?' on':''}" data-ct="${k}">${n}</button>`).join('')+'</div>' : '';
     const bindTabs=()=>pBody.querySelectorAll('[data-ct]').forEach(b=>b.onclick=()=>{ tab=b.dataset.ct; Snd.click(); render(); pBody.scrollTop=0; });
     if (tab==='cook'){ pTitle.textContent='Cooking'; pBody.innerHTML=cookTab(tabsH); bindTabs(); bindCook(render); return; }
     if (tab==='tools'){ EN.renderTab(tabsH, bindTabs); return; }   // v1.40
     if (tab==='design'){ CU.renderTab(tabsH, bindTabs); return; }
-    if (tab==='sew'){ SX.renderTab(tabsH, bindTabs); return; }   // v1.63 sewing   // v1.62 custom furniture
     pTitle.textContent='Woodworking';
     const kd=kindsMade(), left=woodUnknown().length;
     // v1.24: no progress bar or locked plans. New plans just turn up as you make things.
@@ -6819,7 +6820,7 @@ function talkShop(id){
 }
 function talkShopRest(id, k, shop){
   // v1.36: a shopkeeper greets you and asks what you're after, instead of opening the shop straight away
-  const story0=m=> id==='garden' ? sprigReefChoices(k, m) : id==='aquarium' ? [...marloReefChoices(k, m), ...lightChoicesMarlo(k, m), ...reefHallMarlo(k, m)] : id==='general' ? [...forgeChoices(k, m), ...EN.keeperChoices(k, m)] : [];   // v1.37, v1.38
+  const story0=m=> id==='garden' ? sprigReefChoices(k, m) : id==='aquarium' ? [...marloReefChoices(k, m), ...lightChoicesMarlo(k, m), ...reefHallMarlo(k, m)] : id==='general' ? [...forgeChoices(k, m), ...EN.keeperChoices(k, m), ...SX.keeperChoices(k, m)] : [];   // v1.37, v1.38, v1.63 sewing machine
   const story=m=>[...story0(m), ...SR.keeperChoices(id, k, m), ...keeper3(id, k, m)];   // v1.39; v1.44 back room and what's biting
   keeperMenu(k, { first:[{ label:'Let\'s shop', fn:shop }], story, greet:keeperLine(k.id,'greet') });
 }
@@ -9621,7 +9622,8 @@ window.__game.v144 = Object.assign({ SR, shopStock:w=>shopStock(w), talkGill:()=
 // v1.52 test hooks: where the new fish and bugs turn up
 window.__game.v145 = { fishPool, bugPool, isleNear, isleAt, bayMore, bayTipIds, bayPool:()=>bayPool(), waterType, isleSpot, get trees(){ return trees; }, get bugs(){ return bugs; }, newBug:(id,x,z,e)=>new Bug(id,x,z,e||{}), updateBugs:dt=>{ bugT=0; updateBugs(dt||3); }, spawnFish:()=>spawnFish(), get fishes(){ return fishes; },
   openDonate:()=>openDonate(), museumExpand:()=>museumExpand(), buildMuseumAll:()=>buildMuseumAll(), enterRoom:id=>enterRoom(id), tanks:()=>ents.filter(e=>e instanceof MuseumTank), openTankView:e=>openTankView(e), closeTankView:()=>closeTankView(), get tankView(){ return tankView; } };
-window.__game.custom = CU.dev; window.__game.sew = SX.dev;   // v1.63 sewing tests   // v1.62 custom furniture tests
+window.__game.custom = CU.dev; window.__game.sew = SX.dev;
+window.__game.sewMachine = { open:()=>SX.open(), choices:()=>SX.keeperChoices({ name:'Pemberton', voice:1 }, ()=>{}).map(c=>c.label), buy:()=>SX.keeperChoices({ name:'Pemberton', voice:1 }, ()=>{})[0].fn(), place:()=>{ const P=player.pos, rec={ id:'sewmachine', x:P.x+1.6, z:P.z, rot:0 }; S.placed.push(rec); const f=new Furniture(rec); return f.label(); } };   // v1.63 tests   // v1.63 sewing tests   // v1.62 custom furniture tests
 // v1.26 test hooks
 window.__game.v126 = { townNewDay, applyTown, findHomeSpot, claimHomeSpot, townCap, incomeNewDay, refreshIncome, talkIncome, incCollect, incOf, INCOME, incEnts, openMap, talkSkipperHome, talkSkipperTrip, tripGoHome, tripRecap, storyWho, askToLeave, canAskToLeave, pitchOnBuy, merchantDay, get peddler(){ return peddler; }, get skipper(){ return skipper; }, newSquares, LOAN_MAX_SQ, TRIP, TRIP_THEME, residents, residentHomes, plotEnts, KEEPOUT, Q, PATHS, camTarget, updateCamera, set camDist(v){ camDist=v; }, get camDist(){ return camDist; }, set camYaw(v){ camYaw=v; } };
 window.__game.LETTERS = LETTERS;

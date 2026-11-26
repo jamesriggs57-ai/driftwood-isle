@@ -11,7 +11,7 @@
    built in wiki.js. Writing rules: plain words, no em dashes, no emoji, only facts the code supports.
    ===================================================================== */
 
-export const GUIDE_VERSION = 'v1.48';
+export const GUIDE_VERSION = 'v1.49';
 export const GUIDE_UPDATED = '2026-11-26';
 
 const tip = s => `<div class="tip"><b>Tip</b> ${s}</div>`;
@@ -131,6 +131,12 @@ ${note('Guest mode caps your wallet at 10,000 clams. Make an account to lift it.
 <li>Ask someone to leave with "Ever think about moving?". They pack overnight. At least 5 always stay, and anyone who left won't come back for 30 days.</li>
 <li>Good pen pals from trip towns can be invited to move in (see Pen pals).</li></ul>
 <p>Clementine also runs every big building project in the island stories (the workshop, tea room, post office, bathhouse).</p>
+<h3>Inside the town hall</h3>
+<p>The tent has no inside, so Clementine works out front. Once the Town Hall is built you walk in and find her at her desk (the same goes for the Charter Hall). Inside:</p>
+<ul><li><b>Island Records</b> board: islanders, museum donations, shops backed, things found, achievements and best friends. Read it for the island stories so far and a shortcut to Town projects.</li>
+<li><b>Our islanders</b>: a portrait of everyone who lives here. Look at it for each islander's friendship hearts.</li>
+<li>A table with a <b>map of the island</b> (Look opens the full map), and benches for town meetings.</li>
+<li>The <b>Grand Town Hall</b> is bigger, with columns, two chandeliers, a grandfather clock and a trophy case that gets a prize for every 10 achievements (up to 8).</li></ul>
 `},
 
 { id:'islanders', group:'island', title:'Islanders and friendship', data:'residents', html:`
@@ -316,6 +322,9 @@ ${tip('Making 10 <b>different</b> pieces is what starts Bramble\'s workshop stor
 <tr><td>Diviner's Elixir</td><td>3,000</td><td>Fossils, beach finds, swatch books</td></tr><tr><td>Lucky Star Elixir</td><td>8,000</td><td>All three</td></tr></table>
 <h3>Moving buildings</h3>
 <p>Needs a house with 16 floor squares and 2 shops backed. Your house 30,000, anything else 50,000. You see a see-through preview before paying. (Keepers you've invested in will also move their own buildings for free.)</p>
+<p>The check uses the building's real outline, so buildings can stand about a step apart. If a spot is a little off, the preview slides over to the nearest spot that fits. When it can't fit, it says what is in the way (the sea, the beach, a river or pond, a cliff, a bridge, the plaza, a garden, ground that's too uneven, or which building is too close) and a red marker shows where.</p>
+<p>Shop stands, the museum and the town hall are checked at the size they grow to, so there is always room for the next upgrade. That also means other buildings can't go where one of those will grow.</p>
+<p>Things you placed or planted where it lands (furniture, flowers, saplings, dropped items) are set down beside it; if there is no room anywhere near, furniture goes to your bag. Wild flowers and stumps there are cleared.</p>
 <h3>Shaping land</h3>
 <p>Needs a house with 24 squares and all 3 shops backed. Raise or lower terraces, dig ponds and rivers, fill them in, priced per square. A preview shows the plan first.</p>
 <p>Wendell also raises new isles from the sea, below.</p>
@@ -724,6 +733,7 @@ ${steps(['Talk to them and pick <b>Come and meet people</b>. They follow you for
 { id:'changes', group:'done', title:'What\'s changed', html:`
 <p>Recent updates, newest first.</p>
 <ul>
+<li><b>v1.49</b>: The Town Hall has an inside, with Clementine's desk, the Island Records and the islanders' portraits. Moving a building is much more forgiving and says what's in the way.</li>
 <li><b>v1.48</b>: Less grind. Wood sells for 20. Pieces made only from wood, branches, stone and weeds sell for about their materials plus 15% (no more fence fortunes); pieces with iron, clay, stumps or planks never sell below their materials. Shop investing costs 100,000, 200,000 and 400,000. Every passive income and stake tier pays itself back in about a month, and the Heirloom tools (50,000, the can 40,000) and the Grand Expedition Pack (200,000) cost less. Rare and legendary trip islands no longer stop at 200,000; your bag is the limit, and Stardrift Isle's star shower drops a star every 10 to 14 seconds until 100 have fallen.</li>
 <li><b>v1.47</b>: You can go inside Wendell's tower. He works at his cauldron in a round workroom full of books, candles and a scrying bowl, and a stair leads up to an observatory with a telescope. See Wendell the wizard.</li>
 <li><b>v1.44</b>: Shop rewards and fishing tips. At the top two tiers Pemberton opens his back room (one piece a week, sometimes a rare plan), Marlo adds a rare shelf and Sprig sells rare flower colors, hybrids and the glowing Lantern Bloom. Marlo and Gill tell you what's biting, more exactly as their shop and boat grow.</li>

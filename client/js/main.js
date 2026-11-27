@@ -9080,7 +9080,7 @@ function openGarden(g){
     h+=`<div class="row"><div class="grow"><div class="nm">Harvest everything ready</div><div class="sub">${ripe.length ? `${ripe.length} plant${ripe.length>1?'s':''}` : 'Nothing is ready yet'}</div></div><button class="btn" id="gHv" ${ripe.length?'':'disabled'}>Harvest</button></div>`;
     h+=`<div class="row"><div class="grow"><div class="nm">Water everything</div><div class="sub">${!hasTool('can') ? 'Needs a watering can' : dry.length ? `${dry.length} plant${dry.length>1?'s':''} need water` : 'All watered today'}</div></div><button class="btn" id="gWa" ${hasTool('can')&&dry.length&&CAN_EDIT?'':'disabled'}>Water</button></div>`;
     if (CAN_EDIT){
-      h+=`<div class="row"><div class="grow"><div class="nm">Garden editor</div><div class="sub">Move this garden, rearrange its plants or take some out</div></div><button class="btn" id="gEd">Edit</button></div>`;   // v1.71
+      h+=`<div class="row"><div class="grow"><div class="nm">Garden editor</div><div class="sub">Move this garden, rearrange its plants or soil, or take some out</div></div><button class="btn" id="gEd">Edit</button></div>`;   // v1.71
       h+=`<div class="f" style="margin-top:12px;font-weight:700">Plant here</div>`;
       h+= seedStacks.length ? `<div style="display:flex;flex-wrap:wrap;gap:6px">${seedStacks.map(id=>`<button class="btn alt" data-gs="${id}" style="display:flex;align-items:center;gap:6px;padding:4px 10px"><img src="${thumb(id)}" style="width:28px;height:28px">${ITEMS[id].name} x${countItem(id)}</button>`).join('')}</div>` : `<div class="muted">No seeds in your bag.</div>`;
       h+=`<div class="f" style="margin-top:14px;font-weight:700">Fence</div>`;

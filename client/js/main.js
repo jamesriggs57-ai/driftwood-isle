@@ -8403,21 +8403,23 @@ function stairsTap(fx,fz){
   if (applyOrRevert(()=>{ full[sk]={i,j}; }, ()=>{ full[sk]=old; })){ Snd.pop(); previewBuild(); } renderBuild(true); }
 /* v1.72 inside walls. In the Doors & walls tool, a tap on a grid line inside one room cycles it: wall, wall with a doorway, nothing.
    Press and drag along the line to wall off (or clear) several squares at once. Kept in floor.iw (see house.js). */
-function iwLine(fx,fz){ const plan=FP(), occ=planGrid(plan), ex=fx-Math.round(fx), ez=fz-Math.round(fz), m=Math.min(0.42, Math.max(0.32, 10/buildMode.pv.cs));
+// tight: a drag only starts a wall when it begins right on a line, so one finger still pans the plan from anywhere else
+function iwLine(fx,fz,tight){ const plan=FP(), occ=planGrid(plan), ex=fx-Math.round(fx), ez=fz-Math.round(fz), cs=buildMode.pv.cs, m = tight ? Math.min(0.25, Math.max(0.12, 7/cs)) : Math.min(0.42, Math.max(0.32, 10/cs));
   if (Math.abs(ex)<Math.abs(ez) && Math.abs(ex)<m){ const L=Math.round(fx), j=Math.floor(fz), a=occ[j]?.[L-1]; if (a>=0 && occ[j][L]===a) return { kind:'v', i:L, j }; }
   else if (Math.abs(ez)<m){ const L=Math.round(fz), i=Math.floor(fx), a=occ[L-1]?.[i]; if (a>=0 && occ[L]?.[i]===a) return { kind:'h', i, j:L }; }
   return null; }
 function iwSet(F, key, v){ F.iw=F.iw||{}; if (v) F.iw[key]=v; else delete F.iw[key]; }
-function iwDown(fx,fz){ const ln=iwLine(fx,fz); if (!ln) return null; const F=FP(), key=iwKey(ln.kind,ln.i,ln.j), cur=(F.iw||{})[key]||null;
+function iwDown(fx,fz){ const ln=iwLine(fx,fz,true); if (!ln) return null; const F=FP(), key=iwKey(ln.kind,ln.i,ln.j), cur=(F.iw||{})[key]||null;
   return { type:'iw', ln, key, cur, paint: cur ? null : 'wall', prev:{}, saved:JSON.stringify(buildMode.draft.plan) }; }
 function iwMove(t,fx,fz){ const F=FP(), occ=planGrid(F), { ln }=t; iwUndo(t);
   const along = ln.kind==='v' ? Math.floor(fz) : Math.floor(fx), a=Math.min(along, ln.kind==='v'?ln.j:ln.i), b=Math.max(along, ln.kind==='v'?ln.j:ln.i);
   for (let q=a;q<=b;q++){ const i = ln.kind==='v' ? ln.i : q, j = ln.kind==='v' ? q : ln.j, c1 = ln.kind==='v' ? occ[j]?.[i-1] : occ[j-1]?.[i], c2=occ[j]?.[i];
-    if (!(c1>=0) || c1!==c2) continue; const key=iwKey(ln.kind,i,j); t.prev[key]=(F.iw||{})[key]||null; iwSet(F, key, t.paint); } }
+    if (!(c1>=0) || c1!==c2) continue; const key=iwKey(ln.kind,i,j), was=(F.iw||{})[key]||null; if (was===t.paint) continue; t.prev[key]=was; iwSet(F, key, t.paint); } }
 function iwUndo(t){ const F=FP(); for (const key in t.prev) iwSet(F, key, t.prev[key]); t.prev={}; if (F.iw && !Object.keys(F.iw).length) delete F.iw; }
+function iwTap(ln){ const F=FP(), key=iwKey(ln.kind,ln.i,ln.j), cur=(F.iw||{})[key]||null, nxt = cur==='wall' ? 'door' : cur ? null : 'wall';
+  if (applyOrRevert(()=>iwSet(F, key, nxt), ()=>iwSet(F, key, cur))){ Snd.click(); previewBuild(); toast(nxt==='wall'?'Inside wall':nxt==='door'?'Inside wall with a doorway':'Wall taken out'); } renderBuild(true); }
 function iwUp(t, fx, fz, moved){ const F=FP();
-  if (!moved){ iwUndo(t); const nxt={ wall:'door', door:null }[t.cur] ?? (t.cur ? null : 'wall');
-    if (applyOrRevert(()=>iwSet(F, t.key, nxt), ()=>iwSet(F, t.key, t.cur))){ Snd.click(); previewBuild(); toast(nxt==='wall'?'Inside wall':nxt==='door'?'Inside wall with a doorway':'Wall taken out'); } renderBuild(true); return; }
+  if (!moved){ iwUndo(t); iwTap(t.ln); return; }
   const n=Object.keys(t.prev).length; if (!n){ renderBuild(true); return; }
   const prev=t.prev; if (applyOrRevert(()=>{}, ()=>{ for (const key in prev) iwSet(F, key, prev[key]); })){ Snd.click(); previewBuild(); toast(t.paint ? `Inside wall, ${n} square${n>1?'s':''} long` : 'Walls taken out'); }
   renderBuild(true); }
@@ -8428,6 +8430,7 @@ function doorTap(fx,fz){
   else if (Math.abs(ez)<m){ const L=Math.round(fz), i=Math.floor(fx); A=occ[L-1]?.[i]; Bn=occ[L]?.[i]; if (A>=0 && !(Bn>=0) && B.floor===0) front={ i, j:L-1 }; }
   else return;
   if (front){ const old=full.door; if (applyOrRevert(()=>{ full.door=front; }, ()=>{ full.door=old; })){ Snd.pop(); previewBuild(); toast('Front door moved.'); } renderBuild(true); return; }
+  if (A>=0 && A===Bn){ const ln=iwLine(fx,fz); if (ln){ iwTap(ln); return; } }   // v1.72 a line inside one room: an inside wall
   if (!(A>=0) || !(Bn>=0) || A===Bn){ toast(B.floor?'Tap a wall between two rooms on this floor.':'Tap a wall between two rooms, or a front-facing outside wall.'); return; }
   const key=linkKey(plan.rooms[A].id, plan.rooms[Bn].id), cur=plan.links[key]||'door', nxt={ door:'open', open:'wall', wall:'door' }[cur];
   if (applyOrRevert(()=>{ plan.links[key]=nxt; }, ()=>{ plan.links[key]=cur; })){ Snd.click(); previewBuild(); toast({ door:'Doorway', open:'Open (no wall)', wall:'Solid wall' }[nxt]); }

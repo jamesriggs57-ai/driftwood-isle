@@ -85,11 +85,11 @@ const DATA = {
   tools(){
     let h = '<h3>Tools</h3>';
     const rows=[]; for (const [k,t] of Object.entries(TOOLS)) t.tiers.forEach((x,i)=>rows.push({ name:x.name, tool:t.name, does:t.does, ...x, tier:i, key:k }));
-    h += table('tTools', rows, [['Tool', r=>`<b>${esc(r.name)}</b>`, r=>r.name], ['Price', r=>fmt(r.cost), r=>r.cost], ['Uses', r=>r.forever?'Never breaks':fmt(r.uses), r=>r.forever?1e9:r.uses],
+    h += table('tTools', rows, [['Tool', r=>`<b>${esc(r.name)}</b>`, r=>r.name], ['Price', r=>r.forever?'Not sold, made only':fmt(r.cost), r=>r.forever?1e9:r.cost], ['Uses', r=>r.forever?'Never breaks':fmt(r.uses), r=>r.forever?1e9:r.uses],
       ['Needs', r=>esc(r.req ? r.req.desc : '')]], { filters:[['','All'], ...Object.values(TOOLS).map(t=>[t.name,t.name])], tag:r=>r.tool });
     const mk=rows.filter(r=>CRAFT[r.key] && CRAFT[r.key][r.tier]);
     h += '<h3>Making tools</h3><p>Same experience needed as buying.</p>' + table('tToolMake', mk, [['Tool', r=>`<b>${esc(r.name)}</b>`, r=>r.name], ['Materials', r=>mats(Object.fromEntries(CRAFT[r.key][r.tier]))],
-      ['Make it at', r=>TABLE_NAME[toolBench(r.tier)], r=>toolBench(r.tier)]], { filters:[['','All'], ...Object.values(TOOLS).map(t=>[t.name,t.name])], tag:r=>r.tool });
+      ['Make it at', r=>TABLE_NAME[r.forever?3:toolBench(r.tier)], r=>r.forever?3:toolBench(r.tier)]], { filters:[['','All'], ...Object.values(TOOLS).map(t=>[t.name,t.name])], tag:r=>r.tool });
     h += '<h3>Repair materials</h3><p>For a fully worn tool. A part-worn one needs that share of it, at least 1 of each. Heirloom tools never need fixing.</p>'
       + table('tRepair', [['Flimsy tools and the basic Watering Can', 0], ['Sturdy tools', 1], ['Golden tools and the Golden Can', 2]].map(([n,k])=>({ n, k })),
         [['Tier', r=>`<b>${esc(r.n)}</b>`], ['Materials', r=>mats(Object.fromEntries(REPAIR[r.k]))], ['Fix if broken (at a crafting table)', r=>mats(Object.fromEntries(REPAIR[r.k].map(([m,n])=>[m,n*BROKEN_MULT])))]]);

@@ -123,6 +123,8 @@ ${note('Guest mode caps your wallet at 10,000 clams. Make an account to lift it.
 <li><b>Swatch books</b> from digging and neighbor gifts, and Juniper's swatch favor (any fossil plus a Garden Lantern).</li>
 <li>The <b>paint mixer</b> (22,500, sometimes on the rack) lets you mix any color.</li></ul>
 <p>Once you own Mossy shingles you can paint moss onto any roof. Each room has a free light with brightness and warmth sliders; ceiling lights, sconces and accent lights are bought.</p>
+<h3>Rugs</h3>
+<p>Rugs and picnic blankets lie flat, so you can place them under furniture: a rug can go down beneath a table or bed that's already there, and furniture can go on top of a rug. Only walls, buildings and fences stop a rug. Overlapping rugs stack, with the newest on top.</p>
 <h3>Storage</h3>
 <p>The <b>Storage Chest</b> holds 40 stacks. Pemberton stocks it about half the days (2,400), or make it at the workbench (8 wood, 2 iron).</p>
 `},
@@ -231,7 +233,7 @@ ${note('If the islander a story favor was written for doesn\'t live on your isla
 `, data:'shopfurn' },
 
 { id:'tools', group:'island', title:'Tools, bags and the bike', data:'tools', html:`
-<p>Tools break after a number of uses. Golden tools need you to prove yourself first, and Heirloom tools never break. Only Sturdy and Golden (and Heirloom) axes can cut a tree down; the Flimsy axe only chops wood.</p>
+<p>Tools break after a number of uses. Golden tools need you to prove yourself first, and Heirloom tools never break. Heirloom tools can't be bought: you make them at a Master Workbench from heartwood, starstone, golden sap, fittings and a lot of iron (the net also needs glimmer moss, the rod and the can moonpearls). The first time you go to buy another Golden tool once you qualify, Pemberton tells you what it takes. Only Sturdy and Golden (and Heirloom) axes can cut a tree down; the Flimsy axe only chops wood.</p>
 <p>Other gear: the <b>bike</b> (60,000), the <b>Wooden Sled</b> (3,000, for winter hills) and the <b>map</b>, which has its own round button at the top left of the screen, under the clock, and shows land, paths, buildings and whose house is whose (not where anyone is). You can zoom in up to 5 times: pinch, scroll the mouse wheel or tap + and −, then drag to look around. Double-tap a spot to zoom in on it, and double-tap again (or tap Fit) to see the whole map. Names stay the same size however far in you go.</p>
 <h3>Repairing</h3>
 <p>Fix a worn tool before it breaks. Two ways:</p>
@@ -244,7 +246,7 @@ ${note('If the islander a story favor was written for doesn\'t live on your isla
 <li>Buying or making a tool of that kind that's as good or better scraps the broken one, enchantments and all. Pemberton and the Tools tab warn you first if it had any.</li>
 <li>At a crafting table, the top of Woodworking lists any broken tool, and any tool with a quarter or less of its uses left, with a button to the Tools tab.</li></ul>
 <h3>Making tools</h3>
-<p>The Tools tab's "Make a tool" list makes the same tools Pemberton sells, from materials. You need the same experience as buying (the "Needs" column below). A Flimsy tool (and the basic Watering Can) can be made anywhere; each better tier needs a bigger crafting table: Sturdy at a Workbench, Golden at a Carpenter's Bench, Heirloom at a Master Workbench. The watering can skips Sturdy, so the Golden Can needs only a Workbench and the Heirloom Can a Carpenter's Bench. See <a href="#tables">Crafting tables</a>.</p>
+<p>The Tools tab's "Make a tool" list makes the same tools Pemberton sells, from materials. You need the same experience as buying (the "Needs" column below). A Flimsy tool (and the basic Watering Can) can be made anywhere; each better tier needs a bigger crafting table: Sturdy at a Workbench, Golden at a Carpenter's Bench, Heirloom at a Master Workbench. The watering can skips Sturdy, so the Golden Can needs only a Workbench. Every Heirloom tool, the can included, needs the Master Workbench, and they are the only way to get one. See <a href="#tables">Crafting tables</a>.</p>
 <p>A new tool of the same kind, bought or made, takes the old one's enchantments with it. The one exception: Tough, Tougher and Ultratough come off when you move up to an Heirloom tool, because it never wears out. The shop and the Tools tab warn you first.</p>
 `},
 
@@ -371,7 +373,7 @@ ${tip('Your saved designs are kept, so making a matching set of chairs is quick:
 <li><b>Collar.</b> Walk up with a <b>Pet Collar</b> in your bag and choose <b>Put on collar</b>. The pet is yours, and you pick its name from a list.</li></ol>
 <p>How far you've got with each stray is kept until the end of the day. Tomorrow's strays start over.</p>
 <h3>Pet Collars</h3>
-<p>Sewn at a <b>Sewing Machine</b> (see Sewing) from <b>6 weeds</b>. One collar fits a dog or a cat.</p>
+<p>Sewn at a <b>Sewing Machine</b> (see Sewing) from <b>6 weeds</b> (or skeins of yarn). One collar fits a dog or a cat.</p>
 <h3>Coats</h3>
 <p>Each stray's coat is rolled when it turns up: Common 89.6%, Rare 10%, Very rare 0.4%, Legendary 1 in 5,000.</p>
 <table class="t"><tr><th>Rarity</th><th>Dogs</th><th>Cats</th></tr>
@@ -391,7 +393,18 @@ ${tip('Your saved designs are kept, so making a matching set of chairs is quick:
 `},
 
 { id:'sewing', group:'island', title:'Sewing: rugs and clothes', html:`
-<p>You sew at a <b>Sewing Machine</b>. Once you know woodworking, ask Pemberton <i>"Do you sell sewing machines?"</i> and he'll sell you one for <b>12,000 clams</b> (he only offers it while you don't already own one). Place it on your island or in your house, walk up and press <b>Sew</b>. Weeds are your yarn. Pick a rug or a piece of clothing, set its shape and size, then <b>paint it pixel by pixel</b> from 32 yarn colours.</p>
+<p>You sew at a <b>Sewing Machine</b>. Once you know woodworking, ask Pemberton <i>"Do you sell sewing machines?"</i> and he'll sell you one for <b>12,000 clams</b> (he only offers it while you don't already own one). Place it on your island or in your house, walk up and press <b>Sew</b>. Pick a rug or a piece of clothing, set its shape and size, then <b>paint it pixel by pixel</b>.</p>
+<h3>Yarn</h3>
+<p>Weeds are free yarn. If you'd rather not pull them, buy <b>Skeins of Yarn</b> at the machine, delivered from Pemberton's: <b>30 clams each</b>, in 10s or 25s. One skein works like one clump of weeds in any recipe here (rugs, clothes, the Pet Collar), and skeins get used before weeds. A skein sells back for 5.</p>
+<h3>Colours</h3>
+<p>There are 32 yarn colours. You start with five muted ones: Oatmeal, Ink, Brick, Navy and Pine. The rest come in packs, listed at the bottom of the machine's list:</p>
+<table class="t"><tr><th>Pack</th><th>Colours</th><th>How you get it</th></tr>
+<tr><td>Earthy Yarns</td><td>Stone, Bark, Earth, Biscuit, Chestnut</td><td>Reach Apprentice sewing skill (3 pieces sewn)</td></tr>
+<tr><td>Garden Yarns</td><td>Fern, Moss, Pistachio, Butter, Honey</td><td>Reach Tailor sewing skill (8 pieces sewn)</td></tr>
+<tr><td>Sunset Yarns</td><td>Poppy, Berry, Coral, Marigold, Sunshine</td><td>Ordered from Pemberton at the machine for 5,000 clams, once you're an Apprentice</td></tr>
+<tr><td>Seaside Yarns</td><td>Snow, Pebble, Slate, Lagoon, Sky, Mist</td><td>Found only: washes up in a bottle on your beach</td></tr>
+<tr><td>Blossom Yarns</td><td>Cornflower, Lilac, Plum, Blossom, Rose, Night</td><td>Found only: washes up in a bottle on your beach</td></tr></table>
+<p>Once you own a Sewing Machine, there's an 8% chance each day that a bottle with a pack you haven't found yet washes up on your own island's beach (never more than one lying there at a time). Pick it up and the colours are yours. Old designs that already use a colour you don't have still sew as they are; you just can't paint with that colour until you get its pack.</p>
 <p>The machine sells back for 3,000. You can't use a machine on a friend's island.</p>
 <p>The search box at the top of the machine's list finds your clothes, rug designs and the Pet Collar by name, part or material (<i>weeds</i>, <i>long sleeves</i>).</p>
 <h3>Getting better</h3>
@@ -406,11 +419,12 @@ ${tip('Your saved designs are kept, so making a matching set of chairs is quick:
 <h3>Painting</h3>
 <ul><li><b>Brush</b> paints one square, <b>Fill</b> fills a patch of one colour, <b>Pick colour</b> copies a colour from the painting.</li>
 <li><b>Mirror</b> paints both sides at once.</li>
+<li><b>Undo</b> steps back through your last 60 changes: brush strokes, fills, patterns, and shape, size and edge choices.</li>
 <li><b>Start from</b> stripes, a check, a border or a diamond in your two colours, then paint over it.</li>
 <li>On clothes, the middle half of the painting is the front; the outer quarters wrap round the back.</li>
 <li>The 3D preview above the painting holds still. Drag it sideways to turn it.</li></ul>
 <h3>Rugs</h3>
-<p>Choose the shape, width and length (0.6 to 3 m), edge, pile and edge colour. A rug costs weeds by its size (plush pile and tassels or pom-poms take a few more). It goes in your bag; place it like any furniture.</p>
+<p>Choose the shape, width and length (0.6 to 3 m), edge, pile and edge colour. A rug costs weeds (or yarn) by its size (plush pile and tassels or pom-poms take a few more). It goes in your bag; place it like any furniture.</p>
 <ul><li>Copies sell for their materials plus 15%.</li>
 <li>The first time you sell a rug you designed, you get an art bonus for the work: more colours, a finer grid and fancier shapes and edges pay more (from a few hundred for a simple two-colour rug to about 3,000 for a big, detailed one). Up to 2 new rugs a day get the bonus.</li></ul>
 <h3>Clothes</h3>
@@ -586,10 +600,12 @@ ${note('Relics can\'t be sold, gifted, mailed or traded. A storage chest holds t
 <p>Every island has a Portal Station near the plaza: a stone platform with an arch over stairs. "Go down" leads to the portal hall.</p>
 <ul><li><b>Portal arches</b>: one per friend's island (up to 5; more opens the Friends list). Step in to travel. A dark arch means no visits left.</li>
 <li><b>Home portal</b> while you're visiting.</li>
-<li><b>Invite booth</b>: opens the Friends tab, to invite a friend over or make an invite link.</li>
+<li><b>Invite booth</b>: opens the Friends tab, to invite a friend over, invite someone by name or make an invite link.</li>
 <li><b>Pen pal desk</b>.</li></ul>
 <h3>Friends</h3>
-<p>New friends only come through invite links (one use, one person, 14 days). There's no search and no stranger contact.</p>
+<p>New friends come two ways, and there's no search, no list of players and no stranger contact:</p>
+<ul><li><b>By name</b>: in the Friends tab, type their name in the game exactly as it shows (capital letters don't matter) and tap <b>Send invite</b>. Nothing suggests or completes names. They get a <b>Friend invite</b> in their mailbox with <b>Accept</b> and <b>No thanks</b>; you only become friends if they accept, within 14 days. If two players share that name, send a link instead. Up to 20 invites a day.</li>
+<li><b>By link</b>: <b>Make invite link</b> and send it yourself (one use, one person, 14 days).</li></ul>
 <p>Once you're friends, either of you can invite the other over without a new link: Friends tab, <b>Invite a friend over</b>. It lists friends who can't visit you right now (they only ever invited you, or their one visit was used). Tap Invite and they get a letter in their mailbox saying they can come. Whether by link or from the list, you choose one visit or any time, and a role:</p>
 <table class="t"><tr><th>Role</th><th>Can</th></tr>
 <tr><td>Visitor</td><td>Look around, pick fruit, dig fossils, collect beach finds, shop. Their picks come from their own copy of the day, so they never use up yours. Can't chop, plant, place, donate, invest or build.</td></tr>
@@ -662,7 +678,7 @@ ${steps([
  'Gill tells you the reef off the cays died and took the fish with it. He wonders if Sprig could grow coral.',
  'Sprig asks for <b>3 coral fragments</b>. Fragments wash up on beaches from day 1 (brain, staghorn, sea fan, table; table is rarer). More on Sandpiper Dunes, and 15 to 20 on a Coral Atoll trip.',
  'Marlo builds a nursery tank beside Sprig\'s shop: <b>20,000 clams, 10 stone, 4 iron</b>. Ready the next day.',
- 'At the nursery: <b>2 fragments of one kind + 300 clams = 1 coral starter</b>, ready tomorrow. 3 a day, 4/5/7 as you invest in Sprig, +1 with a helper.',
+ 'At the nursery: <b>2 fragments of one kind + 300 clams = 1 coral starter</b>, ready tomorrow. Sprig starts with 5 a day. Any day you fill every spot she has, she gets better: 8, then 12, 16 and 20 at once. Investing in Sprig adds 1/2/3 more, and a helper adds 1.',
  'Gill lends you his old rowboat at the dock. "Row out" takes you to <b>Cay Bay</b>.',
  'Row with the joystick or WASD. Over old rubble, <b>Drop</b> a starter. Anywhere else, <b>Cast</b>. Row to the buoy to go home.'])}
 <h3>Reef stages</h3>
@@ -713,7 +729,8 @@ ${steps(['Clementine runs the project: <b>150,000 + 40 planks + 20 stone</b>. Op
 
 { id:'lighthouse', group:'stories', title:'The Lighthouse and night voyages', html:`
 <p><b>Starts:</b> the first time you talk to Skipper Wick after Lantern Bluff rises.</p>
-${steps(['Marlo grinds a lens: <b>10,000</b>, waiting up the bluff the next day.',
+${steps(['Ask Marlo about a lens. He needs the old keepers\' lens: climb the lighthouse to the lamp room and <b>gather up the pieces</b> by the pedestal.',
+ 'Bring Marlo the pieces, <b>5 sea glass</b> and <b>4,000</b>. The new lens is waiting up the bluff the next day.',
  'Bramble makes a <b>lamp frame</b> (workshop commission: 20 planks + 4 iron).',
  'Bring <b>3 moonpearls</b> (rare: now and then with a catch, or washed up on the beach).',
  'Climb to the lamp room at the top of the lighthouse and fit the lamp there. The beam turns at night.'])}
@@ -750,7 +767,7 @@ ${steps(['Marlo builds the giant tank: <b>100,000 + 10 iron fittings</b>, overni
 ${steps(['<b>Sails</b>: workshop commission, 15 planks + 3 sailcloth, overnight. Sailcloth: Fennick about 1 day in 3, or 1 to 2 on a Shipwreck Cove beach. Fit them at the windmill.',
  '<b>Millstone</b>: Thistle trades it for <b>3 fossils the museum doesn\'t have yet</b> (3 rare bugs or fish if every fossil is in). Arrives overnight.',
  'Sprig starts selling <b>wheat seeds</b>. The mill grinds 2 wheat into 1 flour overnight, up to 10 a day.',
- 'Wendell wakes a stream beside it for <b>15,000</b>. The water wheel doubles it to 20 a day.'])}
+ 'Wendell wakes a stream beside it. Bring him <b>a fish from fresh water</b> (river or pond, any kind), <b>a fish from the sea</b>, <b>3 clay</b> and <b>5,000</b>. The water wheel doubles it to 20 a day.'])}
 <p>Pemberton sells Country Loaf after the first flour, and Mabel buys flour. Stake once the wheel turns.</p>
 `},
 
@@ -790,10 +807,11 @@ ${steps(['Give Wendell <b>3 Diviner\'s Elixirs</b>. Five patches of steaming gro
 
 { id:'wreck', group:'stories', title:'Hazel\'s Shipwreck', html:`
 <p><b>Starts:</b> a day or three after Sandpiper Dunes rises. Hazel finds a page from a captain's logbook.</p>
-${steps(['<b>Diving bell</b>: Marlo\'s glass (20,000, on the sand the next day), a frame from the workshop (25 planks), and 6 iron fittings. Put it together at the wreck.',
+${steps(['<b>Portholes</b>: ask Marlo about glass for a diving bell. He wants <b>3 brass portholes</b> off the Saltwren. From then on one washes up on your beach each day until you have three.',
+ '<b>Diving bell</b>: Marlo\'s glass (the portholes + 12,000, on the sand the next day), a frame from the workshop (25 planks), and 6 iron fittings. Put it together at the wreck.',
  '<b>Deck</b>: open straight away.',
  '<b>Hold</b>: needs Pemberton\'s crowbar (3 iron + 1,500, needs the forge).',
- '<b>Cabin</b>: needs Marlo\'s lantern lens (8,000, ready the next day).',
+ '<b>Cabin</b>: needs Marlo\'s lantern lens. Take the <b>Saltwren Lantern</b> hanging in the hold, then bring it to Marlo with <b>a moonpearl</b> and 3,000. Ready the next day.',
  '<b>Vault</b>: needs 4 treasure chart pieces. They wash up on trip beaches once the cabin is open (50% on Shipwreck Cove, 15% on a themed island, 6% on a plain one).'])}
 <p>Each part holds two pieces of salvage furniture and pages of the <i>Saltwren</i>'s logbook (12 in all; reread them with Hazel or at the wreck). The day after the vault opens, <b>Hazel's Antiques</b> opens near the museum with three pieces of salvage a day, and offers a stake.</p>
 `},

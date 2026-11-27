@@ -30,6 +30,8 @@ ITEM_BUILDERS.escroll = (g, d) => {
    closePanel(), reqMet(t,k), friend(id), updateHeld(), updateHUD(), equip(t), noEdit(), GUEST(), VISIT(), addClams(n), npcName(id)
    Optional: confirm(text, yes) for "are you sure" (falls back to dialog choices).
    ===================================================================== */
+// heirlooms always need the Master Workbench (the can's heirloom sits one tier lower than the others)
+const tBench = (t, k) => TOOLS[t] && TOOLS[t].tiers[k] && TOOLS[t].tiers[k].forever ? 3 : toolBench(k);
 export function createEnchant(C){
   const S=()=>C.S(); const inv={ count:id=>C.countItem(id), take:(id,n)=>C.removeItem(id,n) };
   const fmt=n=>C.fmt?C.fmt(n):String(n);
@@ -159,7 +161,7 @@ export function createEnchant(C){
       h+='<div class="muted" data-shide style="margin-bottom:8px">Tools you make are the same as the ones Pemberton sells, and need the same experience. Making a better one of a tool you already have moves its enchantments over (an heirloom drops Tough, since it never wears out). A tool you don\'t have yet starts with none. A Flimsy tool can be made anywhere. Better ones need a bigger crafting table.</div>';
       for (const t of tools){ const own=s.tools[t]; h+=`<div class="notice" data-sgrp><b>${TOOLS[t].name}</b> <span class="muted">· ${own?'You have: '+TOOLS[t].tiers[own.tier].name:'You don\'t have one'}</span>`;
         TOOLS[t].tiers.forEach((tr,k)=>{ const c=canCraft(s,t,k,inv,C.reqMet), need=craftNeed(t,k); if (!need) return; if (own && own.tier>=k) return; if (!C.reqMet(t,k) && k>((s.toolEver[t]??-1)+1)) return;
-          h+=`<div class="row"${sk(tr.name, TOOLS[t].name, need.map(([m])=>ITEMS[m]?ITEMS[m].name:m))} style="margin:8px 0 0"><img src="${C.toolThumb(t,k)}"><div class="grow"><div class="nm">${tr.name}</div><div class="sub">${matsHTML(need)}${!C.reqMet(t,k)&&tr.req?`<br>${tr.req.desc}`:''}${benchLine(toolBench(k))}</div></div><button class="btn" data-emk="${t}:${k}" ${c.ok&&toolBench(k)<=here()?'':'disabled'}>Make</button></div>`; });
+          h+=`<div class="row"${sk(tr.name, TOOLS[t].name, need.map(([m])=>ITEMS[m]?ITEMS[m].name:m))} style="margin:8px 0 0"><img src="${C.toolThumb(t,k)}"><div class="grow"><div class="nm">${tr.name}</div><div class="sub">${matsHTML(need)}${!C.reqMet(t,k)&&tr.req?`<br>${tr.req.desc}`:''}${benchLine(tBench(t,k))}</div></div><button class="btn" data-emk="${t}:${k}" ${c.ok&&tBench(t,k)<=here()?'':'disabled'}>Make</button></div>`; });
         h+='</div>'; } }
     if (mode==='known'){
       h+=`<div class="muted" data-shide style="margin-bottom:8px">${E.known.length} of ${Object.keys(ENCH).length} known${E.twin?' · Twin Charm: tools hold two':''}</div>`;
@@ -182,7 +184,7 @@ export function createEnchant(C){
       else if (cur.length>=slotsOf(s)){ if (cur.length===1) confirm(`${ENCH[id].name} takes the place of ${ENCH[cur[0]].name}.`, ()=>go(cur[0]));
         else pick(`Which one comes off for ${ENCH[id].name}?`, cur.map(x=>({ label:ENCH[x].name, fn:()=>go(x) }))); }
       else go(null); });
-    pB.querySelectorAll('[data-emk]').forEach(b=>b.onclick=()=>{ if (C.noEdit()) return; const [t,k]=b.dataset.emk.split(':'), kk=+k, c=canCraft(s,t,kk,inv,C.reqMet); if (!c.ok || toolBench(kk)>here()) return;
+    pB.querySelectorAll('[data-emk]').forEach(b=>b.onclick=()=>{ if (C.noEdit()) return; const [t,k]=b.dataset.emk.split(':'), kk=+k, c=canCraft(s,t,kk,inv,C.reqMet); if (!c.ok || tBench(t,kk)>here()) return;
       const go=()=>{ const r=craft(s,t,kk,inv,C.reqMet); if (!r.ok){ C.toast(r.why); return; } C.Snd.fanfare(); C.equip(t); const on=enchOf(s,t); C.toast(`You made a ${TOOLS[t].tiers[kk].name}!`, C.toolThumb(t,kk), 'new', on.length ? `${on.map(nm).join(' and ')} moved over from the old one.` : undefined); C.save(); C.updateHUD(); rer(); };
       const B=scrapsBroken(s,t,kk), warn=[c.loses ? `Your old ${TOOLS[t].name.toLowerCase()} has ${c.loses.map(nm).join(' and ')} on it. An heirloom never wears out, so that comes off. Anything else on it moves over.` : '',
         B && B.ench ? `Your broken ${TOOLS[t].tiers[B.tier].name} still has ${B.ench.map(nm).join(' and ')} on it. Making this scraps it, charm and all. You could fix it instead.` : ''].filter(Boolean).join(' ');

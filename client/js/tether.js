@@ -5,7 +5,7 @@
       canUse() -> whether chests count here (your own island), scene, y(x,z) -> floor height for the lines
    ===================================================================== */
 import * as THREE from 'three';
-import { isStation, isChest, tethers, feedChests, poolCount, poolTake } from './tether-core.js';
+import { isStation, isChest, tethers, feedChests, poolCount, poolTake, sortInPlace, sameOrder } from './tether-core.js';
 export * from './tether-core.js';
 
 export function createTether(C){
@@ -17,7 +17,7 @@ export function createTether(C){
     cache=feedChests(F.filter(f=>isStation(f.id)), F.filter(f=>isChest(f.id)).map(f=>({ id:f.id, x:f.x, z:f.z, store:f.rec.store })), C.player()).map(c=>c.store);
     return cache; }
   const H = {
-    stores,
+    stores, sortInPlace, sameOrder,
     fresh(){ cache=null; },
     chests:()=>stores().length,
     extra:id=>poolCount(stores(), id),

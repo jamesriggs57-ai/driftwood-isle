@@ -276,11 +276,19 @@ ${note('Guests can learn from Pippa and enchant, but don\'t find scrolls. On a f
 <h3>Seeds</h3>
 <p>Every island has <b>4 crops that grow wild</b>, picked from the island's seed and weighted by terrain. They cost 30 each, always in stock (Pemberton's Garden tab, Sprig, a seed bin in the store), and about 6 ripe plants of each stand around the island, topped up daily. Other seeds rotate daily at normal prices. Each island also has 3 wild flower species; picking a clump gives the flower and 1 to 3 seeds.</p>
 <h3>Planting</h3>
-<p>Seeds open a planter: choose how many and how long each row is (up to 10 x 10). Drag the patch into place; green squares plant, red ones are skipped (you never lose seeds). Near a garden it snaps flush to its side. No shovel needed for crops.</p>
+<p>Seeds open a planter: choose how many and how long each row is (up to 10 x 10). It starts from what you picked last time (a 3 by 3 patch the first time), and a row is never longer than the number of seeds, so one seed is one square. The patch sits centred where you tap or drag it. Green squares plant; red ones can't take a seed and are left out, so you never lose seeds. A patch with one empty square between it and a garden slides over to join that garden. No shovel needed for crops.</p>
 <h3>Gardens</h3>
-<p>Planting makes a garden, which is free. Tap its stake for the garden menu: harvest all, water all, plant, fences, decorations, move the gate.</p>
+<p>Planting makes a garden, which is free. Tap its stake for the garden menu: harvest all, water all, plant, fences, decorations, move the gate, and the garden editor.</p>
 <ul><li>Fences per piece: rustic 40, white picket 60, low stone 70, boxwood hedge 90.</li>
 <li>Decorations (one-time per garden): sign 500, scarecrow 1,200, corner lanterns 1,600 (needs a fence), flower arch 2,000.</li></ul>
+<h3>The garden editor</h3>
+<p>Open it with the <b>Garden</b> button, which shows when you are near plants you planted, or from a garden's stake menu. The view goes overhead; drag to look around.</p>
+<ul><li><b>Pick:</b> tap plants you planted to pick them, and tap one again to drop it. Tap a garden's soil or stake to pick the whole garden.</li>
+<li><b>Move:</b> drag the copy or tap the ground, turn it with the arrows, then tap Put it here. Garden plants snap to the squares; trees and bushes go where you set them. Red means it can't go there, and the bar says why (water, a path, uneven ground, too close to other plants, or on top of another garden).</li>
+<li><b>Whole garden:</b> the soil, fences, gate and decorations go with it, and every plant keeps its growth, watering and color.</li>
+<li><b>Some plants:</b> the squares they leave stay as soil. Plants set down next to a garden join it; elsewhere they start a new one.</li>
+<li><b>Take out:</b> you get the seeds, starts or saplings back (a fruit tree gives back its fruit). Anything ripe is harvested first. Taking out a whole garden removes its soil too; fences and decorations aren't refunded.</li></ul>
+<p>The editor doesn't use the shovel. The shovel never digs up anything you planted, so with the shovel out a ripe crop still harvests and a ripe flower still picks. It still digs up wild crops, wild flower clumps, stumps and dig spots.</p>
 <h3>Harvesting</h3>
 <p>No tool needed. Every harvest gives the crop plus 1 to 4 seeds. Tomatoes, herbs and berries stay planted (berries drop back a stage and are ready again in about a day). Watering speeds growth.</p>
 <h3>Trees and orchards</h3>
@@ -887,7 +895,7 @@ export const SUMS = {
   shops: "Every shop, what it sells and backing shopkeepers",
   tools: "Tool tiers, how long they last, bags and the bike",
   enchanting: "Every enchantment, its cost and what it does",
-  garden: "Planting, watering, crops and flowers",
+  garden: "Planting, the garden editor, crops and flowers",
   crafting: "Learning woodworking and every plan",
   tables: "Crafting table tiers and what each adds",
   custom: "Designing your own furniture part by part",

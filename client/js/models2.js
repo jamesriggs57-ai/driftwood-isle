@@ -307,7 +307,7 @@ export function buildTower(){
   // ivy up one side
   for (let i=0;i<14;i++){ const t=i/14, a=-2.2+Math.sin(i*1.3)*0.25; mk(G.sph(0.2,6,4), M(0x4f8a3a), Math.sin(a)*(R+0.12), F+0.3+t*H*0.8, Math.cos(a)*(R+0.12), g).scale.set(1,0.8,0.5); }
   // windows (round, glowing)
-  // v1.72 a balcony round the top, under the eaves, with a little door out from the observatory (Wendell lets friends out on it)
+  // v1.78 a balcony round the top, under the eaves, with a little door out from the observatory (Wendell lets friends out on it)
   const BY=F+3.8, BR=R+1.15, BD=-0.7, wood=M(0x5a3e2a), iron=M(0x2c2a28);
   { const deck=mk(G.cyl(BR,BR,0.14,28), wood, 0,BY-0.07,0,g); deck.receiveShadow=true;
     for (let i=0;i<10;i++){ const a=i/10*TAU+0.15, b=mk(G.box(0.12,0.12,1.3), wood, Math.sin(a)*(R+0.45),BY-0.5,Math.cos(a)*(R+0.45),g); b.rotation.set(0.75,a,0,'YXZ'); }   // struts under it

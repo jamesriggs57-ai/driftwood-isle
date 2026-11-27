@@ -17,7 +17,7 @@ import * as S4 from './story4.js';   // v1.41 phase 4 buildings, festival and St
 import * as LH from './lighthouse.js';   // v1.39 fixes: the climbable lighthouse on Lighthouse Point
 import * as BH from './bluffhouse.js';   // v1.60 the bigger, walk-in Lantern Bluff lighthouse
 import * as TW from './towerroom.js';   // v1.47 inside Wendell's tower
-import * as TT from './towertop.js';   // v1.72 the balcony round the top of Wendell's tower
+import * as TT from './towertop.js';   // v1.78 the balcony round the top of Wendell's tower
 import { ACHIEVEMENTS, ACH_GROUPS } from './achieve.js';
 import { BY_SLOT, SLOT_NAMES } from './wardrobe-data.js';
 import { CELL, buildSoil, buildFences, buildStake, buildGardenSign, buildScarecrow, buildLanternPost, buildFlowerArch } from './farm.js';
@@ -5068,7 +5068,7 @@ function makeTowerRooms(){
   spot(B, 'towerorrery', topL.spots.orrery, [0.6,1.0], 'Look', ()=>toast(pick(TW.TOWER_LINES.orrery)));
   spot(B, 'towerglobe', topL.spots.globe, [0.5,1.1], 'Look', ()=>toast(pick(TW.TOWER_LINES.globe)));
   spot(B, 'towerdesk', topL.spots.desk, [0.6,0.8], 'Read', ()=>toast(TW.TOWER_LINES.desk[0]));
-  spot(B, 'towerroof', topL.spots.roof, [0.6,1.6], 'Out on the balcony', ()=>towerRoof());   // v1.72
+  spot(B, 'towerroof', topL.spots.roof, [0.6,1.6], 'Out on the balcony', ()=>towerRoof());   // v1.78
   spot(B, 'towerglass', topL.spots.pedestal, [0.5,1.2], 'Look', ()=>dialog('Under the glass dome', 420, ISLE_K.includes('starfall')
     ? ['A sliver of Starglass on a velvet cushion. Stars drift inside it, even now.', 'A card underneath, in Wendell\'s hand: "From the night Starfall came up. Do not tap the glass."']
     : ['An empty velvet cushion under a glass dome.', 'A little card says: "For the Starglass. When it comes."']));
@@ -5079,7 +5079,7 @@ function refreshTowerLook(){ if (!topL) return; const night=World.night>0.5; TW.
 function towerFloor(to){ const R=ROOMS[to], L=to==='tower'?towerL:topL; if (!R) return; Snd.door();
   fade(()=>{ World.inside=to; for (const k in ROOMS) ROOMS[k].group.visible=(k===to); stopMove(); const [lx,lz]= to==='tower' ? L.upLand : L.downLand;
     player.pos.set(R.ox+lx, 0, R.oz+lz); player.face=Math.atan2(-lx, -lz); player.obj.rotation.y=player.face; camTarget.copy(player.pos); R.cutState=null; refreshTowerLook(); updateSky(); updateCamera(1); }); }
-// v1.72 out of the little door in the observatory glass onto the balcony round the top: only once Wendell counts you as a friend
+// v1.78 out of the little door in the observatory glass onto the balcony round the top: only once Wendell counts you as a friend
 const BALCONY_FRIEND = 5;   // his goodwill (a chat a day +1, a favor +3), the same mark as an islander being your friend
 let TB=null;
 function towerRoof(){ if (!towerEnt || !ROOMS.towertop || dlgState) return; const W=WIZARD;
@@ -7912,7 +7912,7 @@ function setupLighthouse(lh, P){
   const g=lh.g; OUT.add(LH.buildFarIsles(S.seed));
   const ctx={ tower:g, cx:lh.x, cz:lh.z, rot:g.rotation.y, player, camera, scene, get camTarget(){ return camTarget; } /* declared further down, so read it late */, groundY, Thing, Snd, toast, dialog, fade, save, stopMove, interact, nearestEnt, updateSky, updateCamera,
     get TX(){ return TX; }, keeperSpec:P||null, folkKeeper:(x,z,face)=>folkKeeper(P, x, z, roleMenu(P), face), hud:$('#hud'),
-    step:()=>Snd.click(), night:()=>World.night, dialogOpen:()=>!!dlgState, getCamYaw:()=>camYaw, setCamYaw:v=>{ camYaw=v; }, setPerch:p=>{ PERCH=p; }, ray:()=>ray /* v1.72 the stair: tap a tread to walk to it */,
+    step:()=>Snd.click(), night:()=>World.night, dialogOpen:()=>!!dlgState, getCamYaw:()=>camYaw, setCamYaw:v=>{ camYaw=v; }, setPerch:p=>{ PERCH=p; }, ray:()=>ray /* v1.78 the stair: tap a tread to walk to it */,
     busy:()=>!!(dlgState || placing || buildMode || magicMode || cine || Fishing.state!=='idle' || knockedDown()),
     prep:()=>{ if (riding) setRiding(false); if (sledding) setSled(false); },
     input:()=>{ const jm=Math.hypot(joy.x,joy.y); if (joy.active && jm>0.15) return [joy.x/jm*clamp((jm-0.15)/0.7,0.25,1), joy.y/jm*clamp((jm-0.15)/0.7,0.25,1)];
@@ -9657,7 +9657,7 @@ function movePlayer(dt,t){
 }
 const camTarget=new THREE.Vector3(), _tzl=new THREE.Vector3();
 function updateCamera(dt){
-  if (PERCH){ const turn=(keys[KB().turnR]?1:0)-(keys[KB().turnL]?1:0); if (turn && !dlgState) camYaw+=turn*dt*1.8; if (PERCH.cam(dt)) return; }   // v1.72 in a lighthouse the turn keys still turn the camera
+  if (PERCH){ const turn=(keys[KB().turnR]?1:0)-(keys[KB().turnL]?1:0); if (turn && !dlgState) camYaw+=turn*dt*1.8; if (PERCH.cam(dt)) return; }   // v1.78 in a lighthouse the turn keys still turn the camera
   if (tankZoom){ tankZoom.t=Math.min(1, tankZoom.t+dt/0.42); const k=1-(1-tankZoom.t)**3; camera.position.lerpVectors(tankZoom.from, tankZoom.to, k); camera.lookAt(_tzl.lerpVectors(tankZoom.lookFrom, tankZoom.look, k)); return; }
   if (buildMode){ _bt.copy(buildMode.camT).add(buildMode.pan); camTarget.lerp(_bt, Math.min(1,dt*5)); const dist=buildMode.dist, pitch=buildMode.pitch, yaw=buildMode.yaw;
     if (World.inside){ scene.fog.near=Math.max(60,dist*1.2); scene.fog.far=Math.max(200,dist*3.5); }

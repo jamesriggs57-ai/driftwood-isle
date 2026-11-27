@@ -1,5 +1,5 @@
 /* =====================================================================
-   v1.72 THE BALCONY ROUND THE TOP OF WENDELL'S TOWER.
+   v1.78 THE BALCONY ROUND THE TOP OF WENDELL'S TOWER.
    Once Wendell counts you as a friend, the little door in the observatory glass lets you out onto the balcony
    under the eaves (models2.js buildTower draws it). You walk round it in the usual camera, the way you walk the
    lighthouse galleries (lighthouse.js has the shared walking code), and go back in by the same door.

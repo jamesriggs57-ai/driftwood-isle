@@ -329,7 +329,7 @@ export function buildObservatory(seed){
   { const h=noShadow(mk(G.cyl(0.85,0.85,0.02,24), basic(0x1a1410), hx,0.005,hz,g)); const rail=[]; for (let k=0;k<=20;k++){ const a=k/20*TAU*0.78+holeA+Math.PI*0.35; rail.push(new THREE.Vector3(hx+Math.sin(a)*0.95, 0.9, hz+Math.cos(a)*0.95)); }
     noShadow(mk(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(rail), 30, 0.035, 6), brass, 0,0,0,g)); for (let k=0;k<rail.length;k+=4) mk(G.cyl(0.02,0.02,0.9,5), wood, rail[k].x,0.45,rail[k].z,g);
     const [sx,sz]=polar(holeA, R-1.15); for (let k=0;k<3;k++){ const s=mk(G.box(0.8,0.08,0.3), wood, sx,-0.1-k*0.25,sz,g); s.rotation.y=holeA+k*0.35; } }
-  // v1.72 a little door in the glass, out onto the balcony round the top of the tower
+  // v1.78 a little door in the glass, out onto the balcony round the top of the tower
   { const a=deg(338), [x,z]=polar(a, R-0.06), d=new THREE.Group(); d.position.set(x,0,z); d.rotation.y=a+Math.PI; g.add(d);
     mk(G.box(1.1,2.3,0.12), M(0x8a7a6a), 0,1.15,0,d); mk(G.box(0.9,2.12,0.16), wood, 0,1.06,-0.02,d); mk(G.box(0.5,0.6,0.17), M(0xcfe8f8), 0,1.6,-0.02,d);
     mk(G.sph(0.06,8,6), M(0xf3c35a,{ metalness:0.7, roughness:0.3 }), 0.3,1.05,-0.12,d); const sg=segOf(cut, a); if (sg) sg.hide.push(d); }

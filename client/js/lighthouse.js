@@ -268,7 +268,7 @@ export function perchKit(ctx, o={}){
   const farFog = () => { const f=ctx.scene.fog; if (!f) return; f.near=Math.max(f.near, fogN); f.far=Math.max(f.far, fogF); };
   return { P, hud, walkAnim, still, farFog };
 }
-/* ---------- v1.72 walking it yourself, in the usual view ----------
+/* ---------- v1.78 walking it yourself, in the usual view ----------
    No more ride up the stair with the camera circling the tower, no turn on the spot in the lamp room, no eye-level view
    round the gallery. You walk the stair and the gallery yourself (stick, keys or a tap), and the camera stays where
    the island camera is: behind and above you, pointing the way you last turned it. It only ever slides along with you.

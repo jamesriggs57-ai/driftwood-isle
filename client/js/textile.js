@@ -63,7 +63,13 @@ export function createSewing(C){
     return true; }
 
   /* ---------- 3D preview ---------- */
-  let R=null, scene=null, cam=null, holder=null, raf=0, yaw=0, dirty=true;   // the preview holds still; drag it to turn it
+  // the preview never spins or rocks on its own: clothes face you at a slight angle, rugs sit square, and either turns only when you drag it.
+  // it only redraws when something changed (a drag, a new design) or the model has its own little animations.
+  let R=null, scene=null, cam=null, holder=null, raf=0, yaw=0, yawKind='', dirty=true;
+  function dragTurn(canvas){ let dn=null; canvas.style.touchAction='pan-y'; canvas.style.cursor='grab';
+    canvas.onpointerdown=e=>{ dn={ x:e.clientX, y:yaw, id:e.pointerId }; try{ canvas.setPointerCapture(e.pointerId); }catch(_){} canvas.style.cursor='grabbing'; };
+    canvas.onpointermove=e=>{ if (dn && e.pointerId===dn.id){ yaw=dn.y+(e.clientX-dn.x)*0.012; dirty=true; } };
+    canvas.onpointerup=canvas.onpointercancel=()=>{ dn=null; canvas.style.cursor='grab'; }; }
   function preview(canvas, d){
     if (!R){ R=new THREE.WebGLRenderer({ antialias:true, alpha:true }); R.outputColorSpace=THREE.SRGBColorSpace; R.toneMapping=THREE.ACESFilmicToneMapping; R.shadowMap.enabled=true;
       scene=new THREE.Scene(); scene.add(new THREE.HemisphereLight(0xfff6e8,0x8a7a6a,1.5)); const sun=new THREE.DirectionalLight(0xffffff,2.0); sun.position.set(3,6,5); sun.castShadow=true; scene.add(sun);
@@ -78,11 +84,8 @@ export function createSewing(C){
     if (d.kind==='rug'){ const r=Math.max(size.x,size.z)*0.62+0.1; const dist=r/tf*0.95; cam.position.set(ctr.x, dist*0.85, ctr.z+dist*0.6); cam.lookAt(ctr.x,0,ctr.z); }
     else { const hh=size.y*0.58+0.08, dist=Math.max(hh/tf, (size.x*0.62)/(tf*cam.aspect)); cam.position.set(0, ctr.y+dist*0.12, dist); cam.lookAt(0, ctr.y, 0); }
     const ctx=canvas.getContext('2d'); cancelAnimationFrame(raf); let last=performance.now(); const anims=[]; holder.traverse(o=>{ if (o.userData && o.userData.anims) anims.push(...o.userData.anims); });
-    dirty=true; let dragX=null;
-    canvas.style.cursor='grab'; canvas.style.touchAction='pan-y';
-    canvas.onpointerdown=e=>{ dragX=e.clientX; try { canvas.setPointerCapture(e.pointerId); } catch {} canvas.style.cursor='grabbing'; };
-    canvas.onpointermove=e=>{ if (dragX===null) return; yaw+=(e.clientX-dragX)*0.012; dragX=e.clientX; dirty=true; };
-    canvas.onpointerup=canvas.onpointercancel=()=>{ dragX=null; canvas.style.cursor='grab'; };
+    if (yawKind!==d.kind){ yawKind=d.kind; yaw = d.kind==='rug' ? 0 : 0.35; }
+    dirty=true; dragTurn(canvas);
     const loop=t=>{ if (!canvas.isConnected) return; if ((dirty || anims.length) && t-last>40){ last=t; dirty=false; holder.rotation.y=yaw;
         for (const a of anims) a(t/1000); R.render(scene,cam); canvas.width=R.domElement.width; canvas.height=R.domElement.height; ctx.drawImage(R.domElement,0,0); }
       raf=requestAnimationFrame(loop); };
@@ -96,7 +99,7 @@ export function createSewing(C){
   let mode='list', draft=null, color=25, color2=1, tool='brush', mirror=false, lastArgs=['',null], undo=[];
   // undo: a copy of the draft before each change (painting strokes, fills, patterns, shape and size)
   const snap = () => { if (!draft) return; undo.push(JSON.stringify(draft)); if (undo.length>60) undo.shift(); };
-  const setDraft = d => { draft=d; undo=[]; yaw=0; };
+  const setDraft = d => { draft=d; undo=[]; yawKind=''; };   // a new design starts at its kind's resting angle
   // colours you can paint with, in palette order (plus one already in use, so an edge colour from an old design still shows)
   const palette = extra => { const o=open_(); if (extra!==undefined) o.add(extra); return [...o].sort((a,b)=>a-b); };
   const fixColor = () => { const o=open_(); if (!o.has(color)) color=T.START_COLORS[2]; if (!o.has(color2)) color2=T.START_COLORS[0]; };
@@ -141,7 +144,7 @@ export function createSewing(C){
         <div style="display:flex;gap:6px;margin-top:6px"><button class="btn" data-scollar="1" ${miss?'disabled':''}>Sew one</button></div></div></div></div>`; }
     return h; }
   function editHTML(){ fixColor(); const d=draft, l=lvl(), G=d.G, rug=d.kind==='rug', need=T.needLevel(d), miss=lacks(d), maxG=T.GRIDS[l];
-    let h=`<canvas id="sxPrev" style="width:100%;height:${rug?170:230}px;display:block;background:linear-gradient(#fbf3e4,#f1e4cc);border-radius:14px;margin-bottom:8px"></canvas>`;
+    let h=`<canvas id="sxPrev" style="width:100%;height:${rug?170:230}px;display:block;background:linear-gradient(#fbf3e4,#f1e4cc);border-radius:14px;margin-bottom:2px"></canvas><div class="muted" style="font-size:11px;text-align:center;margin-bottom:6px">Drag to turn</div>`;
     h+=`<div class="notice" style="margin-top:0"><b>${rug?esc(T.rugName(d)):T.GARMENTS[d.base].name}</b><div class="sub" style="margin-top:4px">${matsHTML(d)}</div>
       ${rug?`<div class="sub">Each copy sells for ${C.fmt(T.rugPrice(d))}.${T.rugBonus(d)?` Your first sale of this rug adds ${C.fmt(T.rugBonus(d))} for the art.`:''}</div>`:''}
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px"><button class="btn" id="sxMake" ${miss.length||need>l?'disabled':''}>${rug?'Make it':'Sew it'}</button><button class="btn alt" id="sxSave">Save design</button><button class="btn alt" id="sxBack">Back</button></div>

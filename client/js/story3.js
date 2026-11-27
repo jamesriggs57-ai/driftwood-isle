@@ -34,7 +34,7 @@ ITEM_BUILDERS.bathsalts = (g) => { mk(G.cyl(0.14,0.14,0.28,14), glass(0xeef8f8,0
 ITEM_BUILDERS.crowbar = (g) => { const ir=IRON(); const bar=mk(G.cyl(0.025,0.025,0.8,8), ir, 0,0.05,0,g); bar.rotation.z=Math.PI/2; const hook=mk(G.tor(0.08,0.025,6,10,Math.PI), ir, 0.4,0.12,0,g); hook.rotation.z=-Math.PI/2;
   mk(G.box(0.08,0.02,0.06), ir, -0.43,0.05,0,g); };
 ITEM_BUILDERS.wrecklens = (g) => { const r=mk(G.tor(0.18,0.03,8,24), BRASS(), 0,0.22,0,g); mk(G.cyl(0.17,0.17,0.05,24), glass(0xd8f0ff,0.55), 0,0.22,0,g).rotation.x=Math.PI/2; r.rotation.y=0; mk(G.box(0.08,0.1,0.04), BRASS(), 0,0.04,0,g); addGlow(g, 0.22, 0.6, 0xd8f0ff); };
-// v1.72 quest finds: the old keepers' lens in pieces, a brass porthole off the Saltwren, her sea lantern
+// v1.75 quest finds: the old keepers' lens in pieces, a brass porthole off the Saltwren, her sea lantern
 ITEM_BUILDERS.oldlens = (g) => { const gl=glass(0xd8f0ff,0.6); for (let i=0;i<4;i++){ const p=mk(G.tor(0.12+i*0.03,0.018,5,10,Math.PI*0.45), gl, (i%2?0.06:-0.05),0.03+i*0.012,(i-1.5)*0.05,g); p.rotation.set(Math.PI/2, 0, i*1.3); } mk(G.box(0.12,0.04,0.08), BRASS(), 0.12,0.02,0.1,g).rotation.y=0.5; };
 ITEM_BUILDERS.porthole = (g) => { const b=M(0x7a8a5a,{ metalness:0.5, roughness:0.5 }); const r=mk(G.tor(0.2,0.05,8,24), b, 0,0.06,0,g); r.rotation.x=Math.PI/2; mk(G.cyl(0.17,0.17,0.03,24), glass(0xb8d8d0,0.5), 0,0.06,0,g);
   for (let i=0;i<6;i++){ const a=i/6*Math.PI*2; mk(G.sph(0.022,6,4), b, Math.cos(a)*0.2,0.1,Math.sin(a)*0.2,g); } mk(G.box(0.08,0.04,0.1), b, 0.26,0.04,0,g); };

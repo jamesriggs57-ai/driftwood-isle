@@ -10,7 +10,7 @@
    Sorting: groups a bag or a chest by what kind of thing it is (SORT_KINDS order), then by name, and tops up
    part stacks of the same thing so they take fewer slots. Things with their own details (a fish's size) stay as they are.
    ===================================================================== */
-import { ITEMS } from './content.js';
+import { ITEMS, WOOD_KINDS } from './content.js';
 import { BENCH_IDS, NEAR } from './benches-core.js';
 
 export const STATIONS = [...BENCH_IDS, 'stove', 'campfire', 'sewmachine'];
@@ -29,7 +29,8 @@ export function feedChests(stations, chests, p){
   return chests.filter(c=>Array.isArray(c.store) && near.some(s=>tethers(s,c))); }
 
 // an entry matches an item id, or a kind of thing ('fish', 'fruit', 'berry') for recipes that take any of a kind
-export const entryIs = (e, id) => !!e && (ITEMS[id] ? e.id===id : !!ITEMS[e.id] && ITEMS[e.id].kind===id);
+// v1.77: 'wood' matches every kind of wood (birch, pine, coconut, fruit and plain)
+export const entryIs = (e, id) => !!e && (id==='wood' ? WOOD_KINDS.includes(e.id) : ITEMS[id] ? e.id===id : !!ITEMS[e.id] && ITEMS[e.id].kind===id);
 export const poolCount = (stores, id) => stores.reduce((a,L)=>a+L.reduce((b,e)=>b+(entryIs(e,id) ? e.n : 0), 0), 0);
 // take n of an id (or kind) out of chest stores, last stack first. Returns how many it couldn't find.
 export function poolTake(stores, id, n){

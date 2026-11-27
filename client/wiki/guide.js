@@ -53,7 +53,9 @@ ${tip('Everything unlocks quietly. Characters hint at what they want in their ow
 <table class="t"><tr><th>Key</th><th>Does</th></tr>
 <tr><td>W A S D</td><td>Walk</td></tr><tr><td>E or Enter</td><td>Use, talk, pick up</td></tr>
 <tr><td>Space</td><td>Swing your tool (chop, dig, cast, catch, water)</td></tr><tr><td>Q</td><td>Switch tool</td></tr>
-<tr><td>B</td><td>Bike</td></tr><tr><td>G</td><td>Sled (winter)</td></tr><tr><td>I</td><td>Bag</td></tr><tr><td>Z / C</td><td>Turn the camera</td></tr></table>
+<tr><td>B</td><td>Bike</td></tr><tr><td>G</td><td>Sled (winter)</td></tr><tr><td>I</td><td>Bag</td></tr><tr><td>Z / C</td><td>Turn the camera</td></tr><tr><td>Hold Shift, or X</td><td>Sneak: walk slowly so bugs don't notice you. X turns it on and off.</td></tr></table>
+<p><b>Sneaking up on bugs.</b> A bug may fly or run off when you come close at a normal walk. Sneaking (hold Shift, or press X) slows you to 40% speed and you crouch a little; while you sneak, bugs never notice you, even when you clicked on one to walk to it. Standing still never scares them either. On a phone, push the joystick only a little to creep up the same way.</p>
+<p><b>Sitting and lying down.</b> Tap a chair, stool, bench, armchair, rocking chair, ottoman, beanbag, porch swing, hanging egg chair or picnic blanket and pick Sit to sit on it, facing away from its back (on a stool or other seat with no back, you face away from where you were standing). Beds and the hammock offer Lie down instead. Tap a table and pick Sit at the table to sit on the closest seat beside it, facing the table; the option only shows when a seat is next to it. Chairs and beds you design work the same way. Walking, tapping somewhere else, Swing or the Act button (E on a computer) gets you up again. When you visit a friend, tapping a seat sits you down straight away. Friends see you sitting too.</p>
 <p>Drag to look around. Clicking the ground walks you there (turn it off in Menu &gt; Controls). Every key can be changed in Menu &gt; Controls.</p>
 <p>Clicking one thing a tree or rock dropped (fruit, branches, wood, stone, clay, iron, and any rare find, plan or scroll from it) picks up everything else that same tree or rock dropped, as long as it fits in your bag. Pieces still falling go straight into your bag when they land. Pressing E picks up one thing at a time. Beach finds and things you dropped yourself are always picked up one at a time.</p>
 <h3>Phone and tablet</h3>
@@ -315,6 +317,14 @@ ${note('Guests can learn from Pippa and enchant, but don\'t find scrolls. On a f
 <h3>Searching</h3>
 <p>The search box at the top of the Craft panel finds a plan by its name or by a material it uses: type <i>stone</i> to see every plan that needs stone, or two words (<i>wood chair</i>) to see only plans that match both. It only shows plans you already know. The search box is on the Woodworking, Cooking, Design and Tools tabs (Make a tool and Enchantments); what you type stays when you make something or switch tabs, and clears when you close the panel. The x clears it, and Enter puts the phone keyboard away.</p>
 <p>Digging up a stump gives a Tree Stump for stump furniture.</p>
+<h3>Kinds of wood</h3>
+<p>Each kind of tree gives its own wood when you chop it or cut it down. A plan, favor, order or isle that asks for wood takes any kind, so it never matters which you carry. When it takes wood from your bag it uses the cheapest kind first.</p>
+<table><tr><th>Wood</th><th>From</th><th>Sells for</th></tr>
+<tr><td>Birch Wood</td><td>Birch</td><td>14</td></tr>
+<tr><td>Pine Wood</td><td>Pine and cedar</td><td>17</td></tr>
+<tr><td>Wood</td><td>Oak, maple and cherry blossom</td><td>20</td></tr>
+<tr><td>Coconut Wood</td><td>Palm</td><td>24</td></tr>
+<tr><td>Fruit Wood</td><td>Every fruit tree</td><td>28</td></tr></table>
 <p>What a piece sells for follows what went into it. A piece made only from wood, branches, stone and weeds sells for about its materials plus 15% (3 fences from 2 wood sell for 45 in all), so woodworking adds a little to chopping rather than replacing it. A piece that needs iron, clay, stumps, planks or rare finds sells for more, and never for less than its materials plus 15%.</p>
 ${tip('Making 14 <b>different</b> pieces is what starts Bramble\'s workshop story.')}
 <h3>Rare showpieces</h3>
@@ -686,7 +696,7 @@ ${steps([
  'Marlo builds a nursery tank beside Sprig\'s shop: <b>20,000 clams, 10 stone, 4 iron</b>. Ready the next day.',
  'At the nursery: <b>2 fragments of one kind + 300 clams = 1 coral starter</b>, ready tomorrow. Sprig starts with 5 a day. Any day you fill every spot she has, she gets better: 8, then 12, 16 and 20 at once. Investing in Sprig adds 1/2/3 more, and a helper adds 1.',
  'Gill lends you his old rowboat at the dock. "Row out" takes you to <b>Cay Bay</b>.',
- 'Row with the joystick or WASD. Over old rubble, <b>Drop</b> a starter. Anywhere else, <b>Cast</b>. Row to the buoy to go home.'])}
+ 'Row with the joystick or WASD. Over old rubble, <b>Drop</b> a starter. Anywhere else, <b>Cast</b>. The way home is the buoy with the tall yellow flag and lamp. A <b>Home</b> tag sits over it, or points to it from the edge of the screen when it is out of sight. Tap the tag to row home from anywhere, or row up to the buoy and press <b>Row home</b>.'])}
 <h3>Reef stages</h3>
 <p>Coral grows over 2 days (sprig, small, full). Fish only arrive between visits. Score = full-grown coral + 5 for each coral kind with 5 or more grown.</p>
 <table class="t"><tr><th>Stage</th><th>Score</th><th>What changes</th></tr>

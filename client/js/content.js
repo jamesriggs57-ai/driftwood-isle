@@ -33,6 +33,14 @@ export const NATIVE_FRUITS = ['apple','pear','peach','orange','plum','cherry','l
 
 /* ---------- Materials ---------- */
 def('wood',     {name:'Wood',           kind:'material', price:20,  model:{t:'log'}});   // v1.39: halved (was 60); v1.48: 20 (was 30), so fish and bugs clearly out-earn chopping
+// v1.77 each kind of tree gives its own wood, from palest and cheapest to darkest and dearest. Oak, maple and cherry blossom
+// still give plain Wood. Any recipe, favor or order that asks for wood takes any of them (countItem/removeItem in main.js).
+def('birchwood', {name:'Birch Wood',     kind:'material', price:14,  model:{t:'log', c:0xece6da, e:0xfaf3e2}});
+def('pinewood',  {name:'Pine Wood',      kind:'material', price:17,  model:{t:'log', c:0x8e6038, e:0xf2dcae}});
+def('palmwood',  {name:'Coconut Wood',   kind:'material', price:24,  model:{t:'log', c:0xa88458, e:0xc89c6a}});
+def('fruitwood', {name:'Fruit Wood',     kind:'material', price:28,  model:{t:'log', c:0x5e3a2a, e:0xb07a58}});
+export const WOOD_KINDS = ['birchwood','pinewood','wood','palmwood','fruitwood'];   // cheapest first: a recipe that asks for wood uses these up in this order
+export const treeWood = type => { const t=String(type||'').replace(/\d+$/,''); return t==='birch' ? 'birchwood' : (t==='pine' || t==='cedar') ? 'pinewood' : t==='palm' ? 'palmwood' : t==='fruittree' ? 'fruitwood' : 'wood'; };
 def('softwood', {name:'Driftwood Branch',kind:'material', price:20, model:{t:'branch'}});
 def('stone',    {name:'Stone',          kind:'material', price:75,  model:{t:'stone'}});
 def('clay',     {name:'Clay',           kind:'material', price:100, model:{t:'clay'}});

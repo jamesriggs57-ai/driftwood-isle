@@ -13,6 +13,7 @@ import '../../client/js/enchant-core.js';   // v1.40: Enchanting Scroll items (d
 import '../../client/js/custom-core.js';   // v1.63: custom furniture items (cf_ ids carry their whole design)
 import '../../client/js/textile-core.js';   // v1.64: sewn rugs (cr_ ids carry the whole rug)
 import '../../client/js/benches-core.js';  // v1.40: crafting tables and their pieces
+import '../../client/js/pets-core.js';     // v1.67: the Pet Collar and the Pet Basket
 
 const KEEP_IDS = /^(relic_|lampframe$|cutting$|millsails$|bellframe$|crowbar$|wrecklens$|chartpiece$)/;   // v1.38, v1.39 story items that can't be mailed or traded
 const DAY = 86400e3;

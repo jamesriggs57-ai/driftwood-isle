@@ -32,6 +32,8 @@ import { createBenches } from './benches.js';   // v1.40 crafting tables
 import { createCustom } from './custom.js';
 import { createSewing } from './textile.js';   // v1.64 sewing
 import { registerRug } from './textile-models.js';   // v1.64 sewing (rugs and the machine)
+import { createPets, registerPetModels } from './pets.js';   // v1.67 pets
+import * as PETS_CORE from './pets-core.js';
 import { buildBike, MODEL, M, mk, G, outline, windowMat, glowMats, glowMat, glowSprites, addGlow, textSprite, PALETTE, buildItemModel, thumb, hasThumb, toolThumb, FURN_BUILDERS, MF,
   buildTree, buildStump, buildShrub, buildFlower, buildWildFlower, buildTool, buildAnimal, buildPlayer, buildHouse, buildStall, buildBoard, buildPlankDeck, buildRoom, buildBird, buildGull, buildDuck, buildWeedClump, ITEM_BUILDERS } from './models.js';
 import './furn.js';
@@ -129,7 +131,7 @@ const CU = createCustom({ S:()=>S, save:()=>save(), toast:(...a)=>toast(...a), S
   dialog:(...a)=>dialog(...a), openPanel:(...a)=>openPanel(...a), closePanel:()=>closePanel(), pBody:()=>pBody, pTitle:()=>pTitle, setFoot:h=>setFoot(h), addClams:n=>addClams(n), noEdit:()=>noEdit(),
   GUEST:()=>GUEST, VISIT:()=>VISIT, bench:()=>BN.tier(), benchBanner:()=>BN.banner(), kinds:()=>kindsMade(), today:()=>today(), dayNum:()=>dayNum(today()), sparkle:p=>sparkle(p), track:(k,n)=>track(k,n) });
 // v1.64 sewing (textile.js): rugs and clothes painted pixel by pixel
-registerRug(ITEM_BUILDERS);
+registerRug(ITEM_BUILDERS); registerPetModels(ITEM_BUILDERS);   // v1.67 pets: collar and basket pictures
 const SX = createSewing({ S:()=>S, save:()=>save(), toast:(...a)=>toast(...a), Snd, thumb:id=>thumb(id), fmt:n=>fmt(n), countItem:id=>countItem(id), removeItem:(id,n)=>removeItem(id,n), addItem:id=>addItem(id), canAdd:id=>canAdd(id),
   pBody:()=>pBody, pTitle:()=>pTitle, setFoot:h=>setFoot(h), addClams:n=>addClams(n), noEdit:()=>noEdit(), VISIT:()=>VISIT, today:()=>today(), track:(k,n)=>track(k,n),
   buildPlayer:look=>buildPlayer({ look }), setLook:code=>setPlayerLook(code), look:()=>S.look||CH.lookCode(CH.defaultLook()),
@@ -210,6 +212,7 @@ function rollStats(id){
 }
 function statText(id, m){
   const it=ITEMS[id]; if(!m) return '';
+  if (id==='petbasket'){ const co=PETS_CORE.coatOf(m.sp, m.c); return `${m.n||'A pet'}, ${article(co.name)} ${co.name.toLowerCase()} ${m.sp}${co.r!=='Common'?' ('+co.r.toLowerCase()+')':''}`; }   // v1.67
   const len = it.kind==='fish' ? `${m.l} cm` : `${m.l} mm`;
   const w = m.w>=1000 ? `${(m.w/1000).toFixed(2)} kg` : `${m.w} g`;
   return `${len} · ${w}`;
@@ -6177,6 +6180,11 @@ function spawnDaily(){
   for (const I of ISLES) if (I.ready) isleDaily(I);   // v1.36 isles you're near get today's finds now; the rest when you get there
 }
 rollDay(); spawnDaily();
+// v1.67 pets (pets.js): strays to win over, and your own dog or cat
+const PETS = createPets({ Ent, GroundItem, ents, player, S:()=>S, save:()=>save(), toast:(...a)=>toast(...a), dialog:(...a)=>dialog(...a), Snd, floatText:(t,p)=>floatText(t,p),
+  walkable, blocked, groundY, rawHeight, SAND_H, OUT, ROOMS, roomAt, World, VISIT, TRIP, today, coastR:a=>islandR0(a), inRects, PLACES, ITEMS, scene,
+  countItem:id=>countItem(id), removeItem:(id,n)=>removeItem(id,n), addItem:(id,m)=>addItem(id,m), canAdd:(id,m)=>canAdd(id,m), thumb:id=>thumb(id), noEdit:()=>noEdit(),
+  takeGround:e=>{ const i=S.ground.indexOf(e.rec); if (i>=0) S.ground.splice(i,1); e.remove(); }, started:()=>started, riding:()=>riding });
 setTimeout(()=>{ try { refreshNurseryTank(); spawnRowboat(); pinesRegrow(); } catch(e){ console.warn(e); } }, 0);   // v1.37 (after the rest of the island exists)
 function ensureFavors(){ if (VISIT || TRIP || Q.rolledFor===S.day.key) return; rollFavors(mulberry32(hashStr(S.day.key+':favors:'+S.seed))); Q.rolledFor=S.day.key;
   for (const [k,v] of Object.entries(S.fruitPicked||{})) if (dayNum(S.day.key)-v >= FRUIT_REGROW_DAYS) delete S.fruitPicked[k]; save(); }
@@ -6617,8 +6625,8 @@ function openBag(mode='view', onPick, onCancel){
     const s=S.inv[sel];
     if (s){ const it=ITEMS[s.id]; let b='';
       if (mode==='give') b+= it.noGift ? '<span class="muted">This one stays with you.</span>' : `<button class="btn" data-a="give">Give</button>`;   // v1.38 relics and story parts
-      else if (mode==='swap') b+=`<button class="btn" data-a="give">${it.kind==='fish'||it.kind==='bug'?'Release this':'Set this down'}</button>`;
-      else { if (it.kind==='potion') b+=`<button class="btn" data-a="drink">Drink</button>`; if (it.kind==='food') b+=`<button class="btn" data-a="eat">Eat</button>`; if (s.id==='sled') b+=`<button class="btn" data-a="sled">Ride</button>`; if (it.kind==='furniture') b+=`<button class="btn" data-a="place">Place</button>`; if (canPlant(it) && !World.inside) b+=`<button class="btn" data-a="plant">Plant</button>`; b+=`<button class="btn alt" data-a="drop">${it.kind==='fish'||it.kind==='bug'?'Release':'Drop'}</button>`; }
+      else if (mode==='swap') b+= s.id==='petbasket' ? '<span class="muted">Your pet stays in its basket.</span>' : `<button class="btn" data-a="give">${it.kind==='fish'||it.kind==='bug'?'Release this':'Set this down'}</button>`;
+      else { if (it.kind==='potion') b+=`<button class="btn" data-a="drink">Drink</button>`; if (it.kind==='food') b+=`<button class="btn" data-a="eat">Eat</button>`; if (s.id==='sled') b+=`<button class="btn" data-a="sled">Ride</button>`; if (it.kind==='furniture') b+=`<button class="btn" data-a="place">Place</button>`; if (canPlant(it) && !World.inside) b+=`<button class="btn" data-a="plant">Plant</button>`; if (s.id==='petbasket') b+=`<button class="btn" data-a="letout">Let ${(s.m&&s.m.n)||'it'} out</button>`; else b+=`<button class="btn alt" data-a="drop">${it.kind==='bug'||(it.kind==='fish'&&!PETS.wantsFood())?'Release':'Drop'}</button>`; }   // v1.67 a fish can be set down for a stray
       setFoot(`<div class="detail">${itemDetail(s)}<div class="acts">${b}</div></div>`);
     } else setFoot(`<div class="muted" style="padding:4px 2px">${mode==='give'?'Tap an item to give it.':''}</div>`);
     pBody.querySelectorAll('.slot[data-i]').forEach(el=>el.onclick=()=>{ sel=+el.dataset.i; Snd.click(); render(); });
@@ -6629,7 +6637,8 @@ function openBag(mode='view', onPick, onCancel){
       if(a==='sled'){ panelClose=null; closePanel(); toggleSled(); return; }
       if(a==='place'){ panelClose=null; closePanel(); startPlacing(s.id,'furn'); }
       if(a==='plant'){ panelClose=null; closePanel(); if (ITEMS[s.id].kind==='seed') openPlantPanel(s.id); else if (orchardOk(s.id) && countItem(s.id)>1) openOrchardPanel(s.id); else startPlacing(s.id,'plant'); }
-      if(a==='drop'){ const it=ITEMS[s.id]; const m=s.m; removeAt(sel,1); if(it.kind==='fish'||it.kind==='bug'){ toast(`You let the ${it.name} go.`); Snd.swoosh(); } else dropNear(s.id, player.pos, 1.2, false, m); if(!S.inv[sel]) sel=-1; render(); } });
+      if(a==='letout'){ if (PETS.letOut(sel)){ panelClose=null; closePanel(); } return; }   // v1.67
+      if(a==='drop'){ const it=ITEMS[s.id]; const m=s.m; removeAt(sel,1); if(it.kind==='bug'||(it.kind==='fish'&&!PETS.wantsFood())){ toast(`You let the ${it.name} go.`); Snd.swoosh(); } else dropNear(s.id, player.pos, 1.2, false, m); if(!S.inv[sel]) sel=-1; render(); } });
   };
   openPanel(mode==='give'?'Give a gift':mode==='swap'?'Make room':'Your Bag', onCancel); render();
 }
@@ -9358,7 +9367,7 @@ function frame(now){
   const dt=Math.min(0.05, clock.getDelta()); t+=dt;
   secT+=dt; if(secT>1){ secT=0; if(rollDay()){ spawnDaily(); ensureFavors(); refreshStoreItems(); applyTown(); toast('A new day on '+(S.island||'the island')+'!'); } refreshStands(); setSledBtn(); updateSky(); updateHUD(); updatePotionHUD(); achTick(); }
   saveT+=dt; if(saveT>15){ saveT=0; save(); }
-  updateRemotes(dt,t); updateSnow(dt); PARTY.update(dt,t);
+  updateRemotes(dt,t); updateSnow(dt); PARTY.update(dt,t); PETS.update(); PETS.tickFar(dt,t);   // v1.67 pets
   if (TRIP){ starfallTick(dt); for (let i=FALLING.length-1;i>=0;i--) if (FALLING[i](dt)) FALLING.splice(i,1); }
   if (bayOn()){ bayUpdate(dt,t); renderer.render(BAYR.scn, camera); return; }   // v1.37 out in Cay Bay
   if (started && !tankView){ updateHold(dt); if (meBody.rag) updateRag(meBody,dt,t); else movePlayer(dt,t); bonkCool=Math.max(0,bonkCool-dt); updateBugs(dt); updateFishing(dt,t); updateCatchMeter(dt); tickDialog(dt); updateActButton(); updateCutaway(); }
@@ -9490,9 +9499,9 @@ function remoteUpsert(id, name, st){
   if (st) remotePos(id, st);
   return r;
 }
-function remotePos(id, st){ const r=remotes.get(id); if(!r) return; if (st.lk && st.lk!==r.lk){ r.lk=st.lk; r.obj=swapLook(r.obj, buildPlayer({ look:st.lk })); r.jel={}; } r.tgt.set(st.x, st.y||0, st.z); r.f=st.f||0; r.w=st.w; r.in=st.in||null; r.rg=Array.isArray(st.rg)&&st.rg.length===4?st.rg:null; r.rs=st.rs?1:0;
+function remotePos(id, st){ const r=remotes.get(id); if(!r) return; if (st.lk && st.lk!==r.lk){ r.lk=st.lk; r.obj=swapLook(r.obj, buildPlayer({ look:st.lk })); r.jel={}; } r.tgt.set(st.x, st.y||0, st.z); r.f=st.f||0; r.w=st.w; r.in=st.in||null; r.rg=Array.isArray(st.rg)&&st.rg.length===4?st.rg:null; r.rs=st.rs?1:0; r.pt=Array.isArray(st.pt)?st.pt:null;
   const wantBike=!!st.b; if(wantBike!==!!r.bike){ const u=r.obj.userData; if(wantBike){ r.bike=buildBike(0x5a9ad8); r.obj.add(r.bike); if(u.body) u.body.position.y=0.42; } else { r.obj.remove(r.bike); r.bike=null; if(u.body) u.body.position.y=0; } } if(!r.seen){ r.pos.copy(r.tgt); r.seen=true; } }
-function remoteLeave(id){ PARTY.onLeave(id); const r=remotes.get(id); if(!r) return; scene.remove(r.obj); remotes.delete(id); if (r.rl && r.rl.stars) scene.remove(r.rl.stars); }
+function remoteLeave(id){ PARTY.onLeave(id); const r=remotes.get(id); if(!r) return; PETS.remoteGone(r); scene.remove(r.obj); remotes.delete(id); if (r.rl && r.rl.stars) scene.remove(r.rl.stars); }
 function remoteEmote(id, e){ const txt=EMOTE_TEXT[e]; if(!txt) return; const pos = id==='me' ? player.pos : remotes.get(id)?.pos; if(!pos) return; const v=pos.clone(); v.y+=0.6; floatText(txt, v); if(id!=='me') Snd.pop(); }
 // Jelly feel: bodies squash and stretch on a little spring, and friends bump each other apart.
 /* Jelly feel (v1.1): every critter is a soft plush on springs.
@@ -9541,7 +9550,7 @@ function bumpFriends(dt){
 function updateRemotes(dt,t){
   if (started && !buildMode) bumpFriends(dt);
   jelly(player.obj, playerJelly, dt, player.speedFrac>0.05, t, player.speedFrac*(riding?1.6:1));
-  for (const r of remotes.values()){ r.jel=r.jel||{}; jelly(r.obj, r.jel, dt, !!r.w, t);
+  for (const r of remotes.values()){ r.jel=r.jel||{}; jelly(r.obj, r.jel, dt, !!r.w, t); PETS.remoteUpdate(r, dt, t);
     r.pos.lerp(r.tgt, Math.min(1, dt*(r.rg?14:8))); r.obj.position.copy(r.pos);
     r.obj.visible = r.seen && (r.in||null)===(World.inside||null);
     if (remoteRag(r, dt, t)) continue;
@@ -9711,6 +9720,7 @@ const lkSend = () => { const lk=S.look||''; if (lk.indexOf('~')<0) return lk; co
 const playerState = () => { const R=meBody.rag, P = R ? player.obj.position : player.pos;
   const st={ lk:lkSend(), b:riding?1:0, x:+P.x.toFixed(2), z:+P.z.toFixed(2), y:+P.y.toFixed(2), f:+player.face.toFixed(2), w:player.speedFrac>0.05?1:0, in:World.inside||null };
   if (R){ const q=player.obj.quaternion; st.rg=[+q.x.toFixed(3),+q.y.toFixed(3),+q.z.toFixed(3),+q.w.toFixed(3)]; st.rs=R.resting?1:0; }
+  const pt=PETS.netState(); if (pt) st.pt=pt;   // v1.67 your pet, for friends to see
   return st; };
 // The server changed our bag (gift, mail or trade): take its copy
 function setInventory(inv, seen, equip){ S.inv=inv; if(seen) S.seen=Object.assign(S.seen||{}, seen); if(equip!==undefined){ S.equip=equip; } try{ updateHeld(); updateToolBtn(); }catch(e){} updateHUD(); }
@@ -9778,7 +9788,7 @@ window.__game.v144 = Object.assign({ SR, shopStock:w=>shopStock(w), talkGill:()=
 // v1.52 test hooks: where the new fish and bugs turn up
 window.__game.v145 = { fishPool, bugPool, isleNear, isleAt, bayMore, bayTipIds, bayPool:()=>bayPool(), waterType, isleSpot, get trees(){ return trees; }, get bugs(){ return bugs; }, newBug:(id,x,z,e)=>new Bug(id,x,z,e||{}), updateBugs:dt=>{ bugT=0; updateBugs(dt||3); }, spawnFish:()=>spawnFish(), get fishes(){ return fishes; },
   openDonate:()=>openDonate(), museumExpand:()=>museumExpand(), buildMuseumAll:()=>buildMuseumAll(), enterRoom:id=>enterRoom(id), tanks:()=>ents.filter(e=>e instanceof MuseumTank), openTankView:e=>openTankView(e), closeTankView:()=>closeTankView(), get tankView(){ return tankView; } };
-window.__game.custom = CU.dev; window.__game.sew = SX.dev;
+window.__game.custom = CU.dev; window.__game.sew = SX.dev; window.__game.pets = PETS;   // v1.67 pet tests
 window.__game.sewMachine = { open:()=>SX.open(), choices:()=>SX.keeperChoices({ name:'Pemberton', voice:1 }, ()=>{}).map(c=>c.label), buy:()=>SX.keeperChoices({ name:'Pemberton', voice:1 }, ()=>{})[0].fn(), place:()=>{ const P=player.pos, rec={ id:'sewmachine', x:P.x+1.6, z:P.z, rot:0 }; S.placed.push(rec); const f=new Furniture(rec); return f.label(); } };   // v1.64 tests   // v1.64 sewing tests   // v1.63 custom furniture tests
 // v1.26 test hooks
 window.__game.v126 = { townNewDay, applyTown, findHomeSpot, claimHomeSpot, townCap, incomeNewDay, refreshIncome, talkIncome, incCollect, incOf, INCOME, incEnts, openMap, talkSkipperHome, talkSkipperTrip, tripGoHome, tripRecap, storyWho, askToLeave, canAskToLeave, pitchOnBuy, merchantDay, get peddler(){ return peddler; }, get skipper(){ return skipper; }, newSquares, LOAN_MAX_SQ, TRIP, TRIP_THEME, residents, residentHomes, plotEnts, KEEPOUT, Q, PATHS, camTarget, updateCamera, set camDist(v){ camDist=v; }, get camDist(){ return camDist; }, set camYaw(v){ camYaw=v; } };

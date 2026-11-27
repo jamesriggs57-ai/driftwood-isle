@@ -14,6 +14,7 @@ import { ITEMS } from './content.js';
 import * as T from './textile-core.js';
 import { buildRug } from './textile-models.js';
 import * as CH from './chars.js';
+import { COLLAR, COLLAR_MATS } from './pets-core.js';   // v1.67 pet collars
 export * from './textile-core.js';
 
 const BONUS_PER_DAY = 2;
@@ -99,6 +100,10 @@ export function createSewing(C){
         h+=`<div class="row"><img src="${C.thumb(id)}"><div class="grow"><div class="nm">${esc(ITEMS[id].name)}</div><div class="sub">${T.rugSize(d.w)} x ${d.shape===1?T.rugSize(d.w):T.rugSize(d.d)} m · ${matsHTML(d)}${!c.sold.includes(code)&&T.rugBonus(d)?`<br>First sale: +${C.fmt(T.rugBonus(d))} for the art`:''}</div>
           <div style="display:flex;gap:6px;margin-top:6px"><button class="btn" data-smake="${code}" ${miss.length||T.needLevel(d)>lvl()?'disabled':''}>Make</button><button class="btn alt" data-sedit="${code}">Change</button><button class="btn alt" data-sforget="${code}">Forget</button></div></div></div>`; } }
     if (!c.closet.length && !c.rugs.length) h+='<div class="muted" style="margin-top:8px">Nothing sewn yet. Weeds are your yarn: pull them, then start a rug or some clothes.</div>';
+    // v1.67: pet collars, a quick sew from weeds
+    { const miss=Object.entries(COLLAR_MATS).some(([m,n])=>C.countItem(m)<n);
+      h+=`<div style="margin:10px 0 4px"><b>Little things</b></div><div class="row"><img src="${C.thumb(COLLAR)}"><div class="grow"><div class="nm">${esc(ITEMS[COLLAR].name)}</div><div class="sub">${Object.entries(COLLAR_MATS).map(([m,n])=>`${n} ${matName(m)}`).join(', ')} · fits a dog or a cat${C.countItem(COLLAR)?` · you have ${C.countItem(COLLAR)}`:''}</div>
+        <div style="display:flex;gap:6px;margin-top:6px"><button class="btn" data-scollar="1" ${miss?'disabled':''}>Sew one</button></div></div></div>`; }
     return h; }
   function editHTML(){ const d=draft, l=lvl(), G=d.G, rug=d.kind==='rug', need=T.needLevel(d), miss=lacks(d), maxG=T.GRIDS[l];
     let h=`<canvas id="sxPrev" style="width:100%;height:${rug?170:230}px;display:block;background:linear-gradient(#fbf3e4,#f1e4cc);border-radius:14px;margin-bottom:8px"></canvas>`;
@@ -139,6 +144,9 @@ export function createSewing(C){
     pB.querySelectorAll('[data-snew]').forEach(b=>b.onclick=()=>{ draft = b.dataset.snew==='rug' ? newRug() : newGarment(); mode='edit'; C.Snd.click(); re(); pB.scrollTop=0; });
     pB.querySelectorAll('[data-sedit]').forEach(b=>b.onclick=()=>{ const d=decode(b.dataset.sedit); if (!d) return; draft=d; mode='edit'; C.Snd.click(); re(); pB.scrollTop=0; });
     pB.querySelectorAll('[data-smake]').forEach(b=>b.onclick=()=>{ const d=decode(b.dataset.smake); if (d && make(d)) re(); });
+    pB.querySelectorAll('[data-scollar]').forEach(b=>b.onclick=()=>{ if (C.noEdit()) return; if (Object.entries(COLLAR_MATS).some(([m,n])=>C.countItem(m)<n)){ C.toast('You need more weeds.'); C.Snd.fail(); return; }
+      if (!C.canAdd(COLLAR)){ C.toast('Your bag is full. Make room first.'); C.Snd.fail(); return; }
+      for (const [m,n] of Object.entries(COLLAR_MATS)) C.removeItem(m,n); C.addItem(COLLAR); C.save(); C.Snd.jingle(); C.toast('You sewed a Pet Collar!', C.thumb(COLLAR), 'new', 'Put it on a stray that trusts you.'); re(); });
     pB.querySelectorAll('[data-sforget]').forEach(b=>b.onclick=()=>{ const c=st(); c.rugs=c.rugs.filter(x=>x!==b.dataset.sforget); C.save(); re(); });
     pB.querySelectorAll('[data-sbin]').forEach(b=>b.onclick=()=>{ const c=st(), code=b.dataset.sbin; c.closet=c.closet.filter(x=>x!==code); if (CH.parseLook(C.look()).ct===code) wear(null); C.save(); C.Snd.click(); re(); });
     pB.querySelectorAll('[data-swear]').forEach(b=>b.onclick=()=>{ wear(b.dataset.swear); re(); });

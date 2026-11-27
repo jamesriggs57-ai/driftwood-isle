@@ -114,6 +114,9 @@ ${note('Guest mode caps your wallet at 10,000 clams. Make an account to lift it.
 <tr><td>1 to 9</td><td>about 5,555 (50,000 total)</td></tr><tr><td>10 to 12</td><td>12,000</td></tr>
 <tr><td>13 to 24</td><td>25,000</td></tr><tr><td>25 and up</td><td>40,000</td></tr></table>
 <p>The grid is 20 x 20, up to four floors. Upper floors need a Height style (Two, Three or Four stories). The house only grows onto free land; water, paths, slopes and other buildings are shaded out. Layout changes cost a 50-clam remodel fee each (undoing a change is free). Roof direction, moss, trellises and lighting are free.</p>
+<h3>Doors and inside walls</h3>
+<p>In the builder's <b>Doors &amp; walls</b> tool, tap the wall between two rooms to switch it between a doorway, open (no wall) and a solid wall. Tap a front-facing outside wall to move the front door.</p>
+<p>You can also put walls inside a single room, along the grid's dotted lines, to close off a corner, a closet or a hallway. A room split this way keeps its one roof. Tap a dotted line for a wall, tap it again for a wall with a doorway, and a third time to take it out. Press and drag along a line to put up (or take down) a long wall in one go. Every square has to stay reachable from the front door (or from the stairs on upper floors), so the builder won't let you seal a space off. Inside walls count toward the remodel fee as one change for every 4 squares of wall. When a room moves, its inside walls move with it.</p>
 <h3>Styles</h3>
 <p>Walls, roofs, doors, windows, porches, foundations, chimneys, floors, wallpaper and add-ons are <b>owned</b> styles. Switching between ones you own is free. Get new ones from:</p>
 <ul><li>Pemberton's <b>Home Goods</b> rack (3 new things a day, more as the store grows). "Try it on" previews it on your house.</li>
@@ -335,7 +338,7 @@ ${tip('Making 14 <b>different</b> pieces is what starts Bramble\'s workshop stor
 <tr><td>Shelf</td><td>7 bodies, 6 crowns, 5 bases, 7 fillings</td></tr>
 <tr><td>Lamp</td><td>7 bases, 6 stems, 9 shades, 5 finishes</td></tr>
 <tr><td>Dresser</td><td>6 bodies, 6 feet, 7 fronts, 6 handles, 6 tops</td></tr></table>
-<p>That's 68,412 shapes. On top of that: 16 woods and paints, a second wood, 5 metals, 14 fabrics and 9 patterns. A spinning preview shows the piece as you go. <b>Surprise me</b> picks a matching set in one style (rustic, cottage, antique, modern or woodland).</p>
+<p>That's 68,412 shapes. On top of that: 16 woods and paints, a second wood, 5 metals, 14 fabrics and 9 patterns. A preview pinned at the top shows the piece as you go; drag it to turn it. The options are split into <b>Shape</b> and <b>Colors</b>, and Colors only lists the woods, metals and patterns your crafting table can do. <b>Surprise me</b> picks a matching set in one style (rustic, cottage, antique, modern or woodland).</p>
 <h3>Unlocking parts</h3>
 <ul><li>A <b>Workbench</b> opens the everyday parts, woods and finishes.</li>
 <li>A <b>Carpenter's Bench</b> opens fancier ones (turned and twisted legs, wingbacks, marble tops, damask and velvet).</li>
@@ -402,7 +405,8 @@ ${tip('Your saved designs are kept, so making a matching set of chairs is quick:
 <ul><li><b>Brush</b> paints one square, <b>Fill</b> fills a patch of one colour, <b>Pick colour</b> copies a colour from the painting.</li>
 <li><b>Mirror</b> paints both sides at once.</li>
 <li><b>Start from</b> stripes, a check, a border or a diamond in your two colours, then paint over it.</li>
-<li>On clothes, the middle half of the painting is the front; the outer quarters wrap round the back.</li></ul>
+<li>On clothes, the middle half of the painting is the front; the outer quarters wrap round the back.</li>
+<li>The 3D preview above the painting holds still. Drag it sideways to turn it.</li></ul>
 <h3>Rugs</h3>
 <p>Choose the shape, width and length (0.6 to 3 m), edge, pile and edge colour. A rug costs weeds by its size (plush pile and tassels or pom-poms take a few more). It goes in your bag; place it like any furniture.</p>
 <ul><li>Copies sell for their materials plus 15%.</li>

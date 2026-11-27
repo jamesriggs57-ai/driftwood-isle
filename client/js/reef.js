@@ -245,7 +245,7 @@ export function buildBayWorld(B){
     if (r()<0.6){ const a=r()*TAU, d=cay.r*0.6, x=cay.x+Math.cos(a)*d*cay.sx, z=cay.z+Math.sin(a)*d, h=bayFloor(B,x,z); if (h>0.1){ const l=mk(G.cyl(0.12,0.16,1.8,8), M(0xc8b49a), x,h+0.12,z,group); l.rotation.set(0,r()*TAU,Math.PI/2); } } }
   // the way home: a red and white buoy with a little flag
   { const b=new THREE.Group(); b.position.set(B.buoy[0], 0, B.buoy[1]); group.add(b); mk(G.cyl(0.32,0.42,0.5,12), M(0xe2483d), 0,0.1,0,b); mk(G.cyl(0.3,0.33,0.14,12), M(0xffffff), 0,0.3,0,b);
-    // v1.72 a tall mast with a big flag and a lamp, so the way home shows from anywhere in the bay (and at night)
+    // v1.77 a tall mast with a big flag and a lamp, so the way home shows from anywhere in the bay (and at night)
     mk(G.cyl(0.05,0.06,3.4,6), M(0x4a4a4a), 0,1.95,0,b); const fl=new THREE.Group(); fl.position.y=3.15; b.add(fl); mk(G.box(0.03,0.7,1.15), M(0xf3c35a), 0,0,0.6,fl); mk(G.box(0.036,0.22,1.16), M(0xe2483d), 0,0,0.6,fl); b.userData.flag=fl;   // flag swings on the mast, with a red stripe
     const lamp=mk(G.sph(0.17,12,8), glowMat(0xffd27a), 0,3.78,0,b); addGlow(b, 3.78, 2.6); lamp.castShadow=false; group.userData.buoy=b; }
   return { group, water, wm, fm, update(t, night, spark){ wm.userData.U.uT.value=t; wm.userData.U.uNight.value=night; wm.userData.U.uSpark.value=spark; fm.userData.U.uT.value=t; fm.userData.U.uDay.value=1-night*0.85;

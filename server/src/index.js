@@ -245,6 +245,29 @@ async function api(req, env, url) {
     await env.DB.prepare('INSERT INTO invites (code, owner_id, role, standing, created, expires) VALUES (?, ?, ?, ?, ?, ?)').bind(code, me.id, role, b.standing ? 1 : 0, Date.now(), Date.now() + 14 * DAY).run();
     return json({ code, url: `${url.origin}/#invite=${code}`, role, standing: !!b.standing });
   }
+  // Invite someone by their exact name (no search, no suggestions). They get a letter with Accept and No thanks;
+  // nothing links until they accept. Uses an ordinary invite code that only lives in their mailbox.
+  if (p === '/api/invites/byname' && M === 'POST') {
+    const b = await body(req); const role = b.role === 'resident' ? 'resident' : 'visitor', name = cleanText(b.name, 40);
+    if (!name) return err(400, 'Type their name.');
+    const s = await loadSave(env, me.id); if (!s) return err(400, 'Save your island first.');
+    const found = (await env.DB.prepare('SELECT id FROM users WHERE display_name = ? COLLATE NOCASE LIMIT 2').bind(name).all()).results;
+    if (!found.length) return err(404, 'No player goes by exactly that name. Check the spelling with them.');
+    if (found.length > 1) return err(409, 'More than one player goes by that name. Send this friend an invite link instead.');
+    const to = found[0].id; if (to === me.id) return err(400, 'That is you.');
+    const link = await getLink(env, me.id, to);
+    if (link && (link.standing || link.visits_left > 0)) return err(400, 'They can already visit you.');
+    const waiting = await env.DB.prepare("SELECT 1 FROM mail WHERE to_id = ? AND from_id = ? AND claimed = 0 AND json_extract(item, '$.letter') = 'friendinvite'").bind(to, me.id).first();
+    if (waiting) return err(400, 'Your last invite is still waiting in their mailbox.');
+    const today = (await env.DB.prepare('SELECT COUNT(*) AS n FROM invites WHERE owner_id = ? AND created > ?').bind(me.id, Date.now() - DAY).first())?.n || 0;
+    if (today >= 20) return err(429, 'That is a lot of invites for one day. Try again tomorrow.');
+    const code = shortCode(), now = Date.now();
+    const ok = await tx(env, [
+      env.DB.prepare('INSERT INTO invites (code, owner_id, role, standing, created, expires) VALUES (?, ?, ?, ?, ?, ?)').bind(code, me.id, role, b.standing ? 1 : 0, now, now + 14 * DAY),
+      env.DB.prepare('INSERT INTO mail (to_id, from_id, item, direct, created) VALUES (?, ?, ?, 0, ?)').bind(to, me.id, JSON.stringify({ letter: 'friendinvite', code, role, fromName: me.displayName, isle: cleanText(s.data.island || '', 40) }), now)]);
+    if (!ok) return err(500, 'Could not send the invite. Try again.');
+    return json({ ok: true });
+  }
   if ((m = p.match(/^\/api\/invites\/([a-z0-9]{6,16})\/accept$/)) && M === 'POST') {
     const inv = await env.DB.prepare('SELECT * FROM invites WHERE code = ?').bind(m[1]).first();
     if (!inv || inv.used_by || inv.expires < Date.now()) return err(410, 'This invite was already used or has expired. Ask your friend for a new one.');

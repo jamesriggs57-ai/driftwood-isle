@@ -9,8 +9,8 @@ import { TICKET_THEMES } from './content.js';   // v1.39 fixes: captain's partin
 import { ITEMS, NATIVE_FRUITS, PLANTS, TOOLS, WOODWORK, BACKPACKS, BASE_SLOTS, HOUSE_LEVELS, RESIDENTS, DIALOGUE, PEDDLER, EVENTS, rarityLabel, RARITY_COLORS, SHOPS, INVEST, KEEPERS, MUSEUM, BUILD,
   FOREIGN_FRUIT_PRICE, FRUIT_REGROW_DAYS, POTIONS, WIZARD, MAGIC, STORY, FAVOR_ASKS, CROPS, RECIPES, ARRIVE, MENTOR, islandSeedPool, ISLAND_SEED_BUY, islandFlowerPool, WILDFLOWER_SEEDS, GARDEN_FENCES, GARDEN_DECOR, FR, RARE_WORK, RARE_ODDS, PLAN_PRICE,
   WEAR_IDS, FAVOR_THEMES, DO_TASKS, ORIGINAL_RESIDENTS, LETTERS, LETTER_IDS, CORAL_KINDS, CORAL_NAMES, CORAL_FISH, NIGHT_BAY } from './content.js';
-import { whereText, BAY_MORE } from './content.js';
-import { WOOD_KINDS, treeWood } from './content.js';   // v1.72 wood per tree kind   // v1.52 wave 1: isle, trip and late reef fish
+import { whereText, BAY_MORE } from './content.js';   // v1.52 wave 1: isle, trip and late reef fish
+import { WOOD_KINDS, treeWood } from './content.js';   // v1.77 wood per tree kind
 import * as S2 from './story2.js';   // v1.38 phase 2 buildings and furniture
 import * as S3 from './story3.js';   // v1.39 phase 3 buildings and furniture
 import * as S4 from './story4.js';   // v1.41 phase 4 buildings, festival and Starfall spells
@@ -29,7 +29,9 @@ import * as XT from './extend.js';   // v1.58 the far shore: one side of the isl
 import * as RF from './reef.js';
 import * as TH from './townhall.js';   // v1.49 town hall inside
 import { createEnchant } from './enchant.js';   // v1.40 tools and enchanting
+import { craftNeed as toolCraftNeed } from './enchant-core.js';   // heirloom recipes
 import { createBenches } from './benches.js';   // v1.40 crafting tables
+import { createTether } from './tether.js';   // v1.76 chests beside a crafting spot feed it, and sorting
 import { createCustom } from './custom.js';
 import { createSewing } from './textile.js';   // v1.64 sewing
 import * as SQ from './search.js';   // v1.70 search in the crafting menus
@@ -55,6 +57,7 @@ import { buildShopBuilding, buildMuseum, buildKeeper, buildMossby, buildExhibit,
 import { hasUpstairs, winAt, winKey, trelAt, balcAt, buildCustomHouse, buildHomeInterior, planGrid, planCells, planProblem, fixDoor, linkKey, linkOf, defaultExt, defaultRoom,
   NFLOORS, FLOOR_KEYS, STAIR_KEYS, FLOOR_NAME, FLOOR_SHORT, floorOf, floorHas, topFloor, stairsOf, shiftPlan, ex as hex_, ez as hez_, ix as hix_, iz as hiz_, cellInside, ridgeOf, cellRects,
   buildMossLayer, defaultMoss, mossCellAt, roofHit, roofPick, roofHalfCells, MOSS_GRID, balconyList, SIDES, LT } from './house.js';
+import { iwKey, innerWalls, pruneInner, shiftInner } from './house.js';   // v1.74 inside walls
 
 const $ = s => document.querySelector(s);
 const World = { weather:'sunny', season:seasonOf(Time.month()), night:0, inside:null };
@@ -115,13 +118,20 @@ const SC = LAY.scale || 1;   // island size (generated islands are about twice t
 if (!S.terra) S.terra = { cells:{}, moved:{} };   // wizard work: reshaped land, dug water, moved buildings
 if (!S.magic) S.magic = {};                       // wizard tower (unlocked by a quest) and where it stands
 // v1.40 tools and enchanting (enchant.js). Everything is reached through lambdas, so the order of definitions below doesn't matter.
-const EN = createEnchant({ S:()=>S, toast:(...a)=>toast(...a), Snd, save:()=>save(), countItem:id=>countItem(id), removeItem:(id,n)=>removeItem(id,n), addItem:id=>addItem(id), canAdd:id=>canAdd(id),
+const EN = createEnchant({ S:()=>S, toast:(...a)=>toast(...a), Snd, save:()=>save(), countItem:id=>matCount(id), removeItem:(id,n)=>matTake(id,n), addItem:id=>addItem(id), canAdd:id=>canAdd(id),
   dropNear:(...a)=>dropNear(...a), dropGrp:()=>DROP_GRP, sparkle:p=>sparkle(p), thumb:id=>thumb(id), toolThumb:(t,k)=>toolThumb(t,k), fmt:n=>fmt(n), dialog:(...a)=>dialog(...a), openPanel:(...a)=>openPanel(...a),
   pBody:()=>pBody, pTitle:()=>pTitle, closePanel:()=>closePanel(), reqMet:(t,k)=>reqMet(t,k), friend:id=>S.friend[id]||0, updateHeld:()=>updateHeld(), updateHUD:()=>updateHUD(), equip:t=>equip(t),
-  noEdit:()=>noEdit(), GUEST:()=>GUEST, VISIT:()=>VISIT, addClams:n=>addClams(n), bench:()=>BN.tier(), benchBanner:()=>BN.banner() });
+  noEdit:()=>noEdit(), GUEST:()=>GUEST, VISIT:()=>VISIT, addClams:n=>addClams(n), bench:()=>BN.tier(), benchBanner:()=>BN.banner()+TQ.note() });
 // v1.40 crafting tables (benches.js): crafting tables in reach, as [id, distance, size]
 const BN = createBenches({ S:()=>S, save:()=>save(), addItem:id=>addItem(id), learnWood:id=>learnWood(id),
   tables:()=>ents.filter(e=>e instanceof Furniture && !e.removed && entVisible(e) && BN.isBench(e.rec.id)).map(e=>[e.rec.id, Math.hypot(e.pos.x-player.pos.x, e.pos.z-player.pos.z), ITEMS[e.rec.id].r]) });
+// v1.76 chests beside a crafting spot feed it (tether.js): materials count from your bag first, then those chests
+const TQ = createTether({ get scene(){ return scene; }, canUse:()=>CAN_EDIT && !TRIP, player:()=>player.pos, y:(x,z)=>World.inside?0:groundY(x,z),
+  furn:()=>ents.filter(e=>e instanceof Furniture && !e.removed && entVisible(e)).map(e=>({ id:e.rec.id, x:e.pos.x, z:e.pos.z, rec:e.rec })) });
+const bagHas = id => ITEMS[id] ? countItem(id) : S.inv.filter(s=>ITEMS[s.id] && ITEMS[s.id].kind===id).reduce((a,s)=>a+s.n,0);
+const matCount = id => bagHas(id) + TQ.extra(id);
+function matTake(id, n){ const b=Math.min(n, bagHas(id)); if (b>0) takeFor([[id,b]]); if (n>b){ TQ.take(id, n-b); save(); } }
+const matTakeAll = needs => { for (const [id,n] of needs) matTake(id,n); };
 // v1.44 shop rewards (shoprare.js): Pemberton's back room, Marlo's rare shelf, Sprig's rare seeds, and what's biting (Marlo and Gill)
 const SR = createShopRare({ S:()=>S, TRIP:()=>TRIP, VISIT:()=>VISIT, GUEST:()=>GUEST, noEdit:()=>noEdit(), save:()=>save(), toast:(...a)=>toast(...a), Snd, fmt:n=>fmt(n), thumb:id=>thumb(id),
   rarityTag:it=>rarityTag(it), shopTier:id=>shopTier(id), today:()=>today(), sday:()=>sday(), month:()=>Time.month(), buyPrice:(w,it)=>buyPrice(w,it), addTrade:(w,n)=>addTrade(w,n),
@@ -130,12 +140,12 @@ const SR = createShopRare({ S:()=>S, TRIP:()=>TRIP, VISIT:()=>VISIT, GUEST:()=>G
   homeWaters:()=>['sea','pond', ...(((RIVER&&RIVER.length&&LAY.riverType!=='sea') || XW.some(w=>w.type==='river') || (TERRA_ANY && Object.values(TERRA).some(c=>c&&c.w===2))) ? ['river'] : [])],
   bayIds:()=>SY.reef&&SY.reef.rowboat ? bayTipIds() : [], boatTier:()=>incOf('boat').tier, gillTips:()=>!VISIT && !GUEST && !!(SY.reef && SY.reef.rowboat) && reefStage()>=1 });
 // v1.63 custom furniture (custom.js): the Design tab, islanders' requests, sketches, the first-sale bonus
-const CU = createCustom({ S:()=>S, save:()=>save(), toast:(...a)=>toast(...a), Snd, thumb:id=>thumb(id), fmt:n=>fmt(n), countItem:id=>countItem(id), removeItem:(id,n)=>removeItem(id,n), addItem:id=>addItem(id), canAdd:id=>canAdd(id),
+const CU = createCustom({ S:()=>S, save:()=>save(), toast:(...a)=>toast(...a), Snd, thumb:id=>thumb(id), fmt:n=>fmt(n), countItem:id=>matCount(id), removeItem:(id,n)=>matTake(id,n), addItem:id=>addItem(id), canAdd:id=>canAdd(id),
   dialog:(...a)=>dialog(...a), openPanel:(...a)=>openPanel(...a), closePanel:()=>closePanel(), pBody:()=>pBody, pTitle:()=>pTitle, setFoot:h=>setFoot(h), addClams:n=>addClams(n), noEdit:()=>noEdit(),
-  GUEST:()=>GUEST, VISIT:()=>VISIT, bench:()=>BN.tier(), benchBanner:()=>BN.banner(), kinds:()=>kindsMade(), today:()=>today(), dayNum:()=>dayNum(today()), sparkle:p=>sparkle(p), track:(k,n)=>track(k,n) });
+  GUEST:()=>GUEST, VISIT:()=>VISIT, bench:()=>BN.tier(), benchBanner:()=>BN.banner()+TQ.note(), kinds:()=>kindsMade(), today:()=>today(), dayNum:()=>dayNum(today()), sparkle:p=>sparkle(p), track:(k,n)=>track(k,n) });
 // v1.64 sewing (textile.js): rugs and clothes painted pixel by pixel
 registerRug(ITEM_BUILDERS); registerPetModels(ITEM_BUILDERS);   // v1.67 pets: collar and basket pictures
-const SX = createSewing({ S:()=>S, save:()=>save(), toast:(...a)=>toast(...a), Snd, thumb:id=>thumb(id), fmt:n=>fmt(n), countItem:id=>countItem(id), removeItem:(id,n)=>removeItem(id,n), addItem:id=>addItem(id), canAdd:id=>canAdd(id),
+const SX = createSewing({ S:()=>S, save:()=>save(), toast:(...a)=>toast(...a), Snd, thumb:id=>thumb(id), fmt:n=>fmt(n), countItem:id=>matCount(id), removeItem:(id,n)=>matTake(id,n), chestNote:()=>TQ.note(), addItem:id=>addItem(id), canAdd:id=>canAdd(id),
   pBody:()=>pBody, pTitle:()=>pTitle, setFoot:h=>setFoot(h), addClams:n=>addClams(n), noEdit:()=>noEdit(), VISIT:()=>VISIT, today:()=>today(), track:(k,n)=>track(k,n),
   buildPlayer:look=>buildPlayer({ look }), setLook:code=>setPlayerLook(code), look:()=>S.look||CH.lookCode(CH.defaultLook()),
   openPanel:t=>openPanel(t), dialog:(...a)=>dialog(...a), owns:id=>countItem(id)>0 || S.placed.some(p=>p.id===id || (Array.isArray(p.store) && p.store.some(x=>x&&x.id===id))) });
@@ -177,7 +187,7 @@ else if (S.settings.controls.move!=='tap') S.settings.controls.move='joystick';
 function saveControls(){ try { localStorage.setItem(CTRL_KEY, JSON.stringify(S.settings.controls)); } catch(e){} }
 saveControls();
 // Keyboard shortcuts (Menu > Controls lets you change them)
-const KEY_DEFAULT = { act:'e', swing:' ', tool:'q', bike:'b', sled:'g', bag:'i', turnL:'z', turnR:'c', sneak:'x' };   // v1.72 sneak: X turns slow walking on and off (holding Shift works too)
+const KEY_DEFAULT = { act:'e', swing:' ', tool:'q', bike:'b', sled:'g', bag:'i', turnL:'z', turnR:'c', sneak:'x' };   // v1.77 sneak: X turns slow walking on and off (holding Shift works too)
 S.settings.keys = Object.assign({}, KEY_DEFAULT, S.settings.keys||{});
 const KB = () => S.settings.keys;
 if (S.settings.bright===undefined) S.settings.bright=1;
@@ -194,7 +204,7 @@ function addItem(id, meta){
   const isNew = !S.seen[id]; if (isNew) S.seen[id] = Date.now();
   save(); return isNew ? 'new' : true;
 }
-function countItem(id){ if (id==='wood') return WOOD_KINDS.reduce((a,w)=>a+count1(w),0); return count1(id); }   // v1.72 'wood' in a recipe or favor means any kind of wood
+function countItem(id){ if (id==='wood') return WOOD_KINDS.reduce((a,w)=>a+count1(w),0); return count1(id); }   // v1.77 'wood' in a recipe or favor means any kind of wood
 function count1(id){ return S.inv.reduce((a,s)=>a+(s.id===id?s.n:0),0); }
 function removeAt(i, n=1){ const s=S.inv[i]; if(!s) return; s.n-=n; if(s.n<=0) S.inv.splice(i,1); save(); }
 function removeItem(id, n=1){ if (id==='wood'){ for (const w of WOOD_KINDS){ const k=Math.min(n,count1(w)); if (k>0){ remove1(w,k); n-=k; } if (n<=0) break; } save(); return; } remove1(id,n); save(); }
@@ -1172,7 +1182,7 @@ class Tree extends Ent {
     const tier=toolTier('axe'), one=EN.oneSwing('axe'), out=EN.output('axe'); if(!useTool('axe')) return;   // v1.40
     const n=one?3:(S.day.chop[this.key]||0); S.day.chop[this.key]=n+1; S.stats.chopped++; track('chop');
     this.shake=0.7; Snd.chop(); puff(this.pos.clone().add(new THREE.Vector3(0,1,0)), 0xd8b080, 5, 0.4, 1.5, 0.8, 0.5);
-    const wd=treeWood(this.type);   // v1.72 birch, pine, coconut and fruit trees each give their own wood
+    const wd=treeWood(this.type);   // v1.77 birch, pine, coconut and fruit trees each give their own wood
     if (n<3){ for (let k=0;k<out;k++){ dropNear(wd, this.pos, 1.6); if (tier>=2) dropNear(wd, this.pos, 1.6); } if (TRIP_THEME==='grove' && !this.rec && n===0) dropNear('heartwood', this.pos, 1.6); else rareRoll('chop', 'heartwood', this.pos); }
     else if (TOOLS.axe.tiers[tier].nofell && !one) toast('Too flimsy to fell it.');
     else { Snd.timber(); for (let k=0;k<(one?EN.ONE_SWING_WOOD:out)+(this.big?1:0);k++) dropNear(wd, this.pos, 1.6); EN.scrollRoll('fell', this.pos); CU.planRoll('fell', this.pos);   // v1.57 Old Pinewood's big trees give one more
@@ -1363,8 +1373,8 @@ function fenceHit(x,z,r){ for (const s of FENCE_SEGS){ if (x<Math.min(s[0],s[2])
 // Can a seed go in this square?
 function cellFree(i,j, near){ const x=i*CELL, z=j*CELL; if (World.inside) return false;
   if (!walkable(x,z) || onDock(x,z) || onBridge(x,z) || rawHeight(x,z)<=SAND_H+0.05 || visPathDist(x,z)<1.0) return false;
-  let lo=1e9, hi=-1e9; for (const [ox,oz] of [[-0.4,-0.4],[0.4,-0.4],[-0.4,0.4],[0.4,0.4]]){ if (!walkable(x+ox,z+oz)) return false; const y=rawHeight(x+ox,z+oz); lo=Math.min(lo,y); hi=Math.max(hi,y); }
-  if (hi-lo>0.35) return false;
+  for (const [ox,oz] of [[-0.4,-0.4],[0.4,-0.4],[-0.4,0.4],[0.4,0.4]]) if (!walkable(x+ox,z+oz)) return false;
+  // v1.73 no limit on how steep: the soil tilts to fit the slope
   if (blocked(x,z,0.3)) return false;
   for (const q of (near||S.plants)) if (Math.abs(q.x-x)<0.55 && Math.abs(q.z-z)<0.55) return false;
   for (const t of trees) if (!t.removed && Math.abs(t.pos.x-x)<1.0 && Math.abs(t.pos.z-z)<1.0 && Math.hypot(t.pos.x-x,t.pos.z-z)<1.0) return false;
@@ -1417,12 +1427,12 @@ function rebuildGardens(){
 
 /* ---------- Furniture and buildings ---------- */
 class Furniture extends Ent {
-  constructor(rec){ const it=ITEMS[rec.id]; super('furn',rec.x,rec.z,it.r); this.rec=rec; this.solid=!it.flat; this.reach=it.r+1.1; const m=buildItemModel(rec.id); m.rotation.y=rec.rot||0; const g=new THREE.Group(); g.add(m); this.attach(g); this.model=m; if(it.flat) this.hitSphere(0.9,0.1); }
+  constructor(rec){ const it=ITEMS[rec.id]; super('furn',rec.x,rec.z,it.r); this.rec=rec; this.solid=!it.flat; this.reach=it.r+1.1; const m=buildItemModel(rec.id); m.rotation.y=rec.rot||0; if (it.flat && rec.ly) m.position.y=rec.ly; const g=new THREE.Group(); g.add(m); this.attach(g); this.model=m; if(it.flat) this.hitSphere(0.9,0.1); }
   get station(){ return (this.rec.id==='stove'||this.rec.id==='campfire') && S.cook; }
-  label(){ const sk=seatKind(this.rec.id); if (sk==='sit'||sk==='lie') return player.seat && player.seat.e===this ? 'Stand up' : sk==='lie' ? 'Lie down' : 'Sit';   // v1.72
+  label(){ const sk=seatKind(this.rec.id); if (sk==='sit'||sk==='lie') return player.seat && player.seat.e===this ? 'Stand up' : sk==='lie' ? 'Lie down' : 'Sit';   // v1.77
     return BN.isBench(this.rec.id) && S.craft ? 'Craft' : this.rec.id==='sewmachine' ? 'Sew' : this.station ? 'Cook' : ITEMS[this.rec.id].store ? 'Open' : 'Arrange'; }
   act(){ const store=ITEMS[this.rec.id].store, sk=seatKind(this.rec.id), mine=player.seat && player.seat.e===this, off=()=>{ if (player.seat && player.seat.e===this) standUp(); };
-    const seatOpt = mine ? [{ label:'Stand up', fn:()=>standUp() }] : sk==='sit' ? [{ label:'Sit', fn:()=>sitOn(this) }] : sk==='lie' ? [{ label:'Lie down', fn:()=>sitOn(this) }] : sk==='table' && seatsBy(this).length ? [{ label:'Sit at the table', fn:()=>sitOn(this) }] : [];   // v1.72
+    const seatOpt = mine ? [{ label:'Stand up', fn:()=>standUp() }] : sk==='sit' ? [{ label:'Sit', fn:()=>sitOn(this) }] : sk==='lie' ? [{ label:'Lie down', fn:()=>sitOn(this) }] : sk==='table' && seatsBy(this).length ? [{ label:'Sit at the table', fn:()=>sitOn(this) }] : [];   // v1.77
     if (!CAN_EDIT && seatOpt.length && !(BN.isBench(this.rec.id) && S.craft) && !this.station && this.rec.id!=='sewmachine'){ seatOpt[0].fn(); return; }   // visitors can sit too
     if (!CAN_EDIT){ if (this.rec.id==='sewmachine') SX.open(); else if (BN.isBench(this.rec.id) && S.craft) openCraft(); else if (this.station) openCraft('cook'); else if (store) toast('It\'s locked. Only the islanders who live here can open it.'); else toast('Nice, isn\'t it?'); return; }
     showChoices(ITEMS[this.rec.id].name, [
@@ -1437,7 +1447,7 @@ class Furniture extends Ent {
     { label:'Leave it', alt:true, fn:()=>{} } ]); }
   update(dt,t){ runAnims(this.model, this.obj, t, dt); }
 }
-/* v1.72 sitting: chairs, stools, benches and the picnic blanket sit you down; beds and the hammock lay you down.
+/* v1.77 sitting: chairs, stools, benches and the picnic blanket sit you down; beds and the hammock lay you down.
    Tap a table to sit on the closest seat beside it. Walking, tapping somewhere else, Swing or the action button stands you up.
    Where to sit is read off the model itself: a ray down finds the seat (or mattress), rays out from just above it find the back,
    and you face away from the back (or away from where you stood, on a stool or a beanbag). */
@@ -1521,13 +1531,17 @@ function bagRoomFor(e){ const st=ITEMS[e.id].stack; if (e.m) return S.inv.length
   let room=S.inv.reduce((a,x)=>a+(x.id===e.id && !x.m ? Math.max(0,st-x.n) : 0),0); room+=(slotsMax()-S.inv.length)*st; return room; }
 function openChest(rec){
   rec.store=rec.store||[];
-  const cell=(s,i,key)=>`<div class="slot" data-${key}="${i}"><img src="${thumb(s.id)}" alt="">${s.n>1?`<span class="n">${s.n}</span>`:''}</div>`;
+  const cell=(s,i,key)=>`<div class="slot" data-${key}="${i}" data-tip="${escAttr(ITEMS[s.id].name+(s.n>1?' x'+s.n:'')+'|'+bagValue(s).replace(/<[^>]+>/g,''))}"><img src="${thumb(s.id)}" alt="">${s.n>1?`<span class="n">${s.n}</span>`:''}</div>`;
   const render=()=>{
     const bag=S.inv.map((s,i)=>cell(s,i,'put')).join('') + '<div class="slot empty"></div>'.repeat(Math.max(0,slotsMax()-S.inv.length));
     const box=rec.store.map((s,i)=>cell(s,i,'take')).join('') + '<div class="slot empty"></div>'.repeat(Math.min(6, CHEST_SLOTS-rec.store.length));
-    pBody.innerHTML=`<div class="muted" style="margin-bottom:6px">Tap something in your bag to put it in the chest. Tap something in the chest to take it out.</div>
-      <b>Bag</b> <span class="muted">${S.inv.length}/${slotsMax()}</span><div class="grid" style="margin:6px 0 12px">${bag}</div>
-      <b>Chest</b> <span class="muted">${rec.store.length}/${CHEST_SLOTS}</span><div class="grid" style="margin-top:6px">${box}</div>`;
+    const head=(nm, n, max, id, any)=>`<div style="display:flex;align-items:center;gap:6px"><b>${nm}</b> <span class="muted">${n}/${max}</span><span style="flex:1"></span>${any?sortBtn(id):''}</div>`;
+    pBody.innerHTML=`<div class="muted" style="margin-bottom:6px">Tap something in your bag to put it in the chest. Tap something in the chest to take it out. ${isTouchDevice?'Press and hold':'Point at'} anything to see what it's worth.</div>
+      ${head('Bag', S.inv.length, slotsMax(), 'csBag', S.inv.length>1)}<div class="grid" style="margin:6px 0 12px">${bag}</div>
+      ${head('Chest', rec.store.length, CHEST_SLOTS, 'csBox', rec.store.length>1)}<div class="grid" style="margin-top:6px">${box}</div>`;
+    const sb=pBody.querySelector('#csBag'), sc=pBody.querySelector('#csBox');
+    if (sb) sb.onclick=()=>{ if (sortList(S.inv, 'bag')) render(); };
+    if (sc) sc.onclick=()=>{ if (sortList(rec.store, 'chest')) render(); };
     pBody.querySelectorAll('[data-put]').forEach(el=>el.onclick=()=>{ const i=+el.dataset.put, s=S.inv[i]; if (!s) return;
       const st=ITEMS[s.id].stack; let n=s.n;
       if (!s.m) for (const x of rec.store){ if (n<=0) break; if (x.id===s.id && !x.m && x.n<st){ const k=Math.min(n, st-x.n); x.n+=k; n-=k; } }
@@ -1663,7 +1677,7 @@ class Peddler extends Ent {
   turn(want, k){ let df=want-this.obj.rotation.y; df=Math.atan2(Math.sin(df),Math.cos(df)); this.obj.rotation.y+=df*Math.min(1,k); }
 }
 
-/* v1.72 sneaking on a computer: hold Shift, or press X to turn it on and off. You walk at 40% speed, crouch a little,
+/* v1.77 sneaking on a computer: hold Shift, or press X to turn it on and off. You walk at 40% speed, crouch a little,
    and bugs never notice you, even the one you clicked on. (A joystick pushed only a little sneaks the same way on a phone.) */
 const SNEAK_SPD=0.4;
 let sneakOn=false, sneakEl=null;
@@ -1938,6 +1952,10 @@ let ignoreRects=false;
 // Room kept free for buildings that grow later (museum, town hall, shops): trees and rocks don't grow there
 const KEEPOUT=[]; const keptOut=(x,z)=>KEEPOUT.some(([a,b,r])=>Math.hypot(x-a,z-b)<r);
 function blocked(x,z,r,self){ if (!ignoreRects && inRects(x,z,r)) return true; if (FENCE_SEGS && FENCE_SEGS.length && x<500 && fenceHit(x,z,r)) return true; for(const e of ents){ if(!e.solid||e===self||e.removed) continue; if(Math.abs(x-e.pos.x)>6||Math.abs(z-e.pos.z)>6) continue; if(Math.hypot(x-e.pos.x,z-e.pos.z) < e.r+r) return true; } return false; }
+// Rugs and blankets lie flat, so they can go under furniture: only walls, buildings and fences stop them.
+function blockedFlat(x,z,r){ if (!ignoreRects && inRects(x,z,r)) return true; if (FENCE_SEGS && FENCE_SEGS.length && x<500 && fenceHit(x,z,r)) return true; return false; }
+// overlapping rugs each sit a hair higher than the ones already there, so they don't flicker through each other
+function flatLift(x,z,r,skip){ let n=0; for (const q of S.placed){ if (q===skip) continue; const i=ITEMS[q.id]; if (!i || !i.flat) continue; if (Math.hypot(q.x-x,q.z-z)<(i.r||1)+r) n=Math.max(n, Math.round((q.ly||0)/0.004)+1); } return Math.min(n,12)*0.004; }
 // v1.32: does this placed thing hold other things (a storage chest with something in it)?
 const hasStore = rec => !!(rec && Array.isArray(rec.store) && rec.store.length);
 // v1.32: nearest spot (spiralling out from x,z up to maxR) where something of radius r can stand
@@ -2854,8 +2872,16 @@ function thistleReefChoices(k, menu){
 
 /* ---------- Sprig's coral nursery ---------- */
 const NURSE_COST=300;
-const nurseCap = () => [3,4,5,7][shopTier('garden')]+(helperOf('nursery')?1:0);
-function nurseToday(){ const N=S.reef.nurse; if (N.day!==today()){ N.day=today(); N.used=0; } return N; }
+// Sprig gets better with practice: a day where she starts every coral she can lifts her to the next step.
+const NURSE_STEPS=[5,8,12,16,20];
+const nurseBase = () => NURSE_STEPS[Math.min(NURSE_STEPS.length-1, S.reef.nurse.lv|0)];
+const nurseCap = () => nurseBase()+[0,1,2,3][shopTier('garden')]+(helperOf('nursery')?1:0);
+function nurseToday(){ const N=S.reef.nurse; if (N.day!==today()){
+    if (N.maxed && N.day && (N.lv|0)<NURSE_STEPS.length-1){ N.lv=(N.lv|0)+1; N.brag=true; }
+    N.day=today(); N.used=0; N.maxed=false; } return N; }
+function nurseBrag(then){ const N=S.reef.nurse; if (!N.brag) return then(); N.brag=false; save();
+  const k=KEEPERS[SHOPS.garden.keeper], n=nurseBase(), top=(N.lv|0)>=NURSE_STEPS.length-1;
+  dialog(k.name, k.voice, [top ? `That went great! ${n} at once now. I think that's as many as this tank can hold.` : `That went great! I think I can try to do ${n} at once now!`], then); }
 const nurseReady = () => S.reef.nurse.q.filter(q=>sday()>q.d);
 function openNursery(){
   const render=()=>{ const N=nurseToday(), cap=nurseCap(), ready=nurseReady(), grow=N.q.filter(q=>sday()<=q.d), hp=helperOf('nursery');
@@ -2867,12 +2893,12 @@ function openNursery(){
       h+=`<div class="row"><img src="${thumb(id)}"><div class="grow"><div class="nm">${CORAL_NAMES[k]}</div><div class="muted">${have} fragment${have===1?'':'s'}</div></div><button class="btn" data-ns="${k}" ${ok?'':'disabled'}>Start (${NURSE_COST})</button></div>`; }
     pBody.innerHTML=h+'</div>';
     pBody.querySelectorAll('[data-ns]').forEach(b=>b.onclick=()=>{ if (noEdit()) return; const k=b.dataset.ns, N=nurseToday(); if (countItem('frag_'+k)<2 || N.used>=nurseCap() || S.clams<NURSE_COST) return;
-      removeItem('frag_'+k,2); S.clams-=NURSE_COST; N.used++; N.q.push({ k, d:sday() }); updateHUD(); save(); Snd.plip(); refreshNurseryTank(); render(); });
+      removeItem('frag_'+k,2); S.clams-=NURSE_COST; N.used++; if (N.used>=nurseCap()) N.maxed=true; N.q.push({ k, d:sday() }); updateHUD(); save(); Snd.plip(); refreshNurseryTank(); render(); });
     const tk=pBody.querySelector('#nsTake'); if (tk) tk.onclick=()=>{ let got=0; for (const q of nurseReady()){ if (!canAdd('starter_'+q.k)) break; addItem('starter_'+q.k); N_remove(q); got++; }
       if (!got) toast('Your bag is full.'); else { Snd.coin(); toast(`${got} coral starter${got>1?'s':''} ready for the reef.`, thumb('starter_'+CORAL_KINDS.find(k=>countItem('starter_'+k))||'brain')); }
       save(); refreshNurseryTank(); render(); };
   };
-  openPanel('Coral Nursery'); render(); }
+  nurseToday(); nurseBrag(()=>{ openPanel('Coral Nursery'); render(); }); }
 function N_remove(q){ const a=S.reef.nurse.q; const i=a.indexOf(q); if (i>=0) a.splice(i,1); }
 // the tank itself stands beside Sprig's shop
 let nurseryEnt=null;
@@ -2983,7 +3009,7 @@ function bayCam(dt){ const R=BAYR, p=R.pos; _bc.set(p.x, 0.6, p.z); camTarget.le
   const dist=19, pitch=0.62; camera.position.set(camTarget.x, camTarget.y+Math.sin(pitch)*dist, camTarget.z+Math.cos(pitch)*dist); camera.lookAt(camTarget);
   sky.position.copy(camera.position); stars.position.copy(camera.position); sun.target.position.copy(camTarget); sun.position.copy(camTarget).addScaledVector(sunDir,50);
   R.scn.fog.color.copy(scene.fog.color); }
-// v1.72 the way home from the bay: a "Home" tag over the buoy, or an arrow at the edge of the screen pointing to it when it's out of sight.
+// v1.77 the way home from the bay: a "Home" tag over the buoy, or an arrow at the edge of the screen pointing to it when it's out of sight.
 // Tap it to row home from anywhere.
 const BAY_HOME_R=4.5;   // how close to the buoy the action button offers "Row home" (was 3.4)
 let bayHomeEl=null; const _bh=new THREE.Vector3();
@@ -3407,7 +3433,7 @@ function teaChoices(res, menu){ if (VISIT || GUEST || typeof res.teaK!=='number'
     dialog(res.spec.name, res.spec.voice, [fill(TEA_CHAT[Math.floor(Math.random()*TEA_CHAT.length)], { c:res.spec.catch })], menu); } }]; }
 
 /* ---------- the lighthouse and night voyages ---------- */
-const LENS_COST=10000, NIGHT_FEE=8000;
+const LENS_COST=4000, LENS_GLASS=5, NIGHT_FEE=8000;   // the new lens is ground from the old keepers' pieces plus sea glass
 const lightLit = () => !!(SY.light && SY.light.st==='lit');
 const nightBay = () => lightLit() && reefStage()>=3 ? NIGHT_BAY.filter(id=>ITEMS[id]) : [];
 const bluffIsle = () => ISLES.find(I=>I.kind==='bluff');
@@ -3431,6 +3457,9 @@ function lighthouseAct(lm){   // from the lamp room, at the top of the stair
   const lines=[BLUFF_TOP[Math.min(n,2)]];
   if (!L || VISIT || GUEST) return dialog(nm, 420, lines);
   const lens=L.lens===2, frame=countItem('lampframe')>0, pearls=countItem('moonpearl')>=3;
+  if (!L.lens && !countItem('oldlens')) return dialog(nm, 420, [...lines, 'Among the mess, curved pieces of the old keepers\' lens, thick as your thumb and ringed like a shell. Marlo might be able to do something with them.'], null, [
+    { label:'Gather up the pieces', fn:()=>{ if (noEdit()) return; if (!canAdd('oldlens')){ toast('Your bag is full.'); return; } addItem('oldlens'); L.oldLens=true; save(); Snd.jingle(); itemToast('oldlens', true, 'Gathered'); } },
+    { label:'Leave them', alt:true, fn:()=>{} } ]);
   if (lens && frame && pearls) return dialog(nm, 420, lines, null, [
     { label:'Fit the lamp', fn:()=>{ if (noEdit() || countItem('lampframe')<1 || countItem('moonpearl')<3) return; removeItem('lampframe',1); removeItem('moonpearl',3);
         L.st='lit'; L.litDay=sday2(); save(); if (lm.userData.setLit) lm.userData.setLit(true); const I=bluffIsle(); if (I && I.lodTower) I.lodTower.userData.setLit(true); if (BLUFF) BLUFF.refreshStage();
@@ -3461,9 +3490,15 @@ function lightChoicesMarlo(k, menu){
   if (VISIT || GUEST || !SY.light || SY.light.st==='lit') return []; const L=SY.light, v=k.voice, nm=k.name;
   if (L.lens===1) return [{ label:'About that lens...', fn:()=>dialog(nm, v, ['Grinding it now. Rings and rings of glass, like a seashell. I\'ll carry it up the bluff myself tomorrow.'], menu) }];
   if (L.lens) return [];
-  return [{ label:'A lens for the lighthouse?', fn:()=>dialog(nm, v, ['A lighthouse lens! Ground glass in rings, like the inside of a shell. Throws light for miles.',`I can make one. ${fmt(LENS_COST)} clams, and I'll carry it up the bluff myself tomorrow.`], null, [
-    { label:`Order it (${fmt(LENS_COST)})`, fn:()=>{ if (noEdit()) return; if (S.clams<LENS_COST){ dialog(nm, v, ['Bit short, mate. No rush.'], menu); return; } S.clams-=LENS_COST; L.lens=1; L.lensDay=sday2(); updateHUD(); save(); Snd.coin(); dialog(nm, v, ['Lovely. It\'ll be up there by morning.'], menu); } },
-    { label:'Not yet', alt:true, fn:menu } ]) }]; }
+  if (!countItem('oldlens')) return [{ label:'A lens for the lighthouse?', fn:()=>dialog(nm, v, ['A lighthouse lens! Ground glass in rings, like the inside of a shell. Throws light for miles.',
+      'Grinding one from nothing would take a mountain of glass, mind. But the old keepers\' lens has to be up in that lamp room somewhere, even if it\'s in bits.',
+      `Climb up and bring me the pieces, and ${LENS_GLASS} bits of sea glass to fill out the rings. I\'ll do the rest for ${fmt(LENS_COST)}.`], menu) }];
+  const sg=countItem('seaglass');
+  return [{ label:'I found the old lens', fn:()=>dialog(nm, v, ['Look at that. Cracked clean through, but the rings are still true. I can work with this.',
+      sg>=LENS_GLASS ? `And you\'ve got the sea glass. ${fmt(LENS_COST)} clams and I\'ll carry it up the bluff myself tomorrow.` : `Now I just need ${LENS_GLASS} bits of sea glass to fill the gaps. You\'ve got ${sg}. The beaches throw it up now and then.`], null, sg>=LENS_GLASS ? [
+    { label:`Grind it (${fmt(LENS_COST)})`, fn:()=>{ if (noEdit()) return; if (S.clams<LENS_COST){ dialog(nm, v, ['Bit short, mate. No rush.'], menu); return; } if (!countItem('oldlens') || countItem('seaglass')<LENS_GLASS) return;
+        removeItem('oldlens',1); removeItem('seaglass',LENS_GLASS); S.clams-=LENS_COST; L.lens=1; L.lensDay=sday2(); updateHUD(); save(); Snd.coin(); dialog(nm, v, ['Lovely. It\'ll be up there by morning.'], menu); } },
+    { label:'Not yet', alt:true, fn:menu } ] : null) }]; }
 STAKES.wick={ unit:'ticket_moonlit', place:'in the night voyages', extraWord:t=>`now and then a Moonlit ticket`,
   tiers:[{ name:'A share', cost:25000, per:800, extra:0.15 }, { name:'Partner', cost:65000, per:2000, extra:0.3 }, { name:'Co-owner', cost:145000, per:4500, extra:0.5 }],
   due:()=>!!(SY.light && (SY.light.nv||0)>=1),
@@ -3691,7 +3726,7 @@ const dunesLM = () => { const I=ISLES.find(I=>I.kind==='dunes'); return I && I.l
 /* =====================================================================
    BARLEY'S MILL
    ===================================================================== */
-const MILL_GRIND=2, millCap = () => SY.mill && SY.mill.wheel ? 20 : 10, WHEEL_COST=15000;
+const MILL_GRIND=2, millCap = () => SY.mill && SY.mill.wheel ? 20 : 10, WHEEL_COST=5000, WHEEL_CLAY=3;
 const millOpen = () => !!(SY.mill && SY.mill.st==='grain');
 const millName = () => `${npcName(SY.mill.owner||dreamHolder('mill'))}'s Mill`;
 STAKES.mill={ unit:'flour', place:'in the mill', tiers:[{ name:'A share', cost:25000, per:800, extra:2 }, { name:'Partner', cost:75000, per:2000, extra:3 }, { name:'Co-owner', cost:160000, per:4500, extra:5 }],
@@ -3740,10 +3775,19 @@ function millThistle(k, menu){
 // Wendell's stream: a short race of water off the meadow spring, and a wheel to go with it
 function millWendell(menu){
   if (VISIT || GUEST || !millOpen() || SY.mill.wheel || SY.mill.wheelDay) return []; const W=WIZARD, v=W.voice;
-  return [{ label:'A stream for the mill?', fn:()=>dialog(W.name, v, ['A stream beside the old mill? There was one, before the land slept. I can feel where it ran.',`I'll wake it. The usual rate for shaping water: ${fmt(WHEEL_COST)} clams. ${holderName('mill')} can build a wheel to sit in it.`], null, [
+  const fresh=millFishAt(['river','pond']), sea=millFishAt(['sea']), clay=countItem('clay')>=WHEEL_CLAY, all=fresh>=0 && sea>=0 && clay;
+  const want=[fresh<0?'a river or pond fish':'', sea<0?'a sea fish':'', clay?'':`${WHEEL_CLAY} clay to line the race`].filter(Boolean);
+  return [{ label:'A stream for the mill?', fn:()=>dialog(W.name, v, ['A stream beside the old mill? There was one, before the land slept. I can feel where it ran.',
+      'Water forgets its way, though. It has to be reminded. Bring me a fish from fresh water and one from the sea, so the stream remembers where it is going and where it came from.',
+      `And ${WHEEL_CLAY} clay to line the race, and ${fmt(WHEEL_COST)} clams for the rest. ${holderName('mill')} can build a wheel to sit in it.`,
+      ...(all ? [] : [`Still wanted: ${andList(want)}.`])], null, all ? [
     { label:`Wake the stream (${fmt(WHEEL_COST)})`, fn:()=>{ if (noEdit()) return; if (S.clams<WHEEL_COST){ dialog(W.name, v, ['Water is patient. So am I. Come back with the clams.'], menu); return; }
-        S.clams-=WHEEL_COST; SY.mill.wheelDay=sday2(); updateHUD(); save(); Snd.magic(); dialog(W.name, v, ['Done. By morning it will be running past the mill. Listen for it.'], menu); } },
-    { label:'Not yet', alt:true, fn:menu } ]) }]; }
+        const a=millFishAt(['river','pond']), b=millFishAt(['sea']); if (a<0 || b<0 || countItem('clay')<WHEEL_CLAY) return;
+        removeAt(Math.max(a,b)); removeAt(Math.min(a,b)); removeItem('clay', WHEEL_CLAY);
+        S.clams-=WHEEL_COST; SY.mill.wheelDay=sday2(); updateHUD(); save(); Snd.magic(); dialog(W.name, v, ['He lets the two fish go in a bowl of water, side by side, and murmurs to them.','Done. By morning it will be running past the mill. Listen for it.'], menu); } },
+    { label:'Not yet', alt:true, fn:menu } ] : null) }]; }
+// the bag slot of a fish (any species) from one of these waters, or -1
+function millFishAt(where){ return S.inv.findIndex(s=>s && ITEMS[s.id] && ITEMS[s.id].kind==='fish' && where.includes(ITEMS[s.id].where)); }
 
 /* =====================================================================
    WREN'S TRADE ROUTES (the post office)
@@ -3944,7 +3988,7 @@ function gladeThistle(k, menu){
 /* =====================================================================
    HAZEL'S WRECK: the diving bell, the four parts, the logbook, the antiques shop
    ===================================================================== */
-const BELL_GLASS=20000, LENS3=8000, CROW={ iron:3, clams:1500 }, CHARTS=4;
+const BELL_GLASS=12000, PORTHOLES=3, LENS3=3000, CROW={ iron:3, clams:1500 }, CHARTS=4;
 const wreckOpen = layer => !!(SY.wreck && (layer==='deck' ? SY.wreck.bell : (SY.wreck.layers||{})[layer]));
 COMMISSIONS.push({ id:'bellframe', need:[['plank',25]], clams:0, days:1, gate:()=>!!(SY.wreck && !SY.wreck.bell) && !countItem('bellframe') && !(SY.shop.comm && SY.shop.comm.id==='bellframe') });
 STAKES.antiq={ unit:'shiplantern', place:'in the antiques shop', extraWord:t=>'now and then a piece of salvage',
@@ -4011,19 +4055,38 @@ function makeWreckRoom(){
     const pth=new Thing('pages', ox+px, oz+pz, 0.4, pg, ()=>(SY.wreck.pages||0)>=PAGES_AT[layer] || !wreckOpen(layer)?null:(layer==='vault'?'Open the strongbox':'Pick up'), t2=>{ const W0=SY.wreck; if ((W0.pages||0)>=PAGES_AT[layer] || !wreckOpen(layer)) return;
         const from=(W0.pages||0)+1; W0.pages=PAGES_AT[layer]; save(); Snd.jingle(); pg.visible=false; toast(`Logbook pages ${from} to ${W0.pages}`, null, 'new', `Damp, but you can read them. ${holderName('wreck')} will want to see.`); }, { solid:false, reach:1.5 });
     pg.visible=(SY.wreck.pages||0)<PAGES_AT[layer]; }
+  // the Saltwren's sea lantern, hanging in the hold (Marlo fits the cabin lens into it)
+  { const lg=new THREE.Group(), brass=M(0xa88a3a,{ metalness:0.6, roughness:0.45 }), gl=M(0xcfe8e0,{ transparent:true, opacity:0.55 });
+    mk(G.cyl(0.13,0.15,0.04,10), brass, 0,0.02,0,lg); mk(G.cyl(0.11,0.11,0.26,10), gl, 0,0.17,0,lg); for (let i=0;i<4;i++){ const a=i/4*TAU; mk(G.box(0.02,0.28,0.02), brass, Math.cos(a)*0.12,0.17,Math.sin(a)*0.12,lg); }
+    mk(G.cone(0.15,0.12,10), brass, 0,0.36,0,lg); const hk=mk(G.tor(0.05,0.012,6,12), brass, 0,0.46,0,lg); hk.rotation.x=Math.PI/2; for (const c of [0x6a9a8a,0x8ab0a0]) mk(G.sph(0.03,6,4), M(c), (Math.random()-0.5)*0.2,0.06,(Math.random()-0.5)*0.2,lg);
+    const lz=-D/2+2.5*L;
+    const lt=new Thing('shiplantern', ox+W/2-1.2, oz+lz, 0.4, lg, ()=>wantLantern()?'Take the lantern':null, t2=>{ if (!wantLantern()) return; if (!canAdd('shiplantern')){ toast('Your bag is full.'); return; }
+        addItem('shiplantern'); SY.wreck.lantern=true; save(); Snd.jingle(); itemToast('shiplantern', true, 'Found'); t2.obj.visible=false; }, { solid:false, reach:1.5 });
+    ROOMS.wreck.lantern=lt; }
   wreckGates(); }
-function wreckGates(){ const R=ROOMS.wreck; if (!R) return; const u=R.shell.userData; for (const k of ['hold','cabin','vault']){ const o=wreckOpen(k); if (u.gates[k]) u.gates[k].visible=!o; if (u.veils[k]) u.veils[k].visible=!o; } }
+// the hold's lantern is there to take while you need it for Marlo's lens (and don't already have it or the lens)
+const wantLantern = () => { const W0=SY.wreck; return !!W0 && wreckOpen('hold') && !wreckOpen('cabin') && !countItem('shiplantern') && !countItem('wrecklens') && W0.lens!==1 && W0.lens!==2; };
+function wreckGates(){ const R=ROOMS.wreck; if (!R) return; const u=R.shell.userData; if (R.lantern) R.lantern.obj.visible=wantLantern(); for (const k of ['hold','cabin','vault']){ const o=wreckOpen(k); if (u.gates[k]) u.gates[k].visible=!o; if (u.veils[k]) u.veils[k].visible=!o; } }
 function wreckMarlo(k, menu){
   if (VISIT || GUEST || !SY.wreck) return []; const W0=SY.wreck, v=k.voice, nm=k.name, out=[];
-  if (!W0.bell && !W0.glass && W0.st!=='pending') out.push({ label:'Glass for a diving bell?', fn:()=>dialog(nm, v, ['A diving bell! Thick glass, round portholes, a brass skirt. I\'ve always wanted to make one.',`${fmt(BELL_GLASS)} clams for the glass and the casting. I'll have it down on the sand by the wreck by morning. It'll want iron fittings and a frame to hang from, mind.`], null, [
-    { label:`Make it (${fmt(BELL_GLASS)})`, fn:()=>{ if (noEdit()) return; if (S.clams<BELL_GLASS){ dialog(nm, v, ['Bit short, mate. No rush.'], menu); return; } S.clams-=BELL_GLASS; W0.glass=1; W0.glassDay=sday2(); updateHUD(); save(); Snd.coin(); dialog(nm, v, ['Lovely. Down on the dunes by morning.'], menu); } },
-    { label:'Not yet', alt:true, fn:menu } ]) });
+  if (!W0.bell && !W0.glass && W0.st!=='pending'){ const ph=countItem('porthole');
+    if (!W0.portAsk) out.push({ label:'Glass for a diving bell?', fn:()=>{ W0.portAsk=true; save(); dialog(nm, v, ['A diving bell! Thick glass, a brass skirt. I\'ve always wanted to make one.',
+        'The glass I can do. Portholes are another matter. You want proper ones, cast for the sea, and nobody makes those any more.',
+        `But the Saltwren had brass portholes, and the storms keep throwing bits of her up on the beach. Find me ${PORTHOLES} and I\'ll cast the rest for ${fmt(BELL_GLASS)}.`], menu); } });
+    else if (ph<PORTHOLES) out.push({ label:'About the diving bell...', fn:()=>dialog(nm, v, [ph ? `${ph} porthole${ph>1?'s':''}! ${PORTHOLES-ph} more and we\'re in business.` : `Still need those ${PORTHOLES} portholes. Walk the beaches after a blow. They wash up a lot like the sea glass does.`], menu) });
+    else out.push({ label:'I found the portholes', fn:()=>dialog(nm, v, [`All ${PORTHOLES}! Green with age, but the brass is sound. ${fmt(BELL_GLASS)} clams for the glass and the casting.`,`I'll have it down on the sand by the wreck by morning. It'll want iron fittings and a frame to hang from, mind.`], null, [
+      { label:`Make it (${fmt(BELL_GLASS)})`, fn:()=>{ if (noEdit()) return; if (S.clams<BELL_GLASS){ dialog(nm, v, ['Bit short, mate. No rush.'], menu); return; } if (countItem('porthole')<PORTHOLES) return; removeItem('porthole',PORTHOLES); S.clams-=BELL_GLASS; W0.glass=1; W0.glassDay=sday2(); updateHUD(); save(); Snd.coin(); dialog(nm, v, ['Lovely. Down on the dunes by morning.'], menu); } },
+      { label:'Not yet', alt:true, fn:menu } ]) }); }
   if (wreckOpen('hold') && !wreckOpen('cabin') && !countItem('wrecklens')){
     if (W0.lens===2) out.push({ label:'Is the lens ready?', fn:()=>{ if (!canAdd('wrecklens')){ dialog(nm, v, ['Your bag\'s full, mate.'], menu); return; } addItem('wrecklens'); W0.lens=3; save(); itemToast('wrecklens', true, 'Received'); dialog(nm, v, ['Here she is. Hold it up to a lamp and it\'ll throw light clear across a bay.'], menu); } });
     else if (W0.lens===1) out.push({ label:'About that lens...', fn:()=>dialog(nm, v, ['Still grinding. Tomorrow.'], menu) });
-    else if (!W0.lens || W0.lens===3) out.push({ label:'A lens for the wreck?', fn:()=>dialog(nm, v, ['Too dark down there? A lantern lens, thick and ground just so, throws light a long way through water.',`${fmt(LENS3)} clams. Come back tomorrow for it.`], null, [
-      { label:`Order it (${fmt(LENS3)})`, fn:()=>{ if (noEdit()) return; if (S.clams<LENS3){ dialog(nm, v, ['Bit short, mate.'], menu); return; } S.clams-=LENS3; W0.lens=1; W0.lensDay=sday2(); updateHUD(); save(); Snd.coin(); dialog(nm, v, ['Righto. Tomorrow.'], menu); } },
-      { label:'Not yet', alt:true, fn:menu } ]) }); }
+    else if (!W0.lens || W0.lens===3){ const lan=countItem('shiplantern')>0, pearl=countItem('moonpearl')>0;
+      out.push({ label:'A lens for the wreck?', fn:()=>dialog(nm, v, !lan ? ['Too dark down there? A lantern lens, thick and ground just so, throws light a long way through water.',
+          'Only a lens is no good on its own. It wants a lantern built for the sea to sit in. The Saltwren would have carried one. Have a poke round the hold.',
+          `Bring it to me with a moonpearl for the light to gather in, and ${fmt(LENS3)} clams.`]
+        : [`The Saltwren\'s own lantern! Barnacles and all. Lovely.`, pearl ? `With that moonpearl at its heart it\'ll throw light clear across a bay. ${fmt(LENS3)} clams, and come back tomorrow.` : 'Now a moonpearl, for the light to gather in. They turn up with a catch now and then, or on the beach.'], null, lan && pearl ? [
+      { label:`Fit the lens (${fmt(LENS3)})`, fn:()=>{ if (noEdit()) return; if (S.clams<LENS3){ dialog(nm, v, ['Bit short, mate.'], menu); return; } if (!countItem('shiplantern') || !countItem('moonpearl')) return; removeItem('shiplantern',1); removeItem('moonpearl',1); S.clams-=LENS3; W0.lens=1; W0.lensDay=sday2(); updateHUD(); save(); Snd.coin(); dialog(nm, v, ['Righto. Tomorrow.'], menu); } },
+      { label:'Not yet', alt:true, fn:menu } ] : null) }); } }
   return out; }
 function wreckPemberton(k, menu){
   if (VISIT || GUEST || !SY.wreck || !SY.wreck.bell || wreckOpen('hold') || countItem('crowbar') || !(SY.forge && SY.forge.st==='open')) return []; const v=k.voice, nm=k.name;
@@ -4895,7 +4958,8 @@ function rareRoll(k, id, at, potion){
   if (GUEST || Math.random()>=rareChance(k, potion)) return false;
   const p=at.clone(), g=DROP_GRP; setTimeout(()=>{ dropNear(id, p, 1.4, false, undefined, g); sparkle(p.clone().add(new THREE.Vector3(0,1.4,0))); Snd.jingle(); toast('Rare find!', thumb(id), 'new', `${ITEMS[id].name} ${rarityTag(ITEMS[id])}`); }, 450);
   return true; }
-function learnPlan(planId){ if (ITEMS[planId].ench) return EN.learnScroll(planId); const fid=ITEMS[planId].learns;
+const YARN_BOTTLE_ODDS=0.08;
+function learnPlan(planId){ if (ITEMS[planId].ench) return EN.learnScroll(planId); if (ITEMS[planId].yarn) return SX.learnPack(ITEMS[planId].yarn); const fid=ITEMS[planId].learns;
   if (ITEMS[planId].wood){ if (!learnWood(fid)) return false; Snd.fanfare(); toast(`Woodworking plan: ${ITEMS[fid].name}!`, thumb(fid), 'new', S.craft ? 'It\'s in Woodworking now.' : 'Once Bramble teaches you woodworking, you can make it.'); return true; }
   if (knowsPlan(fid)) return false; S.rare.plans.push(fid); save(); Snd.fanfare();
   toast(`Rare plan found: ${ITEMS[fid].name}!`, thumb(fid), 'new', S.craft ? 'It\'s in Woodworking now. The ingredients are the hard part.' : 'Once Bramble teaches you woodworking, you can make it.');
@@ -6269,7 +6333,13 @@ function rollDay(){
     if (S.day.peddler && plan && c<RARE_ODDS.peddlerPlan) S.day.pplan=randomPlan(rr);
     if (S.day.peddler && !TRIP && rr()<SAILCLOTH_ODDS) S.day.pstock=[...S.day.pstock, 'sailcloth'];   // v1.39 a bolt of sailcloth about 1 visit in 3
     { const sc=EN.dailyScroll(rr); if (sc){ const p=beachSpot(rr); if (p) S.ground.push({ id:sc, x:p[0], z:p[1], beach:true, bottle:true }); } }   // v1.40 a scroll in a bottle
-    if (S.day.peddler){ const ps=EN.peddlerScroll(rr); if (ps) S.day.pscroll=ps; } }   // v1.40 now and then Fennick has an enchanting scroll (rolled last, so nothing above shifts)
+    if (S.day.peddler){ const ps=EN.peddlerScroll(rr); if (ps) S.day.pscroll=ps; }
+    // once Marlo asks for the Saltwren's portholes, one washes up on the beach each day until you have three
+    { const W0=S.story && S.story.wreck; if (!VISIT && !TRIP && W0 && W0.portAsk && !W0.glass && !W0.bell){ const have=countItem('porthole')+S.ground.filter(g=>g.id==='porthole').length;
+        if (have<PORTHOLES){ const p=beachSpot(mulberry32(hashStr(key+':porthole:'+S.seed))); if (p) S.ground.push({ id:'porthole', x:p[0], z:p[1], beach:true }); } } }
+    // a yarn colour pack in a bottle, now and then, once you have a sewing machine (its own stream, so nothing else shifts)
+    if (!VISIT && !TRIP && S.craft){ const yr=mulberry32(hashStr(key+':yarn:'+S.seed)), left=SX.packsToFind(), owns=countItem('sewmachine')>0 || S.placed.some(p=>p.id==='sewmachine');
+      if (left.length && owns && !S.ground.some(g=>String(g.id).startsWith('yarnpack_')) && yr()<YARN_BOTTLE_ODDS){ const p=beachSpot(yr); if (p) S.ground.push({ id:'yarnpack_'+left[Math.floor(yr()*left.length)], x:p[0], z:p[1], beach:true, bottle:true }); } } }   // v1.40 now and then Fennick has an enchanting scroll (rolled last, so nothing above shifts)
   // v1.38 coral fragments wash up from day one, for everyone: a cheap, ordinary beach find (1 to 3 a day). What they're for only comes out
   // later, when Gill tells you about the reef. A Coral Atoll trip is littered with them; other trips get the odd one.
   if (!VISIT){ const cr=mulberry32(hashStr(key+':coral:'+S.seed)), n = TRIP ? (TRIP_THEME==='coral' ? 15+Math.floor(cr()*6) : Math.floor(cr()*2)) : 1+Math.floor(cr()*3);
@@ -6727,16 +6797,32 @@ function itemDetail(s, value){ const it=ITEMS[s.id]; let sub=kindName(it.kind); 
    and the same name and value show in the bar at the bottom of the panel, so tapping works as before. */
 const invTip = document.createElement('div'); invTip.id='invTip'; document.body.appendChild(invTip);
 const hideInvTip = () => { invTip.style.display='none'; };
-pBody.addEventListener('pointerover', e=>{ if (e.pointerType!=='mouse') return; const el=e.target.closest&&e.target.closest('.slot[data-tip]'); if (!el){ hideInvTip(); return; }
+function showInvTip(el){
   const [nm,val]=el.dataset.tip.split('|'); invTip.innerHTML=`<b></b><span></span>`; invTip.firstChild.textContent=nm; invTip.lastChild.textContent=val; invTip.style.display='block';
   const r=el.getBoundingClientRect(), w=invTip.offsetWidth, h=invTip.offsetHeight;
-  invTip.style.left=Math.max(6, Math.min(innerWidth-w-6, r.left+r.width/2-w/2))+'px'; invTip.style.top=(r.top-h-8<6 ? r.bottom+8 : r.top-h-8)+'px'; });
+  invTip.style.left=Math.max(6, Math.min(innerWidth-w-6, r.left+r.width/2-w/2))+'px'; invTip.style.top=(r.top-h-8<6 ? r.bottom+8 : r.top-h-8)+'px'; }
+pBody.addEventListener('pointerover', e=>{ if (e.pointerType!=='mouse') return; const el=e.target.closest&&e.target.closest('.slot[data-tip]'); if (!el){ hideInvTip(); return; } showInvTip(el); });
 pBody.addEventListener('pointerout', e=>{ if (!e.relatedTarget || !e.relatedTarget.closest || !e.relatedTarget.closest('.slot[data-tip]')) hideInvTip(); });
 pBody.addEventListener('scroll', hideInvTip); pBody.addEventListener('click', hideInvTip);
+/* v1.76 touch screens: press and hold a slot (in your bag, a chest or the shop) to see its name and value. Letting go after a
+   hold doesn't count as a tap, so holding something in a chest doesn't move it. The note fades a moment after you let go. */
+const LONG_PRESS=420; let lpTimer=0, lpStart=null, lpShown=0, lpHide=0;
+pBody.addEventListener('pointerdown', e=>{ if (e.pointerType==='mouse') return; const el=e.target.closest&&e.target.closest('.slot[data-tip]'); clearTimeout(lpTimer); lpShown=0; if (!el) return;
+  lpStart=[e.clientX, e.clientY]; lpTimer=setTimeout(()=>{ clearTimeout(lpHide); showInvTip(el); lpShown=performance.now(); }, LONG_PRESS); });
+pBody.addEventListener('pointermove', e=>{ if (lpStart && Math.hypot(e.clientX-lpStart[0], e.clientY-lpStart[1])>10){ clearTimeout(lpTimer); lpStart=null; } });
+const lpEnd = ()=>{ clearTimeout(lpTimer); lpStart=null; if (lpShown){ clearTimeout(lpHide); lpHide=setTimeout(hideInvTip, 1600); } };
+pBody.addEventListener('pointerup', lpEnd); pBody.addEventListener('pointercancel', lpEnd);
+pBody.addEventListener('contextmenu', e=>{ if (e.target.closest && e.target.closest('.slot[data-tip]')) e.preventDefault(); });
+pBody.addEventListener('click', e=>{ if (lpShown && performance.now()-lpShown<4000 && e.target.closest && e.target.closest('.slot[data-tip]')){ lpShown=0; e.stopPropagation(); e.preventDefault(); } }, true);
+// Sort (bag and chests): groups things by kind, then name, and tops up part stacks (tether-core.js)
+// v1.76 Sort button for the bag and chests (rules in tether-core.js)
+function sortList(list, what){ const before=list.map(e=>({...e})); TQ.sortInPlace(list);
+  if (TQ.sameOrder(before, list)){ toast(`Your ${what} is already sorted.`); return false; } Snd.click(); save(); updateHUD(); return true; }
+const sortBtn = (id, label='Sort') => `<button class="btn alt" id="${id}" style="padding:3px 12px;font-size:13px">${label}</button>`;
 function openBag(mode='view', onPick, onCancel){
   let sel=-1;
   const render=()=>{
-    pBody.innerHTML = (mode==='give'?'<div class="muted" style="margin-bottom:8px">Pick something to give.</div>':mode==='swap'?'<div class="muted" style="margin-bottom:8px">Pick something to make room. Fish and bugs are released; anything else (the whole stack) is set down on the ground next to you, so you can pick it up later.</div>':'') + invGrid(sel) + `<div class="muted" style="margin-top:10px">${S.inv.length}/${slotsMax()} slots${S.pack>=0?' ('+BACKPACKS[S.pack].name+')':''}</div>`;
+    pBody.innerHTML = (S.inv.length>1 ? `<div style="display:flex;justify-content:flex-end;margin:-2px 0 8px">${sortBtn('bagSort')}</div>` : '') + (mode==='give'?'<div class="muted" style="margin-bottom:8px">Pick something to give.</div>':mode==='swap'?'<div class="muted" style="margin-bottom:8px">Pick something to make room. Fish and bugs are released; anything else (the whole stack) is set down on the ground next to you, so you can pick it up later.</div>':'') + invGrid(sel) + `<div class="muted" style="margin-top:10px">${S.inv.length}/${slotsMax()} slots${S.pack>=0?' ('+BACKPACKS[S.pack].name+')':''}</div>`;
     const s=S.inv[sel];
     if (s){ const it=ITEMS[s.id]; let b='';
       if (mode==='give') b+= it.noGift ? '<span class="muted">This one stays with you.</span>' : `<button class="btn" data-a="give">Give</button>`;   // v1.38 relics and story parts
@@ -6745,6 +6831,7 @@ function openBag(mode='view', onPick, onCancel){
       setFoot(`<div class="detail">${itemDetail(s)}<div class="acts">${b}</div></div>`);
     } else setFoot(`<div class="muted" style="padding:4px 2px">${mode==='give'?'Tap an item to give it.':''}</div>`);
     pBody.querySelectorAll('.slot[data-i]').forEach(el=>el.onclick=()=>{ sel=+el.dataset.i; Snd.click(); render(); });
+    const sb=pBody.querySelector('#bagSort'); if (sb) sb.onclick=()=>{ if (sortList(S.inv, 'bag')){ sel=-1; render(); } };
     pFoot.querySelectorAll('[data-a]').forEach(b=>b.onclick=()=>{ const s=S.inv[sel]; if(!s) return; const a=b.dataset.a;
       if(a==='give') onPick(sel);
       if(a==='drink'){ drinkPotion(sel); if(!S.inv[sel]) sel=-1; render(); return; }
@@ -6815,18 +6902,18 @@ const haveNeed = ([id,n],k=1) => (ITEMS[id] ? countItem(id) : S.inv.filter(s=>IT
 const needName = id => ITEMS[id] ? ITEMS[id].name : ({ fish:'Any fish', fruit:'Any fruit', berry:'Any berries' })[id];
 // v1.70 search words for a dish's ingredient: "Any fruit" also finds apple, pear and the rest
 const needWords = id => ITEMS[id] ? ITEMS[id].name : [needName(id), ...Object.values(ITEMS).filter(i=>i.kind===id).map(i=>i.name)];
-const needHave = id => ITEMS[id] ? countItem(id) : S.inv.filter(s=>ITEMS[s.id].kind===id).reduce((a,s)=>a+s.n,0);
+const needHave = id => matCount(id);   // your bag, plus chests beside the stove or campfire
 function cookMax(r){ let k=99; for (const [id,n] of r.need) k=Math.min(k, Math.floor(needHave(id)/n)); while (k>0 && !cookFits(r,k)) k--; return k; }
 function cookFits(r,k){ // never lose anything to a full bag: worst case, all ingredients free up no slot
   const inv=S.inv.map(x=>({...x})); for (const [id,n] of r.need){ let need=n*k; for (let i=inv.length-1;i>=0&&need>0;i--){ const x=inv[i]; if ((ITEMS[id]?x.id!==id:ITEMS[x.id].kind!==id)) continue; const t=Math.min(need,x.n); x.n-=t; need-=t; if (x.n<=0) inv.splice(i,1); } }
   let add=k; const st=ITEMS[r.id].stack; for (const x of inv){ if (x.id===r.id && x.n<st) add-=st-x.n; } return add<=0 || Math.ceil(add/st)<=slotsMax()-inv.length; }
-function doCook(r,k,at){ if (k<=0 || (!r.fire && at!=='stove') || !at || !cookFits(r,k) || !r.need.every(q=>haveNeed(q,k))) return false;
-  takeFor(r.need.map(([id,n])=>[id,n*k])); let isNew=false; for (let i=0;i<k;i++) if (addItem(r.id)==='new') isNew=true;
+function doCook(r,k,at){ if (k<=0 || (!r.fire && at!=='stove') || !at || !cookFits(r,k) || !r.need.every(([id,n])=>needHave(id)>=n*k)) return false;
+  matTakeAll(r.need.map(([id,n])=>[id,n*k])); let isNew=false; for (let i=0;i<k;i++) if (addItem(r.id)==='new') isNew=true;
   S.cook.made+=k; track('cook',k); if (!S.cook.kinds.includes(r.id)) S.cook.kinds.push(r.id); save(); Snd.water(); setTimeout(()=>Snd.jingle(),160);
   puff(player.pos.clone().add(new THREE.Vector3(Math.sin(player.face)*1.2,1.0,Math.cos(player.face)*1.2)),0xf4f4f4,8,0.4,1.6,0.9,1.0);
   toast(`${isNew?'New! ':''}You cooked ${k>1?k+' '+r.name+(/s$/.test(r.name)?'':'s'):article(r.name)+' '+r.name}!`, thumb(r.id), isNew?'new':''); return true; }
 function cookTab(h0){
-  const at=nearStation(); let h=(h0||'')+SQ.searchBox('Search dishes or ingredients');
+  const at=nearStation(); let h=(h0||'')+SQ.searchBox('Search dishes or ingredients')+TQ.note();
   h+=`<div class="notice" data-shide><b>Cookbook</b> <span class="muted">· ${S.cook.kinds.length} of ${RECIPES.length} dishes made</span><br><span class="muted">${at==='stove'?'You\'re at a Wood Stove: you can cook anything.':at==='campfire'?'You\'re at a campfire: grilled and simple things only. A Wood Stove does the rest.':'Stand next to a campfire or a Wood Stove you\'ve placed to cook.'} Dishes sell for more than what goes in them, islanders love them, and eating one helps you walk a little faster for a while.</span></div>`;
   RECIPES.forEach((r,i)=>{ const mx=cookMax(r), ok=at && (r.fire || at==='stove');
     const need=r.need.map(([id,n])=>{ const has=needHave(id); return `<span style="color:${has>=n?'inherit':'#c0503a'};font-weight:${has>=n?400:700}">${needName(id)} ${has}/${n}</span>`; }).join(' · ');
@@ -6887,14 +6974,14 @@ function craftFits(r, k){
 }
 function craftMax(r){
   if (!BN.canHere(r)) return 0;   // v1.40: this needs a bigger crafting table than the one in reach
-  let k=Infinity; for (const [m,n] of Object.entries(r.mats)) k=Math.min(k, Math.floor(countItem(m)/n));
+  let k=Infinity; for (const [m,n] of Object.entries(r.mats)) k=Math.min(k, Math.floor(matCount(m)/n));
   k=Math.min(k, 99); while (k>0 && !craftFits(r,k)) k--; return k;
 }
-function bagBlocked(r){ return Object.entries(r.mats).every(([m,n])=>countItem(m)>=n) && !craftFits(r,1); }
+function bagBlocked(r){ return Object.entries(r.mats).every(([m,n])=>matCount(m)>=n) && !craftFits(r,1); }
 function doCraft(r, k){
   if (k<=0 || !recipeOpen(r) || !BN.canHere(r) || !craftFits(r,k)) return false;
-  for (const [m,n] of Object.entries(r.mats)) if (countItem(m)<n*k) return false;
-  for (const [m,n] of Object.entries(r.mats)) removeItem(m, n*k);
+  for (const [m,n] of Object.entries(r.mats)) if (matCount(m)<n*k) return false;
+  for (const [m,n] of Object.entries(r.mats)) matTake(m, n*k);   // bag first, then chests beside the table
   const n=recipeOut(r)*k; let isNew=false; for(let i=0;i<n;i++){ if(addItem(r.id)==='new') isNew=true; }
   const before=kindsMade(); S.craft.made+=k; track('craft',k); S.craft.kinds=S.craft.kinds||[];
   if (r.plan){ S.rare.made+=k; save(); Snd.chop(); setTimeout(()=>Snd.fanfare(),200); sparkle(player.pos.clone().add(new THREE.Vector3(0,2.2,0)));
@@ -6910,14 +6997,14 @@ function doCraft(r, k){
 // v1.13: rare plans sit at the top of Woodworking. Unfound ones show as silhouettes.
 const RARE_MATS = ['heartwood','goldsap','starstone','moonpearl','glimmermoss'];
 function rareCraftSection(){
-  const found=S.rare.plans.length, any=found || RARE_MATS.some(m=>countItem(m));
+  const found=S.rare.plans.length, any=found || RARE_MATS.some(m=>matCount(m));
   if (!any) return '';   // v1.24: the rare section stays secret until you find your first plan or rare ingredient
   let h=`<div class="notice" data-sgrp style="border-color:${RARITY_COLORS.Legendary}"><b>Rare plans</b> <span class="muted">· ${found} found${S.rare.made?` · ${S.rare.made} made`:''}</span>`;
   RARE_WORK.forEach((r,i)=>{ const it=ITEMS[r.id], known=knowsPlan(r.id);
     if (!known) return;
-    const mx=craftMax(r), mats=Object.entries(r.mats).map(([m,n])=>{ const have=countItem(m), ok=have>=n, rare=ITEMS[m].rare; return `<span style="color:${ok?'inherit':'#c0503a'};font-weight:${ok&&!rare?400:700}">${ITEMS[m].name} ${have}/${n}</span>`; }).join(' · ');
+    const mx=craftMax(r), mats=Object.entries(r.mats).map(([m,n])=>{ const have=matCount(m), ok=have>=n, rare=ITEMS[m].rare; return `<span style="color:${ok?'inherit':'#c0503a'};font-weight:${ok&&!rare?400:700}">${ITEMS[m].name} ${have}/${n}</span>`; }).join(' · ');
     h+=`<div class="row"${SQ.sk(it.name, Object.keys(r.mats).map(m=>ITEMS[m].name))} style="margin:8px 0 0"><img src="${thumb(r.id)}"><div class="grow"><div class="nm">${it.name} ${rarityTag(it)}</div><div class="sub">${mats}${BN.note(r)}${bagBlocked(r)?'<br><b>Your bag is full.</b> Make room first.':''}</div></div><button class="btn" data-rc="${i}" ${mx<=0?'disabled':''}>Make</button></div>`; });
-  if (any) h+=`<div data-shide style="margin-top:10px"><b style="font-size:13px">Rare ingredients</b>`+RARE_MATS.filter(m=>countItem(m)).map(m=>`<div class="sub" style="margin-top:4px"><b>${ITEMS[m].name} ${countItem(m)}</b></div>`).join('')+'</div>';
+  if (any) h+=`<div data-shide style="margin-top:10px"><b style="font-size:13px">Rare ingredients</b>`+RARE_MATS.filter(m=>matCount(m)).map(m=>`<div class="sub" style="margin-top:4px"><b>${ITEMS[m].name} ${matCount(m)}</b></div>`).join('')+'</div>';
   return h+'</div>'; }
 function openCraft(start){
   if (!S.craft && !S.cook) return;
@@ -6932,11 +7019,11 @@ function openCraft(start){
     pTitle.textContent='Woodworking';
     const kd=kindsMade(), left=woodUnknown().length;
     // v1.24: no progress bar or locked plans. New plans just turn up as you make things.
-    let h=tabsH+SQ.searchBox('Search plans or materials')+BN.banner()+`<div class="notice" data-shide><b>Woodworking</b> <span class="muted">· ${(S.craft.known||[]).length} plans known · ${fmt(S.craft.made)} crafted</span>`;
+    let h=tabsH+SQ.searchBox('Search plans or materials')+BN.banner()+TQ.note()+`<div class="notice" data-shide><b>Woodworking</b> <span class="muted">· ${(S.craft.known||[]).length} plans known · ${fmt(S.craft.made)} crafted</span>`;
     h+= left ? '' : `<br><span class="muted">You know every plan. Bramble would be proud.</span>`;
     if (left && woodWaiting()) h+=`<br><span class="muted">Your head's full of ideas. New plans will come to you tomorrow.</span>`;   // v1.50
     else if (left) h+=`<br><span class="muted">New plans come from making lots of <b>different</b> things. Making the same piece over and over won't teach you anything new.</span>`;
-    h+=`<div class="muted" style="margin-top:6px">Your materials: ${Object.keys(MAT_NAMES).map(m=>`${MAT_NAMES[m]} ${countItem(m)}`).join(' · ')}</div></div>`;
+    h+=`<div class="muted" style="margin-top:6px">Your materials: ${Object.keys(MAT_NAMES).map(m=>`${MAT_NAMES[m]} ${matCount(m)}`).join(' · ')}</div></div>`;
     h+=`<div data-shide>${EN.fixNote()}</div>`;   // v1.50: broken or nearly worn-out tools, with a jump to the Tools tab
     h+=rareCraftSection();
     // v1.34: study a piece you own to work out its plan
@@ -6950,7 +7037,7 @@ function openCraft(start){
       if (filter==='now' && mx<=0) return; shown++;
       if (!open){ shown--; return; }
       const q=Math.max(1, Math.min(qty[i]||1, Math.max(1,mx)));
-      const mats=Object.entries(r.mats).map(([m,n])=>{ const have=countItem(m), ok=have>=n*q; return `<span style="color:${ok?'inherit':'#c0503a'};font-weight:${ok?400:700}">${MAT_NAMES[m]||ITEMS[m].name} ${have}/${n*q}</span>`; }).join(' · ');
+      const mats=Object.entries(r.mats).map(([m,n])=>{ const have=matCount(m), ok=have>=n*q; return `<span style="color:${ok?'inherit':'#c0503a'};font-weight:${ok?400:700}">${MAT_NAMES[m]||ITEMS[m].name} ${have}/${n*q}</span>`; }).join(' · ');
       const out=recipeOut(r)*q;
       h+=`<div class="row"${SQ.sk(it.name, Object.keys(r.mats).map(m=>MAT_NAMES[m]||ITEMS[m].name))}><img src="${thumb(r.id)}"><div class="grow"><div class="nm">${it.name}${S.craft.kinds&&!S.craft.kinds.includes(r.id)?' <span style="color:#d08a10;font-size:12px">NEW</span>':''}${recipeOut(r)>1?` <span class="muted">x${recipeOut(r)}</span>`:''}</div><div class="sub">${mats}${BN.note(r)}${bagBlocked(r)?'<br><b>Your bag is full.</b> Make room first.':''}</div>
         <div style="display:flex;gap:6px;align-items:center;margin-top:6px;flex-wrap:wrap">
@@ -6981,7 +7068,7 @@ function fillThumbs(root){ const step=()=>{ const imgs=[...root.querySelectorAll
 function openBook(tab='fish'){
   const tabs=[['fish','Fish'],['bug','Bugs'],['fossil','Fossils'],['shell','Beach'],['flower','Flowers'],['furniture','Furniture']];
   const render=()=>{
-    const list=Object.values(ITEMS).filter(i=>i.kind===tab && !i.custom);   const got=list.filter(i=>S.seen[i.id]).length;   // v1.63 custom pieces aren't in the catalog (v1.72: the count was stuck inside this comment, so the catalog page broke)
+    const list=Object.values(ITEMS).filter(i=>i.kind===tab && !i.custom), got=list.filter(i=>S.seen[i.id]).length;   // v1.63 custom pieces aren't in the catalog
     let h='<div class="tabs">'+tabs.map(([k,n])=>`<button class="tab${k===tab?' on':''}" data-t="${k}">${n}</button>`).join('')+'</div>';
     h+=`<div class="muted" style="margin-bottom:8px">${got} of ${list.length} discovered</div><div class="bar" style="margin-bottom:12px"><div style="width:${got/list.length*100}%"></div></div>`;
     for(const it of list){ const k=!!S.seen[it.id]; let sub='';
@@ -7001,7 +7088,7 @@ function openBook(tab='fish'){
    and have the clams for it, Pemberton brings it out from the back himself. One pitch per visit. After that it stays on the Tools tab. */
 let storeVisit=0; const toolBoughtAt={}, PITCH_ORDER=['axe','shovel','rod','net','can'];
 function buyTool(t, k, which='stall'){
-  const tr=TOOLS[t].tiers[k]; if (S.clams<tr.cost) return false;
+  const tr=TOOLS[t].tiers[k]; if (tr.forever || S.clams<tr.cost) return false;   // heirlooms are made, never sold
   S.clams-=tr.cost; addTrade(which,tr.cost); EN.upgradeTool(t,k); /* v1.40 keeps enchantments */ S.toolEver[t]=Math.max(S.toolEver[t]??-1, k); S.toolOffer[t]=Math.max(S.toolOffer[t]??-1, k);
   toolBoughtAt[t]=storeVisit; Snd.coin(); equip(t); updateHUD(); toast(`You got the ${tr.name}! It's in your hand now.`, toolThumb(t,k)); save(); return true;
 }
@@ -7024,7 +7111,7 @@ const PITCH_PERK = {
 };
 const PITCH_DID = { axe:'You\'ve been chopping up a storm', shovel:'You\'ve dug up half the island', rod:'You\'ve been pulling fish out left and right', net:'You\'ve been catching bugs left and right', can:'You\'ve been keeping every plant on the island watered' };
 function pitchTool(k, p, after){
-  pitchedVisit=storeVisit;
+  pitchedVisit=storeVisit; if (TOOLS[p.t].tiers[p.k].forever) return heirloomTalk(p.t, p.k, after);
   const T=TOOLS[p.t], tr=T.tiers[p.k], cur=T.tiers[p.k-1], own=S.tools[p.t], perk=(PITCH_PERK[p.t]||[])[p.k-1]||'';
   const open = tr.forever ? 'Hold on, partner. Before you look around. Come with me to the back a second.'
     : tr.req&&tr.req.stat ? `Hey, you! Word gets around. ${PITCH_DID[p.t]}, I hear.`
@@ -7041,6 +7128,7 @@ function pitchTool(k, p, after){
 const PITCH_OFF=0.2;
 function pitchOnBuy(t, k){
   const T=TOOLS[t], n=k+1; if (!T || n>=T.tiers.length || n<=(S.toolOffer[t]??-1) || (S.toolEver[t]??-1)<k || !reqMet(t,n)) return false;
+  if (T.tiers[n].forever){ heirloomTalk(t, n, ()=>{ buyTool(t, k); openShop('stall'); }); return true; }
   const tr=T.tiers[n], price=Math.round(tr.cost*(1-PITCH_OFF)); if (S.clams<price) return false;
   const kp=KEEPERS[SHOPS.general.keeper], perk=(PITCH_PERK[t]||[])[n-1]||'', own=S.tools[t], broke=!own || (own.tier===k && !T.tiers[k].forever && own.uses<=0);
   S.toolOffer[t]=n; save(); panelClose=null; closePanel();
@@ -7051,6 +7139,18 @@ function pitchOnBuy(t, k){
     { label:`Buy it (${fmt(price)})`, fn:()=>{ const c=tr.cost; tr.cost=price; const ok=buyTool(t, n); tr.cost=c; dialog(kp.name, kp.voice, [ok?'Pleasure doing business! You won\'t regret it.':'Hm, looks like you\'re a little short.'], back); } },
     { label:`Just the ${T.tiers[k].name}`, alt:true, fn:()=>{ buyTool(t, k); dialog(kp.name, kp.voice, ['Suit yourself. I\'ll keep the good one on the tools shelf for you.'], back); } } ]);
   return true;
+}
+/* Heirlooms can't be bought. When you've earned one, Pemberton tells you what it takes to make it. */
+const HEIR_WORD = { iron:'iron', fitting:'iron fittings', moonpearl:'moonpearls', starstone:'starstone', heartwood:'heartwood', goldsap:'golden sap', glimmermoss:'glimmer moss' };
+const heirMat = id => HEIR_WORD[id] || (ITEMS[id] ? ITEMS[id].name.toLowerCase() : id);
+function heirloomMats(t){ const need=toolCraftNeed(t, TOOLS[t].tiers.length-1)||[]; return need.map(([m,n])=>`${n} ${heirMat(m)}`).join(', ').replace(/, ([^,]*)$/, ' and $1'); }
+const HEIRLOOM_PART = { net:'the hoop', rod:'the reel', shovel:'the blade', axe:'the head', can:'the spout' };
+function heirloomTalk(t, n, after){
+  const T=TOOLS[t], tr=T.tiers[n], kp=KEEPERS[SHOPS.general.keeper]; S.toolOffer[t]=n; save(); panelClose=null; closePanel();
+  dialog(kp.name, kp.voice, [`Another ${T.tiers[n-1].name}? Hold on, partner. Someone who goes through tools like you should have an heirloom.`,
+    `Thing is, I can't sell you one. Nobody can. An heirloom gets made, by your own hands, at a Master Workbench.`,
+    `Heartwood for the handle, starstone for ${HEIRLOOM_PART[t]||'the metal'}, and more iron than you'd think. Golden sap to seal it.`,
+    `All told: ${heirloomMats(t)}. Get those together and it'll outlast us both.`], after);
 }
 function reqMet(t, tier){ const q=TOOLS[t].tiers[tier].req; if(!q) return true; if(q.tool!==undefined && (S.toolEver[t]===undefined || S.toolEver[t]<q.tool)) return false; if(q.stat && (S.stats[TOOLS[t].stat]||0)<q.stat) return false; return true; }
 function packReq(i){ const q=BACKPACKS[i].req; if(!q) return true; if(q.caught && S.caught<q.caught) return false; if(q.discovered && discovered()<q.discovered) return false; if(q.bestFriends && bestFriends()<q.bestFriends) return false; return true; }
@@ -7161,6 +7261,7 @@ function openShop(which, startTab){
         const ever=Math.max(own?own.tier:-1, S.toolEver[t]??-1), offered=S.toolOffer[t]??-1; let hidden=0;
         T.tiers.forEach((tr,k)=>{ const ok=reqMet(t,k), keep=own&&T.tiers[own.tier].forever&&k<=own.tier;
           if (k>0 && k>ever && k>offered){ hidden++; return; }
+          if (tr.forever){ h+=`<div class="row" style="margin:8px 0 0"><img src="${toolThumb(t,k)}"><div class="grow"><div class="nm">${tr.name}</div><div class="sub"><b>Never breaks</b> · not for sale. Made at a Master Workbench from ${heirloomMats(t)}.</div></div>${keep?'<span class="muted">Owned</span>':''}</div>`; return; }
           h+=`<div class="row" style="margin:8px 0 0"><img src="${toolThumb(t,k)}"><div class="grow"><div class="nm">${tr.name}</div><div class="sub">${fmt(tr.cost)} clams · ${tr.forever?'<b>Never breaks</b>':tr.uses+' uses'}${tr.bonus&&t==='net'?` · +${Math.round(tr.bonus*100)}% catch`:''}${tr.bonus&&t==='rod'?` · longer bite window`:''}${tr.nofell?' · can\'t fell trees':''}${k>ever&&k>0?' <span style="color:#d08a10;font-weight:600">New!</span>':''}</div></div><button class="btn" data-tool="${t}:${k}" ${keep||!ok||S.clams<tr.cost?'disabled':''}>${keep?(k===own.tier?'Owned':'Kept'):'Buy'}</button></div>`; });
         if (hidden) h+=`<div class="muted" style="margin-top:6px"></div>`;
         h+='</div>'; } }
@@ -8289,7 +8390,8 @@ const REMODEL_FEE=50;
 function remodelEdits(a, b){ let n=0;
   for (let f=0;f<NFLOORS;f++){ const A=floorOf(a,f), Bf=floorOf(b,f), ra=A.rooms||[], rb=Bf.rooms||[], la=A.links||{}, lb=Bf.links||{};
     for (const id of new Set([...ra.map(r=>r.id), ...rb.map(r=>r.id)])){ const x=ra.find(r=>r.id===id), y=rb.find(r=>r.id===id); if (!x || !y || x.x!==y.x || x.z!==y.z || x.w!==y.w || x.d!==y.d) n++; }
-    const has=new Set(rb.map(r=>r.id)); for (const k of new Set([...Object.keys(la), ...Object.keys(lb)])){ const [p,q]=k.split('|'); if (has.has(p) && has.has(q) && (la[k]||'door')!==(lb[k]||'door')) n++; } }
+    const has=new Set(rb.map(r=>r.id)); for (const k of new Set([...Object.keys(la), ...Object.keys(lb)])){ const [p,q]=k.split('|'); if (has.has(p) && has.has(q) && (la[k]||'door')!==(lb[k]||'door')) n++; }
+    const ia=A.iw||{}, ib=Bf.iw||{}; let iwN=0; for (const k of new Set([...Object.keys(ia), ...Object.keys(ib)])) if ((ia[k]||'')!==(ib[k]||'')) iwN++; n+=Math.ceil(iwN/4); }   // v1.74: inside walls, one edit per 4 squares
   for (const k of new Set([...Object.keys(a.win||{}), ...Object.keys(b.win||{})])){ const [row,rest]=k.split(':'), [i,j,sd]=rest.split(',').map(Number); if (winAt(a,i,j,sd,+row)!==winAt(b,i,j,sd,+row)) n++; }
   for (const k of new Set([...Object.keys(a.balc||{}), ...Object.keys(b.balc||{})])) if (!!(a.balc&&a.balc[k]) !== !!(b.balc&&b.balc[k])) n++;
   if (a.door && b.door && (a.door.i!==b.door.i || a.door.j!==b.door.j)) n++;
@@ -8393,6 +8495,10 @@ function drawPlan(cv, drawRect){
       if (nb===k || di<0 || dj<0) return; const t=linkOf(plan,plan.rooms[k].id,plan.rooms[nb].id);
       if (t==='wall') line(x1,y1,x2,y2,LW,'#5b4332'); else if (t==='open') line(x1,y1,x2,y2,Math.max(1.5,LW/2),'rgba(91,67,50,.45)',[4,4]);
       else { line(x1,y1,x2,y2,LW,'#5b4332'); if (mids[[i,j,di,dj].join(',')]){ const mx=(x1+x2)/2, my=(y1+y2)/2, hl=cs*0.27; line(mx-(dj?hl:0),my-(di?hl:0),mx+(dj?hl:0),my+(di?hl:0),LW+2,'#fff8ea'); } } }); }
+  // v1.74 inside walls (and, in the Doors & walls tool, faint lines where one can go)
+  if (B.mode==='doors' && B.tab==='layout' && cs>12){ for (const r of plan.rooms){ for (let i=r.x+1;i<r.x+r.w;i++) line(X(i),Y(r.z),X(i),Y(r.z+r.d),1,'rgba(91,67,50,.22)',[2,4]); for (let j=r.z+1;j<r.z+r.d;j++) line(X(r.x),Y(j),X(r.x+r.w),Y(j),1,'rgba(91,67,50,.22)',[2,4]); } }
+  for (const w of innerWalls(plan, occ)){ const x1=X(w.i), y1=Y(w.j), x2=w.kind==='v'?x1:X(w.i+1), y2=w.kind==='v'?Y(w.j+1):y1; line(x1,y1,x2,y2,LW,'#5b4332');
+    if (w.t==='door'){ const mx=(x1+x2)/2, my=(y1+y2)/2, hl=cs*0.27, hz=w.kind==='h'; line(mx-(hz?hl:0),my-(hz?0:hl),mx+(hz?hl:0),my+(hz?0:hl),LW+2,'#fff8ea'); } }
   // roofs (ridge lines) in the roof tool
   if (B.mode==='roof' && B.tab==='layout') for (const { r, q, dir } of roofParts(full, n)){ const cx=X(q.x+q.w/2), cy=Y(q.z+q.d/2), sel=r.id===B.sel;
     const hx = dir==='x' ? (q.w/2-0.25)*cs : 0, hy = dir==='z' ? (q.d/2-0.25)*cs : 0; line(cx-hx,cy-hy,cx+hx,cy+hy, sel?LW+3:LW+1, sel?'#c0503a':'#8b5e3a');
@@ -8405,7 +8511,7 @@ function drawPlan(cv, drawRect){
     if (B.tab==='layout' && B.mode==='rooms') for(const [hx,hy] of [[sel.x+sel.w/2,sel.z],[sel.x+sel.w/2,sel.z+sel.d],[sel.x,sel.z+sel.d/2],[sel.x+sel.w,sel.z+sel.d/2]]){ x.fillStyle='#4f9a3a'; x.beginPath(); x.arc(X(hx),Y(hy),7,0,TAU); x.fill(); x.fillStyle='#fff'; x.beginPath(); x.arc(X(hx),Y(hy),3,0,TAU); x.fill(); } }
   if (drawRect){ const [a,b]=drawRect; x.fillStyle='rgba(124,195,90,.45)'; x.strokeStyle='#4f9a3a'; x.lineWidth=2; const X0=Math.min(a[0],b[0]), Z0=Math.min(a[1],b[1]), w=Math.abs(a[0]-b[0])+1, d=Math.abs(a[1]-b[1])+1; x.fillRect(X(X0),Y(Z0),w*cs,d*cs); x.strokeRect(X(X0),Y(Z0),w*cs,d*cs); }
   x.restore();
-  x.fillStyle='#8b6b50'; x.font='600 12px Fredoka, sans-serif'; x.textAlign='center'; x.fillText(up?`${FLOOR_NAME[n]} (shaded: rooms below) · front is at the bottom`:'front of the lot (path side) is at the bottom', W/2, H+15);
+  x.fillStyle='#8b6b50'; x.font='600 12px Fredoka, sans-serif'; x.textAlign='center'; x.fillText(B.mode==='doors' && B.tab==='layout' ? 'Tap a dotted line in a room for a wall, again for a doorway. Drag along it for a long wall.' : up?`${FLOOR_NAME[n]} (shaded: rooms below) · front is at the bottom`:'front of the lot (path side) is at the bottom', W/2, H+15);
 }
 // Pointer handling for the plan: one finger or the mouse uses the current tool, two fingers pinch and pan, the wheel zooms
 function bindPlan(cv, tool){
@@ -8430,7 +8536,7 @@ function bindPlan(cv, tool){
     if (z==='in') bpZoom(cv,1.3); else if (z==='out') bpZoom(cv,1/1.3); else if (z==='fit') planFit(cv); else if (z==='tall'){ buildMode.tall=!buildMode.tall; buildMode.pv=null; renderBuild(true); return; } drawPlan(cv); });
 }
 function roomAtCell(plan,i,j){ return plan.rooms.find(r=>i>=r.x&&i<r.x+r.w&&j>=r.z&&j<r.z+r.d); }
-function applyOrRevert(fn, revert){ const plan=buildMode.draft.plan; fn(); fixDoor(plan); const p=planIssue(plan); if (p){ revert(); fixDoor(plan); toast(p); Snd.fail(); return false; } return true; }
+function applyOrRevert(fn, revert){ const plan=buildMode.draft.plan; fn(); for (let f=0;f<NFLOORS;f++) pruneInner(floorOf(plan,f)); fixDoor(plan); const p=planIssue(plan); if (p){ revert(); fixDoor(plan); toast(p); Snd.fail(); return false; } return true; }
 const floorChips = (onlyBuilt) => { const B=buildMode, plan=B.draft.plan, m=onlyBuilt ? topFloor(plan)+1 : maxFloors(); if (m<2) return '';
   let h='<div class="chips" style="margin-right:6px">'; for (let n=0;n<m;n++){ const can = n===0 || floorHas(plan,n-1); h+=`<button class="chip${B.floor===n?' on':''}" data-fl="${n}" ${can?'':'disabled'}>${FLOOR_SHORT[n]}</button>`; } return h+'</div>'; };
 function bindFloorChips(){ bBody.querySelectorAll('[data-fl]').forEach(b=>b.onclick=()=>{ const B=buildMode, n=+b.dataset.fl; if (B.floor===n) return; B.floor=n; const F=FP(); B.sel=F.rooms[0]?F.rooms[0].id:null; Snd.click();
@@ -8450,6 +8556,7 @@ function renderLayoutTab(){
   bindPlan(cv, {
     down:([fx,fz])=>{ const i=Math.floor(fx), j=Math.floor(fz);
       if (B.mode==='roof'){ const r=roomAtCell(plan,i,j); if (r){ B.sel=r.id; Snd.click(); renderBuild(true); } return null; }
+      if (B.mode==='doors') return iwDown(fx,fz);
       if (B.mode!=='rooms') return null;
       const r=roomAtCell(plan,i,j), m=handle(B.pv.cs);
       if (r && r.id===B.sel){ const d={ l:fx-r.x, r:r.x+r.w-fx, t:fz-r.z, b:r.z+r.d-fz }; const side=Object.entries(d).sort((a,b)=>a[1]-b[1])[0]; return { type: side[1]<m ? 'resize':'move', side:side[0], r, orig:{...r}, fx, fz, saved:JSON.stringify(full) }; }
@@ -8457,14 +8564,16 @@ function renderLayoutTab(){
       if (i>=0&&j>=0&&i<GW&&j<GD){ const t={ type:'draw', a:[i,j], b:[i,j] }; drawPlan(cv,[t.a,t.b]); return t; }
       return null; },
     move:(t,[fx,fz])=>{
+      if (t.type==='iw'){ iwMove(t,fx,fz); drawPlan(cv); return; }
       if (t.type==='draw'){ t.b=[clamp(Math.floor(fx),0,GW-1), clamp(Math.floor(fz),0,GD-1)]; drawPlan(cv,[t.a,t.b]); return; }
       if (t.type==='move'){ const o=t.orig; t.r.x=clamp(o.x+Math.round(fx-t.fx),0,GW-o.w); t.r.z=clamp(o.z+Math.round(fz-t.fz),0,GD-o.d); drawPlan(cv); return; }
       if (t.type==='resize'){ const o=t.orig, r=t.r, s=t.side;
         if (s==='r') r.w=clamp(Math.round(fx)-o.x,1,GW-o.x); if (s==='b') r.d=clamp(Math.round(fz)-o.z,1,GD-o.z);
         if (s==='l'){ const nx=clamp(Math.round(fx),0,o.x+o.w-1); r.x=nx; r.w=o.x+o.w-nx; } if (s==='t'){ const nz=clamp(Math.round(fz),0,o.z+o.d-1); r.z=nz; r.d=o.z+o.d-nz; }
         drawPlan(cv); } },
-    cancel:(t)=>{ if (t.type==='move'||t.type==='resize') Object.assign(t.r, t.orig); drawPlan(cv); },
+    cancel:(t)=>{ if (t.type==='iw') iwUndo(t); if (t.type==='move'||t.type==='resize') Object.assign(t.r, t.orig); drawPlan(cv); },
     up:(t,[fx,fz],moved)=>{
+      if (t.type==='iw'){ iwUp(t, fx, fz, moved); return; }
       if (t.type==='draw'){ const X0=Math.min(t.a[0],t.b[0]), Z0=Math.min(t.a[1],t.b[1]), w=Math.abs(t.a[0]-t.b[0])+1, dd=Math.abs(t.a[1]-t.b[1])+1;
         const like=plan.rooms.find(r=>r.id===B.sel)||plan.rooms[0]||full.rooms[0]; const nr=Object.assign(defaultRoom('r'+Date.now().toString(36),X0,Z0,w,dd), like?Object.fromEntries(ROOM_KEYS.filter(k=>k!=='roof').map(k=>[k,like[k]]).concat([['bright',like.bright??0.75],['warm',like.warm??0.5]])):{});
         const touches = !plan.rooms.length || plan.rooms.some(r=>(X0<r.x+r.w && r.x<X0+w && (Z0===r.z+r.d || r.z===Z0+dd)) || (Z0<r.z+r.d && r.z<Z0+dd && (X0===r.x+r.w || r.x===X0+w)));
@@ -8476,7 +8585,7 @@ function renderLayoutTab(){
         renderBuild(true); return; }
       const changed = t.r.x!==t.orig.x||t.r.z!==t.orig.z||t.r.w!==t.orig.w||t.r.d!==t.orig.d;
       if (!changed){ drawPlan(cv); if(t.justSel) renderBuild(true); return; }
-      if (applyOrRevert(()=>{}, ()=>{ const p=JSON.parse(t.saved); for (const k of Object.keys(full)) delete full[k]; Object.assign(full, p); })){ Snd.click(); previewBuild(); }
+      if (applyOrRevert(()=>{ if (t.type==='move') shiftInner(plan, t.orig, t.r.x-t.orig.x, t.r.z-t.orig.z); }, ()=>{ const p=JSON.parse(t.saved); for (const k of Object.keys(full)) delete full[k]; Object.assign(full, p); })){ Snd.click(); previewBuild(); }
       renderBuild(true); },
     tap:([fx,fz])=>{ if (B.mode==='doors') doorTap(fx,fz); else if (B.mode==='windows') edgeTap(fx,fz,'win'); else if (B.mode==='trellis') edgeTap(fx,fz,'trel'); else if (B.mode==='balcony') edgeTap(fx,fz,'balc'); else if (B.mode==='stairs') stairsTap(fx,fz); }
   });
@@ -8507,6 +8616,28 @@ function stairsTap(fx,fz){
   const B=buildMode, full=B.draft.plan, n=B.floor, sk=STAIR_KEYS[n], i=Math.floor(fx), j=Math.floor(fz), old=full[sk];
   if (!n || !floorHas(full,n)){ toast(`Add a room on the ${FLOOR_NAME[n]} first, then place the stairs.`); return; }
   if (applyOrRevert(()=>{ full[sk]={i,j}; }, ()=>{ full[sk]=old; })){ Snd.pop(); previewBuild(); } renderBuild(true); }
+/* v1.74 inside walls. In the Doors & walls tool, a tap on a grid line inside one room cycles it: wall, wall with a doorway, nothing.
+   Press and drag along the line to wall off (or clear) several squares at once. Kept in floor.iw (see house.js). */
+// tight: a drag only starts a wall when it begins right on a line, so one finger still pans the plan from anywhere else
+function iwLine(fx,fz,tight){ const plan=FP(), occ=planGrid(plan), ex=fx-Math.round(fx), ez=fz-Math.round(fz), cs=buildMode.pv.cs, m = tight ? Math.min(0.25, Math.max(0.12, 7/cs)) : Math.min(0.42, Math.max(0.32, 10/cs));
+  if (Math.abs(ex)<Math.abs(ez) && Math.abs(ex)<m){ const L=Math.round(fx), j=Math.floor(fz), a=occ[j]?.[L-1]; if (a>=0 && occ[j][L]===a) return { kind:'v', i:L, j }; }
+  else if (Math.abs(ez)<m){ const L=Math.round(fz), i=Math.floor(fx), a=occ[L-1]?.[i]; if (a>=0 && occ[L]?.[i]===a) return { kind:'h', i, j:L }; }
+  return null; }
+function iwSet(F, key, v){ F.iw=F.iw||{}; if (v) F.iw[key]=v; else delete F.iw[key]; }
+function iwDown(fx,fz){ const ln=iwLine(fx,fz,true); if (!ln) return null; const F=FP(), key=iwKey(ln.kind,ln.i,ln.j), cur=(F.iw||{})[key]||null;
+  return { type:'iw', ln, key, cur, paint: cur ? null : 'wall', prev:{}, saved:JSON.stringify(buildMode.draft.plan) }; }
+function iwMove(t,fx,fz){ const F=FP(), occ=planGrid(F), { ln }=t; iwUndo(t);
+  const along = ln.kind==='v' ? Math.floor(fz) : Math.floor(fx), a=Math.min(along, ln.kind==='v'?ln.j:ln.i), b=Math.max(along, ln.kind==='v'?ln.j:ln.i);
+  for (let q=a;q<=b;q++){ const i = ln.kind==='v' ? ln.i : q, j = ln.kind==='v' ? q : ln.j, c1 = ln.kind==='v' ? occ[j]?.[i-1] : occ[j-1]?.[i], c2=occ[j]?.[i];
+    if (!(c1>=0) || c1!==c2) continue; const key=iwKey(ln.kind,i,j), was=(F.iw||{})[key]||null; if (was===t.paint) continue; t.prev[key]=was; iwSet(F, key, t.paint); } }
+function iwUndo(t){ const F=FP(); for (const key in t.prev) iwSet(F, key, t.prev[key]); t.prev={}; if (F.iw && !Object.keys(F.iw).length) delete F.iw; }
+function iwTap(ln){ const F=FP(), key=iwKey(ln.kind,ln.i,ln.j), cur=(F.iw||{})[key]||null, nxt = cur==='wall' ? 'door' : cur ? null : 'wall';
+  if (applyOrRevert(()=>iwSet(F, key, nxt), ()=>iwSet(F, key, cur))){ Snd.click(); previewBuild(); toast(nxt==='wall'?'Inside wall':nxt==='door'?'Inside wall with a doorway':'Wall taken out'); } renderBuild(true); }
+function iwUp(t, fx, fz, moved){ const F=FP();
+  if (!moved){ iwUndo(t); iwTap(t.ln); return; }
+  const n=Object.keys(t.prev).length; if (!n){ renderBuild(true); return; }
+  const prev=t.prev; if (applyOrRevert(()=>{}, ()=>{ for (const key in prev) iwSet(F, key, prev[key]); })){ Snd.click(); previewBuild(); toast(t.paint ? `Inside wall, ${n} square${n>1?'s':''} long` : 'Walls taken out'); }
+  renderBuild(true); }
 function doorTap(fx,fz){
   const B=buildMode, full=B.draft.plan, plan=FP(), occ=planGrid(plan); const ex=fx-Math.round(fx), ez=fz-Math.round(fz); const m=Math.min(0.42, Math.max(0.32, 10/B.pv.cs));
   let A,Bn,front=null;
@@ -8514,6 +8645,7 @@ function doorTap(fx,fz){
   else if (Math.abs(ez)<m){ const L=Math.round(fz), i=Math.floor(fx); A=occ[L-1]?.[i]; Bn=occ[L]?.[i]; if (A>=0 && !(Bn>=0) && B.floor===0) front={ i, j:L-1 }; }
   else return;
   if (front){ const old=full.door; if (applyOrRevert(()=>{ full.door=front; }, ()=>{ full.door=old; })){ Snd.pop(); previewBuild(); toast('Front door moved.'); } renderBuild(true); return; }
+  if (A>=0 && A===Bn){ const ln=iwLine(fx,fz); if (ln){ iwTap(ln); return; } }   // v1.74 a line inside one room: an inside wall
   if (!(A>=0) || !(Bn>=0) || A===Bn){ toast(B.floor?'Tap a wall between two rooms on this floor.':'Tap a wall between two rooms, or a front-facing outside wall.'); return; }
   const key=linkKey(plan.rooms[A].id, plan.rooms[Bn].id), cur=plan.links[key]||'door', nxt={ door:'open', open:'wall', wall:'door' }[cur];
   if (applyOrRevert(()=>{ plan.links[key]=nxt; }, ()=>{ plan.links[key]=cur; })){ Snd.click(); previewBuild(); toast({ door:'Doorway', open:'Open (no wall)', wall:'Solid wall' }[nxt]); }
@@ -8779,7 +8911,8 @@ function openMenu(){
       <label class="f">Weather <select id="mW"><option value="">Today's weather</option><option>sunny</option><option>cloudy</option><option>rain</option><option>snow</option></select></label>
       ${DEV?`<div style="margin-top:8px"><b>Shortcuts</b> <span class="muted">(only on this device)</span><div class="muted" style="margin:6px 0 2px">Story map</div><button class="btn" id="dvMap">Story map: isles, stories, places</button><div class="muted" style="margin:6px 0 2px">Isles and stories</div><button class="btn alt" id="dvT">${S.magic.tower?'Tower is up':'Raise the wizard tower'}</button> ${!GUEST&&!VISIT&&nextIsleKind()?'<button class="btn alt" id="dvI">Raise the next isle</button>':''} ${!GUEST&&!VISIT&&!TRIP&&lowerAny()?'<button class="btn alt" id="dvLo">Lower every isle</button> ':''}<button class="btn alt" id="dvM">${S.devMagic?'Wizard needs requirements again':'Skip wizard requirements'}</button> <button class="btn alt" id="dvRl">Relics for the next isle</button> <button class="btn alt" id="dvSt">Phase 2: next story</button> <button class="btn alt" id="dvS3">Phase 3: next story</button><div class="muted" style="margin:6px 0 2px">Town and island</div><button class="btn alt" id="dvC">+50,000 clams</button> <button class="btn alt" id="dvF">New favors now</button> <button class="btn alt" id="dvD">Town: skip a day</button> <button class="btn alt" id="dvR">Rare kit</button> <button class="btn alt" id="dvRf">Reef: skip to the rowboat</button> <button class="btn alt" id="dvRg">Reef: grow 12 coral</button> <button class="btn alt" id="dvWs">Workshop: skip ahead</button><div class="muted" style="margin:6px 0 2px">Shops and fishing</div><button class="btn alt" id="dvSh3">Shops to tier 3 of 4</button> <button class="btn alt" id="dvSh4">Shops to the top tier</button> <button class="btn alt" id="dvBk">Back room: next week</button> <button class="btn alt" id="dvGb">Gill: next boat</button><div class="muted" style="margin:6px 0 2px">Lighthouse</div><button class="btn alt" id="dvLp">Go to Lighthouse Point</button> <button class="btn alt" id="dvLt">Lighthouse top, with the keeper</button><div class="muted" style="margin:6px 0 2px">Lantern Bluff lighthouse</div><button class="btn alt" id="dvBh">Go to the bluff lighthouse</button> <button class="btn alt" id="dvBh0">Inside: ruined</button> <button class="btn alt" id="dvBh1">Inside: lens up</button> <button class="btn alt" id="dvBh2">Inside: mending</button> <button class="btn alt" id="dvBh3">Inside: lit</button> <button class="btn alt" id="dvBhT">Top of the stair</button> <button class="btn alt" id="dvBhR">Back to the story's stage</button><div class="muted" style="margin:6px 0 2px">Enchanting and tables</div><button class="btn alt" id="dvEnL">Learn every enchantment</button> <button class="btn alt" id="dvEnT">${S.rare&&S.rare.ench&&S.rare.ench.twin?'Two-enchantment trick learned':'Learn the two-enchantment trick'}</button> <button class="btn alt" id="dvEnI">+20 of each ingredient</button> <button class="btn alt" id="dvEnK">A Sturdy tool of each kind</button> <button class="btn alt" id="dvBrk">Break the tool in hand</button> ${!VISIT&&!TRIP?'<button class="btn alt" id="dvB1">Workbench here</button> <button class="btn alt" id="dvB2">Carpenter\'s Bench here</button> <button class="btn alt" id="dvB3">Master Workbench here</button>':''} <button class="btn alt" id="dvBA">${BN.dev.any?'Tables work normally again':'Count as a Master Workbench anywhere'}</button> <button class="btn alt" id="dvEn">All of it at once</button>${PLACES.hall?`<div class="muted" style="margin:6px 0 2px">Town hall</div><button class="btn alt" id="dvH">Into the town hall</button> <button class="btn alt" id="dvHg">${(S.town.hall||0)>=2?'Make it the Town Hall':'Make it the Grand Town Hall'}</button>`:''}<br><button class="btn alt" id="dvOff">Hide shortcuts</button></div>`:''}
     </div>
-    <button class="btn warn" id="mReset">Start a new island</button>${saveOK?'':'<div class="muted" style="margin-top:8px">Saving isn\'t available in this browser.</div>'}`;
+    <details style="margin-top:18px;color:#9a8a7a;font-size:13px"><summary style="cursor:pointer;list-style:none;opacity:.75">More island options...</summary>
+      <div style="margin-top:10px;padding:10px;border:1px dashed #e0c8b0;border-radius:10px">Starting over replaces your whole island. <a href="#" id="mReset" style="color:#c0503a">Start a new island</a></div></details>${saveOK?'':'<div class="muted" style="margin-top:8px">Saving isn\'t available in this browser.</div>'}`;
     $('#mParty').onclick=()=>{ closePanel(); setTimeout(()=>PARTY.open(), 50); };
     $('#mLook').onclick=async()=>{ closePanel(); const L=await openCreator({ look:CH.parseLook(S.look), title:'Change your look', cancel:true, owned:wardrobeOwned() }); if (L){ const was=CH.parseLook(S.look); if (L.ct && (L.top!==was.top || L.tc!==was.tc)) delete L.ct; else if (!L.ct && was.ct && L.top===was.top && L.tc===was.tc) L.ct=was.ct;   /* v1.64 sewn clothes stay on unless you pick another outfit */ const code=CH.lookCode(L); if (code!==S.look) track('look'); setPlayerLook(code); checkAch(); } };
     $('#mAch').onclick=()=>{ closePanel(); setTimeout(()=>openAchievements(), 60); };
@@ -8836,7 +8969,7 @@ function openMenu(){
       $('#dvOff').onclick=()=>{ try{ localStorage.removeItem('dwDev'); }catch(e){} toast('Shortcuts hidden. Open the game with #dev at the end of the address to bring them back.'); render(); }; }
     if (DEV) devHall(render);   // v1.49
     const w=$('#mW'); w.value=weatherOverride||''; w.onchange=()=>{ weatherOverride=w.value||null; World.weather=weatherOverride||S.day.weather; updateSky(); updateHUD(); };
-    $('#mReset').onclick=()=>{
+    $('#mReset').onclick=e=>{ if (e) e.preventDefault();
       if (VISIT){ pBody.innerHTML=`<p>You're visiting a friend's island. Go back to your own island to start a new one.</p><button class="btn alt" id="rN">OK</button>`; $('#rN').onclick=render; return; }
       const acct=BOOT.mode==='account';
       pBody.innerHTML=`<p>${acct?'This replaces your island with a brand new one. Your house, items, clams and progress on it are erased. Friends you\'ve added stay your friends.':'This erases your island, items and friendships.'} Are you sure?</p><button class="btn warn" id="rY">Yes, start over</button> <button class="btn alt" id="rN">Keep my island</button>`;
@@ -9036,17 +9169,19 @@ function checkPlace(){
   if (placing.mode==='orchard') return checkOrchard();
   if (placing.mode==='furn' && isFence(placing.id)) snapFence();
   const p=placing.m.position, it=ITEMS[placing.id]; let ok=walkable(p.x,p.z) && Math.hypot(p.x-player.pos.x,p.z-player.pos.z)>0.6 && !onDock(p.x,p.z) && !onBridge(p.x,p.z);
-  if (placing.mode==='furn') ok = ok && (isFence(placing.id) ? !blockedFence(p.x,p.z,placing.moving) : !blocked(p.x,p.z,it.r));
+  if (placing.mode==='furn') ok = ok && (isFence(placing.id) ? !blockedFence(p.x,p.z,placing.moving) : it.flat ? !blockedFlat(p.x,p.z,it.r) : !blocked(p.x,p.z,it.r));
   else ok = ok && plantSpotOk(p.x,p.z,it);
-  placing.ok=ok; placing.m.traverse(c=>{ for(const mt of (Array.isArray(c.material)?c.material:[c.material])) if(mt&&mt.emissive&&!c.userData.outline) mt.emissive.setHex(ok?0x000000:0x882020); }); if(placing.ring) placing.ring.material.color.setHex(ok?0xffffff:0xe2604d); $('#pOk').disabled=!ok; return ok;
+  placing.ok=ok; placing.m.traverse(c=>{ for(const mt of (Array.isArray(c.material)?c.material:[c.material])) if(mt&&mt.emissive&&!c.userData.outline) mt.emissive.setHex(ok?0x000000:0x882020); }); if(placing.ring) placing.ring.material.color.setHex(ok?0xffffff:0xe2604d); $('#pOk').disabled=!ok;
+  if (placing.mode==='furn') TQ.showLines(placing.id, p.x, p.z, placing.moving && placing.moving.rec);   // faint tether lines: chest to crafting spot
+  return ok;
 }
-function endPlacing(){ const mv=placing.moving; if (mv && !placing.done){ mv.obj.visible=true; mv.solid=!ITEMS[mv.rec.id].flat; } scene.remove(placing.m); placing=null; $('#placeBar').classList.remove('show'); }
+function endPlacing(){ TQ.clearLines(); TQ.fresh(); const mv=placing.moving; if (mv && !placing.done){ mv.obj.visible=true; mv.solid=!ITEMS[mv.rec.id].flat; } scene.remove(placing.m); placing=null; $('#placeBar').classList.remove('show'); }
 const turnBy = a => { if(!placing) return; if (placing.mode==='orchard'){ placing.orient^=1; Snd.click(); checkOrchard(); return; } if (placing.mode==='grid'){ placing.orient^=1; Snd.click(); checkGrid(); return; } if (isFence(placing.id)) a=Math.sign(a)*Math.PI/4; placing.rot=((placing.rot+a)%TAU+TAU)%TAU; placing.m.rotation.y=placing.rot; Snd.click(); checkPlace(); };
 $('#pRotL').onclick=()=>turnBy(Math.PI/12); $('#pRotR').onclick=()=>turnBy(-Math.PI/12);
 $('#pNo').onclick=()=>{ endPlacing(); Snd.click(); };
 $('#pOk').onclick=()=>{ if (placing && placing.mode==='grid'){ plantGrid(); return; } if (placing && placing.mode==='orchard'){ plantOrchard(); return; } if(!checkPlace()) return; const p=placing.m.position, id=placing.id, it=ITEMS[id];
-  if (placing.moving){ const e=placing.moving, rec=e.rec; rec.x=p.x; rec.z=p.z; rec.rot=placing.rot; e.pos.set(p.x, World.inside?0:groundY(p.x,p.z), p.z); e.obj.position.copy(e.pos); e.model.rotation.y=rec.rot; e.obj.visible=true; e.solid=!it.flat; placing.done=true; }
-  else if (placing.mode==='furn'){ const rec={ id, x:p.x, z:p.z, rot:placing.rot }; removeItem(id,1); S.placed.push(rec); new Furniture(rec); track('place');
+  if (placing.moving){ const e=placing.moving, rec=e.rec; rec.x=p.x; rec.z=p.z; rec.rot=placing.rot; if (it.flat){ rec.ly=flatLift(p.x,p.z,it.r,rec); e.model.position.y=rec.ly; } e.pos.set(p.x, World.inside?0:groundY(p.x,p.z), p.z); e.obj.position.copy(e.pos); e.model.rotation.y=rec.rot; e.obj.visible=true; e.solid=!it.flat; placing.done=true; }
+  else if (placing.mode==='furn'){ const rec={ id, x:p.x, z:p.z, rot:placing.rot }; if (it.flat){ const ly=flatLift(p.x,p.z,it.r); if (ly) rec.ly=ly; } removeItem(id,1); S.placed.push(rec); new Furniture(rec); track('place');
     if (isFence(id) && countItem(id)>0){ const a=fenceAxis(placing.rot), nx=p.x+a[0], nz=p.z+a[1], rot=placing.rot;   // the next fence waits at the end of the line
       puff(p.clone().add(new THREE.Vector3(0,0.3,0)),0xffffff,6,0.5,1.2,0.8,0.5); Snd.pop(); save(); endPlacing();
       startPlacing(id,'furn'); if (placing){ placing.rot=rot; placing.m.rotation.y=rot; placing.m.position.set(nx, World.inside?0:groundY(nx,nz), nz); checkPlace(); $('#pNo').textContent='Done'; } return; } }
@@ -9099,8 +9234,10 @@ function gridBeside(g, EW, EH){ const b=gardenBox(g), P=placing; let best=null, 
 function gridFill(i0, j0, P, near){ const out=[], bad=[], W=gridW(P), rows=Math.ceil(P.n/W);
   for (let r=0;r<rows;r++) for (let c=0;c<W && r*W+c<P.n;c++){ const [i,j] = P.orient ? [i0+r, j0+c] : [i0+c, j0+r]; (cellFree(i,j,near)?out:bad).push([i,j]); }
   return { out, bad }; }
-// a patch one empty square away from a garden's side slides that one square so it joins the garden
+// a patch one empty square away from a garden's side slides that one square so it joins the garden.
+// v1.73 a patch that already sits in or right against a garden stays where you aimed (it used to hop toward another garden nearby)
 function gridNudge(i0, j0, EW, EH){
+  for (let i=i0-1;i<=i0+EW;i++) for (let j=j0-1;j<=j0+EH;j++){ const edge=(i<i0||i>i0+EW-1)&&(j<j0||j>j0+EH-1); if (!edge && gardenAtCell(i,j)) return null; }
   for (const g of S.gardens){ if (!g.cells.length) continue; const b=gardenBox(g);
     const overI = i0<=b.i1 && i0+EW-1>=b.i0, overJ = j0<=b.j1 && j0+EH-1>=b.j0;
     if (overJ && i0===b.i1+2) return [i0-1, j0]; if (overJ && i0+EW-1===b.i0-2) return [i0+1, j0];
@@ -9113,7 +9250,7 @@ function checkGrid(){ const P=placing, m=P.m, ax=m.position.x, az=m.position.z;
   const near=S.plants.filter(q=>q.x>(i0-1)*CELL && q.x<(i0+EW+1)*CELL && q.z>(j0-1)*CELL && q.z<(j0+EH+1)*CELL);
   const { out, bad }=gridFill(i0, j0, P, near); P.cells=out;
   const cx=(i0+(EW-1)/2)*CELL, cz=(j0+(EH-1)/2)*CELL; P.box=[i0*CELL, (i0+EW-1)*CELL, j0*CELL, (j0+EH-1)*CELL];
-  const d=new THREE.Object3D(); let k=0; const put=([i,j],col)=>{ const x=i*CELL, z=j*CELL; d.position.set(x-cx, groundY(x,z)+0.09, z-cz); d.updateMatrix(); P.tiles.setMatrixAt(k,d.matrix); P.tiles.setColorAt(k,col); k++; };
+  const d=new THREE.Object3D(); let k=0; const put=([i,j],col)=>{ const x=i*CELL, z=j*CELL; let y=groundY(x,z); for (const [a,b] of [[-0.36,-0.36],[0.36,-0.36],[-0.36,0.36],[0.36,0.36]]) y=Math.max(y, groundY(x+a,z+b)); d.position.set(x-cx, y+0.09, z-cz); d.updateMatrix(); P.tiles.setMatrixAt(k,d.matrix); P.tiles.setColorAt(k,col); k++; };
   out.forEach(c=>put(c,GREEN)); bad.slice(0, P.tiles.instanceMatrix.count-out.length).forEach(c=>put(c,RED)); P.tiles.count=k; P.tiles.instanceMatrix.needsUpdate=true; if (P.tiles.instanceColor) P.tiles.instanceColor.needsUpdate=true;
   m.position.set(cx, 0, cz);
   P.ok=out.length>0; $('#pOk').disabled=!P.ok; $('#pOk').textContent=out.length?`Plant ${out.length}`:'No room'; return P.ok; }
@@ -9193,7 +9330,7 @@ function openGarden(g){
     h+=`<div class="row"><div class="grow"><div class="nm">Harvest everything ready</div><div class="sub">${ripe.length ? `${ripe.length} plant${ripe.length>1?'s':''}` : 'Nothing is ready yet'}</div></div><button class="btn" id="gHv" ${ripe.length?'':'disabled'}>Harvest</button></div>`;
     h+=`<div class="row"><div class="grow"><div class="nm">Water everything</div><div class="sub">${!hasTool('can') ? 'Needs a watering can' : dry.length ? `${dry.length} plant${dry.length>1?'s':''} need water` : 'All watered today'}</div></div><button class="btn" id="gWa" ${hasTool('can')&&dry.length&&CAN_EDIT?'':'disabled'}>Water</button></div>`;
     if (CAN_EDIT){
-      h+=`<div class="row"><div class="grow"><div class="nm">Garden editor</div><div class="sub">Move this garden, rearrange its plants or take some out</div></div><button class="btn" id="gEd">Edit</button></div>`;   // v1.71
+      h+=`<div class="row"><div class="grow"><div class="nm">Garden editor</div><div class="sub">Move this garden, rearrange its plants or soil, or take some out</div></div><button class="btn" id="gEd">Edit</button></div>`;   // v1.71
       h+=`<div class="f" style="margin-top:12px;font-weight:700">Plant here</div>`;
       h+= seedStacks.length ? `<div style="display:flex;flex-wrap:wrap;gap:6px">${seedStacks.map(id=>`<button class="btn alt" data-gs="${id}" style="display:flex;align-items:center;gap:6px;padding:4px 10px"><img src="${thumb(id)}" style="width:28px;height:28px">${ITEMS[id].name} x${countItem(id)}</button>`).join('')}</div>` : `<div class="muted">No seeds in your bag.</div>`;
       h+=`<div class="f" style="margin-top:14px;font-weight:700">Fence</div>`;
@@ -9239,7 +9376,7 @@ addEventListener('keydown', e=>{ if(e.target.tagName==='INPUT'||e.target.tagName
   if (k===kb.act||k==='enter'){ e.preventDefault(); if (performance.now()>popupCool) doAction(); return; }
   if (scrim.classList.contains('show')){ if (k===kb.bag && !menuOpen) closePanel(); return; }
   if (PERCH) return;   // v1.39 fixes: no bike, sled, tools or bag on the lighthouse stair or gallery
-  if (k===kb.sneak && !isTouchDevice){ setSneak(!sneakOn); return; }   // v1.72
+  if (k===kb.sneak && !isTouchDevice){ setSneak(!sneakOn); return; }   // v1.77
   if (k===kb.tool) cycleTool(); else if (k===kb.bike) toggleBike(); else if (k===kb.sled) toggleSled(); else if (k===kb.bag && !buildMode && !placing) openBag(); });
 let keyCapture=null;   // set while Menu > Controls waits for you to press a new key
 /* v1.34: while a pop-up is up (a panel, the Friends panel, the tool or More menu, or a big announcement card),
@@ -9315,8 +9452,9 @@ function handleTap(cx,cy){
   if (buildMode) return;
   if (CatchMeter.bug){ resolveSwing(); return; }
   if (Fishing.state!=='idle'){ reel(); return; }
+  // v1.73 a tap while placing aims at the ground under your finger, not at a plant or stake in front of it (tapping between plants used to land on the plant)
+  if (placing){ if (placing.dragged) return; const p=pickAt(cx,cy), pt=groundAtScreen(cx,cy)||(p&&(p.ground||p.point||p.water)); if(pt){ placing.m.position.set(pt.x,World.inside?0:groundY(pt.x,pt.z),pt.z); checkPlace(); } return; }
   const p=pickAt(cx,cy); if(!p) return;
-  if (placing){ if (placing.dragged) return; const pt=p.ground||p.point||p.water; if(pt){ placing.m.position.set(pt.x,World.inside?0:groundY(pt.x,pt.z),pt.z); checkPlace(); } return; }
   // On a computer, clicking walks you there (v1.19, on by default, Menu > Controls). With it off, clicking only uses
   // things that are close enough and you walk with the keys.
   if (!isTouchDevice && CT().clickWalk===false){
@@ -9452,7 +9590,7 @@ function updateHold(dt){ if(CT().move!=='tap') return; holdAcc+=dt; if(holdAcc<0
 /* ---------- Movement and camera ---------- */
 function movePlayer(dt,t){
   if (PERCH && PERCH.move(dt,t)) return;
-  if (player.seat && seatHold(dt)) return;   // v1.72 sitting or lying down
+  if (player.seat && seatHold(dt)) return;   // v1.77 sitting or lying down
   const u=player.obj.userData; let mv=null; if(riding && (World.inside||buildMode)) setRiding(false); if (sledding && (World.inside||buildMode||!snowyEnough())) setSled(false); const speed=(riding?10.2:5.4)*(wellFed()?1.15:1); let spd=1;
   const kx=(keys['d']||keys['arrowright']?1:0)-(keys['a']||keys['arrowleft']?1:0), kz=(keys['s']||keys['arrowdown']?1:0)-(keys['w']||keys['arrowup']?1:0);
   if (dlgState && player.target) stopMove();   // v1.34: you stand still while someone is talking to you
@@ -9463,7 +9601,7 @@ function movePlayer(dt,t){
     if (player.targetEnt){ if(player.targetEnt.removed) stopMove(); else player.target.copy(player.targetEnt.pos); }
     if (player.target){ const d=player.target.clone().sub(player.pos); d.y=0; const L=d.length(); const stopAt=player.targetEnt?player.targetEnt.reach:0.15;
       if (player.targetEnt instanceof Bug && L<5) spd=0.35;
-      if (sneaking()) spd=Math.min(spd, SNEAK_SPD);   // v1.72 clicking to walk sneaks too
+      if (sneaking()) spd=Math.min(spd, SNEAK_SPD);   // v1.77 clicking to walk sneaks too
       if (L<=stopAt){ const cb=player.cb; stopMove(); if(cb) cb(); }
       else {
         // moving targets (bugs, islanders): re-plan now and then
@@ -9614,7 +9752,7 @@ let riding=false, bikeObj=null;
 const BIKE_SVG='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><circle cx="8" cy="21" r="5.5" fill="none" stroke="#5b4336" stroke-width="2.5"/><circle cx="24" cy="21" r="5.5" fill="none" stroke="#5b4336" stroke-width="2.5"/><path d="M8 21l6-9h8l2 9M14 12l4 9h-10M20 9h4" fill="none" stroke="#d8604a" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 function bikeThumb(){ return 'data:image/svg+xml,'+encodeURIComponent(BIKE_SVG); }
 function setRiding(on){
-  if (on && sneakOn) setSneak(false);   // v1.72
+  if (on && sneakOn) setSneak(false);   // v1.77
   if (on && player.seat) standUp();
   on = !!on && !!S.bike && !World.inside && !buildMode;
   if (on===riding) return; riding=on;
@@ -9647,7 +9785,7 @@ function toggleSled(){
   if (!snowyEnough()){ toast('There\'s no snow to sled on.'); Snd.fail(); return; }
   setSled(true); }
 function setSled(on){
-  if (on && sneakOn) setSneak(false);   // v1.72
+  if (on && sneakOn) setSneak(false);   // v1.77
   if (on && player.seat) standUp();
   if (on===sledding) return; sledding=on; const u=player.obj.userData;
   if (on){ track('sled'); if (riding) setRiding(false); stopMove(); if (Fishing.state!=='idle') reel(); if (!sledObj){ sledObj=buildItemModel('sled'); sledObj.scale.setScalar(1.15); } player.obj.add(sledObj); if (u.body) u.body.position.y=0.18; sledV.set(Math.sin(player.face)*1.5, Math.cos(player.face)*1.5); Snd.pop();
@@ -9742,7 +9880,7 @@ function bumpFriends(dt){
 function updateRemotes(dt,t){
   if (started && !buildMode) bumpFriends(dt);
   jelly(player.obj, playerJelly, dt, player.speedFrac>0.05, t, player.speedFrac*(riding?1.6:1));
-  { const u=player.obj.userData; playerJelly.crouch=lerp(playerJelly.crouch||0, sneaking() && !World.inside ? 1 : 0, Math.min(1,dt*8)); if (u.body && playerJelly.crouch>0.01){ const c=playerJelly.crouch; u.body.scale.y*=1-0.12*c; u.body.scale.x*=1+0.05*c; u.body.scale.z*=1+0.05*c; u.body.rotation.x+=0.22*c; } }   // v1.72 a little crouch while sneaking
+  { const u=player.obj.userData; playerJelly.crouch=lerp(playerJelly.crouch||0, sneaking() && !World.inside ? 1 : 0, Math.min(1,dt*8)); if (u.body && playerJelly.crouch>0.01){ const c=playerJelly.crouch; u.body.scale.y*=1-0.12*c; u.body.scale.x*=1+0.05*c; u.body.scale.z*=1+0.05*c; u.body.rotation.x+=0.22*c; } }   // v1.77 a little crouch while sneaking
   for (const r of remotes.values()){ r.jel=r.jel||{}; jelly(r.obj, r.jel, dt, !!r.w, t); PETS.remoteUpdate(r, dt, t);
     r.pos.lerp(r.tgt, Math.min(1, dt*(r.rg?14:8))); r.obj.position.copy(r.pos);
     r.obj.visible = r.seen && (r.in||null)===(World.inside||null);
@@ -9751,7 +9889,7 @@ function updateRemotes(dt,t){
     r.obj.visible = r.seen && (r.in||null)===(World.inside||null);
     const u=r.obj.userData; if(r.bike){ if(r.w) for(const w of r.bike.userData.wheels) w.rotation.x+=dt*30; if(u.legs){ u.legs[0].rotation.x=-0.9+Math.sin(t*9)*0.5*r.w; u.legs[1].rotation.x=-0.9-Math.sin(t*9)*0.5*r.w; } if(u.arms){ u.arms[0].rotation.x=-0.9; u.arms[1].rotation.x=-0.9; } continue; }
     if(u.legs){ const ph=t*11, a=r.w?1:0; u.legs[0].rotation.x=Math.sin(ph)*0.7*a; u.legs[1].rotation.x=-Math.sin(ph)*0.7*a; if(u.arms){ u.arms[0].rotation.x=-Math.sin(ph)*0.6*a; u.arms[1].rotation.x=Math.sin(ph)*0.6*a; } }
-    if (r.st){ r.obj.rotation.order='YXZ'; r.obj.rotation.x = r.st===2 ? -Math.PI/2 : 0; if (u.legs) u.legs.forEach(l=>l.rotation.x = r.st===2 ? 0 : -1.45); } else if (r.obj.rotation.order==='YXZ'){ r.obj.rotation.x=0; r.obj.rotation.order='XYZ'; }   // v1.72
+    if (r.st){ r.obj.rotation.order='YXZ'; r.obj.rotation.x = r.st===2 ? -Math.PI/2 : 0; if (u.legs) u.legs.forEach(l=>l.rotation.x = r.st===2 ? 0 : -1.45); } else if (r.obj.rotation.order==='YXZ'){ r.obj.rotation.x=0; r.obj.rotation.order='XYZ'; }   // v1.77
   }
 }
 /* ---------- Swing and ragdolls (v1.6) ----------
@@ -9780,7 +9918,7 @@ const TOOL_VERBS = { axe:['Chop','Hit'], shovel:['Dig','Dig up','Hit'], net:['Ca
 function swing(){
   if (PERCH) return;   // v1.39 fixes: no tools on the lighthouse stair or gallery
   if (cine||dlgState||scrim.classList.contains('show')||placing||layoutMode||buildMode||magicMode||meBody.rag||bonkCool>0) return;
-  if (player.seat){ standUp(); return; }   // v1.72
+  if (player.seat){ standUp(); return; }   // v1.77
   if (bayOn()){ const F=BAYR.fish; if (F.state!=='idle') bayReel(); else bayCast(); return; }
   if (CatchMeter.bug){ resolveSwing(); return; }
   if (Fishing.state!=='idle'){ reel(); return; }
@@ -9914,7 +10052,7 @@ let lkSent='', lkAt=0;
 const lkSend = () => { const lk=S.look||''; if (lk.indexOf('~')<0) return lk; const now=performance.now(); if (lk!==lkSent || now-lkAt>3000){ lkSent=lk; lkAt=now; return lk; } return ''; };
 const playerState = () => { const R=meBody.rag, P = R||player.seat ? player.obj.position : player.pos;
   const st={ lk:lkSend(), b:riding?1:0, x:+P.x.toFixed(2), z:+P.z.toFixed(2), y:+P.y.toFixed(2), f:+player.face.toFixed(2), w:player.speedFrac>0.05?1:0, in:World.inside||null };
-  if (player.seat) st.st=player.seat.lie?2:1;   // v1.72 friends see you sitting or lying down
+  if (player.seat) st.st=player.seat.lie?2:1;   // v1.77 friends see you sitting or lying down
   if (R){ const q=player.obj.quaternion; st.rg=[+q.x.toFixed(3),+q.y.toFixed(3),+q.z.toFixed(3),+q.w.toFixed(3)]; st.rs=R.resting?1:0; }
   const pt=PETS.netState(); if (pt) st.pt=pt;   // v1.67 your pet, for friends to see
   return st; };
@@ -9985,7 +10123,7 @@ window.__game.v144 = Object.assign({ SR, shopStock:w=>shopStock(w), talkGill:()=
 window.__game.v145 = { fishPool, bugPool, isleNear, isleAt, bayMore, bayTipIds, bayPool:()=>bayPool(), waterType, isleSpot, get trees(){ return trees; }, get bugs(){ return bugs; }, newBug:(id,x,z,e)=>new Bug(id,x,z,e||{}), updateBugs:dt=>{ bugT=0; updateBugs(dt||3); }, spawnFish:()=>spawnFish(), get fishes(){ return fishes; },
   openDonate:()=>openDonate(), museumExpand:()=>museumExpand(), buildMuseumAll:()=>buildMuseumAll(), enterRoom:id=>enterRoom(id), tanks:()=>ents.filter(e=>e instanceof MuseumTank), openTankView:e=>openTankView(e), closeTankView:()=>closeTankView(), get tankView(){ return tankView; } };
 window.__game.custom = CU.dev; window.__game.sew = SX.dev; window.__game.pets = PETS;   // v1.67 pet tests
-window.__game.v172 = { countItem, removeItem, craftFits, craftMax, doCraft, sitOn, standUp, seatInfo, seatKind, seatsBy, Furniture, doAction, get ents(){ return ents; } };   // v1.72 tests
+window.__game.v177 = { countItem, removeItem, craftFits, craftMax, doCraft, sitOn, standUp, seatInfo, seatKind, seatsBy, Furniture, doAction, get ents(){ return ents; } };   // v1.77 tests
 window.__game.gardenEdit = { GE, start:o=>startGardenEdit(o) };   // v1.71 garden editor tests
 window.__game.sewMachine = { open:()=>SX.open(), choices:()=>SX.keeperChoices({ name:'Pemberton', voice:1 }, ()=>{}).map(c=>c.label), buy:()=>SX.keeperChoices({ name:'Pemberton', voice:1 }, ()=>{})[0].fn(), place:()=>{ const P=player.pos, rec={ id:'sewmachine', x:P.x+1.6, z:P.z, rot:0 }; S.placed.push(rec); const f=new Furniture(rec); return f.label(); } };   // v1.64 tests   // v1.64 sewing tests   // v1.63 custom furniture tests
 // v1.26 test hooks
@@ -10014,3 +10152,9 @@ window.__game.v137 = { get S(){ return S; }, get SY(){ return SY; }, get BAYR(){
   goTo:(x,z)=>{ player.pos.set(x, groundY(x,z), z); player.obj.position.copy(player.pos); camTarget.copy(player.pos); }, dayKeyOf, sday, get trees(){ return trees; }, get nurseryEnt(){ return nurseryEnt; }, get rowboatEnt(){ return rowboatEnt; }, get workshopEnt(){ return workshopEnt; },
   info:()=>({ calls:renderer.info.render.calls, tris:renderer.info.render.triangles }), dialogOpen:()=>!!dlgState, closeDialog:()=>closeDialog(false), closePanel, adv:()=>{ for (let i=0;i<30 && dlgState && !dlgChoices.children.length;i++) advanceDialog(); return dlgState ? [...dlgChoices.children].map(b=>b.textContent) : null; },
   choose:txt=>{ for (let i=0;i<30 && dlgState && !dlgChoices.children.length;i++) advanceDialog(); const b=[...dlgChoices.children].find(b=>b.textContent.includes(txt)); if (b){ b.click(); return true; } return false; }, lines:()=>dlgState ? { name:dlgState.name, lines:dlgState.lines, full:dlgState.full } : null, PLACES, DOCK, groundY, Time, World, camera };
+window.__game.v172 = { nurseCap, nurseBase, nurseToday, openNursery, NURSE_STEPS, heirloomMats, heirloomTalk, pitchOnBuy, buyTool, flatLift, blockedFlat, checkPlace, startPlacing, get placing(){ return placing; },
+  lightChoicesMarlo, lighthouseAct, wreckMarlo, millWendell, millFishAt, wantLantern, SX, rollDay, spawnDaily, learnPlan,
+  // the open dialog, fast-forwarded to its choices (or closed): { name, lines, choices }
+  dlgRun(){ const d=dlgState; if (!d) return null; const lines=[d.full, ...d.lines.slice(d.i)]; for (let k=0;k<40 && dlgState===d;k++){ d.chars=d.full.length; if (dlgChoices.children.length) break; advanceDialog(); }
+    return { name:d.name, lines, choices:[...dlgChoices.children].map(b=>b.textContent) }; } };   // v1.75 tests
+window.__game.tether = { TQ, matCount, matTake, sortList, cookMax:r=>cookMax(r), craftMax:r=>craftMax(r) };   // v1.76 chests feeding crafting, sorting: tests

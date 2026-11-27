@@ -14,9 +14,15 @@ export function buildSoil(cells, yAt){   // cells: [[x,z],...]
   const g=new THREE.Group(), n=cells.length; if (!n) return g;
   const bed=new THREE.InstancedMesh(SOIL_GEO, SOIL_MAT, n), rid=new THREE.InstancedMesh(RIDGE_GEO, SOIL_MAT, n*2);
   const d=new THREE.Object3D(), c=new THREE.Color(), base=new THREE.Color(0x6e4a30), dark=new THREE.Color(0x5a3a24);
+  const up=new THREE.Vector3(0,1,0), nrm=new THREE.Vector3(), tilt=new THREE.Quaternion(), turn=new THREE.Quaternion(), off=new THREE.Vector3(), h=CELL*0.4;
   cells.forEach(([x,z],k)=>{ const r=mulberry32(Math.round(x*7919+z*104729)|0), y=yAt(x,z);
-    d.position.set(x, y+0.0, z); d.rotation.set(0,0,0); d.scale.set(1,1,1); d.updateMatrix(); bed.setMatrixAt(k,d.matrix); bed.setColorAt(k, c.copy(base).offsetHSL((r()-0.5)*0.02,(r()-0.5)*0.05,(r()-0.5)*0.05));
-    for (let s=0;s<2;s++){ d.position.set(x, y+0.05, z+(s?0.2:-0.2)); d.rotation.set(0,(r()-0.5)*0.06,0); d.updateMatrix(); rid.setMatrixAt(k*2+s,d.matrix); rid.setColorAt(k*2+s, c.copy(dark).offsetHSL(0,0,(r()-0.5)*0.05)); } });
+    // v1.73 each bed tilts to the slope under it, and its top rises over a bulge and its sides reach down into dips, so soil fits hills too
+    const sx=(yAt(x+h,z)-yAt(x-h,z))/(2*h), sz=(yAt(x,z+h)-yAt(x,z-h))/(2*h); nrm.set(-sx,1,-sz).normalize(); tilt.setFromUnitVectors(up, nrm);
+    let lift=0, sink=0; for (const [ox,oz] of [[-h,-h],[h,-h],[-h,h],[h,h]]){ const e=yAt(x+ox,z+oz)-(y+sx*ox+sz*oz); lift=Math.max(lift,e); sink=Math.min(sink,e); }
+    lift=Math.min(lift,0.25); const deep=1+(lift-sink)/0.1;
+    off.copy(nrm).multiplyScalar(0.05-0.05*deep); d.position.set(x+off.x, y+lift+off.y, z+off.z); d.quaternion.copy(tilt); d.scale.set(1,deep,1); d.updateMatrix(); bed.setMatrixAt(k,d.matrix); bed.setColorAt(k, c.copy(base).offsetHSL((r()-0.5)*0.02,(r()-0.5)*0.05,(r()-0.5)*0.05));
+    d.scale.set(1,1,1);
+    for (let s=0;s<2;s++){ off.set(0, 0.05, s?0.2:-0.2).applyQuaternion(tilt); d.position.set(x+off.x, y+lift+off.y, z+off.z); turn.setFromAxisAngle(up,(r()-0.5)*0.06); d.quaternion.copy(tilt).multiply(turn); d.updateMatrix(); rid.setMatrixAt(k*2+s,d.matrix); rid.setColorAt(k*2+s, c.copy(dark).offsetHSL(0,0,(r()-0.5)*0.05)); } });
   for (const m of [bed,rid]){ m.receiveShadow=true; m.castShadow=false; g.add(m); }
   return g;
 }

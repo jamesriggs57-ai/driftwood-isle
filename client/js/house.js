@@ -50,6 +50,45 @@ function reachable(F, startK){ const occ=planGrid(F), seen=new Set([startK]), q=
   while (q.length){ const k=q.pop(); const r=F.rooms[k];
     for (let j=r.z;j<r.z+r.d;j++) for (let i=r.x;i<r.x+r.w;i++) for (const [di,dj] of SIDES){ const n=occ[j+dj]?.[i+di]; if (n===undefined||n<0||n===k||seen.has(n)) continue; if (linkOf(F,F.rooms[k].id,F.rooms[n].id)==='wall') continue; seen.add(n); q.push(n); } }
   return seen.size; }
+/* v1.74: inside walls. A wall, or a wall with a doorway, along a grid line inside one room, so part of a room can be closed off
+   without splitting it into two rooms (a room of its own would get a roof of its own). Kept per floor in F.iw = { key:'wall'|'door' }.
+   'v:i,j' is the line x=i between squares (i-1,j) and (i,j); 'h:i,j' is the line z=j between squares (i,j-1) and (i,j).
+   A line only counts while both of its squares belong to the same room. */
+export const iwKey = (kind, i, j) => kind+':'+i+','+j;
+export function iwParse(key){ const [kind,rest]=key.split(':'), [i,j]=rest.split(',').map(Number); return { kind, i, j, cells: kind==='v' ? [[i-1,j],[i,j]] : [[i,j-1],[i,j]] }; }
+export function innerWalls(F, occ){ occ=occ||planGrid(F); const out=[];
+  for (const key in (F.iw||{})){ const t=F.iw[key]; if (t!=='wall' && t!=='door') continue; const q=iwParse(key), [[a,b],[c,d]]=q.cells, k=occ[b]?.[a];
+    if (k===undefined || k<0 || occ[d]?.[c]!==k) continue; out.push({ key, kind:q.kind, i:q.i, j:q.j, t, k }); }
+  return out; }
+// drop lines that no longer sit inside one room (after a room was moved, resized or removed)
+export function pruneInner(F){ if (!F || !F.iw) return; const keep=new Set(innerWalls(F).map(w=>w.key)); for (const k of Object.keys(F.iw)) if (!keep.has(k)) delete F.iw[k]; if (!Object.keys(F.iw).length) delete F.iw; }
+// a room moved by (dx, dz): its inside walls move with it. r is the room's rectangle before the move.
+export function shiftInner(F, r, dx, dz){ if (!F || !F.iw || (!dx && !dz)) return; const inR=([i,j])=>i>=r.x && i<r.x+r.w && j>=r.z && j<r.z+r.d, out={};
+  for (const key in F.iw){ const q=iwParse(key); if (q.cells.every(inR)) out[iwKey(q.kind, q.i+dx, q.j+dz)]=F.iw[key]; }
+  for (const key in F.iw){ const q=iwParse(key); if (!q.cells.every(inR) && !(key in out)) out[key]=F.iw[key]; }
+  F.iw=out; }
+// Which grid lines between two squares you can walk through: every line inside a room unless an inside wall stands on it
+// (a doorway in it lets you through), and between rooms the doorway's middle line(s) or the whole of an open wall.
+export function passLines(F, occ){ occ=occ||planGrid(F); const { GW, GD } = BUILD, pass=new Set(), block=new Set();
+  for (const w of innerWalls(F, occ)) if (w.t==='wall') block.add(w.key);
+  const pairs={};
+  for (let j=0;j<GD;j++) for (let i=0;i<GW;i++){ const k=occ[j][i]; if (k<0) continue;
+    for (const [di,dj] of [[1,0],[0,1]]){ const nb=occ[j+dj]?.[i+di]; if (nb===undefined || nb<0) continue; const key = di ? iwKey('v',i+1,j) : iwKey('h',i,j+1);
+      if (nb===k){ if (!block.has(key)) pass.add(key); continue; }
+      const pk=linkKey(F.rooms[k].id, F.rooms[nb].id)+(dj?'h':'v'); (pairs[pk]=pairs[pk]||{ t:linkOf(F,F.rooms[k].id,F.rooms[nb].id), keys:[] }).keys.push([di?j:i, key]); } }
+  for (const pk in pairs){ const P=pairs[pk]; if (P.t==='wall') continue; if (P.t==='open'){ P.keys.forEach(([,key])=>pass.add(key)); continue; }
+    P.keys.sort((a,b)=>a[0]-b[0]); const L=P.keys.length; if (L%2){ pass.add(P.keys[(L-1)/2][1]); continue; }
+    // an even run's doorway is centred on the line between its two middle squares; an inside wall ending there splits it too narrow to pass
+    const q=iwParse(P.keys[L/2][1]), split = q.kind==='h' ? block.has(iwKey('v',q.i,q.j-1)) || block.has(iwKey('v',q.i,q.j)) : block.has(iwKey('h',q.i-1,q.j)) || block.has(iwKey('h',q.i,q.j));
+    if (!split){ pass.add(P.keys[L/2-1][1]); pass.add(P.keys[L/2][1]); } }
+  return pass; }
+// how many squares you can reach from (si, sj) on one floor
+export function cellsReached(F, si, sj, occ){ occ=occ||planGrid(F); if (!(occ[sj]?.[si]>=0)) return 0; const pass=passLines(F, occ), seen=new Set([si+','+sj]), q=[[si,sj]];
+  while (q.length){ const [i,j]=q.pop();
+    for (const [di,dj,key] of [[1,0,iwKey('v',i+1,j)],[-1,0,iwKey('v',i,j)],[0,1,iwKey('h',i,j+1)],[0,-1,iwKey('h',i,j)]]){ const a=i+di, b=j+dj;
+      if (!(occ[b]?.[a]>=0) || seen.has(a+','+b) || !pass.has(key)) continue; seen.add(a+','+b); q.push([a,b]); } }
+  return seen.size; }
+const floorSquares = F => F.rooms.reduce((a,r)=>a+r.w*r.d,0);
 // Problems with a plan, or '' if it's fine. Used live by the editor.
 export function planProblem(plan){
   const { GD } = BUILD; if (!plan.rooms.length) return 'A house needs at least one room.';
@@ -62,10 +101,12 @@ export function planProblem(plan){
     const st=stairsOf(plan,n); if (!st || !(g0[st.j]?.[st.i]>=0) || !(g1[st.j]?.[st.i]>=0)) return `Add stairs up to the ${FLOOR_NAME[n]}: pick a square with a room on both floors.`;
     if (n===1 && plan.door && st.i===plan.door.i && st.j===plan.door.j) return 'The stairs can\'t go right inside the front door.';
     if (n>1){ const sb=stairsOf(plan,n-1); if (sb && sb.i===st.i && sb.j===st.j) return `Two staircases can't share a square on the ${FLOOR_NAME[n-1]}.`; }
-    if (reachable(U, g1[st.j][st.i])<U.rooms.length) return `Every room on the ${FLOOR_NAME[n]} needs a way in from the stairs.`; }
+    if (reachable(U, g1[st.j][st.i])<U.rooms.length) return `Every room on the ${FLOOR_NAME[n]} needs a way in from the stairs.`;
+    if (U.iw && cellsReached(U, st.i, st.j, g1)<floorSquares(U)) return `Every corner of the ${FLOOR_NAME[n]} needs a way in from the stairs. Add a doorway to an inside wall.`; }
   // every room must be reachable from the front door through doorways or open walls
   const occ=planGrid(plan), d=plan.door; if (!d || occ[d.j]?.[d.i]===undefined || occ[d.j][d.i]<0 || (d.j+1<GD && occ[d.j+1][d.i]>=0)) return 'The front door needs an outside wall facing the front.';
   if (reachable(plan, occ[d.j][d.i])<plan.rooms.length) return 'Every room needs a way in. Add a doorway.';
+  if (plan.iw && cellsReached(plan, d.i, d.j, occ)<floorSquares(plan)) return 'Every corner of the house needs a way in. Add a doorway to an inside wall.';
   return '';
 }
 // Move the front door somewhere valid if it isn't (prefers the old column)
@@ -439,7 +480,7 @@ function ceilingFixture(p, kind, x, z, WH, col, b){ const f=new THREE.Group(); f
   else { cord(0.45); mk(G.cyl(0.03,0.03,0.06,8), M(0xb8a888), 0,WH-0.48,0,f); const bl=mk(G.sph(0.06,10,8), em(0xfff4dc,1.5), 0,WH-0.56,0,f); bl.scale.y=1.2; bl.castShadow=false; }
   return f; }
 export function buildHomeInterior(home, n=0){
-  const { GW, GD, IC } = BUILD; const full=home.plan, F=floorOf(full,n), plan = n ? { rooms:F.rooms, links:F.links||{}, door:null } : full; const g=new THREE.Group(); const occ=planGrid(plan);
+  const { GW, GD, IC } = BUILD; const full=home.plan, F=floorOf(full,n), plan = n ? { rooms:F.rooms, links:F.links||{}, iw:F.iw, door:null } : full; const g=new THREE.Group(); const occ=planGrid(plan);
   const row=n, cx=ix, cz=iz; const WH=3.0, T=0.16;
   const walls=[], segs=[]; let bb=[1e9,1e9,-1e9,-1e9];
   const paperMat = (r, len) => tiled(r.paper==='plain'?'stucco':'p:'+r.paper, r.paperC, len, WH, 1.6);
@@ -500,6 +541,10 @@ export function buildHomeInterior(home, n=0){
     if (s.horiz){ const z=cz(s.cells[0][1]+1); addWall(a0,z,a1,z,'int',A,-1,B,+1,gap); }
     else { const x=cx(s.cells[0][0]+1); addWall(x,a0,x,a1,'int',A,-1,B,+1,gap); }
   }
+  // v1.74: inside walls within one room (both faces take that room's wallpaper), each with an optional doorway
+  for (const w of innerWalls(plan, occ)){ const room=plan.rooms[w.k], gap = w.t==='door' ? [(IC/2-0.65)/IC, (IC/2+0.65)/IC] : null;
+    if (w.kind==='h'){ const z=cz(w.j); addWall(cx(w.i), z, cx(w.i+1), z, 'int', room, -1, room, +1, gap); }
+    else { const x=cx(w.i); addWall(x, cz(w.j), x, cz(w.j+1), 'int', room, -1, room, +1, gap); } }
   if (d){ mk(G.box(1.3,0.08,0.3), M(0x8b5e3a), doorPt[0], 0.04, doorPt[1]+0.1, g).castShadow=false; mk(G.box(1.1,0.04,0.6), M(0xc04a3a), doorPt[0], 0.02, doorPt[1]-0.5, g).castShadow=false; }
   // ---- lighting, room by room: an overhead light (free, with brightness and warmth), plus fixtures you've installed ----
   const order=plan.rooms.map((r,k)=>[r.w*r.d,k]).sort((a,b)=>b[0]-a[0]).map(q=>q[1]), real=new Set(order.slice(0,MAX_LIGHTS)), lights=[];

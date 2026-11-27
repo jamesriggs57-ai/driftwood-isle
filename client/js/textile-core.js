@@ -22,6 +22,26 @@ export const YARN = [
 export const YARN_NAMES = ['Snow','Oatmeal','Stone','Bark','Earth','Ink','Pebble','Slate','Poppy','Berry','Coral','Marigold','Sunshine','Honey','Fern','Moss',
   'Pine','Lagoon','Sky','Cornflower','Navy','Lilac','Plum','Blossom','Rose','Brick','Biscuit','Chestnut','Pistachio','Mist','Butter','Night'];
 
+/* Colours you can paint with. You start with five muted ones; the rest come in packs.
+   how: 'level' = reach that sewing skill, 'buy' = Pemberton sells it, 'find' = washes up in a bottle on the beach. */
+export const START_COLORS = [1, 5, 25, 20, 16];   // Oatmeal, Ink, Brick, Navy, Pine
+export const PACKS = {
+  earth:   { name:'Earthy Yarns',   colors:[2,3,4,26,27],     how:'level', lv:1 },
+  garden:  { name:'Garden Yarns',   colors:[14,15,28,30,13],  how:'level', lv:2 },
+  sunset:  { name:'Sunset Yarns',   colors:[8,9,10,11,12],    how:'buy', price:5000 },
+  seaside: { name:'Seaside Yarns',  colors:[0,6,7,17,18,29],  how:'find' },
+  blossom: { name:'Blossom Yarns',  colors:[23,24,21,22,19,31], how:'find' } };
+export const PACK_IDS = Object.keys(PACKS);
+export const packItem = k => 'yarnpack_'+k;
+for (const [k,P] of Object.entries(PACKS)) def(packItem(k), { name:P.name, kind:'plan', yarn:k, price:400, stack:1, rarity:1.8,
+  desc:`A bundle of ${P.colors.length} new yarn colours for sewing. Picking it up adds them to your Sewing tab.`, model:{ t:'yarnpack', colors:P.colors.map(i=>YARN[i]) } });
+// colours a player can paint with (packs: list of pack keys they have)
+export function colorsOpen(packs){ const s=new Set(START_COLORS); for (const k of packs||[]) if (PACKS[k]) for (const c of PACKS[k].colors) s.add(c); return s; }
+// yarn you can buy instead of pulling weeds. One skein works like one clump of weeds when you sew.
+export const YARN_ITEM = 'yarn', YARN_BUY = 30;
+def(YARN_ITEM, { name:'Skein of Yarn', kind:'material', price:5, buy:YARN_BUY, stack:99,
+  desc:'Soft wool yarn from Pemberton\'s. When you sew, each skein stands in for a clump of weeds.', model:{ t:'yarnball' } });
+
 // Skill levels: pieces sewn to reach each, grid size, alterations you can add at once
 export const LEVELS = [
   { name:'Beginner',   at:0,  grid:8,  alts:0 },

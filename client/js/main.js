@@ -1444,13 +1444,17 @@ function bagRoomFor(e){ const st=ITEMS[e.id].stack; if (e.m) return S.inv.length
   let room=S.inv.reduce((a,x)=>a+(x.id===e.id && !x.m ? Math.max(0,st-x.n) : 0),0); room+=(slotsMax()-S.inv.length)*st; return room; }
 function openChest(rec){
   rec.store=rec.store||[];
-  const cell=(s,i,key)=>`<div class="slot" data-${key}="${i}"><img src="${thumb(s.id)}" alt="">${s.n>1?`<span class="n">${s.n}</span>`:''}</div>`;
+  const cell=(s,i,key)=>`<div class="slot" data-${key}="${i}" data-tip="${escAttr(ITEMS[s.id].name+(s.n>1?' x'+s.n:'')+'|'+bagValue(s).replace(/<[^>]+>/g,''))}"><img src="${thumb(s.id)}" alt="">${s.n>1?`<span class="n">${s.n}</span>`:''}</div>`;
   const render=()=>{
     const bag=S.inv.map((s,i)=>cell(s,i,'put')).join('') + '<div class="slot empty"></div>'.repeat(Math.max(0,slotsMax()-S.inv.length));
     const box=rec.store.map((s,i)=>cell(s,i,'take')).join('') + '<div class="slot empty"></div>'.repeat(Math.min(6, CHEST_SLOTS-rec.store.length));
-    pBody.innerHTML=`<div class="muted" style="margin-bottom:6px">Tap something in your bag to put it in the chest. Tap something in the chest to take it out.</div>
-      <b>Bag</b> <span class="muted">${S.inv.length}/${slotsMax()}</span><div class="grid" style="margin:6px 0 12px">${bag}</div>
-      <b>Chest</b> <span class="muted">${rec.store.length}/${CHEST_SLOTS}</span><div class="grid" style="margin-top:6px">${box}</div>`;
+    const head=(nm, n, max, id, any)=>`<div style="display:flex;align-items:center;gap:6px"><b>${nm}</b> <span class="muted">${n}/${max}</span><span style="flex:1"></span>${any?sortBtn(id):''}</div>`;
+    pBody.innerHTML=`<div class="muted" style="margin-bottom:6px">Tap something in your bag to put it in the chest. Tap something in the chest to take it out. ${isTouchDevice?'Press and hold':'Point at'} anything to see what it's worth.</div>
+      ${head('Bag', S.inv.length, slotsMax(), 'csBag', S.inv.length>1)}<div class="grid" style="margin:6px 0 12px">${bag}</div>
+      ${head('Chest', rec.store.length, CHEST_SLOTS, 'csBox', rec.store.length>1)}<div class="grid" style="margin-top:6px">${box}</div>`;
+    const sb=pBody.querySelector('#csBag'), sc=pBody.querySelector('#csBox');
+    if (sb) sb.onclick=()=>{ if (sortList(S.inv, 'bag')) render(); };
+    if (sc) sc.onclick=()=>{ if (sortList(rec.store, 'chest')) render(); };
     pBody.querySelectorAll('[data-put]').forEach(el=>el.onclick=()=>{ const i=+el.dataset.put, s=S.inv[i]; if (!s) return;
       const st=ITEMS[s.id].stack; let n=s.n;
       if (!s.m) for (const x of rec.store){ if (n<=0) break; if (x.id===s.id && !x.m && x.n<st){ const k=Math.min(n, st-x.n); x.n+=k; n-=k; } }
@@ -6620,16 +6624,31 @@ function itemDetail(s, value){ const it=ITEMS[s.id]; let sub=kindName(it.kind); 
    and the same name and value show in the bar at the bottom of the panel, so tapping works as before. */
 const invTip = document.createElement('div'); invTip.id='invTip'; document.body.appendChild(invTip);
 const hideInvTip = () => { invTip.style.display='none'; };
-pBody.addEventListener('pointerover', e=>{ if (e.pointerType!=='mouse') return; const el=e.target.closest&&e.target.closest('.slot[data-tip]'); if (!el){ hideInvTip(); return; }
+function showInvTip(el){
   const [nm,val]=el.dataset.tip.split('|'); invTip.innerHTML=`<b></b><span></span>`; invTip.firstChild.textContent=nm; invTip.lastChild.textContent=val; invTip.style.display='block';
   const r=el.getBoundingClientRect(), w=invTip.offsetWidth, h=invTip.offsetHeight;
-  invTip.style.left=Math.max(6, Math.min(innerWidth-w-6, r.left+r.width/2-w/2))+'px'; invTip.style.top=(r.top-h-8<6 ? r.bottom+8 : r.top-h-8)+'px'; });
+  invTip.style.left=Math.max(6, Math.min(innerWidth-w-6, r.left+r.width/2-w/2))+'px'; invTip.style.top=(r.top-h-8<6 ? r.bottom+8 : r.top-h-8)+'px'; }
+pBody.addEventListener('pointerover', e=>{ if (e.pointerType!=='mouse') return; const el=e.target.closest&&e.target.closest('.slot[data-tip]'); if (!el){ hideInvTip(); return; } showInvTip(el); });
 pBody.addEventListener('pointerout', e=>{ if (!e.relatedTarget || !e.relatedTarget.closest || !e.relatedTarget.closest('.slot[data-tip]')) hideInvTip(); });
 pBody.addEventListener('scroll', hideInvTip); pBody.addEventListener('click', hideInvTip);
+/* Touch screens: press and hold a slot (in your bag, a chest or the shop) to see its name and value. Letting go after a
+   hold doesn't count as a tap, so holding something in a chest doesn't move it. The note fades a moment after you let go. */
+const LONG_PRESS=420; let lpTimer=0, lpStart=null, lpShown=0, lpHide=0;
+pBody.addEventListener('pointerdown', e=>{ if (e.pointerType==='mouse') return; const el=e.target.closest&&e.target.closest('.slot[data-tip]'); clearTimeout(lpTimer); lpShown=0; if (!el) return;
+  lpStart=[e.clientX, e.clientY]; lpTimer=setTimeout(()=>{ clearTimeout(lpHide); showInvTip(el); lpShown=performance.now(); }, LONG_PRESS); });
+pBody.addEventListener('pointermove', e=>{ if (lpStart && Math.hypot(e.clientX-lpStart[0], e.clientY-lpStart[1])>10){ clearTimeout(lpTimer); lpStart=null; } });
+const lpEnd = ()=>{ clearTimeout(lpTimer); lpStart=null; if (lpShown){ clearTimeout(lpHide); lpHide=setTimeout(hideInvTip, 1600); } };
+pBody.addEventListener('pointerup', lpEnd); pBody.addEventListener('pointercancel', lpEnd);
+pBody.addEventListener('contextmenu', e=>{ if (e.target.closest && e.target.closest('.slot[data-tip]')) e.preventDefault(); });
+pBody.addEventListener('click', e=>{ if (lpShown && performance.now()-lpShown<4000 && e.target.closest && e.target.closest('.slot[data-tip]')){ lpShown=0; e.stopPropagation(); e.preventDefault(); } }, true);
+// Sort (bag and chests): groups things by kind, then name, and tops up part stacks (tether-core.js)
+function sortList(list, what){ const before=list.map(e=>({...e})); TQ.sortInPlace(list);
+  if (TQ.sameOrder(before, list)){ toast(`Your ${what} is already sorted.`); return false; } Snd.click(); save(); updateHUD(); return true; }
+const sortBtn = (id, label='Sort') => `<button class="btn alt" id="${id}" style="padding:3px 12px;font-size:13px">${label}</button>`;
 function openBag(mode='view', onPick, onCancel){
   let sel=-1;
   const render=()=>{
-    pBody.innerHTML = (mode==='give'?'<div class="muted" style="margin-bottom:8px">Pick something to give.</div>':mode==='swap'?'<div class="muted" style="margin-bottom:8px">Pick something to make room. Fish and bugs are released; anything else (the whole stack) is set down on the ground next to you, so you can pick it up later.</div>':'') + invGrid(sel) + `<div class="muted" style="margin-top:10px">${S.inv.length}/${slotsMax()} slots${S.pack>=0?' ('+BACKPACKS[S.pack].name+')':''}</div>`;
+    pBody.innerHTML = (S.inv.length>1 ? `<div style="display:flex;justify-content:flex-end;margin:-2px 0 8px">${sortBtn('bagSort')}</div>` : '') + (mode==='give'?'<div class="muted" style="margin-bottom:8px">Pick something to give.</div>':mode==='swap'?'<div class="muted" style="margin-bottom:8px">Pick something to make room. Fish and bugs are released; anything else (the whole stack) is set down on the ground next to you, so you can pick it up later.</div>':'') + invGrid(sel) + `<div class="muted" style="margin-top:10px">${S.inv.length}/${slotsMax()} slots${S.pack>=0?' ('+BACKPACKS[S.pack].name+')':''}</div>`;
     const s=S.inv[sel];
     if (s){ const it=ITEMS[s.id]; let b='';
       if (mode==='give') b+= it.noGift ? '<span class="muted">This one stays with you.</span>' : `<button class="btn" data-a="give">Give</button>`;   // v1.38 relics and story parts
@@ -6638,6 +6657,7 @@ function openBag(mode='view', onPick, onCancel){
       setFoot(`<div class="detail">${itemDetail(s)}<div class="acts">${b}</div></div>`);
     } else setFoot(`<div class="muted" style="padding:4px 2px">${mode==='give'?'Tap an item to give it.':''}</div>`);
     pBody.querySelectorAll('.slot[data-i]').forEach(el=>el.onclick=()=>{ sel=+el.dataset.i; Snd.click(); render(); });
+    const sb=pBody.querySelector('#bagSort'); if (sb) sb.onclick=()=>{ if (sortList(S.inv, 'bag')){ sel=-1; render(); } };
     pFoot.querySelectorAll('[data-a]').forEach(b=>b.onclick=()=>{ const s=S.inv[sel]; if(!s) return; const a=b.dataset.a;
       if(a==='give') onPick(sel);
       if(a==='drink'){ drinkPotion(sel); if(!S.inv[sel]) sel=-1; render(); return; }

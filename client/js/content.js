@@ -33,6 +33,14 @@ export const NATIVE_FRUITS = ['apple','pear','peach','orange','plum','cherry','l
 
 /* ---------- Materials ---------- */
 def('wood',     {name:'Wood',           kind:'material', price:20,  model:{t:'log'}});   // v1.39: halved (was 60); v1.48: 20 (was 30), so fish and bugs clearly out-earn chopping
+// v1.77 each kind of tree gives its own wood, from palest and cheapest to darkest and dearest. Oak, maple and cherry blossom
+// still give plain Wood. Any recipe, favor or order that asks for wood takes any of them (countItem/removeItem in main.js).
+def('birchwood', {name:'Birch Wood',     kind:'material', price:14,  model:{t:'log', c:0xece6da, e:0xfaf3e2}});
+def('pinewood',  {name:'Pine Wood',      kind:'material', price:17,  model:{t:'log', c:0x8e6038, e:0xf2dcae}});
+def('palmwood',  {name:'Coconut Wood',   kind:'material', price:24,  model:{t:'log', c:0xa88458, e:0xc89c6a}});
+def('fruitwood', {name:'Fruit Wood',     kind:'material', price:28,  model:{t:'log', c:0x5e3a2a, e:0xb07a58}});
+export const WOOD_KINDS = ['birchwood','pinewood','wood','palmwood','fruitwood'];   // cheapest first: a recipe that asks for wood uses these up in this order
+export const treeWood = type => { const t=String(type||'').replace(/\d+$/,''); return t==='birch' ? 'birchwood' : (t==='pine' || t==='cedar') ? 'pinewood' : t==='palm' ? 'palmwood' : t==='fruittree' ? 'fruitwood' : 'wood'; };
 def('softwood', {name:'Driftwood Branch',kind:'material', price:20, model:{t:'branch'}});
 def('stone',    {name:'Stone',          kind:'material', price:75,  model:{t:'stone'}});
 def('clay',     {name:'Clay',           kind:'material', price:100, model:{t:'clay'}});
@@ -68,6 +76,9 @@ def('flour',     {name:'Flour',          kind:'food', price:150, stack:30, story
 def('bread',     {name:'Country Loaf',   kind:'food', price:260, buy:520, stack:10, story:true, model:{t:'bread'}, desc:'A crusty loaf baked from Barley\'s flour.'});
 def('bathsalts', {name:'Herb Bath Salts', kind:'material', price:300, stack:20, story:true, model:{t:'bathsalts'}, desc:'Sprig\'s mix of sea salt, dried flowers and garden herbs, for Tobin\'s bathhouse.'});
 def('crowbar',   {name:'Crowbar',        kind:'material', price:0, stack:1, noSell:true, noGift:true, story:true, model:{t:'crowbar'}, desc:'A heavy iron bar from Pemberton\'s forge, for prying open a wreck\'s hold.'});
+def('oldlens',   {name:'Old Lens Pieces', kind:'material', price:0, stack:1, noSell:true, noGift:true, story:true, model:{t:'oldlens'}, desc:'Curved pieces of the old keepers\' lighthouse lens, gathered from the lamp room. Marlo can grind a new lens from them.'});
+def('porthole',  {name:'Brass Porthole',  kind:'material', price:0, stack:3, noSell:true, noGift:true, story:true, model:{t:'porthole'}, desc:'A green old brass porthole off the Saltwren, washed up on the beach. Marlo wants three for a diving bell.'});
+def('shiplantern',{name:'Saltwren Lantern',kind:'material', price:0, stack:1, noSell:true, noGift:true, story:true, model:{t:'shiplantern'}, desc:'The wreck\'s own sea lantern, found in the hold. Marlo can fit a lens into it.'});
 def('wrecklens', {name:'Lantern Lens',   kind:'material', price:0, stack:1, noSell:true, noGift:true, story:true, model:{t:'wrecklens'}, desc:'A thick glass lens from Marlo that throws a lantern\'s light a long way through dark water.'});
 def('bellframe', {name:'Diving Bell Frame', kind:'material', price:0, stack:1, noSell:true, noGift:true, story:true, model:{t:'bellframe'}, desc:'A stout timber frame from the workshop, to hang Hazel\'s diving bell from.'});
 def('chartpiece',{name:'Treasure Chart Piece', kind:'relic', price:0, stack:4, noSell:true, noGift:true, story:true, model:{t:'chartpiece'}, desc:'A torn corner of an old sea chart, inked with a compass rose. Hazel says there are four.'});
@@ -1425,6 +1436,8 @@ export const LETTERS = {
   gift:   { label:'A little something', text:['Dear {to},','I tucked a little something in with this letter. I hope it makes you smile.','Warmly, {p}'] },
   // v1.55: sent by the server when a friend invites you over from their Friends tab. sys letters can't be picked or mailed by players.
   invited:{ label:'You\'re invited', sys:true, text:['Dear {to},','I just invited you over to {isle}! Open Friends and tap Visit next to my island, or step through my arch in the Portal Station, whenever you like.','See you soon, {p}'] },
+  // sent by the server when someone invites you by your exact name. Accept it in the mailbox to become friends.
+  friendinvite:{ label:'An invitation', sys:true, text:['Dear {to},','Would you like to be friends? Come and visit me on {isle} whenever you like.','Hoping to see you, {p}'] },
 };
 export const LETTER_IDS = Object.keys(LETTERS).filter(k => !LETTERS[k].sys);
 

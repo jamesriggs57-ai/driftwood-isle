@@ -53,7 +53,9 @@ ${tip('Everything unlocks quietly. Characters hint at what they want in their ow
 <table class="t"><tr><th>Key</th><th>Does</th></tr>
 <tr><td>W A S D</td><td>Walk</td></tr><tr><td>E or Enter</td><td>Use, talk, pick up</td></tr>
 <tr><td>Space</td><td>Swing your tool (chop, dig, cast, catch, water)</td></tr><tr><td>Q</td><td>Switch tool</td></tr>
-<tr><td>B</td><td>Bike</td></tr><tr><td>G</td><td>Sled (winter)</td></tr><tr><td>I</td><td>Bag</td></tr><tr><td>Z / C</td><td>Turn the camera</td></tr></table>
+<tr><td>B</td><td>Bike</td></tr><tr><td>G</td><td>Sled (winter)</td></tr><tr><td>I</td><td>Bag</td></tr><tr><td>Z / C</td><td>Turn the camera</td></tr><tr><td>Hold Shift, or X</td><td>Sneak: walk slowly so bugs don't notice you. X turns it on and off.</td></tr></table>
+<p><b>Sneaking up on bugs.</b> A bug may fly or run off when you come close at a normal walk. Sneaking (hold Shift, or press X) slows you to 40% speed and you crouch a little; while you sneak, bugs never notice you, even when you clicked on one to walk to it. Standing still never scares them either. On a phone, push the joystick only a little to creep up the same way.</p>
+<p><b>Sitting and lying down.</b> Tap a chair, stool, bench, armchair, rocking chair, ottoman, beanbag, porch swing, hanging egg chair or picnic blanket and pick Sit to sit on it, facing away from its back (on a stool or other seat with no back, you face away from where you were standing). Beds and the hammock offer Lie down instead. Tap a table and pick Sit at the table to sit on the closest seat beside it, facing the table; the option only shows when a seat is next to it. Chairs and beds you design work the same way. Walking, tapping somewhere else, Swing or the Act button (E on a computer) gets you up again. When you visit a friend, tapping a seat sits you down straight away. Friends see you sitting too.</p>
 <p>Drag to look around. Clicking the ground walks you there (turn it off in Menu &gt; Controls). Every key can be changed in Menu &gt; Controls.</p>
 <p>Clicking one thing a tree or rock dropped (fruit, branches, wood, stone, clay, iron, and any rare find, plan or scroll from it) picks up everything else that same tree or rock dropped, as long as it fits in your bag. Pieces still falling go straight into your bag when they land. Pressing E picks up one thing at a time. Beach finds and things you dropped yourself are always picked up one at a time.</p>
 <h3>Phone and tablet</h3>
@@ -71,7 +73,7 @@ ${tip('Menu &gt; Battery saver lowers resolution and turns off shadows if your p
 <tr><td>Tidepool (Marlo)</td><td>Fish only</td><td>120%, up to 150% as you invest</td></tr>
 <tr><td>Bug &amp; Bloom (Sprig)</td><td>Bugs and flowers</td><td>120%, up to 150% as you invest</td></tr>
 <tr><td>Mabel's Tea Room (story)</td><td>Fruit, vegetables, herbs, berries, honey</td><td>150%</td></tr></table>
-<p>To see what something is worth, hover over it in your bag with a mouse, or tap it on a phone. It shows the most any shop pays for it today (with your shop upgrades and the size of a catch counted) and who pays that. Story items say they can't be sold.</p>
+<p>To see what something is worth, hover over it in your bag or in a storage chest with a mouse. On a phone, tap it in your bag, or press and hold it (in your bag or in a chest) and the note fades a moment after you let go. It shows the most any shop pays for it today (with your shop upgrades and the size of a catch counted) and who pays that. Story items say they can't be sold.</p>
 <h3>Good money makers</h3>
 <ul>
 <li><b>Foreign fruit.</b> Your island has one native fruit. Other fruit sells for 250 each (native 100, coconut 150). Plant foreign fruit you bring back from trips and orchards pay for themselves.</li>
@@ -114,14 +116,21 @@ ${note('Guest mode caps your wallet at 10,000 clams. Make an account to lift it.
 <tr><td>1 to 9</td><td>about 5,555 (50,000 total)</td></tr><tr><td>10 to 12</td><td>12,000</td></tr>
 <tr><td>13 to 24</td><td>25,000</td></tr><tr><td>25 and up</td><td>40,000</td></tr></table>
 <p>The grid is 20 x 20, up to four floors. Upper floors need a Height style (Two, Three or Four stories). The house only grows onto free land; water, paths, slopes and other buildings are shaded out. Layout changes cost a 50-clam remodel fee each (undoing a change is free). Roof direction, moss, trellises and lighting are free.</p>
+<h3>Doors and inside walls</h3>
+<p>In the builder's <b>Doors &amp; walls</b> tool, tap the wall between two rooms to switch it between a doorway, open (no wall) and a solid wall. Tap a front-facing outside wall to move the front door.</p>
+<p>You can also put walls inside a single room, along the grid's dotted lines, to close off a corner, a closet or a hallway. A room split this way keeps its one roof. Tap a dotted line for a wall, tap it again for a wall with a doorway, and a third time to take it out. Press and drag along a line to put up (or take down) a long wall in one go. Every square has to stay reachable from the front door (or from the stairs on upper floors), so the builder won't let you seal a space off. Inside walls count toward the remodel fee as one change for every 4 squares of wall. When a room moves, its inside walls move with it.</p>
 <h3>Styles</h3>
 <p>Walls, roofs, doors, windows, porches, foundations, chimneys, floors, wallpaper and add-ons are <b>owned</b> styles. Switching between ones you own is free. Get new ones from:</p>
 <ul><li>Pemberton's <b>Home Goods</b> rack (3 new things a day, more as the store grows). "Try it on" previews it on your house.</li>
 <li><b>Swatch books</b> from digging and neighbor gifts, and Juniper's swatch favor (any fossil plus a Garden Lantern).</li>
 <li>The <b>paint mixer</b> (22,500, sometimes on the rack) lets you mix any color.</li></ul>
 <p>Once you own Mossy shingles you can paint moss onto any roof. Each room has a free light with brightness and warmth sliders; ceiling lights, sconces and accent lights are bought.</p>
+<h3>Rugs</h3>
+<p>Rugs and picnic blankets lie flat, so you can place them under furniture: a rug can go down beneath a table or bed that's already there, and furniture can go on top of a rug. Only walls, buildings and fences stop a rug. Overlapping rugs stack, with the newest on top.</p>
 <h3>Storage</h3>
 <p>The <b>Storage Chest</b> holds 40 stacks. Pemberton stocks it about half the days (2,400), or make it at the workbench (8 wood, 2 iron).</p>
+<p>The bag and every chest have a <b>Sort</b> button. It groups things by kind (materials first, then seeds, crops, food, fish, bugs, fossils, furniture and so on), puts them in name order and tops up part stacks of the same thing. Things with their own details, like a bug's size, stay as they are. The Wooden Crate is decoration and holds nothing.</p>
+<p>A chest set right beside a crafting spot feeds it. See <a href="#tables">Crafting tables</a>.</p>
 `},
 
 { id:'town', group:'island', title:'The town and Clementine', html:`
@@ -228,7 +237,7 @@ ${note('If the islander a story favor was written for doesn\'t live on your isla
 `, data:'shopfurn' },
 
 { id:'tools', group:'island', title:'Tools, bags and the bike', data:'tools', html:`
-<p>Tools break after a number of uses. Golden tools need you to prove yourself first, and Heirloom tools never break. Only Sturdy and Golden (and Heirloom) axes can cut a tree down; the Flimsy axe only chops wood.</p>
+<p>Tools break after a number of uses. Golden tools need you to prove yourself first, and Heirloom tools never break. Heirloom tools can't be bought: you make them at a Master Workbench from heartwood, starstone, golden sap, fittings and a lot of iron (the net also needs glimmer moss, the rod and the can moonpearls). The first time you go to buy another Golden tool once you qualify, Pemberton tells you what it takes. Only Sturdy and Golden (and Heirloom) axes can cut a tree down; the Flimsy axe only chops wood.</p>
 <p>Other gear: the <b>bike</b> (60,000), the <b>Wooden Sled</b> (3,000, for winter hills) and the <b>map</b>, which has its own round button at the top left of the screen, under the clock, and shows land, paths, buildings and whose house is whose (not where anyone is). You can zoom in up to 5 times: pinch, scroll the mouse wheel or tap + and −, then drag to look around. Double-tap a spot to zoom in on it, and double-tap again (or tap Fit) to see the whole map. Names stay the same size however far in you go.</p>
 <h3>Repairing</h3>
 <p>Fix a worn tool before it breaks. Two ways:</p>
@@ -241,7 +250,7 @@ ${note('If the islander a story favor was written for doesn\'t live on your isla
 <li>Buying or making a tool of that kind that's as good or better scraps the broken one, enchantments and all. Pemberton and the Tools tab warn you first if it had any.</li>
 <li>At a crafting table, the top of Woodworking lists any broken tool, and any tool with a quarter or less of its uses left, with a button to the Tools tab.</li></ul>
 <h3>Making tools</h3>
-<p>The Tools tab's "Make a tool" list makes the same tools Pemberton sells, from materials. You need the same experience as buying (the "Needs" column below). A Flimsy tool (and the basic Watering Can) can be made anywhere; each better tier needs a bigger crafting table: Sturdy at a Workbench, Golden at a Carpenter's Bench, Heirloom at a Master Workbench. The watering can skips Sturdy, so the Golden Can needs only a Workbench and the Heirloom Can a Carpenter's Bench. See <a href="#tables">Crafting tables</a>.</p>
+<p>The Tools tab's "Make a tool" list makes the same tools Pemberton sells, from materials. You need the same experience as buying (the "Needs" column below). A Flimsy tool (and the basic Watering Can) can be made anywhere; each better tier needs a bigger crafting table: Sturdy at a Workbench, Golden at a Carpenter's Bench, Heirloom at a Master Workbench. The watering can skips Sturdy, so the Golden Can needs only a Workbench. Every Heirloom tool, the can included, needs the Master Workbench, and they are the only way to get one. See <a href="#tables">Crafting tables</a>.</p>
 <p>A new tool of the same kind, bought or made, takes the old one's enchantments with it. The one exception: Tough, Tougher and Ultratough come off when you move up to an Heirloom tool, because it never wears out. The shop and the Tools tab warn you first.</p>
 `},
 
@@ -276,18 +285,20 @@ ${note('Guests can learn from Pippa and enchant, but don\'t find scrolls. On a f
 <h3>Seeds</h3>
 <p>Every island has <b>4 crops that grow wild</b>, picked from the island's seed and weighted by terrain. They cost 30 each, always in stock (Pemberton's Garden tab, Sprig, a seed bin in the store), and about 6 ripe plants of each stand around the island, topped up daily. Other seeds rotate daily at normal prices. Each island also has 3 wild flower species; picking a clump gives the flower and 1 to 3 seeds.</p>
 <h3>Planting</h3>
-<p>Seeds open a planter: choose how many and how long each row is (up to 10 x 10). It starts from what you picked last time (a 3 by 3 patch the first time), and a row is never longer than the number of seeds, so one seed is one square. The patch sits centred where you tap or drag it. Green squares plant; red ones can't take a seed and are left out, so you never lose seeds. A patch with one empty square between it and a garden slides over to join that garden. No shovel needed for crops.</p>
+<p>Seeds open a planter: choose how many and how long each row is (up to 10 x 10). It starts from what you picked last time (a 3 by 3 patch the first time), and a row is never longer than the number of seeds, so one seed is one square. The patch sits centred on the ground where you tap or drag it, even when you tap between plants. Green squares plant; red ones can't take a seed (water, the beach, a path, a rock or a plant already there) and are left out, so you never lose seeds. Slopes are fine: the soil tilts to fit the hill. A patch with one empty square between it and a garden slides over to join that garden; a patch already in or touching a garden stays where you put it. No shovel needed for crops.</p>
 <h3>Gardens</h3>
 <p>Planting makes a garden, which is free. Tap its stake for the garden menu: harvest all, water all, plant, fences, decorations, move the gate, and the garden editor.</p>
 <ul><li>Fences per piece: rustic 40, white picket 60, low stone 70, boxwood hedge 90.</li>
 <li>Decorations (one-time per garden): sign 500, scarecrow 1,200, corner lanterns 1,600 (needs a fence), flower arch 2,000.</li></ul>
 <h3>The garden editor</h3>
-<p>Open it with the <b>Garden</b> button, which shows when you are near plants you planted, or from a garden's stake menu. The view goes overhead; drag to look around.</p>
-<ul><li><b>Pick:</b> tap plants you planted to pick them, and tap one again to drop it. Tap a garden's soil or stake to pick the whole garden.</li>
-<li><b>Move:</b> drag the copy or tap the ground, turn it with the arrows, then tap Put it here. Garden plants snap to the squares; trees and bushes go where you set them. Red means it can't go there, and the bar says why (water, a path, uneven ground, too close to other plants, or on top of another garden).</li>
+<p>Open it with the <b>Garden</b> button, which shows when you are near plants you planted, or from a garden's stake menu. The view goes overhead; drag to look around. The <b>Plants</b> and <b>Soil</b> buttons at the top choose what a tap picks.</p>
+<ul><li><b>Pick plants:</b> tap plants you planted to pick them, and tap one again to drop it. Tap a garden's soil or stake to pick the whole garden.</li>
+<li><b>Pick soil:</b> tap soil squares to pick them, and tap one again to drop it. Whole garden picks every square of the garden you're working on, Empty squares picks the ones with nothing growing, and a garden's stake picks the whole garden.</li>
+<li><b>Move:</b> drag the copy or tap the ground, turn it with the arrows, then tap Put it here. Garden plants snap to the squares; trees and bushes go where you set them. Red means it can't go there, and the bar says why (water or the beach, a path, something in the way, too close to other plants, or on top of another garden). Any slope is fine.</li>
 <li><b>Whole garden:</b> the soil, fences, gate and decorations go with it, and every plant keeps its growth, watering and color.</li>
 <li><b>Some plants:</b> the squares they leave stay as soil. Plants set down next to a garden join it; elsewhere they start a new one.</li>
-<li><b>Take out:</b> you get the seeds, starts or saplings back (a fruit tree gives back its fruit). Anything ripe is harvested first. Taking out a whole garden removes its soil too; fences and decorations aren't refunded.</li></ul>
+<li><b>Soil squares:</b> the squares move with the plants of yours on them. They can land on bare ground or on empty soil, join any garden they touch, or start a new garden. Picking every square of one garden moves it whole, fence and all. A garden cut in two becomes two gardens; the bigger part keeps the gate, sign and other decorations, and both keep the fence style. Fence pieces on the sides you cut aren't added for you: Close the gaps in the garden menu adds them for the usual price per piece.</li>
+<li><b>Take out:</b> you get the seeds, starts or saplings back (a fruit tree gives back its fruit). Anything ripe is harvested first. Taking out a whole garden removes its soil too; fences and decorations aren't refunded. Taking out soil squares turns them back to grass, and plants of yours on them come out the same way. Wild plants stay where they are.</li></ul>
 <p>The editor doesn't use the shovel. The shovel never digs up anything you planted, so with the shovel out a ripe crop still harvests and a ripe flower still picks. It still digs up wild crops, wild flower clumps, stumps and dig spots.</p>
 <h3>Harvesting</h3>
 <p>No tool needed. Every harvest gives the crop plus 1 to 4 seeds. Tomatoes, herbs and berries stay planted (berries drop back a stage and are ready again in about a day). Watering speeds growth.</p>
@@ -306,6 +317,14 @@ ${note('Guests can learn from Pippa and enchant, but don\'t find scrolls. On a f
 <h3>Searching</h3>
 <p>The search box at the top of the Craft panel finds a plan by its name or by a material it uses: type <i>stone</i> to see every plan that needs stone, or two words (<i>wood chair</i>) to see only plans that match both. It only shows plans you already know. The search box is on the Woodworking, Cooking, Design and Tools tabs (Make a tool and Enchantments); what you type stays when you make something or switch tabs, and clears when you close the panel. The x clears it, and Enter puts the phone keyboard away.</p>
 <p>Digging up a stump gives a Tree Stump for stump furniture.</p>
+<h3>Kinds of wood</h3>
+<p>Each kind of tree gives its own wood when you chop it or cut it down. A plan, favor, order or isle that asks for wood takes any kind, so it never matters which you carry. When it takes wood from your bag it uses the cheapest kind first.</p>
+<table><tr><th>Wood</th><th>From</th><th>Sells for</th></tr>
+<tr><td>Birch Wood</td><td>Birch</td><td>14</td></tr>
+<tr><td>Pine Wood</td><td>Pine and cedar</td><td>17</td></tr>
+<tr><td>Wood</td><td>Oak, maple and cherry blossom</td><td>20</td></tr>
+<tr><td>Coconut Wood</td><td>Palm</td><td>24</td></tr>
+<tr><td>Fruit Wood</td><td>Every fruit tree</td><td>28</td></tr></table>
 <p>What a piece sells for follows what went into it. A piece made only from wood, branches, stone and weeds sells for about its materials plus 15% (3 fences from 2 wood sell for 45 in all), so woodworking adds a little to chopping rather than replacing it. A piece that needs iron, clay, stumps, planks or rare finds sells for more, and never for less than its materials plus 15%.</p>
 ${tip('Making 14 <b>different</b> pieces is what starts Bramble\'s workshop story.')}
 <h3>Rare showpieces</h3>
@@ -324,6 +343,10 @@ ${tip('Making 14 <b>different</b> pieces is what starts Bramble\'s workshop stor
 <tr><td>Carpenter's Bench</td><td>Its plan comes once you've made 16 different things</td><td>Rare-plan showpieces, Golden tools, second-rank enchantments and Double Output, plus Rocking Horse, Garden Wagon, Rolltop Desk and Vine Pergola</td></tr>
 <tr><td>Master Workbench</td><td>Its plan comes once you've made 30 different things, one of them a Carpenter's Bench</td><td>Heirloom tools, the strongest enchantments and the Twin Charm's binding, plus Carousel Music Box, Weaving Loom, Garden Windmill and Garden Gazebo</td></tr></table>
 <p>Building a table for the first time teaches its pieces. Materials are in the <a href="#crafting">Woodworking</a> table.</p>
+<h3>Chests beside a crafting spot</h3>
+<p>Set a storage chest right beside any crafting table, the Wood Stove, a campfire or the sewing machine and it is tethered to it. While you stand at that spot, whatever is in its chests counts as yours for woodworking, custom furniture, making tools, enchanting, cooking and sewing there, as if it were in your bag. Your bag is used up first, then the chests. Recipe counts and search include the chests, and the top of the panel says how many things the chests add.</p>
+<p>Reach: the gap between the chest's edge and the spot's edge can be about as wide as the spot itself, and never less than a little over one step for the small ones. While you place or move a chest or a crafting spot, a faint dashed line shows each tether it would make. Several chests can feed one spot, and one chest can feed several spots.</p>
+<p>Chests only count on your own island. Town projects, favors and islanders' requests still take things from your bag only.</p>
 `},
 
 { id:'custom', group:'island', title:'Custom furniture', html:`
@@ -335,7 +358,7 @@ ${tip('Making 14 <b>different</b> pieces is what starts Bramble\'s workshop stor
 <tr><td>Shelf</td><td>7 bodies, 6 crowns, 5 bases, 7 fillings</td></tr>
 <tr><td>Lamp</td><td>7 bases, 6 stems, 9 shades, 5 finishes</td></tr>
 <tr><td>Dresser</td><td>6 bodies, 6 feet, 7 fronts, 6 handles, 6 tops</td></tr></table>
-<p>That's 68,412 shapes. On top of that: 16 woods and paints, a second wood, 5 metals, 14 fabrics and 9 patterns. A spinning preview shows the piece as you go. <b>Surprise me</b> picks a matching set in one style (rustic, cottage, antique, modern or woodland).</p>
+<p>That's 68,412 shapes. On top of that: 16 woods and paints, a second wood, 5 metals, 14 fabrics and 9 patterns. A preview pinned at the top shows the piece as you go; drag it to turn it. The options are split into <b>Shape</b> and <b>Colors</b>, and Colors only lists the woods, metals and patterns your crafting table can do. <b>Surprise me</b> picks a matching set in one style (rustic, cottage, antique, modern or woodland).</p>
 <h3>Unlocking parts</h3>
 <ul><li>A <b>Workbench</b> opens the everyday parts, woods and finishes.</li>
 <li>A <b>Carpenter's Bench</b> opens fancier ones (turned and twisted legs, wingbacks, marble tops, damask and velvet).</li>
@@ -366,7 +389,7 @@ ${tip('Your saved designs are kept, so making a matching set of chairs is quick:
 <li><b>Collar.</b> Walk up with a <b>Pet Collar</b> in your bag and choose <b>Put on collar</b>. The pet is yours, and you pick its name from a list.</li></ol>
 <p>How far you've got with each stray is kept until the end of the day. Tomorrow's strays start over.</p>
 <h3>Pet Collars</h3>
-<p>Sewn at a <b>Sewing Machine</b> (see Sewing) from <b>6 weeds</b>. One collar fits a dog or a cat.</p>
+<p>Sewn at a <b>Sewing Machine</b> (see Sewing) from <b>6 weeds</b> (or skeins of yarn). One collar fits a dog or a cat.</p>
 <h3>Coats</h3>
 <p>Each stray's coat is rolled when it turns up: Common 89.6%, Rare 10%, Very rare 0.4%, Legendary 1 in 5,000.</p>
 <table class="t"><tr><th>Rarity</th><th>Dogs</th><th>Cats</th></tr>
@@ -386,7 +409,18 @@ ${tip('Your saved designs are kept, so making a matching set of chairs is quick:
 `},
 
 { id:'sewing', group:'island', title:'Sewing: rugs and clothes', html:`
-<p>You sew at a <b>Sewing Machine</b>. Once you know woodworking, ask Pemberton <i>"Do you sell sewing machines?"</i> and he'll sell you one for <b>12,000 clams</b> (he only offers it while you don't already own one). Place it on your island or in your house, walk up and press <b>Sew</b>. Weeds are your yarn. Pick a rug or a piece of clothing, set its shape and size, then <b>paint it pixel by pixel</b> from 32 yarn colours.</p>
+<p>You sew at a <b>Sewing Machine</b>. Once you know woodworking, ask Pemberton <i>"Do you sell sewing machines?"</i> and he'll sell you one for <b>12,000 clams</b> (he only offers it while you don't already own one). Place it on your island or in your house, walk up and press <b>Sew</b>. Pick a rug or a piece of clothing, set its shape and size, then <b>paint it pixel by pixel</b>.</p>
+<h3>Yarn</h3>
+<p>Weeds are free yarn. If you'd rather not pull them, buy <b>Skeins of Yarn</b> at the machine, delivered from Pemberton's: <b>30 clams each</b>, in 10s or 25s. One skein works like one clump of weeds in any recipe here (rugs, clothes, the Pet Collar), and skeins get used before weeds. A skein sells back for 5.</p>
+<h3>Colours</h3>
+<p>There are 32 yarn colours. You start with five muted ones: Oatmeal, Ink, Brick, Navy and Pine. The rest come in packs, listed at the bottom of the machine's list:</p>
+<table class="t"><tr><th>Pack</th><th>Colours</th><th>How you get it</th></tr>
+<tr><td>Earthy Yarns</td><td>Stone, Bark, Earth, Biscuit, Chestnut</td><td>Reach Apprentice sewing skill (3 pieces sewn)</td></tr>
+<tr><td>Garden Yarns</td><td>Fern, Moss, Pistachio, Butter, Honey</td><td>Reach Tailor sewing skill (8 pieces sewn)</td></tr>
+<tr><td>Sunset Yarns</td><td>Poppy, Berry, Coral, Marigold, Sunshine</td><td>Ordered from Pemberton at the machine for 5,000 clams, once you're an Apprentice</td></tr>
+<tr><td>Seaside Yarns</td><td>Snow, Pebble, Slate, Lagoon, Sky, Mist</td><td>Found only: washes up in a bottle on your beach</td></tr>
+<tr><td>Blossom Yarns</td><td>Cornflower, Lilac, Plum, Blossom, Rose, Night</td><td>Found only: washes up in a bottle on your beach</td></tr></table>
+<p>Once you own a Sewing Machine, there's an 8% chance each day that a bottle with a pack you haven't found yet washes up on your own island's beach (never more than one lying there at a time). Pick it up and the colours are yours. Old designs that already use a colour you don't have still sew as they are; you just can't paint with that colour until you get its pack.</p>
 <p>The machine sells back for 3,000. You can't use a machine on a friend's island.</p>
 <p>The search box at the top of the machine's list finds your clothes, rug designs and the Pet Collar by name, part or material (<i>weeds</i>, <i>long sleeves</i>).</p>
 <h3>Getting better</h3>
@@ -401,10 +435,12 @@ ${tip('Your saved designs are kept, so making a matching set of chairs is quick:
 <h3>Painting</h3>
 <ul><li><b>Brush</b> paints one square, <b>Fill</b> fills a patch of one colour, <b>Pick colour</b> copies a colour from the painting.</li>
 <li><b>Mirror</b> paints both sides at once.</li>
+<li><b>Undo</b> steps back through your last 60 changes: brush strokes, fills, patterns, and shape, size and edge choices.</li>
 <li><b>Start from</b> stripes, a check, a border or a diamond in your two colours, then paint over it.</li>
-<li>On clothes, the middle half of the painting is the front; the outer quarters wrap round the back.</li></ul>
+<li>On clothes, the middle half of the painting is the front; the outer quarters wrap round the back.</li>
+<li>The 3D preview above the painting holds still. Drag it sideways to turn it.</li></ul>
 <h3>Rugs</h3>
-<p>Choose the shape, width and length (0.6 to 3 m), edge, pile and edge colour. A rug costs weeds by its size (plush pile and tassels or pom-poms take a few more). It goes in your bag; place it like any furniture.</p>
+<p>Choose the shape, width and length (0.6 to 3 m), edge, pile and edge colour. A rug costs weeds (or yarn) by its size (plush pile and tassels or pom-poms take a few more). It goes in your bag; place it like any furniture.</p>
 <ul><li>Copies sell for their materials plus 15%.</li>
 <li>The first time you sell a rug you designed, you get an art bonus for the work: more colours, a finer grid and fancier shapes and edges pay more (from a few hundred for a simple two-colour rug to about 3,000 for a big, detailed one). Up to 2 new rugs a day get the bonus.</li></ul>
 <h3>Clothes</h3>
@@ -581,10 +617,12 @@ ${note('Relics can\'t be sold, gifted, mailed or traded. A storage chest holds t
 <p>Every island has a Portal Station near the plaza: a stone platform with an arch over stairs. "Go down" leads to the portal hall.</p>
 <ul><li><b>Portal arches</b>: one per friend's island (up to 5; more opens the Friends list). Step in to travel. A dark arch means no visits left.</li>
 <li><b>Home portal</b> while you're visiting.</li>
-<li><b>Invite booth</b>: opens the Friends tab, to invite a friend over or make an invite link.</li>
+<li><b>Invite booth</b>: opens the Friends tab, to invite a friend over, invite someone by name or make an invite link.</li>
 <li><b>Pen pal desk</b>.</li></ul>
 <h3>Friends</h3>
-<p>New friends only come through invite links (one use, one person, 14 days). There's no search and no stranger contact.</p>
+<p>New friends come two ways, and there's no search, no list of players and no stranger contact:</p>
+<ul><li><b>By name</b>: in the Friends tab, type their name in the game exactly as it shows (capital letters don't matter) and tap <b>Send invite</b>. Nothing suggests or completes names. They get a <b>Friend invite</b> in their mailbox with <b>Accept</b> and <b>No thanks</b>; you only become friends if they accept, within 14 days. If two players share that name, send a link instead. Up to 20 invites a day.</li>
+<li><b>By link</b>: <b>Make invite link</b> and send it yourself (one use, one person, 14 days).</li></ul>
 <p>Once you're friends, either of you can invite the other over without a new link: Friends tab, <b>Invite a friend over</b>. It lists friends who can't visit you right now (they only ever invited you, or their one visit was used). Tap Invite and they get a letter in their mailbox saying they can come. Whether by link or from the list, you choose one visit or any time, and a role:</p>
 <table class="t"><tr><th>Role</th><th>Can</th></tr>
 <tr><td>Visitor</td><td>Look around, pick fruit, dig fossils, collect beach finds, shop. Their picks come from their own copy of the day, so they never use up yours. Can't chop, plant, place, donate, invest or build.</td></tr>
@@ -657,9 +695,9 @@ ${steps([
  'Gill tells you the reef off the cays died and took the fish with it. He wonders if Sprig could grow coral.',
  'Sprig asks for <b>3 coral fragments</b>. Fragments wash up on beaches from day 1 (brain, staghorn, sea fan, table; table is rarer). More on Sandpiper Dunes, and 15 to 20 on a Coral Atoll trip.',
  'Marlo builds a nursery tank beside Sprig\'s shop: <b>20,000 clams, 10 stone, 4 iron</b>. Ready the next day.',
- 'At the nursery: <b>2 fragments of one kind + 300 clams = 1 coral starter</b>, ready tomorrow. 3 a day, 4/5/7 as you invest in Sprig, +1 with a helper.',
+ 'At the nursery: <b>2 fragments of one kind + 300 clams = 1 coral starter</b>, ready tomorrow. Sprig starts with 5 a day. Any day you fill every spot she has, she gets better: 8, then 12, 16 and 20 at once. Investing in Sprig adds 1/2/3 more, and a helper adds 1.',
  'Gill lends you his old rowboat at the dock. "Row out" takes you to <b>Cay Bay</b>.',
- 'Row with the joystick or WASD. Over old rubble, <b>Drop</b> a starter. Anywhere else, <b>Cast</b>. Row to the buoy to go home.'])}
+ 'Row with the joystick or WASD. Over old rubble, <b>Drop</b> a starter. Anywhere else, <b>Cast</b>. The way home is the buoy with the tall yellow flag and lamp. A <b>Home</b> tag sits over it, or points to it from the edge of the screen when it is out of sight. Tap the tag to row home from anywhere, or row up to the buoy and press <b>Row home</b>.'])}
 <h3>Reef stages</h3>
 <p>Coral grows over 2 days (sprig, small, full). Fish only arrive between visits. Score = full-grown coral + 5 for each coral kind with 5 or more grown.</p>
 <table class="t"><tr><th>Stage</th><th>Score</th><th>What changes</th></tr>
@@ -708,7 +746,8 @@ ${steps(['Clementine runs the project: <b>150,000 + 40 planks + 20 stone</b>. Op
 
 { id:'lighthouse', group:'stories', title:'The Lighthouse and night voyages', html:`
 <p><b>Starts:</b> the first time you talk to Skipper Wick after Lantern Bluff rises.</p>
-${steps(['Marlo grinds a lens: <b>10,000</b>, waiting up the bluff the next day.',
+${steps(['Ask Marlo about a lens. He needs the old keepers\' lens: climb the lighthouse to the lamp room and <b>gather up the pieces</b> by the pedestal.',
+ 'Bring Marlo the pieces, <b>5 sea glass</b> and <b>4,000</b>. The new lens is waiting up the bluff the next day.',
  'Bramble makes a <b>lamp frame</b> (workshop commission: 20 planks + 4 iron).',
  'Bring <b>3 moonpearls</b> (rare: now and then with a catch, or washed up on the beach).',
  'Climb to the lamp room at the top of the lighthouse and fit the lamp there. The beam turns at night.'])}
@@ -745,7 +784,7 @@ ${steps(['Marlo builds the giant tank: <b>100,000 + 10 iron fittings</b>, overni
 ${steps(['<b>Sails</b>: workshop commission, 15 planks + 3 sailcloth, overnight. Sailcloth: Fennick about 1 day in 3, or 1 to 2 on a Shipwreck Cove beach. Fit them at the windmill.',
  '<b>Millstone</b>: Thistle trades it for <b>3 fossils the museum doesn\'t have yet</b> (3 rare bugs or fish if every fossil is in). Arrives overnight.',
  'Sprig starts selling <b>wheat seeds</b>. The mill grinds 2 wheat into 1 flour overnight, up to 10 a day.',
- 'Wendell wakes a stream beside it for <b>15,000</b>. The water wheel doubles it to 20 a day.'])}
+ 'Wendell wakes a stream beside it. Bring him <b>a fish from fresh water</b> (river or pond, any kind), <b>a fish from the sea</b>, <b>3 clay</b> and <b>5,000</b>. The water wheel doubles it to 20 a day.'])}
 <p>Pemberton sells Country Loaf after the first flour, and Mabel buys flour. Stake once the wheel turns.</p>
 `},
 
@@ -785,10 +824,11 @@ ${steps(['Give Wendell <b>3 Diviner\'s Elixirs</b>. Five patches of steaming gro
 
 { id:'wreck', group:'stories', title:'Hazel\'s Shipwreck', html:`
 <p><b>Starts:</b> a day or three after Sandpiper Dunes rises. Hazel finds a page from a captain's logbook.</p>
-${steps(['<b>Diving bell</b>: Marlo\'s glass (20,000, on the sand the next day), a frame from the workshop (25 planks), and 6 iron fittings. Put it together at the wreck.',
+${steps(['<b>Portholes</b>: ask Marlo about glass for a diving bell. He wants <b>3 brass portholes</b> off the Saltwren. From then on one washes up on your beach each day until you have three.',
+ '<b>Diving bell</b>: Marlo\'s glass (the portholes + 12,000, on the sand the next day), a frame from the workshop (25 planks), and 6 iron fittings. Put it together at the wreck.',
  '<b>Deck</b>: open straight away.',
  '<b>Hold</b>: needs Pemberton\'s crowbar (3 iron + 1,500, needs the forge).',
- '<b>Cabin</b>: needs Marlo\'s lantern lens (8,000, ready the next day).',
+ '<b>Cabin</b>: needs Marlo\'s lantern lens. Take the <b>Saltwren Lantern</b> hanging in the hold, then bring it to Marlo with <b>a moonpearl</b> and 3,000. Ready the next day.',
  '<b>Vault</b>: needs 4 treasure chart pieces. They wash up on trip beaches once the cabin is open (50% on Shipwreck Cove, 15% on a themed island, 6% on a plain one).'])}
 <p>Each part holds two pieces of salvage furniture and pages of the <i>Saltwren</i>'s logbook (12 in all; reread them with Hazel or at the wreck). The day after the vault opens, <b>Hazel's Antiques</b> opens near the museum with three pieces of salvage a day, and offers a stake.</p>
 `},
@@ -898,7 +938,7 @@ export const SUMS = {
   enchanting: "Every enchantment, its cost and what it does",
   garden: "Planting, the garden editor, crops and flowers",
   crafting: "Learning woodworking and every plan",
-  tables: "Crafting table tiers and what each adds",
+  tables: "Crafting table tiers, what each adds, and chests that feed them",
   custom: "Designing your own furniture part by part",
   sewing: "The Sewing Machine, pixel-painted rugs and clothes",
   pets: "Winning over a stray dog or cat, collars, coats and giving pets away",

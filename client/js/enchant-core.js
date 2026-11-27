@@ -112,12 +112,14 @@ export const REPAIR_CLAMS = 0.45;   // Pemberton's full repair costs this share 
 export const BROKEN_MULT = 2;       // v1.50: fixing a broken tool costs twice a full repair (Flimsy: 4 wood, 4 branches; Sturdy: 6 wood, 2 iron; Golden: 8 iron, 8 stone)
 export const FIX_BENCH = 1;         // and needs a crafting table (any: Workbench or bigger)
 // Crafting a tool from materials. Same requirements as buying it (reqMet). Heirloom tools are a long haul on purpose.
+/* Heirloom tools (the last tier) can't be bought. They're only made, from rare materials:
+   heartwood for the handle, starstone for the metal, plenty of iron, golden sap to seal it, and fittings. */
 export const CRAFT = {
-  net:    [ [['softwood',4],['weed',6]], [['wood',4],['softwood',3],['iron',2]], [['iron',6],['fitting',2],['goldsap',1]], [['heartwood',3],['starstone',3],['goldsap',3],['moonpearl',3],['glimmermoss',3],['fitting',4]] ],
-  rod:    [ [['softwood',4],['weed',4]], [['wood',4],['softwood',3],['iron',2]], [['iron',6],['fitting',2],['goldsap',1]], [['heartwood',3],['starstone',3],['goldsap',3],['moonpearl',3],['glimmermoss',3],['fitting',4]] ],
-  shovel: [ [['wood',3],['stone',2]],    [['wood',4],['iron',3]],                [['iron',6],['fitting',2],['goldsap',1]], [['heartwood',3],['starstone',3],['goldsap',3],['moonpearl',3],['glimmermoss',3],['fitting',4]] ],
-  axe:    [ [['wood',3],['stone',3]],    [['wood',5],['iron',3]],                [['iron',6],['fitting',2],['goldsap',1]], [['heartwood',3],['starstone',3],['goldsap',3],['moonpearl',3],['glimmermoss',3],['fitting',4]] ],
-  can:    [ [['clay',4],['iron',1]],                                             [['iron',6],['fitting',2],['goldsap',1]], [['heartwood',3],['starstone',3],['goldsap',3],['moonpearl',3],['glimmermoss',3],['fitting',4]] ],
+  net:    [ [['softwood',4],['weed',6]], [['wood',4],['softwood',3],['iron',2]], [['iron',6],['fitting',2],['goldsap',1]], [['heartwood',3],['starstone',3],['glimmermoss',3],['goldsap',2],['iron',20],['fitting',4]] ],
+  rod:    [ [['softwood',4],['weed',4]], [['wood',4],['softwood',3],['iron',2]], [['iron',6],['fitting',2],['goldsap',1]], [['heartwood',3],['starstone',3],['moonpearl',2],['goldsap',2],['iron',20],['fitting',4]] ],
+  shovel: [ [['wood',3],['stone',2]],    [['wood',4],['iron',3]],                [['iron',6],['fitting',2],['goldsap',1]], [['heartwood',2],['starstone',5],['goldsap',2],['iron',25],['fitting',4]] ],
+  axe:    [ [['wood',3],['stone',3]],    [['wood',5],['iron',3]],                [['iron',6],['fitting',2],['goldsap',1]], [['heartwood',3],['starstone',5],['goldsap',2],['iron',25],['fitting',4]] ],
+  can:    [ [['clay',4],['iron',1]],                                             [['iron',6],['fitting',2],['goldsap',1]], [['heartwood',2],['starstone',3],['moonpearl',3],['goldsap',2],['iron',20],['fitting',4]] ],
 };
 
 /* ---------- Scroll items (one per enchantment, learned the moment you pick it up, like plans) ---------- */

@@ -222,7 +222,7 @@ export function buildItemModel(id){
   const it=ITEMS[id], d=it.model, g=new THREE.Group();
   if (d.t==='fruit'){ if(d.cherry){ for(const s of [-1,1]) mk(G.sph(0.16,12,10),M(d.c),s*0.13,0.16,0,g); const st=mk(G.cyl(0.015,0.015,0.4,5),M(0x5a7a2a),0,0.36,0,g); return g; }
     const r=d.big?0.34:0.27; const b=mk(G.sph(r,16,12), M(d.c), 0, r, 0, g); if(d.pear) b.scale.set(0.9,1.15,0.9); mk(G.cyl(0.025,0.03,0.14,5), M(0x6b4a2a), 0, r*2+0.04, 0, g); if(!d.big){ const lf=mk(G.sph(0.08,8,4), M(0x5fae43), 0.08, r*2+0.05, 0, g); lf.scale.set(1.4,0.4,0.8); } }
-  else if (d.t==='log'){ for(let i=0;i<3;i++){ const l=mk(G.cyl(0.13,0.13,0.8,10), M(0xa8754a), 0, 0.13+(i===2?0.22:0), (i===2?0:(i-0.5)*0.27), g); l.rotation.z=Math.PI/2; mk(G.cyl(0.11,0.11,0.01,10),M(0xe0b888),0.4,l.position.y,l.position.z,g).rotation.z=Math.PI/2; } }
+  else if (d.t==='log'){ for(let i=0;i<3;i++){ const l=mk(G.cyl(0.13,0.13,0.8,10), M(d.c||0xa8754a), 0, 0.13+(i===2?0.22:0), (i===2?0:(i-0.5)*0.27), g); l.rotation.z=Math.PI/2; mk(G.cyl(0.11,0.11,0.01,10),M(d.e||0xe0b888),0.4,l.position.y,l.position.z,g).rotation.z=Math.PI/2; } }
   else if (d.t==='branch'){ const l=mk(G.cyl(0.07,0.09,0.9,7), M(0xc8b49a), 0, 0.1, 0, g); l.rotation.z=Math.PI/2; const tw=mk(G.cyl(0.03,0.04,0.35,5), M(0xc8b49a), 0.1, 0.22, 0.05, g); tw.rotation.z=-0.8; }
   else if (d.t==='stone'){ const s=mk(G.dod(0.3), MF(0x9aa1a8), 0, 0.22, 0, g); s.scale.set(1,0.75,0.9); }
   else if (d.t==='ticket'){ const t=mk(G.box(0.62,0.03,0.34), M(0xf4e6c8), 0,0.04,0,g); t.rotation.y=0.3; const st=mk(G.box(0.2,0.035,0.34), M(d.c), -0.18,0.045,-0.06,g); st.rotation.y=0.3; mk(G.box(0.28,0.035,0.04), M(0x8a6a4a), 0.12,0.045,0.06,g).rotation.y=0.3; }

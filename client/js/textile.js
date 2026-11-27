@@ -97,7 +97,7 @@ export function createSewing(C){
     return `<div class="notice" data-shide><b>Sewing: ${L().name}</b> <span class="muted">· ${c.made} sewn · ${L().grid}x${L().grid} grid${L().alts?` · ${L().alts} alteration${L().alts>1?'s':''}`:''}</span>
       <div style="height:8px;background:#f1e4cc;border-radius:6px;margin-top:6px;overflow:hidden"><div style="height:100%;width:${pct}%;background:#7cc35a"></div></div>
       <div class="sub muted" style="margin-top:4px">${nx ? `${nx.at-c.made} more to ${nx.name}: ${nx.grid}x${nx.grid} grid${nx.alts>L().alts?' and stranger alterations':''}.` : 'The finest grid and every alteration are yours.'}</div></div>`; }
-  function listHTML(){ const c=st(); let h=searchBox('Search clothes, rugs or materials')+(C.chestNote ? C.chestNote() : '')+levelBar();   // chests beside the machine count too
+  function listHTML(){ const c=st(); let h=searchBox('Search clothes, rugs or materials')+(C.chestNote ? C.chestNote() : '')/* v1.75 chests beside the machine */+levelBar();   // chests beside the machine count too
     h+=`<div style="margin:6px 0"><button class="btn" data-snew="rug">New rug</button> <button class="btn" data-snew="garment">New clothes</button></div>`;
     if (c.closet.length){ const worn=(CH.parseLook(C.look()).ct)||''; h+='<div data-sgrp><div style="margin:10px 0 4px"><b>Your closet</b></div>';
       for (const code of c.closet){ const d=T.decodeGarment(code); if (!d) continue; const on=worn===code;

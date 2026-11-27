@@ -71,7 +71,7 @@ ${tip('Menu &gt; Battery saver lowers resolution and turns off shadows if your p
 <tr><td>Tidepool (Marlo)</td><td>Fish only</td><td>120%, up to 150% as you invest</td></tr>
 <tr><td>Bug &amp; Bloom (Sprig)</td><td>Bugs and flowers</td><td>120%, up to 150% as you invest</td></tr>
 <tr><td>Mabel's Tea Room (story)</td><td>Fruit, vegetables, herbs, berries, honey</td><td>150%</td></tr></table>
-<p>To see what something is worth, hover over it in your bag with a mouse, or tap it on a phone. It shows the most any shop pays for it today (with your shop upgrades and the size of a catch counted) and who pays that. Story items say they can't be sold.</p>
+<p>To see what something is worth, hover over it in your bag or in a storage chest with a mouse. On a phone, tap it in your bag, or press and hold it (in your bag or in a chest) and the note fades a moment after you let go. It shows the most any shop pays for it today (with your shop upgrades and the size of a catch counted) and who pays that. Story items say they can't be sold.</p>
 <h3>Good money makers</h3>
 <ul>
 <li><b>Foreign fruit.</b> Your island has one native fruit. Other fruit sells for 250 each (native 100, coconut 150). Plant foreign fruit you bring back from trips and orchards pay for themselves.</li>
@@ -125,6 +125,8 @@ ${note('Guest mode caps your wallet at 10,000 clams. Make an account to lift it.
 <p>Once you own Mossy shingles you can paint moss onto any roof. Each room has a free light with brightness and warmth sliders; ceiling lights, sconces and accent lights are bought.</p>
 <h3>Storage</h3>
 <p>The <b>Storage Chest</b> holds 40 stacks. Pemberton stocks it about half the days (2,400), or make it at the workbench (8 wood, 2 iron).</p>
+<p>The bag and every chest have a <b>Sort</b> button. It groups things by kind (materials first, then seeds, crops, food, fish, bugs, fossils, furniture and so on), puts them in name order and tops up part stacks of the same thing. Things with their own details, like a bug's size, stay as they are. The Wooden Crate is decoration and holds nothing.</p>
+<p>A chest set right beside a crafting spot feeds it. See <a href="#tables">Crafting tables</a>.</p>
 `},
 
 { id:'town', group:'island', title:'The town and Clementine', html:`
@@ -329,6 +331,10 @@ ${tip('Making 14 <b>different</b> pieces is what starts Bramble\'s workshop stor
 <tr><td>Carpenter's Bench</td><td>Its plan comes once you've made 16 different things</td><td>Rare-plan showpieces, Golden tools, second-rank enchantments and Double Output, plus Rocking Horse, Garden Wagon, Rolltop Desk and Vine Pergola</td></tr>
 <tr><td>Master Workbench</td><td>Its plan comes once you've made 30 different things, one of them a Carpenter's Bench</td><td>Heirloom tools, the strongest enchantments and the Twin Charm's binding, plus Carousel Music Box, Weaving Loom, Garden Windmill and Garden Gazebo</td></tr></table>
 <p>Building a table for the first time teaches its pieces. Materials are in the <a href="#crafting">Woodworking</a> table.</p>
+<h3>Chests beside a crafting spot</h3>
+<p>Set a storage chest right beside any crafting table, the Wood Stove, a campfire or the sewing machine and it is tethered to it. While you stand at that spot, whatever is in its chests counts as yours for woodworking, custom furniture, making tools, enchanting, cooking and sewing there, as if it were in your bag. Your bag is used up first, then the chests. Recipe counts and search include the chests, and the top of the panel says how many things the chests add.</p>
+<p>Reach: the gap between the chest's edge and the spot's edge can be about as wide as the spot itself, and never less than a little over one step for the small ones. While you place or move a chest or a crafting spot, a faint dashed line shows each tether it would make. Several chests can feed one spot, and one chest can feed several spots.</p>
+<p>Chests only count on your own island. Town projects, favors and islanders' requests still take things from your bag only.</p>
 `},
 
 { id:'custom', group:'island', title:'Custom furniture', html:`
@@ -903,7 +909,7 @@ export const SUMS = {
   enchanting: "Every enchantment, its cost and what it does",
   garden: "Planting, the garden editor, crops and flowers",
   crafting: "Learning woodworking and every plan",
-  tables: "Crafting table tiers and what each adds",
+  tables: "Crafting table tiers, what each adds, and chests that feed them",
   custom: "Designing your own furniture part by part",
   sewing: "The Sewing Machine, pixel-painted rugs and clothes",
   pets: "Winning over a stray dog or cat, collars, coats and giving pets away",

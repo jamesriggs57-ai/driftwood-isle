@@ -29,7 +29,7 @@ import * as RF from './reef.js';
 import * as TH from './townhall.js';   // v1.49 town hall inside
 import { createEnchant } from './enchant.js';   // v1.40 tools and enchanting
 import { createBenches } from './benches.js';   // v1.40 crafting tables
-import { createTether } from './tether.js';   // chests beside a crafting spot feed it, and sorting
+import { createTether } from './tether.js';   // v1.75 chests beside a crafting spot feed it, and sorting
 import { createCustom } from './custom.js';
 import { createSewing } from './textile.js';   // v1.64 sewing
 import * as SQ from './search.js';   // v1.70 search in the crafting menus
@@ -123,7 +123,7 @@ const EN = createEnchant({ S:()=>S, toast:(...a)=>toast(...a), Snd, save:()=>sav
 // v1.40 crafting tables (benches.js): crafting tables in reach, as [id, distance, size]
 const BN = createBenches({ S:()=>S, save:()=>save(), addItem:id=>addItem(id), learnWood:id=>learnWood(id),
   tables:()=>ents.filter(e=>e instanceof Furniture && !e.removed && entVisible(e) && BN.isBench(e.rec.id)).map(e=>[e.rec.id, Math.hypot(e.pos.x-player.pos.x, e.pos.z-player.pos.z), ITEMS[e.rec.id].r]) });
-// chests beside a crafting spot feed it (tether.js): materials count from your bag first, then those chests
+// v1.75 chests beside a crafting spot feed it (tether.js): materials count from your bag first, then those chests
 const TQ = createTether({ get scene(){ return scene; }, canUse:()=>CAN_EDIT && !TRIP, player:()=>player.pos, y:(x,z)=>World.inside?0:groundY(x,z),
   furn:()=>ents.filter(e=>e instanceof Furniture && !e.removed && entVisible(e)).map(e=>({ id:e.rec.id, x:e.pos.x, z:e.pos.z, rec:e.rec })) });
 const bagHas = id => ITEMS[id] ? countItem(id) : S.inv.filter(s=>ITEMS[s.id] && ITEMS[s.id].kind===id).reduce((a,s)=>a+s.n,0);
@@ -6632,7 +6632,7 @@ function showInvTip(el){
 pBody.addEventListener('pointerover', e=>{ if (e.pointerType!=='mouse') return; const el=e.target.closest&&e.target.closest('.slot[data-tip]'); if (!el){ hideInvTip(); return; } showInvTip(el); });
 pBody.addEventListener('pointerout', e=>{ if (!e.relatedTarget || !e.relatedTarget.closest || !e.relatedTarget.closest('.slot[data-tip]')) hideInvTip(); });
 pBody.addEventListener('scroll', hideInvTip); pBody.addEventListener('click', hideInvTip);
-/* Touch screens: press and hold a slot (in your bag, a chest or the shop) to see its name and value. Letting go after a
+/* v1.75 touch screens: press and hold a slot (in your bag, a chest or the shop) to see its name and value. Letting go after a
    hold doesn't count as a tap, so holding something in a chest doesn't move it. The note fades a moment after you let go. */
 const LONG_PRESS=420; let lpTimer=0, lpStart=null, lpShown=0, lpHide=0;
 pBody.addEventListener('pointerdown', e=>{ if (e.pointerType==='mouse') return; const el=e.target.closest&&e.target.closest('.slot[data-tip]'); clearTimeout(lpTimer); lpShown=0; if (!el) return;
@@ -6643,6 +6643,7 @@ pBody.addEventListener('pointerup', lpEnd); pBody.addEventListener('pointercance
 pBody.addEventListener('contextmenu', e=>{ if (e.target.closest && e.target.closest('.slot[data-tip]')) e.preventDefault(); });
 pBody.addEventListener('click', e=>{ if (lpShown && performance.now()-lpShown<4000 && e.target.closest && e.target.closest('.slot[data-tip]')){ lpShown=0; e.stopPropagation(); e.preventDefault(); } }, true);
 // Sort (bag and chests): groups things by kind, then name, and tops up part stacks (tether-core.js)
+// v1.75 Sort button for the bag and chests (rules in tether-core.js)
 function sortList(list, what){ const before=list.map(e=>({...e})); TQ.sortInPlace(list);
   if (TQ.sameOrder(before, list)){ toast(`Your ${what} is already sorted.`); return false; } Snd.click(); save(); updateHUD(); return true; }
 const sortBtn = (id, label='Sort') => `<button class="btn alt" id="${id}" style="padding:3px 12px;font-size:13px">${label}</button>`;
@@ -9952,4 +9953,4 @@ window.__game.v137 = { get S(){ return S; }, get SY(){ return SY; }, get BAYR(){
   goTo:(x,z)=>{ player.pos.set(x, groundY(x,z), z); player.obj.position.copy(player.pos); camTarget.copy(player.pos); }, dayKeyOf, sday, get trees(){ return trees; }, get nurseryEnt(){ return nurseryEnt; }, get rowboatEnt(){ return rowboatEnt; }, get workshopEnt(){ return workshopEnt; },
   info:()=>({ calls:renderer.info.render.calls, tris:renderer.info.render.triangles }), dialogOpen:()=>!!dlgState, closeDialog:()=>closeDialog(false), closePanel, adv:()=>{ for (let i=0;i<30 && dlgState && !dlgChoices.children.length;i++) advanceDialog(); return dlgState ? [...dlgChoices.children].map(b=>b.textContent) : null; },
   choose:txt=>{ for (let i=0;i<30 && dlgState && !dlgChoices.children.length;i++) advanceDialog(); const b=[...dlgChoices.children].find(b=>b.textContent.includes(txt)); if (b){ b.click(); return true; } return false; }, lines:()=>dlgState ? { name:dlgState.name, lines:dlgState.lines, full:dlgState.full } : null, PLACES, DOCK, groundY, Time, World, camera };
-window.__game.tether = { TQ, matCount, matTake, sortList, cookMax:r=>cookMax(r), craftMax:r=>craftMax(r) };   // chests feeding crafting, sorting: tests
+window.__game.tether = { TQ, matCount, matTake, sortList, cookMax:r=>cookMax(r), craftMax:r=>craftMax(r) };   // v1.75 chests feeding crafting, sorting: tests

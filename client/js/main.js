@@ -31,6 +31,7 @@ import { createEnchant } from './enchant.js';   // v1.40 tools and enchanting
 import { createBenches } from './benches.js';   // v1.40 crafting tables
 import { createCustom } from './custom.js';
 import { createSewing } from './textile.js';   // v1.64 sewing
+import * as SQ from './search.js';   // v1.70 search in the crafting menus
 import { registerRug } from './textile-models.js';   // v1.64 sewing (rugs and the machine)
 import { createPets, registerPetModels } from './pets.js';   // v1.67 pets
 import * as PETS_CORE from './pets-core.js';
@@ -48,7 +49,7 @@ import { openCreator } from './creator.js';
 import { createParty } from './party.js';
 import { buildPlot, buildStand, buildStore, buildTownHall, buildMuseumTier, buildCrop, buildStairs } from './models3.js';
 import { buildCottage, cottageStyle as COTTAGE_STYLE, mergeStatic } from './cottage.js';
-import { MIX_GROUPS, FOSSIL_CAP, SHELL_CAP, TANK_GROUPS, tankOf, isBigFossil, museumLayout, buildMuseumHall, buildDesk, buildBench, buildPalm, buildCenterpiece, buildShellCase, shellSlots, buildPedestal, fossilModel, shellModel, buildFossilCase, fossilCaseSlots, caseFossilModel, FCASE_TOP, buildTank, buildTankView } from './museum.js';
+import { museumFit, museumGrown, museumShort, museumPlanWords, museumTierOf, museumShow, museumLayout, buildMuseumHall, buildDesk, buildBench, buildPalm, buildCenterpiece, buildShellCase, shellSlots, buildPedestal, fossilModel, shellModel, buildFossilCase, fossilCaseSlots, caseFossilModel, FCASE_TOP, buildTank, buildTankView } from './museum.js';
 import { buildShopBuilding, buildMuseum, buildKeeper, buildMossby, buildExhibit, buildTower, buildWizard } from './models2.js';
 import { hasUpstairs, winAt, winKey, trelAt, balcAt, buildCustomHouse, buildHomeInterior, planGrid, planCells, planProblem, fixDoor, linkKey, linkOf, defaultExt, defaultRoom,
   NFLOORS, FLOOR_KEYS, STAIR_KEYS, FLOOR_NAME, FLOOR_SHORT, floorOf, floorHas, topFloor, stairsOf, shiftPlan, ex as hex_, ez as hez_, ix as hix_, iz as hiz_, cellInside, ridgeOf, cellRects,
@@ -2117,50 +2118,36 @@ function buildShop(id){
 // a stand closes up for the night (and opens in the morning)
 function refreshStands(){ for (const id of ['aquarium','garden']) if (shopTier(id)===0 && shopEnts[id] && shopEnts[id].standOpen!==shopOpen(id) && World.inside!==id) buildShop(id); }
 
-/* The museum starts as one small room and each section grows on its own once it runs out of room (v1.22):
-   - fish and bugs share one tank each (8 spaces) until it overflows; then that section gets its own wing with one
-     themed tank per group, and later a new tank whenever a group with no tank yet gets its first donation
-   - fossils: 3 pedestals in the main room, then a Fossil Hall with 6, then (v1.65) the full Fossil Hall with a spot for
-     every fossil in the game: a pedestal for each big one and themed glass cases for the rest
+/* v1.68 the museum is one compact hall that grows only when something is full (the rules and numbers are in museum.js):
+   - fish and bugs share tanks of 20, a group kept together in one tank where it fits; a new tank only when a group
+     fits in none of them
+   - big fossils on pedestals (two more at a time), small fossils in shared glass cases of 8
    - beach finds: a small case of 4, then a long case of 8
-   A donation that doesn't fit waits in the back room; the builders make room overnight. */
+   A donation that doesn't fit waits in the back room; the builders make room overnight.
+   S.museum.st2 is the museum's size. S.museum.st (the size before v1.68) is left as it was. */
 const _ord = Object.fromEntries(Object.keys(ITEMS).map((k,i)=>[k,i]));
 function donatedOf(kind){ return Object.keys(S.museum.items).filter(id=>ITEMS[id] && ITEMS[id].kind===kind).sort((a,b)=>(S.museum.items[a]-S.museum.items[b]) || (_ord[a]-_ord[b])); }
-const tankGid = id => (tankOf(id)||{}).id;
-const sortGroups = (k, ids) => TANK_GROUPS[k].map(g=>g.id).filter(g=>ids.includes(g));
-function museumFitState(){   // the smallest museum that shows everything already donated (islands from before v1.22)
-  const st={}; for (const k of ['fish','bug']){ const d=donatedOf(k); st[k] = d.length<=MIX_GROUPS[k].slots ? null : sortGroups(k, d.map(tankGid)); }
-  const nf=donatedOf('fossil').length; st.fossil = nf<=FOSSIL_CAP[0]?0 : nf<=FOSSIL_CAP[1]?1 : 2; st.shell = donatedOf('shell').length<=SHELL_CAP[0]?0:1; return st; }
-if (!S.museum.st) S.museum.st=museumFitState();
-function onDisplay(kind){ const st=S.museum.st, d=donatedOf(kind);
-  if (kind==='fish'||kind==='bug') return st[kind] ? d.filter(id=>st[kind].includes(tankGid(id))) : d.slice(0, MIX_GROUPS[kind].slots);
-  if (kind==='fossil') return st.fossil>=2 ? d : d.slice(0, FOSSIL_CAP[st.fossil]);
-  return d.slice(0, SHELL_CAP[st.shell]); }
-const museumNeeds = () => MUSEUM.kinds.filter(k=>onDisplay(k).length<donatedOf(k).length);
-const inStorage = () => MUSEUM.kinds.reduce((n,k)=>n+donatedOf(k).length-onDisplay(k).length, 0);
-const museumTierNow = () => { const st=S.museum.st; return Math.min(3, (st.fish?1:0)+(st.bug?1:0)+(st.fossil?1:0)); };
-const tankName = (k,g) => (TANK_GROUPS[k].find(x=>x.id===g)||{}).name;
+const donatedAll = () => Object.fromEntries(MUSEUM.kinds.map(k=>[k, donatedOf(k)]));
+const museumFitState = () => museumFit(donatedAll());   // the smallest museum that shows everything already donated
+if (!S.museum.items) S.museum.items={};
+if (!S.museum.st2 || S.museum.st2.v!==2){ const old=S.museum.st; S.museum.st2=museumFitState();
+  // islands from before v1.68 were rebuilt compact; Thistle mentions it once if the old museum had grown
+  if (old && (old.fish || old.bug || old.fossil)) S.museum.tidyNews=true; }
+const museumShowNow = () => museumShow(S.museum.st2, donatedAll());
+function onDisplay(kind){ return museumShowNow().shown[kind] || []; }
+const museumNeeds = () => museumShort(S.museum.st2, donatedAll());
+const inStorage = () => { const sh=museumShowNow().shown; return MUSEUM.kinds.reduce((n,k)=>n+donatedOf(k).length-(sh[k]||[]).length, 0); };
+const museumTierNow = () => museumTierOf(donatedAll());
 // What the builders will do tonight, in words (for Professor Thistle)
-function museumPlans(){ const st=S.museum.st, out=[];
-  for (const k of museumNeeds()){
-    if (k==='fish'||k==='bug'){ const nm=k==='fish'?'Aquarium':'Insectarium';
-      if (!st[k]) out.push(`a proper ${nm} wing with a tank for each kind of ${k==='fish'?'fish':'bug'}`);
-      else { const add=sortGroups(k, donatedOf(k).map(tankGid)).filter(g=>!st[k].includes(g)); out.push(`a new ${add.map(g=>tankName(k,g)).join(' and ')} ${k==='fish'?'tank':'terrarium'} in the ${nm}`); } }
-    if (k==='fossil') out.push(st.fossil===0 ? 'a Fossil Hall across the back' : 'the full Fossil Hall, with a pedestal or a glass case spot for every fossil there is');
-    if (k==='shell') out.push('a bigger case for the beach finds'); }
-  return out; }
-function museumExpand(){ const st=S.museum.st, plans=museumPlans();
-  for (const k of museumNeeds()){
-    if (k==='fish'||k==='bug') st[k]=sortGroups(k, [...(st[k]||[]), ...donatedOf(k).map(tankGid)]);
-    if (k==='fossil'){ st.fossil++; while (st.fossil<2 && FOSSIL_CAP[st.fossil]<donatedOf('fossil').length) st.fossil++; }
-    if (k==='shell') st.shell=1; }
+const museumPlans = () => [...museumPlanWords(S.museum.st2, donatedAll()), ...(museumTierNow()>(S.museum.tier||0) ? ['a bigger building outside'] : [])];
+function museumExpand(){ const plans=museumPlans(); S.museum.st2=museumGrown(S.museum.st2, donatedAll());
   S.museum.tier=Math.max(S.museum.tier||0, museumTierNow()); return plans; }
 if (S.museum.tier===undefined) S.museum.tier=museumTierNow();
-const museumKey = () => JSON.stringify(S.museum.st)+'|'+S.museum.tier;
+const museumKey = () => JSON.stringify(S.museum.st2)+'|'+S.museum.tier;
 let museumEnt=null, thistle=null;
 const museumRoom=()=>ROOMS.museum;
 function buildMuseumAll(){
-  const t=S.museum.tier, LY=museumLayout(S.museum.st, donatedOf('fossil').length), W=LY.W, D=LY.D;
+  const t=S.museum.tier, LY=museumLayout(S.museum.st2), W=LY.W, D=LY.D;
   if (museumEnt) museumEnt.remove(); setRects('museum',[]); clearMuseumEnts();
   museumEnt=placeBuilding('museum', PLACES.museum[0], PLACES.museum[1], buildMuseumTier(t), 'Enter', ()=>enterRoom('museum')); museumEnt.tier=t; museumEnt.key=museumKey();
   clearRoom('museum');
@@ -2171,7 +2158,6 @@ function buildMuseumAll(){
   for (const [x,z,ry] of LY.benches) put(buildBench(), x, z, ry);
   for (const [x,z] of LY.plants) put(buildPalm(), x, z);
   put(buildShellCase(LY.shells.len, LY.shells.slots), LY.shells.x, LY.shells.z);
-  if (LY.fcases) for (const c of LY.fcases) put(buildFossilCase(c.len, c.name, c.sub), c.x, c.z);
   if (LY.center) put(buildCenterpiece(t), LY.center.x, LY.center.z);
   ROOMS.museum={ id:'museum', ox, oz, w:W, d:D, group:container, shell, spec:{ mood:'museum' }, layout:LY, entry:[ox, oz+D/2-1.2], exit:[museumEnt.doorPt[0], museumEnt.doorPt[1]+0.2], bed:[ox,oz],
     walk:(x,z)=>{ const lx=x-ox, lz=z-oz; if (!(Math.abs(lx)<W/2-0.4 && lz>-D/2+0.4 && lz<D/2-0.05)) return false; for (const b of LY.blocks) if (lx>b[0]-0.28 && lx<b[2]+0.28 && lz>b[1]-0.28 && lz<b[3]+0.28) return false; return true; } };
@@ -2327,6 +2313,7 @@ function applyTown(){
   if (SY.shop && SY.shop.news){ SY.shop.news=false; setTimeout(()=>{ Snd.fanfare(); toast(`${npcName(SY.shop.owner)}'s Workshop is open!`, null, 'new', 'Out on Old Pinewood. Bring wood, take planks.'); }, 3600); }
   if (T.departed){ const R=RESIDENTS.find(x=>x.id===T.departed); T.departed=null; if (R) setTimeout(()=>toast(`${R.name} moved away.`, null, '', 'Their plot is empty now. Someone new may take it.'), 2600); }
   if (T.hallNews){ T.hallNews=false; setTimeout(()=>{ Snd.fanfare(); toast(`The ${HALL_NAMES[T.hall]} is finished!`, null, 'new', T.hall===1?'Newcomers may start to notice the island, and the plaza got flower beds.':'A fountain in the plaza, and Wendell can now make new land.'); }, 3200); }
+  if (S.museum.tidyNews && !VISIT){ S.museum.tidyNews=false; setTimeout(()=>toast('The museum was rearranged!', null, 'new', 'Professor Thistle had the builders put the collection closer together. Everything you donated is still on display.'), 4400); }
   if (S.museum.grewNews){ const g=S.museum.grewNews; S.museum.grewNews=false; setTimeout(()=>toast('The museum grew overnight!', null, 'new', Array.isArray(g)?'New: '+g.join(', ')+'.':''), 4000); }
   if (S.museum.news){ const nw=S.museum.news; S.museum.news=null; if (nw.clams) setTimeout(()=>{ Snd.coin(); toast(`+${fmt(nw.clams)} clams`, null, 'new', 'Someone left a donation at the museum. Professor Thistle sent it your way.'); }, 5000); }
   save();
@@ -5386,7 +5373,7 @@ const MOVE_OFFER = {
   aquarium:'Ooh, with the new tanks going in we could move the whole shop! Closer to the water, maybe? Anywhere you like, partner.',
   garden:'Since we\'re building anyway... do you want the shop somewhere sunnier? Or shadier? Your call!',
   hall:'The builders say that if the hall is ever going to stand somewhere else, now\'s the time, dear. Shall we pick a new spot?',
-  museum:'Hm. The new wing is up. While the scaffolding still stands one could, in principle, move the entire museum. Would you like to?',
+  museum:'Hm. The builders have finished in the museum. While the scaffolding still stands one could, in principle, move the entire museum. Would you like to?',
   inc:'With the new {name}, I could set up somewhere else if you\'d like. Want to show me a spot?' };
 function offerMove(key, who, line, back){
   if (VISIT || GUEST || TRIP || !placeOf(key)) { if (back) back(); return; }
@@ -6572,9 +6559,9 @@ function giveGift(res, slot, menu){
 /* ---------- UI: panels, toasts, HUD ---------- */
 const scrim=$('#scrim'), pTitle=$('#pTitle'), pBody=$('#pBody'), pFoot=$('#pFoot');
 let panelClose=null;
-function openPanel(title, onClose){ pTitle.textContent=title; pBody.innerHTML=''; setFoot(''); scrim.classList.add('show'); panelClose=onClose||null; Snd.click(); pBody.scrollTop=0; }
+function openPanel(title, onClose){ SQ.resetSearch(); SQ.kbOff(); pTitle.textContent=title; pBody.innerHTML=''; setFoot(''); scrim.classList.add('show'); panelClose=onClose||null; Snd.click(); pBody.scrollTop=0; }
 function setFoot(html){ pFoot.innerHTML=html; pFoot.style.display=html?'':'none'; }
-function closePanel(){ const f=panelClose; panelClose=null; scrim.classList.remove('show'); hideInvTip(); coolPopup(); if(f) f(); }
+function closePanel(){ const f=panelClose; panelClose=null; scrim.classList.remove('show'); SQ.kbOff(); hideInvTip(); coolPopup(); if(f) f(); }
 $('#pClose').onclick=()=>closePanel();
 scrim.addEventListener('pointerdown', e=>{ if(e.target===scrim) closePanel(); });
 function dropToast(t){ if (t.dataset.gone) return; t.dataset.gone='1'; t.style.transition='opacity .25s'; t.style.opacity=0; setTimeout(()=>t.remove(),260); }
@@ -6711,6 +6698,8 @@ function nearStation(){ let best=null;
   return best; }
 const haveNeed = ([id,n],k=1) => (ITEMS[id] ? countItem(id) : S.inv.filter(s=>ITEMS[s.id].kind===id).reduce((a,s)=>a+s.n,0)) >= n*k;
 const needName = id => ITEMS[id] ? ITEMS[id].name : ({ fish:'Any fish', fruit:'Any fruit', berry:'Any berries' })[id];
+// v1.70 search words for a dish's ingredient: "Any fruit" also finds apple, pear and the rest
+const needWords = id => ITEMS[id] ? ITEMS[id].name : [needName(id), ...Object.values(ITEMS).filter(i=>i.kind===id).map(i=>i.name)];
 const needHave = id => ITEMS[id] ? countItem(id) : S.inv.filter(s=>ITEMS[s.id].kind===id).reduce((a,s)=>a+s.n,0);
 function cookMax(r){ let k=99; for (const [id,n] of r.need) k=Math.min(k, Math.floor(needHave(id)/n)); while (k>0 && !cookFits(r,k)) k--; return k; }
 function cookFits(r,k){ // never lose anything to a full bag: worst case, all ingredients free up no slot
@@ -6722,11 +6711,11 @@ function doCook(r,k,at){ if (k<=0 || (!r.fire && at!=='stove') || !at || !cookFi
   puff(player.pos.clone().add(new THREE.Vector3(Math.sin(player.face)*1.2,1.0,Math.cos(player.face)*1.2)),0xf4f4f4,8,0.4,1.6,0.9,1.0);
   toast(`${isNew?'New! ':''}You cooked ${k>1?k+' '+r.name+(/s$/.test(r.name)?'':'s'):article(r.name)+' '+r.name}!`, thumb(r.id), isNew?'new':''); return true; }
 function cookTab(h0){
-  const at=nearStation(); let h=h0||'';
-  h+=`<div class="notice"><b>Cookbook</b> <span class="muted">· ${S.cook.kinds.length} of ${RECIPES.length} dishes made</span><br><span class="muted">${at==='stove'?'You\'re at a Wood Stove: you can cook anything.':at==='campfire'?'You\'re at a campfire: grilled and simple things only. A Wood Stove does the rest.':'Stand next to a campfire or a Wood Stove you\'ve placed to cook.'} Dishes sell for more than what goes in them, islanders love them, and eating one helps you walk a little faster for a while.</span></div>`;
+  const at=nearStation(); let h=(h0||'')+SQ.searchBox('Search dishes or ingredients');
+  h+=`<div class="notice" data-shide><b>Cookbook</b> <span class="muted">· ${S.cook.kinds.length} of ${RECIPES.length} dishes made</span><br><span class="muted">${at==='stove'?'You\'re at a Wood Stove: you can cook anything.':at==='campfire'?'You\'re at a campfire: grilled and simple things only. A Wood Stove does the rest.':'Stand next to a campfire or a Wood Stove you\'ve placed to cook.'} Dishes sell for more than what goes in them, islanders love them, and eating one helps you walk a little faster for a while.</span></div>`;
   RECIPES.forEach((r,i)=>{ const mx=cookMax(r), ok=at && (r.fire || at==='stove');
     const need=r.need.map(([id,n])=>{ const has=needHave(id); return `<span style="color:${has>=n?'inherit':'#c0503a'};font-weight:${has>=n?400:700}">${needName(id)} ${has}/${n}</span>`; }).join(' · ');
-    h+=`<div class="row"><img src="${thumb(r.id)}"><div class="grow"><div class="nm">${r.name}${!S.cook.kinds.includes(r.id)?' <span style="color:#d08a10;font-size:12px">NEW</span>':''} <span class="muted" style="font-size:12px">${r.fire?'stove or campfire':'stove'}</span></div><div class="sub">${need} · sells for ${fmt(ITEMS[r.id].price)}</div></div>
+    h+=`<div class="row"${SQ.sk(r.name, r.need.map(([id])=>needWords(id)))}><img src="${thumb(r.id)}"><div class="grow"><div class="nm">${r.name}${!S.cook.kinds.includes(r.id)?' <span style="color:#d08a10;font-size:12px">NEW</span>':''} <span class="muted" style="font-size:12px">${r.fire?'stove or campfire':'stove'}</span></div><div class="sub">${need} · sells for ${fmt(ITEMS[r.id].price)}</div></div>
       <button class="btn alt" data-ck="${i}:1" ${!ok||mx<1?'disabled':''}>Cook</button>${mx>1?`<button class="btn" data-ck="${i}:${mx}" ${!ok?'disabled':''}>All ${mx}</button>`:''}</div>`; });
   return h; }
 function bindCook(render){ pBody.querySelectorAll('[data-ck]').forEach(b=>b.onclick=()=>{ const [i,k]=b.dataset.ck.split(':').map(Number); if (doCook(RECIPES[i], k, nearStation())){ const st=pBody.scrollTop; render(); pBody.scrollTop=st; } }); }
@@ -6808,12 +6797,12 @@ const RARE_MATS = ['heartwood','goldsap','starstone','moonpearl','glimmermoss'];
 function rareCraftSection(){
   const found=S.rare.plans.length, any=found || RARE_MATS.some(m=>countItem(m));
   if (!any) return '';   // v1.24: the rare section stays secret until you find your first plan or rare ingredient
-  let h=`<div class="notice" style="border-color:${RARITY_COLORS.Legendary}"><b>Rare plans</b> <span class="muted">· ${found} found${S.rare.made?` · ${S.rare.made} made`:''}</span>`;
+  let h=`<div class="notice" data-sgrp style="border-color:${RARITY_COLORS.Legendary}"><b>Rare plans</b> <span class="muted">· ${found} found${S.rare.made?` · ${S.rare.made} made`:''}</span>`;
   RARE_WORK.forEach((r,i)=>{ const it=ITEMS[r.id], known=knowsPlan(r.id);
     if (!known) return;
     const mx=craftMax(r), mats=Object.entries(r.mats).map(([m,n])=>{ const have=countItem(m), ok=have>=n, rare=ITEMS[m].rare; return `<span style="color:${ok?'inherit':'#c0503a'};font-weight:${ok&&!rare?400:700}">${ITEMS[m].name} ${have}/${n}</span>`; }).join(' · ');
-    h+=`<div class="row" style="margin:8px 0 0"><img src="${thumb(r.id)}"><div class="grow"><div class="nm">${it.name} ${rarityTag(it)}</div><div class="sub">${mats}${BN.note(r)}${bagBlocked(r)?'<br><b>Your bag is full.</b> Make room first.':''}</div></div><button class="btn" data-rc="${i}" ${mx<=0?'disabled':''}>Make</button></div>`; });
-  if (any) h+=`<div style="margin-top:10px"><b style="font-size:13px">Rare ingredients</b>`+RARE_MATS.filter(m=>countItem(m)).map(m=>`<div class="sub" style="margin-top:4px"><b>${ITEMS[m].name} ${countItem(m)}</b></div>`).join('')+'</div>';
+    h+=`<div class="row"${SQ.sk(it.name, Object.keys(r.mats).map(m=>ITEMS[m].name))} style="margin:8px 0 0"><img src="${thumb(r.id)}"><div class="grow"><div class="nm">${it.name} ${rarityTag(it)}</div><div class="sub">${mats}${BN.note(r)}${bagBlocked(r)?'<br><b>Your bag is full.</b> Make room first.':''}</div></div><button class="btn" data-rc="${i}" ${mx<=0?'disabled':''}>Make</button></div>`; });
+  if (any) h+=`<div data-shide style="margin-top:10px"><b style="font-size:13px">Rare ingredients</b>`+RARE_MATS.filter(m=>countItem(m)).map(m=>`<div class="sub" style="margin-top:4px"><b>${ITEMS[m].name} ${countItem(m)}</b></div>`).join('')+'</div>';
   return h+'</div>'; }
 function openCraft(start){
   if (!S.craft && !S.cook) return;
@@ -6822,23 +6811,23 @@ function openCraft(start){
   const render=()=>{
     const tabsH = (S.craft && S.cook) || EN.hasTab() || CU.hasTab() ? '<div class="tabs">'+[...(S.craft?[['wood','Woodworking']]:[]),...(CU.hasTab()?[['design','Design']]:[]),...(S.cook?[['cook','Cooking']]:[]),...(EN.hasTab()?[['tools','Tools']]:[])].map(([k,n])=>`<button class="tab${k===tab?' on':''}" data-ct="${k}">${n}</button>`).join('')+'</div>' : '';
     const bindTabs=()=>pBody.querySelectorAll('[data-ct]').forEach(b=>b.onclick=()=>{ tab=b.dataset.ct; Snd.click(); render(); pBody.scrollTop=0; });
-    if (tab==='cook'){ pTitle.textContent='Cooking'; pBody.innerHTML=cookTab(tabsH); bindTabs(); bindCook(render); return; }
+    if (tab==='cook'){ pTitle.textContent='Cooking'; pBody.innerHTML=cookTab(tabsH); bindTabs(); bindCook(render); SQ.bindSearch(pBody); return; }
     if (tab==='tools'){ EN.renderTab(tabsH, bindTabs); return; }   // v1.40
     if (tab==='design'){ CU.renderTab(tabsH, bindTabs); return; }
     pTitle.textContent='Woodworking';
     const kd=kindsMade(), left=woodUnknown().length;
     // v1.24: no progress bar or locked plans. New plans just turn up as you make things.
-    let h=tabsH+BN.banner()+`<div class="notice"><b>Woodworking</b> <span class="muted">· ${(S.craft.known||[]).length} plans known · ${fmt(S.craft.made)} crafted</span>`;
+    let h=tabsH+SQ.searchBox('Search plans or materials')+BN.banner()+`<div class="notice" data-shide><b>Woodworking</b> <span class="muted">· ${(S.craft.known||[]).length} plans known · ${fmt(S.craft.made)} crafted</span>`;
     h+= left ? '' : `<br><span class="muted">You know every plan. Bramble would be proud.</span>`;
     if (left && woodWaiting()) h+=`<br><span class="muted">Your head's full of ideas. New plans will come to you tomorrow.</span>`;   // v1.50
     else if (left) h+=`<br><span class="muted">New plans come from making lots of <b>different</b> things. Making the same piece over and over won't teach you anything new.</span>`;
     h+=`<div class="muted" style="margin-top:6px">Your materials: ${Object.keys(MAT_NAMES).map(m=>`${MAT_NAMES[m]} ${countItem(m)}`).join(' · ')}</div></div>`;
-    h+=EN.fixNote();   // v1.50: broken or nearly worn-out tools, with a jump to the Tools tab
+    h+=`<div data-shide>${EN.fixNote()}</div>`;   // v1.50: broken or nearly worn-out tools, with a jump to the Tools tab
     h+=rareCraftSection();
     // v1.34: study a piece you own to work out its plan
     const st=studyable();
-    if (st.length){ h+=`<div class="notice"><b>Study a piece</b> <span class="muted">· ${studyToday()?'You\'ve studied something today. Try again tomorrow.':'Take a close look at something you own to learn how it\'s made. One a day.'}</span>`;
-      for (const r of st.slice(0,6)) h+=`<div class="row" style="margin:8px 0 0"><img src="${thumb(r.id)}"><div class="grow"><div class="nm">${ITEMS[r.id].name}</div></div><button class="btn alt" data-study="${r.id}" ${studyToday()?'disabled':''}>Study</button></div>`;
+    if (st.length){ h+=`<div class="notice" data-sgrp><b>Study a piece</b> <span class="muted">· ${studyToday()?'You\'ve studied something today. Try again tomorrow.':'Take a close look at something you own to learn how it\'s made. One a day.'}</span>`;
+      for (const r of st.slice(0,6)) h+=`<div class="row"${SQ.sk(ITEMS[r.id].name)} style="margin:8px 0 0"><img src="${thumb(r.id)}"><div class="grow"><div class="nm">${ITEMS[r.id].name}</div></div><button class="btn alt" data-study="${r.id}" ${studyToday()?'disabled':''}>Study</button></div>`;
       h+='</div>'; }
     h+='<div class="tabs">'+[['all','All plans'],['now','Can make now']].map(([k,n])=>`<button class="tab${k===filter?' on':''}" data-f="${k}">${n}</button>`).join('')+'</div>';
     let shown=0;
@@ -6848,13 +6837,13 @@ function openCraft(start){
       const q=Math.max(1, Math.min(qty[i]||1, Math.max(1,mx)));
       const mats=Object.entries(r.mats).map(([m,n])=>{ const have=countItem(m), ok=have>=n*q; return `<span style="color:${ok?'inherit':'#c0503a'};font-weight:${ok?400:700}">${MAT_NAMES[m]||ITEMS[m].name} ${have}/${n*q}</span>`; }).join(' · ');
       const out=recipeOut(r)*q;
-      h+=`<div class="row"><img src="${thumb(r.id)}"><div class="grow"><div class="nm">${it.name}${S.craft.kinds&&!S.craft.kinds.includes(r.id)?' <span style="color:#d08a10;font-size:12px">NEW</span>':''}${recipeOut(r)>1?` <span class="muted">x${recipeOut(r)}</span>`:''}</div><div class="sub">${mats}${BN.note(r)}${bagBlocked(r)?'<br><b>Your bag is full.</b> Make room first.':''}</div>
+      h+=`<div class="row"${SQ.sk(it.name, Object.keys(r.mats).map(m=>MAT_NAMES[m]||ITEMS[m].name))}><img src="${thumb(r.id)}"><div class="grow"><div class="nm">${it.name}${S.craft.kinds&&!S.craft.kinds.includes(r.id)?' <span style="color:#d08a10;font-size:12px">NEW</span>':''}${recipeOut(r)>1?` <span class="muted">x${recipeOut(r)}</span>`:''}</div><div class="sub">${mats}${BN.note(r)}${bagBlocked(r)?'<br><b>Your bag is full.</b> Make room first.':''}</div>
         <div style="display:flex;gap:6px;align-items:center;margin-top:6px;flex-wrap:wrap">
           <button class="btn alt" data-q="${i}:-1" ${q<=1?'disabled':''} style="padding:4px 12px">-</button><b style="min-width:22px;text-align:center">${q}</b><button class="btn alt" data-q="${i}:1" ${q>=mx?'disabled':''} style="padding:4px 12px">+</button>
           <button class="btn alt" data-q="${i}:max" ${mx<=1?'disabled':''} style="padding:4px 10px">Max ${mx>1?mx:''}</button>
           <button class="btn" data-c="${i}" ${mx<=0?'disabled':''}>Make${out>1?' '+out:''}</button></div></div></div>`; });
-    if (!shown) h+='<div class="muted">Nothing you can make right now.</div>';
-    pBody.innerHTML=h; bindTabs();
+    if (!shown) h+='<div class="muted" data-shide>Nothing you can make right now.</div>';
+    pBody.innerHTML=h; bindTabs(); SQ.bindSearch(pBody);
     pBody.querySelectorAll('[data-f]').forEach(b=>b.onclick=()=>{ filter=b.dataset.f; Snd.click(); render(); });
     pBody.querySelectorAll('[data-q]').forEach(b=>b.onclick=()=>{ const [i,d]=b.dataset.q.split(':'); const r=WOODWORK[+i], mx=craftMax(r); qty[i]= d==='max'?mx:Math.max(1,Math.min(mx,(qty[i]||1)+(+d))); Snd.click(); render(); });
     pBody.querySelectorAll('[data-study]').forEach(b=>b.onclick=()=>{ if (studyPiece(b.dataset.study)){ const st=pBody.scrollTop; render(); pBody.scrollTop=st; } });
@@ -7131,9 +7120,10 @@ class Exhibit extends Ent {
   update(dt){ if (this.spin) this.spin.rotation.y+=dt*0.35; }
 }
 // A whole aquarium tank or terrarium. Walk up and press View (or click it) for the fullscreen view.
+// v1.68 a tank is shared: T.group is made fresh from what's on display (its name, theme, specimens and "?" spots).
 class MuseumTank extends Ent {
-  constructor(T, R, shown){ super('tank', R.ox+T.x, R.oz+T.z, 0.5); this.T=T; this.solid=false; this.reach=T.len/2+1.2;
-    this.have=T.group.slots ? shown.slice(0, T.group.slots) : shown.filter(id=>T.group.ids.includes(id)); const g=buildTank(T.group, T.len, this.have); g.rotation.y=T.rot; this.attach(g); }
+  constructor(T, R){ super('tank', R.ox+T.x, R.oz+T.z, 0.5); this.T=T; this.solid=false; this.reach=T.len/2+1.2;
+    this.have=T.group.have; const g=buildTank(T.group, T.len, this.have); g.rotation.y=T.rot; this.attach(g); }
   label(){ return 'View'; }
   act(){ openTankView(this); }
   update(dt,t){ const u=this.obj.userData; if (u.update && World.inside==='museum') u.update(t,dt); }
@@ -7147,19 +7137,23 @@ function queueExhibit(fn){ exhibitQ.push(fn); if (exhibitJob) return; exhibitJob
     if (exhibitQ.length) return true; exhibitJob=false; return false; }); }
 function clearMuseumEnts(){ exhibitQ.length=0; for (const id in exhibits){ exhibits[id].remove(); delete exhibits[id]; } for (const e of museumTanks) e.remove(); museumTanks.length=0; }
 // Everything on display is rebuilt together (cheap, and only when something changes)
-function spawnExhibits(){ const R=museumRoom(); if (!R || !R.layout) return; clearMuseumEnts(); const LY=R.layout;
-  const shown={ fish:onDisplay('fish'), bug:onDisplay('bug') };
-  for (const T of LY.tanks) museumTanks.push(new MuseumTank(T, R, shown[T.kind]));
-  const fos=onDisplay('fossil'), full=!!LY.fcases, have=new Set(fos);
+function spawnExhibits(){ const R=museumRoom(); if (!R || !R.layout) return; clearMuseumEnts(); const LY=R.layout, show=museumShowNow();
+  for (const T of LY.tanks){ const grp=show.tanks[T.kind][T.index]; if (grp) museumTanks.push(new MuseumTank({ ...T, group:grp }, R)); }
   // v1.65: fossil models come in a few per frame once you're inside (80 of them would freeze a phone for seconds)
-  LY.pedestals.forEach((p,i)=>{ const id=full ? (have.has(p.id)?p.id:null) : (fos[i]||null), big=full || (!!id && isBigFossil(id)), g=buildPedestal(id, p.h, big, !!id);
+  LY.pedestals.forEach((p,i)=>{ const id=show.peds[i]||null, g=buildPedestal(id, p.h, true, !!id);
     const e=exhibits[id||('ped'+i)]=new Exhibit(id, R.ox+p.x, R.oz+p.z, g, null, 'fossil');
-    if (id) queueExhibit(()=>{ const m=fossilModel(id, big); m.position.y=p.h+0.05+m.userData.h/2+0.02; g.add(m); m.traverse(c=>{ c.userData.ent=e; }); e.spin=m; }); });
-  if (full) for (const c of LY.fcases){ const sl=fossilCaseSlots(c.len);
-    c.ids.forEach((id,i)=>{ if (!have.has(id) || !sl[i]) return; const g=new THREE.Group(), e=exhibits[id]=new Exhibit(id, R.ox+c.x+sl[i][0], R.oz+c.z+sl[i][1], g, null, 'fossil');
-      queueExhibit(()=>{ const m=caseFossilModel(id); m.position.y=FCASE_TOP+m.userData.h/2+0.005; g.add(m); m.traverse(k=>{ k.userData.ent=e; }); }); }); }
-  const sl=shellSlots(LY.shells.len, LY.shells.slots); onDisplay('shell').forEach((id,i)=>{ if (!sl[i]) return; const m=shellModel(id), g=new THREE.Group(); m.position.y=0.89+m.userData.h/2; g.add(m);
+    if (id) queueExhibit(()=>{ const m=fossilModel(id, true); m.position.y=p.h+0.05+m.userData.h/2+0.02; g.add(m); m.traverse(c=>{ c.userData.ent=e; }); e.spin=m; }); });
+  // v1.68 the glass cases are rebuilt with what's in them, so each is named after the fossils it holds
+  LY.fcases.forEach((c,ci)=>{ const sc=show.cases[ci]; if (!sc) return; const sl=fossilCaseSlots(c.len);
+    museumTanks.push(new MuseumCase(R, c.x, c.z, buildFossilCase(c.len, sc.name, sc.sub)));
+    sc.ids.forEach((id,i)=>{ if (!sl[i]) return; const g=new THREE.Group(), e=exhibits[id]=new Exhibit(id, R.ox+c.x+sl[i][0], R.oz+c.z+sl[i][1], g, null, 'fossil');
+      queueExhibit(()=>{ const m=caseFossilModel(id); m.position.y=FCASE_TOP+m.userData.h/2+0.005; g.add(m); m.traverse(k=>{ k.userData.ent=e; }); }); }); });
+  const sl=shellSlots(LY.shells.len, LY.shells.slots); show.shown.shell.forEach((id,i)=>{ if (!sl[i]) return; const m=shellModel(id), g=new THREE.Group(); m.position.y=0.89+m.userData.h/2; g.add(m);
     exhibits[id]=new Exhibit(id, R.ox+LY.shells.x+sl[i][0], R.oz+LY.shells.z+sl[i][1], g, null, 'shell'); }); }
+// a fossil glass case (just furniture; each fossil in it is its own Exhibit)
+class MuseumCase extends Ent {
+  constructor(R, x, z, obj){ super('fcase', R.ox+x, R.oz+z, 0.5); this.solid=false; this.attach(obj); }
+}
 
 /* ---------- Fullscreen tank view ---------- */
 let tankView=null, tankZoom=null;
@@ -7199,16 +7193,15 @@ function openTankView(ent){
     catch(e){ console.error(e); tankView=null; tvEl.classList.remove('show'); document.body.classList.remove('tankOpen'); player.obj.visible=true; updateCamera(1); } }), 420);
 }
 function closeTankView(){ if (!tankView) return; Snd.click(); fade(()=>{ tvEl.classList.remove('show'); document.body.classList.remove('tankOpen'); player.obj.visible=true; tankView.dispose(); tankView=null; updateCamera(1); updateActButton.nh=undefined; }); }
-function renderTankUI(){ const V=tankView, g=V.group, have=new Set(V.ent.have);
-  const ids = g.slots ? [...V.ent.have, ...Array(Math.max(0,g.slots-have.size)).fill('')] : g.ids;
-  tvEl.querySelector('.tvName').textContent=g.name; tvEl.querySelector('.tvSub').textContent = g.slots ? `${have.size} of ${g.slots} spaces · shared ${g.kind==='fish'?'tank':'terrarium'}` : `${have.size} of ${g.ids.length} species${have.size===g.ids.length?' · complete!':''}`;
-  const em=tvEl.querySelector('.tvEmpty'); em.style.display=have.size?'none':'block'; em.textContent=`Nothing in this ${g.kind==='fish'?'tank':'terrarium'} yet. Bring Professor Thistle a ${g.kind==='fish'?'fish':'bug'}${g.slots?'':' from this group'} and it will go right in.`;
+function renderTankUI(){ const V=tankView, g=V.group, have=new Set(V.ent.have), ids=g.ids, miss=ids.length-have.size;
+  tvEl.querySelector('.tvName').textContent=g.name; tvEl.querySelector('.tvSub').textContent = `${have.size} of ${g.slots} spaces${miss?` · ${miss} still to find`:have.size&&g.groups.length?' · every one found':''}`;
+  const em=tvEl.querySelector('.tvEmpty'); em.style.display=have.size?'none':'block'; em.textContent=`Nothing in this ${g.kind==='fish'?'tank':'terrarium'} yet. Bring Professor Thistle a ${g.kind==='fish'?'fish':'bug'} and it will go right in.`;
   tvEl.querySelector('.tvStrip').innerHTML=ids.map(id=>have.has(id)?`<button class="tvChip" data-id="${id}" title="${ITEMS[id].name}"><img src="${thumb(id)}" alt=""></button>`:`<button class="tvChip no" data-id="${id}">?</button>`).join('');
   tvEl.querySelectorAll('.tvChip').forEach(b=>b.onclick=e=>{ e.stopPropagation(); Snd.click(); tankSelect(b.dataset.id||'', true); });
   tvEl.querySelector('.tvCard').classList.remove('show'); }
 function tankSelect(id, follow){ const V=tankView; if (!V) return; const card=tvEl.querySelector('.tvCard');
   tvEl.querySelectorAll('.tvChip').forEach(b=>b.classList.toggle('sel', !!id && b.dataset.id===id));
-  if (id===''){ card.innerHTML=`<div><b>An empty space</b><div class="sub">This tank is shared until the ${V.group.kind==='fish'?'Aquarium':'Insectarium'} gets its own wing. Each new ${V.group.kind==='fish'?'fish':'bug'} you donate fills a space.</div></div>`; card.classList.add('show'); V.view.follow=null; return; }
+  if (id===''){ card.innerHTML=`<div><b>An empty space</b><div class="sub">Each new ${V.group.kind==='fish'?'fish':'bug'} you donate fills a space. When every ${V.group.kind==='fish'?'tank':'terrarium'} is full the builders add another.</div></div>`; card.classList.add('show'); V.view.follow=null; return; }
   if (!id){ card.classList.remove('show'); V.view.follow=null; V.sel=null; return; } V.sel=id; const it=ITEMS[id];
   if (!S.museum.items[id]){ const seen=!!S.rec[id]; card.innerHTML=`<div><b>${seen?it.name:'Not in the collection yet'}</b><div class="sub">${seen?'You have caught one before. Bring one to Professor Thistle to add it here.':`Somewhere out there: ${(whereText(it)||'on the island')}.`}</div></div>`; card.classList.add('show'); V.view.follow=null; return; }
   card.innerHTML=`<img src="${thumb(id)}" alt=""><div><b>${it.name}</b><div class="sub">${whereText(it)} · ${monthsText(it.months)} · ${hoursText(it.hours)}<br>${exhibitInfo(id)}</div></div>`; card.classList.add('show');
@@ -7229,7 +7222,7 @@ function anonDonation(r){
   const n=300+Math.floor(r()*6)*100; S.clams = GUEST ? Math.max(S.clams, Math.min(GUEST_CAP.clams, S.clams+n)) : S.clams+n; S.museum.news={ clams:n }; return n;
 }
 // The museum grows overnight once the collection outgrows it
-function museumGrowCheck(){ if (museumNeeds().length && !S.museum.grow){ S.museum.grow=1; save(); return true; } return false; }
+function museumGrowCheck(){ if ((museumNeeds().length || museumTierNow()>(S.museum.tier||0)) && !S.museum.grow){ S.museum.grow=1; save(); return true; } return false; }
 if (!TRIP){ initTownBuildings(); applyTown(); }
 /* =====================================================================
    v1.26: BOAT TRIPS. Skipper Wick waits at the dock with her boat. Pay a flat fee for a random little island (mostly
@@ -7982,7 +7975,7 @@ function openDonate(){ if (noEdit()) return;
     pBody.innerHTML=h;
     const before=museumPlans().join('|');
     const after=()=>{ spawnExhibits(); checkMuseumGifts(); museumGrowCheck(); const plans=museumPlans();
-      if (plans.length && plans.join('|')!==before) setTimeout(()=>dialog(KEEPERS.thistle.name, KEEPERS.thistle.voice, ['My word, we are out of room! I will keep it safe in the back for now.', `Tonight the builders will put in ${plans.join(', and ')}.`]), 300); render(); };
+      if (plans.length && plans.join('|')!==before) setTimeout(()=>dialog(KEEPERS.thistle.name, KEEPERS.thistle.voice, [museumNeeds().length ? 'My word, we are out of room! I will keep it safe in the back for now.' : 'My word, the collection is really growing!', `Tonight the builders will put in ${plans.join(', and ')}.`]), 300); render(); };
     const full=()=>{ toast('Every display spot is taken!'); Snd.fail(); };
     pBody.querySelectorAll('[data-d]').forEach(b=>b.onclick=()=>{ const i=+b.dataset.d, id=S.inv[i].id; if (!donate(i)){ full(); return; } itemToast(id,false,'Donated'); after(); });
     const da=pBody.querySelector('#dAll'); if(da) da.onclick=()=>{ let n=0; for(;;){ const el2=eligibleDonations(); if(!el2.length) break; if (!donate(el2[0])){ full(); break; } n++; } if (n) toast(`Donated ${n} things! Professor Thistle is delighted.`); after(); };
@@ -8794,17 +8787,21 @@ function mapExtent(){ let x0=1e9, z0=1e9, x1=-1e9, z1=-1e9; const grow=(x,z)=>{ 
   for (let i=0;i<128;i++){ const a=i/128*TAU, r=islandR(a)*1.12; grow(Math.cos(a)*r, Math.sin(a)*r); }
   for (const I of ISLES){ grow(I.cx-I.r*1.1, I.cz-I.r*1.1); grow(I.cx+I.r*1.1, I.cz+I.r*1.1); }
   return { cx:(x0+x1)/2, cz:(z0+z1)/2, E:Math.max(x1-x0, z1-z0)/2 }; }
-function drawIslandMap(cv){
-  const ctx=cv.getContext('2d'), W=cv.width, H=cv.height, { cx:mcx, cz:mcz, E }=mapExtent(), k=Math.min(W,H)/(E*2), X=x=>W/2+(x-mcx)*k, Z=z=>H/2+(z-mcz)*k;
-  // land and water, sampled from the real terrain
-  const N=Math.min(240, W), img=ctx.createImageData(N,N), step=E*2/N;
-  for (let j=0;j<N;j++) for (let i=0;i<N;i++){ const x=mcx-E+(i+0.5)*step, z=mcz-E+(j+0.5)*step, h=rawHeight(x,z), o=(j*N+i)*4; let c;
+// land and water for one square of the map, sampled from the real terrain (N x N samples)
+function mapTerrain(x0, z0, span, N){ const img=new ImageData(N,N), step=span/N;
+  for (let j=0;j<N;j++) for (let i=0;i<N;i++){ const x=x0+(i+0.5)*step, z=z0+(j+0.5)*step, h=rawHeight(x,z), o=(j*N+i)*4; let c;
     if (h< -0.15 || (!walkable(x,z) && h<0.2)){ const d=clamp(-h/3,0,1); c=[86-30*d, 186-40*d, 206-30*d]; }
     else if (h<SAND_H+0.08) c=[238,218,166];
     else { const t=clamp((h-SAND_H)/6,0,1); c=[128-40*t, 190-50*t, 98-30*t]; }
     img.data[o]=c[0]; img.data[o+1]=c[1]; img.data[o+2]=c[2]; img.data[o+3]=255; }
-  const tmp=document.createElement('canvas'); tmp.width=tmp.height=N; tmp.getContext('2d').putImageData(img,0,0);
-  ctx.imageSmoothingEnabled=true; ctx.drawImage(tmp, 0,0,N,N, X(mcx-E),Z(mcz-E),E*2*k,E*2*k);
+  const cv=document.createElement('canvas'); cv.width=cv.height=N; cv.getContext('2d').putImageData(img,0,0); return { cv, x0, z0, span, N }; }
+// v1.69 o: { W, H } the size to draw at (when the caller has already scaled for the screen), { zoom, cx, cz } the view, terr/sharp cached terrain
+function drawIslandMap(cv, o={}){
+  const ext=o.ext||mapExtent(), { cx:mcx, cz:mcz, E }=ext, zoom=o.zoom||1, vcx=o.cx??mcx, vcz=o.cz??mcz;
+  const ctx=cv.getContext('2d'), W=o.W||cv.width, H=o.H||cv.height, k=Math.min(W,H)/(E*2)*zoom, X=x=>W/2+(x-vcx)*k, Z=z=>H/2+(z-vcz)*k, ms=clamp(Math.sqrt(zoom),1,1.6);
+  // land and water: the whole map, then a sharper copy of the part you've zoomed in on
+  ctx.imageSmoothingEnabled=true;
+  for (const T of [o.terr||mapTerrain(mcx-E, mcz-E, E*2, Math.min(240, W)), o.sharp]) if (T) ctx.drawImage(T.cv, 0,0,T.N,T.N, X(T.x0),Z(T.z0),T.span*k,T.span*k);
   // paths and the dock
   ctx.strokeStyle='#e6cf9a'; ctx.lineWidth=Math.max(2,1.6*k); ctx.lineCap='round'; ctx.lineJoin='round';
   for (const P of PATHS){ ctx.beginPath(); P.forEach((q,i)=>i?ctx.lineTo(X(q[0]),Z(q[1])):ctx.moveTo(X(q[0]),Z(q[1]))); ctx.stroke(); }
@@ -8814,7 +8811,7 @@ function drawIslandMap(cv){
     ctx.strokeStyle='#a87a4e'; ctx.lineWidth=Math.max(3,2.2*k); ctx.beginPath(); ctx.moveTo(X(I.bridge.a[0]),Z(I.bridge.a[1])); ctx.lineTo(X(I.bridge.b[0]),Z(I.bridge.b[1])); ctx.stroke(); ctx.lineWidth=Math.max(2,1.6*k); }
   // buildings
   const labels=[];
-  const mark=(p, col, name, big)=>{ if (!p) return; const r=big?7:5; ctx.fillStyle=col; ctx.strokeStyle='#5b4336'; ctx.lineWidth=1.6;
+  const mark=(p, col, name, big)=>{ if (!p) return; const r=(big?7:5)*ms; ctx.fillStyle=col; ctx.strokeStyle='#5b4336'; ctx.lineWidth=1.6;
     ctx.beginPath(); ctx.moveTo(X(p[0]),Z(p[1])-r); ctx.lineTo(X(p[0])+r,Z(p[1])); ctx.lineTo(X(p[0])+r*0.75,Z(p[1])); ctx.lineTo(X(p[0])+r*0.75,Z(p[1])+r*0.9); ctx.lineTo(X(p[0])-r*0.75,Z(p[1])+r*0.9); ctx.lineTo(X(p[0])-r*0.75,Z(p[1])); ctx.lineTo(X(p[0])-r,Z(p[1])); ctx.closePath(); ctx.fill(); ctx.stroke();
     if (name) labels.push([X(p[0]), Z(p[1])+r+3, name, big]); };
   ctx.fillStyle='#d8bc86'; ctx.beginPath(); ctx.arc(X(0),Z(0),Math.max(6,4.5*k),0,TAU); ctx.fill(); labels.push([X(0),Z(0)+Math.max(6,4.5*k)+3,'Plaza']);
@@ -8833,13 +8830,53 @@ function drawIslandMap(cv){
   // compass
   ctx.fillStyle='#5b4336'; ctx.font='700 14px Fredoka, sans-serif'; ctx.textAlign='center'; ctx.fillText('N', W-22, 10); ctx.beginPath(); ctx.moveTo(W-22,28); ctx.lineTo(W-27,40); ctx.lineTo(W-17,40); ctx.closePath(); ctx.fill();
 }
+/* v1.69 the map zooms: pinch, the mouse wheel or + and -, drag to move around once zoomed in, double-tap to zoom in there or back out.
+   The view never leaves the map's edges, so the island can't be dragged off screen. Markers and names stay the same size at every zoom. */
+const MAP_ZOOM_MAX=5;
 function openMap(){
   openPanel(`Map of ${S.island||'the island'}`); Snd.click();
-  const w=Math.max(260, Math.min(pBody.clientWidth-8, 620)), cv=document.createElement('canvas'), dpr=Math.min(2, devicePixelRatio||1);
-  cv.width=Math.round(w*dpr); cv.height=Math.round(w*dpr); cv.style.width=w+'px'; cv.style.height=w+'px'; cv.style.borderRadius='14px'; cv.style.display='block'; cv.style.margin='0 auto'; cv.style.background='#56bace';
-  pBody.appendChild(cv); const ctx=cv.getContext('2d'); ctx.scale(dpr,dpr); cv.width; // keep scale
-  const off=document.createElement('canvas'); off.width=w; off.height=w; drawIslandMap(off); ctx.drawImage(off,0,0);
-  const note=document.createElement('div'); note.className='muted'; note.style.cssText='margin-top:8px;text-align:center'; note.textContent=World.inside?'You\'re indoors right now.':'The red arrow is you.'; pBody.appendChild(note);
+  const w=Math.max(260, Math.min(pBody.clientWidth-8, 620)), cv=document.createElement('canvas'), dpr=Math.min(2, devicePixelRatio||1), ext=mapExtent(), V={ zoom:1, cx:ext.cx, cz:ext.cz };
+  const box=document.createElement('div'); box.style.cssText=`position:relative;width:${w}px;height:${w}px;margin:0 auto`;
+  cv.width=Math.round(w*dpr); cv.height=Math.round(w*dpr); cv.style.cssText=`width:${w}px;height:${w}px;border-radius:14px;display:block;background:#56bace;touch-action:none;cursor:grab`;
+  box.appendChild(cv); box.insertAdjacentHTML('beforeend', `<div class="bpz" style="top:auto;bottom:6px"><button data-z="in" title="Zoom in" aria-label="Zoom in">+</button><button data-z="out" title="Zoom out" aria-label="Zoom out">&minus;</button><button data-z="fit" title="Show the whole map">Fit</button></div>`);
+  pBody.appendChild(box); const ctx=cv.getContext('2d'), btn=z=>box.querySelector(`[data-z="${z}"]`);
+  const terr=mapTerrain(ext.cx-ext.E, ext.cz-ext.E, ext.E*2, Math.min(240, w)); let sharp=null, raf=0, sharpT=0, anim=0;
+  const scale=()=>w/(ext.E*2)*V.zoom;
+  const clampView=()=>{ V.zoom=clamp(V.zoom,1,MAP_ZOOM_MAX); const h=ext.E/V.zoom; V.cx=clamp(V.cx, ext.cx-ext.E+h, ext.cx+ext.E-h); V.cz=clamp(V.cz, ext.cz-ext.E+h, ext.cz+ext.E-h); };
+  const draw=()=>{ raf=0; if (!cv.isConnected) return; ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,w,w); drawIslandMap(cv, { W:w, H:w, ext, zoom:V.zoom, cx:V.cx, cz:V.cz, terr, sharp });
+    const zin=V.zoom>1.01; btn('in').disabled=V.zoom>=MAP_ZOOM_MAX-0.01; btn('out').disabled=!zin; btn('fit').disabled=!zin; for (const b of box.querySelectorAll('[data-z]')) b.style.opacity=b.disabled?0.45:1; cv.style.cursor=zin?'grab':'zoom-in'; };
+  // once you stop moving, the part you're looking at is sampled again at a finer step (a little wider than the view, so a short drag stays sharp)
+  const sharpen=()=>{ if (!cv.isConnected) return; if (V.zoom<1.4){ sharp=null; return; } const h=ext.E/V.zoom*1.3, x0=clamp(V.cx-h, ext.cx-ext.E, ext.cx+ext.E-2*h), z0=clamp(V.cz-h, ext.cz-ext.E, ext.cz+ext.E-2*h), span=Math.min(2*h, ext.E*2);
+    const S0=sharp, need=ext.E/V.zoom; if (S0 && S0.span<=span*1.15 && V.cx-need>=S0.x0 && V.cx+need<=S0.x0+S0.span && V.cz-need>=S0.z0 && V.cz+need<=S0.z0+S0.span) return;
+    sharp=mapTerrain(x0, z0, span, Math.min(280, Math.round(w*Math.min(dpr,1.5)))); redraw(true); };
+  const redraw=quiet=>{ if (!raf) raf=requestAnimationFrame(draw); if (!quiet){ clearTimeout(sharpT); sharpT=setTimeout(sharpen, 200); } };
+  const zoomAt=(f, sx=w/2, sy=w/2)=>{ const k0=scale(), wx=V.cx+(sx-w/2)/k0, wz=V.cz+(sy-w/2)/k0; V.zoom=clamp(V.zoom*f,1,MAP_ZOOM_MAX); const k1=scale(); V.cx=wx-(sx-w/2)/k1; V.cz=wz-(sy-w/2)/k1; clampView(); redraw(); };
+  const glide=(zoom, cx, cz)=>{ cancelAnimationFrame(anim); const a={ ...V }, t0=performance.now();
+    const step=t=>{ const u=clamp((t-t0)/220,0,1), e=1-(1-u)*(1-u)*(1-u); V.zoom=Math.exp(Math.log(a.zoom)+(Math.log(zoom)-Math.log(a.zoom))*e); V.cx=a.cx+(cx-a.cx)*e; V.cz=a.cz+(cz-a.cz)*e; clampView(); redraw(); if (u<1 && cv.isConnected) anim=requestAnimationFrame(step); };
+    anim=requestAnimationFrame(step); };
+  const fit=()=>glide(1, ext.cx, ext.cz);
+  const zoomTo=(f, sx, sy)=>{ const k0=scale(), wx=V.cx+(sx-w/2)/k0, wz=V.cz+(sy-w/2)/k0, z=clamp(V.zoom*f,1,MAP_ZOOM_MAX), k1=w/(ext.E*2)*z; glide(z, wx-(sx-w/2)/k1, wz-(sy-w/2)/k1); };
+  // pointers: one finger or the mouse drags, two fingers pinch (and drag), a quick second tap zooms in there or back out
+  const ptr=new Map(); let pinch=null, drag=null, lastTap=null;
+  const local=e=>{ const r=cv.getBoundingClientRect(); return [e.clientX-r.left, e.clientY-r.top]; };
+  cv.addEventListener('wheel', e=>{ e.preventDefault(); cancelAnimationFrame(anim); const [sx,sy]=local(e); zoomAt(Math.exp(-(e.ctrlKey?e.deltaY*3:e.deltaY)*0.0015), sx, sy); }, { passive:false });
+  cv.addEventListener('pointerdown', e=>{ e.preventDefault(); e.stopPropagation(); cancelAnimationFrame(anim); try { cv.setPointerCapture(e.pointerId); } catch(_){} ptr.set(e.pointerId, local(e));
+    if (ptr.size===2){ const [a,b]=[...ptr.values()]; pinch={ d:Math.hypot(a[0]-b[0],a[1]-b[1])||1, mx:(a[0]+b[0])/2, my:(a[1]+b[1])/2 }; drag=null; return; }
+    if (ptr.size===1){ const [x,y]=ptr.get(e.pointerId); drag={ x, y, sx:x, sy:y, moved:false, t:performance.now() }; if (V.zoom>1.01) cv.style.cursor='grabbing'; } });
+  cv.addEventListener('pointermove', e=>{ if (!ptr.has(e.pointerId)) return; const p=local(e); ptr.set(e.pointerId, p);
+    if (pinch && ptr.size===2){ const [a,b]=[...ptr.values()], d=Math.hypot(a[0]-b[0],a[1]-b[1])||1, mx=(a[0]+b[0])/2, my=(a[1]+b[1])/2;
+      zoomAt(d/pinch.d, mx, my); const k=scale(); V.cx-=(mx-pinch.mx)/k; V.cz-=(my-pinch.my)/k; clampView(); pinch={ d, mx, my }; return; }
+    if (!drag || ptr.size!==1) return; if (Math.hypot(p[0]-drag.sx,p[1]-drag.sy)>6) drag.moved=true;
+    if (drag.moved){ const k=scale(); V.cx-=(p[0]-drag.x)/k; V.cz-=(p[1]-drag.y)/k; clampView(); redraw(); } drag.x=p[0]; drag.y=p[1]; });
+  const end=e=>{ if (!ptr.has(e.pointerId)) return; const p=local(e); ptr.delete(e.pointerId); if (ptr.size<2) pinch=null; const d=drag; drag=null; draw();
+    if (e.type!=='pointerup' || ptr.size || !d || d.moved || performance.now()-d.t>400){ if (d && d.moved) lastTap=null; return; }
+    const now=performance.now(); if (lastTap && now-lastTap.t<350 && Math.hypot(p[0]-lastTap.x,p[1]-lastTap.y)<30){ lastTap=null; if (V.zoom>1.01) fit(); else zoomTo(2.5, p[0], p[1]); Snd.click(); }
+    else lastTap={ t:now, x:p[0], y:p[1] }; };
+  cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end); cv.addEventListener('contextmenu', e=>e.preventDefault());
+  for (const b of box.querySelectorAll('[data-z]')) b.onclick=ev=>{ ev.stopPropagation(); if (b.disabled) return; Snd.click(); const z=b.dataset.z; if (z==='in') zoomTo(1.6, w/2, w/2); else if (z==='out') zoomTo(1/1.6, w/2, w/2); else fit(); };
+  draw();
+  const note=document.createElement('div'); note.className='muted'; note.style.cssText='margin-top:8px;text-align:center'; note.textContent=(World.inside?'You\'re indoors right now. ':'The red arrow is you. ')+'Pinch, scroll or use + and − to zoom, drag to look around, double-tap to zoom in or back out.'; pBody.appendChild(note);
+  if (window.__game) window.__game.v169 = { view:V, zoomAt, fit, get sharp(){ return sharp; }, MAP_ZOOM_MAX, ext, cv };   // v1.69 test hooks
 }
 addEventListener('pointerdown', e=>{ if(!toolPop.contains(e.target) && e.target!==toolBtn && !toolBtn.contains(e.target)) toolPop.classList.remove('show'); });
 function positionToolPop(){ const r=toolBtn.getBoundingClientRect(); const w=Math.min(300, innerWidth-20); toolPop.style.width=w+'px'; toolPop.style.left=clamp(r.left+r.width/2-w/2,10,innerWidth-w-10)+'px'; toolPop.style.top=Math.max(10, r.top-toolPop.offsetHeight-10)+'px'; }

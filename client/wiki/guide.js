@@ -181,11 +181,16 @@ ${note('If the islander a story favor was written for doesn\'t live on your isla
 { id:'museum', group:'island', title:'The museum', html:`
 <p>Professor Thistle the tortoise takes one of every fish, bug, fossil and beach find. Each donation is displayed for good.</p>
 <h3>How it grows</h3>
-<p>It starts as one small room: a shared tank (8 fish), a shared terrarium (8 bugs), 3 fossil pedestals and a 4-space case of beach finds. When a section runs out of room, the donation waits in the back room and builders expand that night:</p>
-<ul><li>Fish or bugs past 8: an <b>Aquarium</b> wing (left) or <b>Insectarium</b> wing (right) with one themed tank per group. A group's tank is built the night after its first donation, so the wings get longer as you fill them. Fish groups: Pond &amp; Marsh, River Run, Coastal Shallows, Cay Bay Reef, Sandy Shallows, Reef Wonders, Rapids &amp; Riverbed, Lily Pool, Isles &amp; Far Shores, The Deep, Reef &amp; Open Ocean. Bug groups: Butterfly Garden, Garden &amp; Pond, Woodland &amp; Shore, Butterfly House, Flies, Wasps &amp; Lacewings, Beetle Hall, Creepy Crawlies, Hoppers, Mimics &amp; Shore, Moon Moths, Moths &amp; Night Lights.</li>
-<li>Fossils past 3: a <b>Fossil Hall</b> across the back. Past 6: the <b>full Fossil Hall</b>, the width of the whole museum, with a spot for every fossil in the game. The 16 big fossils (the skulls, the Mammoth Tusk, the Dino Egg and the like) each have their own pedestal in two rows at the back, and the other 64 sit in 8 themed glass cases of 8 in front of them: Shells of the Old Sea, Clams and Corals, Stars and Sea Lilies, Trilobites and Crawlers, Ancient Plants, Fish and Swimmers, Amber and Small Wonders, and Dinosaurs and Ice Age. An empty pedestal or an empty tray in a case means that fossil is still out there.</li>
+<p>It starts as one hall: a fish tank and a bug terrarium of 20 spaces each, 2 pedestals for big fossils, a glass case of 8 for the other fossils and a 4-space case of beach finds. It only grows when something is full.</p>
+<p>Fish and bugs are kept together by group. A tank holds as many whole groups as fit in its 20 spaces. Its sign names the group it holds, or both groups when it holds two ("Pond &amp; Marsh and River Run"), or says Island Waters (fish) or Island Critters (bugs) when it holds three or more. Fish groups: Pond &amp; Marsh, River Run, Coastal Shallows, Cay Bay Reef, Sandy Shallows, Reef Wonders, Rapids &amp; Riverbed, Lily Pool, Isles &amp; Far Shores, The Deep, Reef &amp; Open Ocean. Bug groups: Butterfly Garden, Garden &amp; Pond, Woodland &amp; Shore, Butterfly House, Flies, Wasps &amp; Lacewings, Beetle Hall, Creepy Crawlies, Hoppers, Mimics &amp; Shore, Moon Moths, Moths &amp; Night Lights.</p>
+<p>When a section runs out of room, the builders add space that night:</p>
+<ul><li>Fish or bugs: another tank once the groups you have donated no longer fit whole in the tanks there are. Fish tanks run down the left wall, terrariums down the right, and the builders move groups between tanks so each group stays together. Until they come, a group that doesn't fit whole is spread over the free spaces.</li>
+<li>Big fossils (the 16 skulls, the Mammoth Tusk, the Dino Egg and the like): two more pedestals, in rows at the back.</li>
+<li>Other fossils: another glass case of 8. A case is named for the theme most of its fossils share: Shells of the Old Sea, Clams and Corals, Stars and Sea Lilies, Trilobites and Crawlers, Ancient Plants, Fish and Swimmers, Amber and Small Wonders, or Dinosaurs and Ice Age. A case holding more than one theme says "Mixed finds" under its name.</li>
 <li>Beach finds past 4: an 8-space case.</li></ul>
-<p>The outside building grows a step per wing. The first wing counts as "outgrowing its cottage" for the Grand Town Hall. All three wings are needed for Lantern Bluff.</p>
+<p>A donation only waits in the back room when every space for its kind is taken. Professor Thistle tells you what the builders will put in that night. The hall gets wider and longer only as far as its tanks and cases need. With everything donated it holds 6 fish tanks, 6 terrariums, 16 pedestals and 8 glass cases. Benches go down the middle, and a fountain once there's room for one.</p>
+<h3>Milestones</h3>
+<p>The outside building grows a step at each of three milestones: more than 8 fish, more than 8 bugs and more than 3 fossils donated. The builders put up the new front the night after you pass one. The first milestone counts as "outgrowing its cottage" for the Grand Town Hall. All three are needed for Lantern Bluff.</p>
 <p>Click a tank (or walk up and press View) for a fullscreen view: tap a specimen for its card (where, when, your biggest).</p>
 <h3>Thank-you gifts</h3>
 <table class="t"><tr><th>Donations</th><th>Gift</th></tr><tr><td>10</td><td>Antique Globe</td></tr><tr><td>30</td><td>Mini Dino Skeleton</td></tr><tr><td>60</td><td>Explorer Statue</td></tr></table>
@@ -224,7 +229,7 @@ ${note('If the islander a story favor was written for doesn\'t live on your isla
 
 { id:'tools', group:'island', title:'Tools, bags and the bike', data:'tools', html:`
 <p>Tools break after a number of uses. Golden tools need you to prove yourself first, and Heirloom tools never break. Only Sturdy and Golden (and Heirloom) axes can cut a tree down; the Flimsy axe only chops wood.</p>
-<p>Other gear: the <b>bike</b> (60,000), the <b>Wooden Sled</b> (3,000, for winter hills) and the <b>map</b>, which has its own round button at the top left of the screen, under the clock, and shows land, paths, buildings and whose house is whose (not where anyone is).</p>
+<p>Other gear: the <b>bike</b> (60,000), the <b>Wooden Sled</b> (3,000, for winter hills) and the <b>map</b>, which has its own round button at the top left of the screen, under the clock, and shows land, paths, buildings and whose house is whose (not where anyone is). You can zoom in up to 5 times: pinch, scroll the mouse wheel or tap + and −, then drag to look around. Double-tap a spot to zoom in on it, and double-tap again (or tap Fit) to see the whole map. Names stay the same size however far in you go.</p>
 <h3>Repairing</h3>
 <p>Fix a worn tool before it breaks. Two ways:</p>
 <ul><li><b>Yourself</b>: the Tools tab in the Craft panel, anywhere, no crafting table needed. It costs materials by tier (see the table below), scaled by how worn the tool is, at least 1 of each.</li>
@@ -298,6 +303,8 @@ ${note('Guests can learn from Pippa and enchant, but don\'t find scrolls. On a f
 <ul><li>A batch of 3 at each variety milestone. Each different piece you make counts for up to 3 points: making it once is 1 point, three times is 3, and making it more often adds nothing. The milestones are at 24, 33, 42, 51, 60, 69, 78 and 87 points, so you need to make most of what you know, a few times each, before more comes. You get at most one batch a day; if you pass a milestone after that, the plans come the next day (open the Craft panel).</li>
 <li>Woodworking Plan items: dug up (1.5% of digs), from felled trees (1%), or Pemberton's one-a-day plan.</li>
 <li>Studying a piece you own from the Woodworking panel, once a day.</li></ul>
+<h3>Searching</h3>
+<p>The search box at the top of the Craft panel finds a plan by its name or by a material it uses: type <i>stone</i> to see every plan that needs stone, or two words (<i>wood chair</i>) to see only plans that match both. It only shows plans you already know. The search box is on the Woodworking, Cooking, Design and Tools tabs (Make a tool and Enchantments); what you type stays when you make something or switch tabs, and clears when you close the panel. The x clears it, and Enter puts the phone keyboard away.</p>
 <p>Digging up a stump gives a Tree Stump for stump furniture.</p>
 <p>What a piece sells for follows what went into it. A piece made only from wood, branches, stone and weeds sells for about its materials plus 15% (3 fences from 2 wood sell for 45 in all), so woodworking adds a little to chopping rather than replacing it. A piece that needs iron, clay, stumps, planks or rare finds sells for more, and never for less than its materials plus 15%.</p>
 ${tip('Making 14 <b>different</b> pieces is what starts Bramble\'s workshop story.')}
@@ -381,6 +388,7 @@ ${tip('Your saved designs are kept, so making a matching set of chairs is quick:
 { id:'sewing', group:'island', title:'Sewing: rugs and clothes', html:`
 <p>You sew at a <b>Sewing Machine</b>. Once you know woodworking, ask Pemberton <i>"Do you sell sewing machines?"</i> and he'll sell you one for <b>12,000 clams</b> (he only offers it while you don't already own one). Place it on your island or in your house, walk up and press <b>Sew</b>. Weeds are your yarn. Pick a rug or a piece of clothing, set its shape and size, then <b>paint it pixel by pixel</b> from 32 yarn colours.</p>
 <p>The machine sells back for 3,000. You can't use a machine on a friend's island.</p>
+<p>The search box at the top of the machine's list finds your clothes, rug designs and the Pet Collar by name, part or material (<i>weeds</i>, <i>long sleeves</i>).</p>
 <h3>Getting better</h3>
 <p>Every piece you sew counts toward your sewing skill. The better you get, the finer your grid (more detail) and the more alterations your clothes can carry.</p>
 <table class="t"><tr><th>Skill</th><th>Pieces sewn</th><th>Grid</th><th>Alterations</th><th>Opens</th></tr>
@@ -405,6 +413,7 @@ ${tip('Your saved designs are kept, so making a matching set of chairs is quick:
 `},
 { id:'cooking', group:'island', title:'Cooking', data:'recipes', html:`
 <p>Mabel teaches cooking once she knows you. Cook at a <b>campfire</b> (craftable; simple dishes marked "fire") or a <b>Wood Stove</b> (anything). Dishes sell well, islanders love them, and eating one makes you walk a little faster for 5 minutes. "Fish" or "fruit" in a recipe means any fish or fruit.</p>
+<p>Search the Cooking tab by dish or ingredient. A fish or fruit name also finds the dishes that take any fish or fruit, so <i>apple</i> finds Fruit Tart.</p>
 `},
 
 { id:'style', group:'island', title:'Clothes and your look', html:`
@@ -447,9 +456,9 @@ ${tip('Your saved designs are kept, so making a matching set of chairs is quick:
 <p>Once the tower is up and the island is ready, Wendell starts talking about old land sunk under the sea ("You look distracted"). He raises six isles, one at a time, at least 3 days apart. He never lists requirements: he says one hint for the first thing missing, in this order: relics, then the town hall, trade (shops), the museum, a neighbor's dream, then the price.</p>
 <table class="t"><tr><th>#</th><th>Isle</th><th>Hidden requirements</th><th>Relics</th><th>Clams and materials</th><th>What's there</th></tr>
 <tr><td>1</td><td>Clover Meadow</td><td>Town Hall, one shop backed</td><td>Heartwood Acorn</td><td>60,000, 30 wood, 15 stone, 10 flowers</td><td>Grass and wildflower fields, an orchard of a fruit you don't grow, a fishing pond with a brook and a footbridge, low hills, an old windmill</td></tr>
-<tr><td>2</td><td>Sandpiper Dunes</td><td>Marlo backed, museum's first wing</td><td>Sunken Ley Stone</td><td>120,000, 10 beach finds, 20 branches, 6 coconuts</td><td>All sand and palms, a long spit of dunes running out to sea, a big shipwreck, the best beachcombing</td></tr>
+<tr><td>2</td><td>Sandpiper Dunes</td><td>Marlo backed, museum's first milestone</td><td>Sunken Ley Stone</td><td>120,000, 10 beach finds, 20 branches, 6 coconuts</td><td>All sand and palms, a long spit of dunes running out to sea, a big shipwreck, the best beachcombing</td></tr>
 <tr><td>3</td><td>Old Pinewood</td><td>Grand Town Hall, Pemberton backed, Bramble's workshop dream open</td><td>Frostpine Cone, Amber Sliver, Heartwood Acorn</td><td>180,000, 60 wood, 20 stone</td><td>Big misty pines that grow back overnight, the Grandfather Stump, site of Bramble's workshop</td></tr>
-<tr><td>4</td><td>Lantern Bluff</td><td>All three museum wings, the workshop open</td><td>Moonsap Vial</td><td>220,000, 30 planks, 8 iron, 10 clay</td><td>Cliff-top plateau with raised knolls, a spring that spills over the cliff as a waterfall, sea stacks offshore, pines, good rocks, the old lighthouse</td></tr>
+<tr><td>4</td><td>Lantern Bluff</td><td>All three museum milestones, the workshop open</td><td>Moonsap Vial</td><td>220,000, 30 planks, 8 iron, 10 clay</td><td>Cliff-top plateau with raised knolls, a spring that spills over the cliff as a waterfall, sea stacks offshore, pines, good rocks, the old lighthouse</td></tr>
 <tr><td>5</td><td>Hollow Crags</td><td>All three shops at tier 2, the reef at Teeming</td><td>Amber Sliver, Living Coral Crown</td><td>350,000, 15 iron, 30 stone, 2 fossils</td><td>Bare stone and gravel, a quarry of iron-rich rocks (and now and then an emerald), boulders, scree and rock outcrops, stone spires, old ruins, a sunken grotto with steps down to a pool; site of Pemberton's forge</td></tr>
 <tr><td>6</td><td>Starfall Isle</td><td>The Island Charter signed and Wendell's last letter</td><td>Living Coral Crown, Starglass Shard, Moonsap Vial</td><td>500,000, and one each of: plank, honey, tea cake, iron fitting, flour, bath salts</td><td>A small isle in the sky beside Hollow Crags, up a stair of glowing stones. Always night up there, with its own bugs and the star altar</td></tr></table>
 <p>Each isle rises off the new coast (see The far shore). On islands from the island maker, the directions the isles rise in are picked for that island, so they're not in the same places on every island. Wendell tells you which direction an isle will rise in when he first brings it up.</p>
@@ -847,7 +856,7 @@ ${steps(['Talk to them and pick <b>Come and meet people</b>. They follow you for
 <p>There's no credits screen. Here's everything there is to finish:</p>
 <ul class="check">
 <li>Every fish, bug, fossil and beach find in the museum (including bay and glade species)</li>
-<li>All three museum wings and the Reef Hall</li>
+<li>All three museum milestones and the Reef Hall</li>
 <li>Grand Town Hall and 10 islanders</li>
 <li>All three shops at tier 3 (Grand Emporium, Grand Aquarium Hall, Botanical Conservatory)</li>
 <li>House: pay off every loan; four floors if you like</li>
@@ -882,7 +891,7 @@ export const SUMS = {
   farshore: "The wild land round the edge of your island",
   islanders: "Who can move in, gifts and friendship",
   favors: "Errands islanders ask for and the Island Board",
-  museum: "Donating to Professor Thistle and the museum wings",
+  museum: "Donating to Professor Thistle and how the museum grows",
   shops: "Every shop, what it sells and backing shopkeepers",
   tools: "Tool tiers, how long they last, bags and the bike",
   enchanting: "Every enchantment, its cost and what it does",

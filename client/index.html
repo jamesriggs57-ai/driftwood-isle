@@ -134,6 +134,16 @@ html.magicret #start{visibility:hidden}
 .bar>div{height:100%;background:linear-gradient(90deg,#8fd66a,#5fae43)}
 .muted{color:var(--brown2);font-size:14px}
 .notice{background:#fff;border:3px solid var(--line);border-radius:16px;padding:10px 12px;margin-bottom:8px;font-size:15px}
+/* v1.70 search in the crafting menus (search.js) */
+.srch{position:sticky;top:0;z-index:3;background:var(--cream);margin:0 -4px 6px;padding:4px 4px 6px;display:flex;align-items:center}
+.srch input{flex:1;min-width:0;font:inherit;font-size:16px;padding:9px 38px 9px 12px;border-radius:14px;border:3px solid var(--line);background:#fff;color:var(--brown);outline:none;-webkit-appearance:none;appearance:none}
+.srch input:focus{border-color:var(--leaf)}
+.srch .srchx{margin-left:-36px;width:30px;height:30px;border:0;border-radius:50%;background:var(--cream2);color:var(--brown);font:inherit;font-size:18px;font-weight:700;line-height:1;cursor:pointer}
+.srch .srchx[hidden]{display:none}
+.srch0{margin:2px 2px 10px}
+.srch-off{display:none!important}
+#scrim.kb{align-items:flex-start;padding-top:8px;padding-bottom:8px}
+#scrim.kb .panel{max-height:min(100%,760px)}
 label.f{display:block;font-weight:600;margin:10px 0 4px}
 input[type=text]{width:100%;font-family:inherit;font-size:18px;padding:10px 12px;border:3px solid var(--line);border-radius:14px;background:#fff;color:var(--brown);outline:none;user-select:text;-webkit-user-select:text}
 input[type=range]{width:100%}

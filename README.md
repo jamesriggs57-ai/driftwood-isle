@@ -518,3 +518,19 @@ Code: `fossils2.js` (the 69 new fossil builders and their rocks, `buildFossil2In
   - The original trees are laid out again without the isles' bridges, which can move a few of them (on one test island: one tree went, one came back and a palm moved about 2 m).
 - Test hooks (#dev): `window.__game.v166`.
 - Save: no new keys.
+
+## v1.69: zoom on the island map
+- **Zoom.** The map (round button top left, or Look at the town hall table) zooms from the whole map (1x) up to 5x (`MAP_ZOOM_MAX`): pinch on a phone, mouse wheel or trackpad pinch on a computer, or the +, − and Fit buttons at the bottom right of the map. + and − step by 1.6x around the middle; the wheel and pinch zoom around the cursor or between the fingers.
+- **Moving around.** Once zoomed in, drag with one finger or the mouse. The view is clamped to the map's square, so the island can't be dragged off screen. Double-tap (or double-click) zooms 2.5x on that spot; when already zoomed in it glides back to the whole map. The map always opens at the whole view.
+- **Drawing.** `drawIslandMap(cv, o)` takes an optional view (`zoom`, `cx`, `cz`), a draw size (`W`, `H`) and cached terrain (`terr`, `sharp`); with no options it draws exactly as before (town hall table, treasure map). Terrain sampling moved into `mapTerrain()`. Paths and the plaza grow with the zoom, building markers grow a little (up to 1.6x), names, the arrow, the X and the compass stay the same size. The map is now drawn at the screen's pixel density instead of being scaled up from a 1x copy.
+- **Sharper when zoomed.** 200 ms after the view stops moving at 1.4x or more, the part in view (plus 30% around it) is sampled again from the real terrain at up to 280 x 280 and drawn over the base map, so coastlines stay crisp.
+- Test hooks: `window.__game.v169` (set while the map is open).
+- Save: no new keys.
+
+## v1.70: search in the crafting menus
+Code: `search.js` (the search box and filter), hooks in main.js, enchant.js, custom.js and textile.js (search `v1.70`), CSS in index.html (`.srch`, `.srch-off`, `#scrim.kb`).
+- **Where.** Woodworking (plans, rare plans, pieces to study), Cooking, Tools (Make a tool and Enchantments; not Your tools), Design (piece chips, requests, saved designs) and the Sewing machine (closet, rug designs, Pet Collar). Not the forge, the workshop or the wish list (the forge and workshop lists are 3 or 4 items; the wish list already had its own search).
+- **Matching.** Each row carries `data-sk`: its name plus the names of what goes in it (and, for designs and clothes, style and parts). Every typed word must appear (case and apostrophes ignored). A dish's "any fish/fruit/berries" also carries every item of that kind, so `apple` finds Fruit Tart. Only plans you know are on screen, so search never shows an unknown one.
+- **How it filters.** Typing hides rows (`.srch-off`) without re-rendering, so focus and the phone keyboard stay. `data-sgrp` sections hide when nothing in them matches; `data-shide` notes hide while searching so matches sit under the box. The words are kept while the panel is open (a Make tap or a tab switch keeps them) and `openPanel` clears them. Enter puts the keyboard away; Escape with text clears it instead of closing the panel.
+- **Phone keyboard.** On a touch screen, focusing the box sizes the panel's backdrop to `visualViewport` and pins the panel to the top, until the panel closes, so results sit above the keys and nothing moves under your finger when the keyboard drops.
+- Save: no new keys.

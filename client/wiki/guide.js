@@ -340,6 +340,36 @@ ${tip('Making 14 <b>different</b> pieces is what starts Bramble\'s workshop stor
 <li>Each islander asks at most once every 2 weeks, and you can have 2 requests open at once. Open requests show in the Design tab, with a "Try it" button that loads the sketch into the designer.</li></ul>
 ${tip('Your saved designs are kept, so making a matching set of chairs is quick: press Make on the saved design.')}
 `},
+{ id:'pets', group:'island', title:'Pets: dogs and cats', html:`
+<p>You can have one pet: a dog or a cat. It follows you around, explores your island or stays at home.</p>
+<h3>Finding one</h3>
+<p>While you don't have a pet (and there's no Pet Basket in your bag), a stray dog wanders one small part of your island each day and a stray cat wanders another. They move to new spots every day. They only turn up on your own island, never on a friend's island or a boat trip.</p>
+<h3>Winning one over</h3>
+<ol><li><b>Wary.</b> At first it keeps at least 5 m away and backs off if you get closer.</li>
+<li><b>Food.</b> Drop some food near it (fish, fruit, a crop or something you cooked) and step back. It comes over and eats it once you're a few metres from the food. Fish you drop near a stray are set down instead of released. After eating it stops avoiding you, but it still runs off a few metres if you <b>run</b> at it, or walk <b>straight</b> at it from close by. Hold Shift, or push the joystick only part way, to walk slowly, and come at it from the side.</li>
+<li><b>Trust.</b> Call it (<i>Psst psst psst</i> for a cat, <i>Tchk tchk tchk</i> for a dog) from up to 6 m away, or pet it if you can get right next to it. Each call counts once and a pet counts twice. After 3 it trusts you: it comes over and follows you a short way, but not far from its spot.</li>
+<li><b>Collar.</b> Walk up with a <b>Pet Collar</b> in your bag and choose <b>Put on collar</b>. The pet is yours, and you pick its name from a list.</li></ol>
+<p>How far you've got with each stray is kept until the end of the day. Tomorrow's strays start over.</p>
+<h3>Pet Collars</h3>
+<p>Sewn at a <b>Sewing Machine</b> (see Sewing) from <b>6 weeds</b>. One collar fits a dog or a cat.</p>
+<h3>Coats</h3>
+<p>Each stray's coat is rolled when it turns up: Common 89.6%, Rare 10%, Very rare 0.4%, Legendary 1 in 5,000.</p>
+<table class="t"><tr><th>Rarity</th><th>Dogs</th><th>Cats</th></tr>
+<tr><td>Common</td><td>Golden, Cocoa, Black and Tan, Cream</td><td>Ginger Tabby, Grey, Black, Tuxedo</td></tr>
+<tr><td>Rare</td><td>Dotty, Blue Merle</td><td>Calico, Siamese</td></tr>
+<tr><td>Very rare</td><td>Ember, Silver</td><td>Lilac, Snow Smoke</td></tr>
+<tr><td>Legendary</td><td>Starlit (glows)</td><td>Moonlit (glows)</td></tr></table>
+<h3>Looking after your pet</h3>
+<p>Walk up to your pet and choose <b>Pet</b> to give it a fuss and pick what it does:</p>
+<ul><li><b>Follow me</b>: it comes everywhere with you, into houses and onto friends' islands. Pets don't come on boat trips; it waits at home and joins you again when you're back.</li>
+<li><b>Go explore the island</b>: it wanders around your island near your house and sometimes trots over to say hello.</li>
+<li><b>Stay home</b>: it stays inside your house.</li>
+<li><b>New name</b>: pick another name from the list.</li></ul>
+<p>Friends on the same island as you see your pet.</p>
+<h3>Giving a pet away</h3>
+<p>Choose <b>Give to a friend</b>. Your pet curls up in a <b>Pet Basket</b> in your bag. Mail the basket from the Friends tab or put it in a trade. Whoever has the basket chooses <b>Let it out</b> in their bag to take the pet, as long as they don't already have one. You can also let it out again yourself. A basket can't be sold, set down on the ground or given to an islander. While you have a basket in your bag, no strays turn up.</p>
+`},
+
 { id:'sewing', group:'island', title:'Sewing: rugs and clothes', html:`
 <p>You sew at a <b>Sewing Machine</b>. Once you know woodworking, ask Pemberton <i>"Do you sell sewing machines?"</i> and he'll sell you one for <b>12,000 clams</b> (he only offers it while you don't already own one). Place it on your island or in your house, walk up and press <b>Sew</b>. Weeds are your yarn. Pick a rug or a piece of clothing, set its shape and size, then <b>paint it pixel by pixel</b> from 32 yarn colours.</p>
 <p>The machine sells back for 3,000. You can't use a machine on a friend's island.</p>
@@ -853,6 +883,7 @@ export const SUMS = {
   tables: "Crafting table tiers and what each adds",
   custom: "Designing your own furniture part by part",
   sewing: "The Sewing Machine, pixel-painted rugs and clothes",
+  pets: "Winning over a stray dog or cat, collars, coats and giving pets away",
   cooking: "Learning to cook and every recipe",
   style: "Changing your look and wearing clothes",
   wendell: "How Wendell arrives and what he does in his tower",

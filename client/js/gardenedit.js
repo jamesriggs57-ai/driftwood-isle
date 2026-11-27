@@ -99,8 +99,7 @@ export function createGardenEdit(C){
   function cellOk(i, j, others){ const x=i*CELL, z=j*CELL;
     if (!C.walkable(x,z) || C.onDock(x,z) || C.onBridge(x,z) || x>500 || C.rawHeight(x,z)<=C.SAND_H+0.05) return 'water';
     if (C.visPathDist(x,z)<1.0) return 'path';
-    let lo=1e9, hi=-1e9; for (const [ox,oz] of [[-0.4,-0.4],[0.4,-0.4],[-0.4,0.4],[0.4,0.4]]){ if (!C.walkable(x+ox,z+oz)) return 'water'; const y=C.rawHeight(x+ox,z+oz); lo=Math.min(lo,y); hi=Math.max(hi,y); }
-    if (hi-lo>0.35) return 'steep';
+    for (const [ox,oz] of [[-0.4,-0.4],[0.4,-0.4],[-0.4,0.4],[0.4,0.4]]) if (!C.walkable(x+ox,z+oz)) return 'water';   // v1.72 any slope will do; the soil tilts to fit
     if (C.blocked(x,z,0.3)) return 'blocked';
     for (const q of others) if (Math.abs(q.x-x)<0.55 && Math.abs(q.z-z)<0.55) return 'plants';
     for (const t of C.trees) if (!t.removed && Math.hypot(t.pos.x-x,t.pos.z-z)<1.0) return 'blocked';
@@ -114,7 +113,7 @@ export function createGardenEdit(C){
     const gap = sf ? 0.55 : 1.6; if (others.some(q=>Math.hypot(q.x-x,q.z-z)<gap)) return 'plants';
     if (C.trees.some(t=>!t.removed && Math.hypot(t.pos.x-x,t.pos.z-z)<(P.ptype==='tree'?2.2:1.0))) return 'blocked';
     return null; }
-  const WHY = { water:'There\'s water or the edge of the island there.', path:'That\'s too close to a path.', steep:'The ground there is too uneven.', blocked:'Something is in the way.',
+  const WHY = { water:'There\'s water or the edge of the island there.', path:'That\'s too close to a path.', blocked:'Something is in the way.',
     plants:'That\'s too close to other plants.', garden:'That would sit on top of another garden.', sand:'That one only grows on sand.', you:'You\'re standing right there.' };
   function update(){ if (!E || E.phase!=='move') return; const { out, cells }=plan(), sel=new Set(E.items.map(it=>it.rec));
     let x0=1e9,x1=-1e9,z0=1e9,z1=-1e9; for (const o of out){ x0=Math.min(x0,o.x); x1=Math.max(x1,o.x); z0=Math.min(z0,o.z); z1=Math.max(z1,o.z); }

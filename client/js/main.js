@@ -1359,8 +1359,8 @@ function fenceHit(x,z,r){ for (const s of FENCE_SEGS){ if (x<Math.min(s[0],s[2])
 // Can a seed go in this square?
 function cellFree(i,j, near){ const x=i*CELL, z=j*CELL; if (World.inside) return false;
   if (!walkable(x,z) || onDock(x,z) || onBridge(x,z) || rawHeight(x,z)<=SAND_H+0.05 || visPathDist(x,z)<1.0) return false;
-  let lo=1e9, hi=-1e9; for (const [ox,oz] of [[-0.4,-0.4],[0.4,-0.4],[-0.4,0.4],[0.4,0.4]]){ if (!walkable(x+ox,z+oz)) return false; const y=rawHeight(x+ox,z+oz); lo=Math.min(lo,y); hi=Math.max(hi,y); }
-  if (hi-lo>0.35) return false;
+  for (const [ox,oz] of [[-0.4,-0.4],[0.4,-0.4],[-0.4,0.4],[0.4,0.4]]) if (!walkable(x+ox,z+oz)) return false;
+  // v1.72 no limit on how steep: the soil tilts to fit the slope
   if (blocked(x,z,0.3)) return false;
   for (const q of (near||S.plants)) if (Math.abs(q.x-x)<0.55 && Math.abs(q.z-z)<0.55) return false;
   for (const t of trees) if (!t.removed && Math.abs(t.pos.x-x)<1.0 && Math.abs(t.pos.z-z)<1.0 && Math.hypot(t.pos.x-x,t.pos.z-z)<1.0) return false;
@@ -8984,8 +8984,10 @@ function gridBeside(g, EW, EH){ const b=gardenBox(g), P=placing; let best=null, 
 function gridFill(i0, j0, P, near){ const out=[], bad=[], W=gridW(P), rows=Math.ceil(P.n/W);
   for (let r=0;r<rows;r++) for (let c=0;c<W && r*W+c<P.n;c++){ const [i,j] = P.orient ? [i0+r, j0+c] : [i0+c, j0+r]; (cellFree(i,j,near)?out:bad).push([i,j]); }
   return { out, bad }; }
-// a patch one empty square away from a garden's side slides that one square so it joins the garden
+// a patch one empty square away from a garden's side slides that one square so it joins the garden.
+// v1.72 a patch that already sits in or right against a garden stays where you aimed (it used to hop toward another garden nearby)
 function gridNudge(i0, j0, EW, EH){
+  for (let i=i0-1;i<=i0+EW;i++) for (let j=j0-1;j<=j0+EH;j++){ const edge=(i<i0||i>i0+EW-1)&&(j<j0||j>j0+EH-1); if (!edge && gardenAtCell(i,j)) return null; }
   for (const g of S.gardens){ if (!g.cells.length) continue; const b=gardenBox(g);
     const overI = i0<=b.i1 && i0+EW-1>=b.i0, overJ = j0<=b.j1 && j0+EH-1>=b.j0;
     if (overJ && i0===b.i1+2) return [i0-1, j0]; if (overJ && i0+EW-1===b.i0-2) return [i0+1, j0];
@@ -9199,8 +9201,9 @@ function handleTap(cx,cy){
   if (buildMode) return;
   if (CatchMeter.bug){ resolveSwing(); return; }
   if (Fishing.state!=='idle'){ reel(); return; }
+  // v1.72 a tap while placing aims at the ground under your finger, not at a plant or stake in front of it (tapping between plants used to land on the plant)
+  if (placing){ if (placing.dragged) return; const p=pickAt(cx,cy), pt=groundAtScreen(cx,cy)||(p&&(p.ground||p.point||p.water)); if(pt){ placing.m.position.set(pt.x,World.inside?0:groundY(pt.x,pt.z),pt.z); checkPlace(); } return; }
   const p=pickAt(cx,cy); if(!p) return;
-  if (placing){ if (placing.dragged) return; const pt=p.ground||p.point||p.water; if(pt){ placing.m.position.set(pt.x,World.inside?0:groundY(pt.x,pt.z),pt.z); checkPlace(); } return; }
   // On a computer, clicking walks you there (v1.19, on by default, Menu > Controls). With it off, clicking only uses
   // things that are close enough and you walk with the keys.
   if (!isTouchDevice && CT().clickWalk===false){

@@ -17,6 +17,7 @@ import * as S4 from './story4.js';   // v1.41 phase 4 buildings, festival and St
 import * as LH from './lighthouse.js';   // v1.39 fixes: the climbable lighthouse on Lighthouse Point
 import * as BH from './bluffhouse.js';   // v1.60 the bigger, walk-in Lantern Bluff lighthouse
 import * as TW from './towerroom.js';   // v1.47 inside Wendell's tower
+import * as TT from './towertop.js';   // v1.78 the balcony round the top of Wendell's tower
 import { ACHIEVEMENTS, ACH_GROUPS } from './achieve.js';
 import { BY_SLOT, SLOT_NAMES } from './wardrobe-data.js';
 import { CELL, buildSoil, buildFences, buildStake, buildGardenSign, buildScarecrow, buildLanternPost, buildFlowerArch } from './farm.js';
@@ -5067,6 +5068,7 @@ function makeTowerRooms(){
   spot(B, 'towerorrery', topL.spots.orrery, [0.6,1.0], 'Look', ()=>toast(pick(TW.TOWER_LINES.orrery)));
   spot(B, 'towerglobe', topL.spots.globe, [0.5,1.1], 'Look', ()=>toast(pick(TW.TOWER_LINES.globe)));
   spot(B, 'towerdesk', topL.spots.desk, [0.6,0.8], 'Read', ()=>toast(TW.TOWER_LINES.desk[0]));
+  spot(B, 'towerroof', topL.spots.roof, [0.6,1.6], 'Out on the balcony', ()=>towerRoof());   // v1.78
   spot(B, 'towerglass', topL.spots.pedestal, [0.5,1.2], 'Look', ()=>dialog('Under the glass dome', 420, ISLE_K.includes('starfall')
     ? ['A sliver of Starglass on a velvet cushion. Stars drift inside it, even now.', 'A card underneath, in Wendell\'s hand: "From the night Starfall came up. Do not tap the glass."']
     : ['An empty velvet cushion under a glass dome.', 'A little card says: "For the Starglass. When it comes."']));
@@ -5077,6 +5079,23 @@ function refreshTowerLook(){ if (!topL) return; const night=World.night>0.5; TW.
 function towerFloor(to){ const R=ROOMS[to], L=to==='tower'?towerL:topL; if (!R) return; Snd.door();
   fade(()=>{ World.inside=to; for (const k in ROOMS) ROOMS[k].group.visible=(k===to); stopMove(); const [lx,lz]= to==='tower' ? L.upLand : L.downLand;
     player.pos.set(R.ox+lx, 0, R.oz+lz); player.face=Math.atan2(-lx, -lz); player.obj.rotation.y=player.face; camTarget.copy(player.pos); R.cutState=null; refreshTowerLook(); updateSky(); updateCamera(1); }); }
+// v1.78 out of the little door in the observatory glass onto the balcony round the top: only once Wendell counts you as a friend
+const BALCONY_FRIEND = 5;   // his goodwill (a chat a day +1, a favor +3), the same mark as an islander being your friend
+let TB=null;
+function towerRoof(){ if (!towerEnt || !ROOMS.towertop || dlgState) return; const W=WIZARD;
+  if (((S.kfriend||{}).wendell||0) < BALCONY_FRIEND){ dialog(W.name, W.voice, ['Ah, ah! Not the balcony, if you please.', 'I only let friends out there. Stop for a chat now and then, help me with a favor or two, and we\'ll see.']); return; }
+  const out=()=>{ if (!TB || TB.model!==towerEnt.model){ if (TB) TB.door.remove(); TB=TT.makeTowerBalcony(towerBalcCtx()); TB.model=towerEnt.model; }
+    Snd.door(); fade(()=>{ for (const id of Object.keys(rebuildOnExit)){ delete rebuildOnExit[id]; setTimeout(()=>rebuildPlace(id),0); }
+      World.inside=null; camYaw=0; OUT.visible=true; for (const k in ROOMS) ROOMS[k].group.visible=false; stopMove(); TB.arrive(); updateSky(); }); };
+  if (!S.magic.balcony){ S.magic.balcony=true; save(); dialog(W.name, W.voice, ['Going out on the balcony? Go on then, you\'ve earned it.', 'Mind the eaves. And don\'t lean on the rail, it\'s older than I am.'], out); return; }
+  out(); }
+function towerBalcCtx(){ return { player, camera, scene, model:towerEnt.model, Thing, fade, toast, stopMove, interact, hud:$('#hud'), step:()=>Snd.click(),
+  dialogOpen:()=>!!dlgState, getCamYaw:()=>camYaw, setCamYaw:v=>{ camYaw=v; }, setPerch:p=>{ PERCH=p; },
+  input:()=>{ const jm=Math.hypot(joy.x,joy.y); if (joy.active && jm>0.15) return [joy.x/jm*clamp((jm-0.15)/0.7,0.25,1), joy.y/jm*clamp((jm-0.15)/0.7,0.25,1)];
+    return [(keys['d']||keys['arrowright']?1:0)-(keys['a']||keys['arrowleft']?1:0), (keys['s']||keys['arrowdown']?1:0)-(keys['w']||keys['arrowup']?1:0)]; },
+  skyFollow:tg=>{ sky.position.copy(camera.position); stars.position.copy(camera.position); sun.target.position.copy(tg); sun.position.copy(tg).addScaledVector(sunDir,50); },
+  goIn:done=>{ Snd.door(); fade(()=>{ done(); const R=ROOMS.towertop; World.inside='towertop'; OUT.visible=false; for (const k in ROOMS) ROOMS[k].group.visible=(k==='towertop'); stopMove(); camYaw=0;
+    const [lx,lz]=topL.roofLand; player.pos.set(R.ox+lx, 0, R.oz+lz); player.face=Math.atan2(-lx, -lz); player.obj.rotation.y=player.face; camTarget.copy(player.pos); R.cutState=null; refreshTowerLook(); updateSky(); updateCamera(1); }); } }; }
 // first time in: if you've met him he says hello properly; if not, he introduces himself
 function towerHello(){ setTimeout(()=>{ if (World.inside!=='tower' || dlgState) return; const W=WIZARD;
   if (!S.magic.met){ talkWizard(); return; }
@@ -7893,7 +7912,7 @@ function setupLighthouse(lh, P){
   const g=lh.g; OUT.add(LH.buildFarIsles(S.seed));
   const ctx={ tower:g, cx:lh.x, cz:lh.z, rot:g.rotation.y, player, camera, scene, get camTarget(){ return camTarget; } /* declared further down, so read it late */, groundY, Thing, Snd, toast, dialog, fade, save, stopMove, interact, nearestEnt, updateSky, updateCamera,
     get TX(){ return TX; }, keeperSpec:P||null, folkKeeper:(x,z,face)=>folkKeeper(P, x, z, roleMenu(P), face), hud:$('#hud'),
-    step:()=>Snd.click(), night:()=>World.night, dialogOpen:()=>!!dlgState, getCamYaw:()=>camYaw, setCamYaw:v=>{ camYaw=v; }, setPerch:p=>{ PERCH=p; },
+    step:()=>Snd.click(), night:()=>World.night, dialogOpen:()=>!!dlgState, getCamYaw:()=>camYaw, setCamYaw:v=>{ camYaw=v; }, setPerch:p=>{ PERCH=p; }, ray:()=>ray /* v1.78 the stair: tap a tread to walk to it */,
     busy:()=>!!(dlgState || placing || buildMode || magicMode || cine || Fishing.state!=='idle' || knockedDown()),
     prep:()=>{ if (riding) setRiding(false); if (sledding) setSled(false); },
     input:()=>{ const jm=Math.hypot(joy.x,joy.y); if (joy.active && jm>0.15) return [joy.x/jm*clamp((jm-0.15)/0.7,0.25,1), joy.y/jm*clamp((jm-0.15)/0.7,0.25,1)];
@@ -9638,7 +9657,7 @@ function movePlayer(dt,t){
 }
 const camTarget=new THREE.Vector3(), _tzl=new THREE.Vector3();
 function updateCamera(dt){
-  if (PERCH && PERCH.cam(dt)) return;
+  if (PERCH){ const turn=(keys[KB().turnR]?1:0)-(keys[KB().turnL]?1:0); if (turn && !dlgState) camYaw+=turn*dt*1.8; if (PERCH.cam(dt)) return; }   // v1.78 in a lighthouse the turn keys still turn the camera
   if (tankZoom){ tankZoom.t=Math.min(1, tankZoom.t+dt/0.42); const k=1-(1-tankZoom.t)**3; camera.position.lerpVectors(tankZoom.from, tankZoom.to, k); camera.lookAt(_tzl.lerpVectors(tankZoom.lookFrom, tankZoom.look, k)); return; }
   if (buildMode){ _bt.copy(buildMode.camT).add(buildMode.pan); camTarget.lerp(_bt, Math.min(1,dt*5)); const dist=buildMode.dist, pitch=buildMode.pitch, yaw=buildMode.yaw;
     if (World.inside){ scene.fog.near=Math.max(60,dist*1.2); scene.fog.far=Math.max(200,dist*3.5); }
@@ -10129,7 +10148,7 @@ window.__game.sewMachine = { open:()=>SX.open(), choices:()=>SX.keeperChoices({ 
 // v1.26 test hooks
 window.__game.v126 = { townNewDay, applyTown, findHomeSpot, claimHomeSpot, townCap, incomeNewDay, refreshIncome, talkIncome, incCollect, incOf, INCOME, incEnts, openMap, talkSkipperHome, talkSkipperTrip, tripGoHome, tripRecap, storyWho, askToLeave, canAskToLeave, pitchOnBuy, merchantDay, get peddler(){ return peddler; }, get skipper(){ return skipper; }, newSquares, LOAN_MAX_SQ, TRIP, TRIP_THEME, residents, residentHomes, plotEnts, KEEPOUT, Q, PATHS, camTarget, updateCamera, set camDist(v){ camDist=v; }, get camDist(){ return camDist; }, set camYaw(v){ camYaw=v; } };
 window.__game.LETTERS = LETTERS;
-window.__game.v147 = { makeTowerRooms, towerFloor, towerHello, openEyepiece, refreshTowerLook, outdoors, get towerL(){ return towerL; }, get topL(){ return topL; }, get wizard(){ return wizard; }, get tower(){ return towerEnt; }, TW };   // v1.47 test hooks
+window.__game.v147 = { makeTowerRooms, towerFloor, towerRoof, get balcony(){ return TB; }, towerHello, openEyepiece, refreshTowerLook, outdoors, get towerL(){ return towerL; }, get topL(){ return topL; }, get wizard(){ return wizard; }, get tower(){ return towerEnt; }, TW };   // v1.47 test hooks
 window.__game.v160 = { get bluff(){ return BLUFF; }, get lhc(){ return LHC; }, devLighthouse, bluffStage, devBluff, devBluffReal, setupBluff, BH, get devStage(){ return BLUFF_DEV_STAGE; } };
 window.__game.v127 = { roleMenu, folkMenu, smugglerShop, openNoticeBoard, shellGame, talkWorkshop, talkAttic, talkWizGarden, talkLibrary, anglerWants, get perch(){ return PERCH; }, setupTown, get PLAN(){ return PLAN; }, get TX(){ return TX; }, LAY, haulValue, openContacts, deliverReplies, sendLetter, addContact, canInvite, invitePenpal, readTreasureMap, bottleLetter, openNote, contactPerson, XW, POOLS, lowTide, BRIDGES, DOCK, waterType, VY, Thing };
 // v1.25 test hooks for the house builder

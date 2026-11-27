@@ -299,7 +299,7 @@ export function buildTower(){
   const body=mk(new THREE.CylinderGeometry(R,R*1.06,H,24), M(0xb4ae9e), 0,F+H/2,0,g);   // v1.26: older, greyer stone body.castShadow=body.receiveShadow=true;
   for (let k=0;k<5;k++) for (let i=0;i<10;i++){ const a=i/10*TAU+(k%2)*0.31; if (k<3 && Math.abs(Math.atan2(Math.sin(a),Math.cos(a)))<0.45) continue; const st=mk(G.box(0.7,0.36,0.08), M([0xa8a292,0x9a9484,0xb2ac9c][(i+k)%3]), Math.sin(a)*(R+0.03), F+0.5+k*1.0, Math.cos(a)*(R+0.03), g); st.rotation.y=a; st.castShadow=false; }
   const band=mk(G.cyl(R+0.12,R+0.12,0.25,20), M(0x5a5248), 0,F+H,0,g);
-  const roof=outline(mk(new THREE.ConeGeometry(R+0.7,3.6,20), M(0x4e5460,{flatShading:true}), 0,F+H+1.8,0,g)); roof.rotation.y=0.1;   // slate, crooked a touch
+  const roof=outline(mk(new THREE.ConeGeometry(R+0.7,3.6,20), M(0x4e5460,{flatShading:true}).clone(), 0,F+H+1.8,0,g)); roof.rotation.y=0.1;   // slate, crooked a touch (its own material: it fades when you're on the balcony behind it)
   roof.rotation.z=0.06;
   for (let i=0;i<7;i++){ const a=i/7*TAU+0.3; mk(G.sph(0.32,7,5), M(0x5f8a3e), Math.sin(a)*(R+0.35), F+H+0.25, Math.cos(a)*(R+0.35), g).scale.set(1.2,0.35,1); }
   // an iron finial with a crescent-moon vane instead of a glowing ball
@@ -307,7 +307,15 @@ export function buildTower(){
   // ivy up one side
   for (let i=0;i<14;i++){ const t=i/14, a=-2.2+Math.sin(i*1.3)*0.25; mk(G.sph(0.2,6,4), M(0x4f8a3a), Math.sin(a)*(R+0.12), F+0.3+t*H*0.8, Math.cos(a)*(R+0.12), g).scale.set(1,0.8,0.5); }
   // windows (round, glowing)
-  for (const [y,a] of [[F+2.6,0.6],[F+3.8,-0.7],[F+2.0,Math.PI-0.5],[F+4.1,Math.PI+0.6]]){ const w=mk(G.cyl(0.32,0.32,0.08,16), glowMat(0xffd27a), Math.sin(a)*(R+0.02), y, Math.cos(a)*(R+0.02), g); w.rotation.set(Math.PI/2,0,0); w.rotation.y=a; w.lookAt(Math.sin(a)*10, y, Math.cos(a)*10); w.rotateX(Math.PI/2); }
+  // v1.78 a balcony round the top, under the eaves, with a little door out from the observatory (Wendell lets friends out on it)
+  const BY=F+3.8, BR=R+1.15, BD=-0.7, wood=M(0x5a3e2a), iron=M(0x2c2a28);
+  { const deck=mk(G.cyl(BR,BR,0.14,28), wood, 0,BY-0.07,0,g); deck.receiveShadow=true;
+    for (let i=0;i<10;i++){ const a=i/10*TAU+0.15, b=mk(G.box(0.12,0.12,1.3), wood, Math.sin(a)*(R+0.45),BY-0.5,Math.cos(a)*(R+0.45),g); b.rotation.set(0.75,a,0,'YXZ'); }   // struts under it
+    for (let i=0;i<24;i++){ const a=i/24*TAU; mk(G.box(0.05,0.9,0.05), iron, Math.sin(a)*(BR-0.08),BY+0.45,Math.cos(a)*(BR-0.08),g).castShadow=false; }
+    for (const y of [0.9,0.48]){ const t=mk(G.tor(BR-0.08,0.03,6,48), iron, 0,BY+y,0,g); t.rotation.x=Math.PI/2; t.castShadow=false; }
+    const dr=new THREE.Group(); dr.position.set(Math.sin(BD)*(R+0.06), BY, Math.cos(BD)*(R+0.06)); dr.rotation.y=BD; g.add(dr);
+    mk(G.box(0.86,1.5,0.1), M(0x8a7a6a), 0,0.75,0,dr); mk(G.box(0.68,1.36,0.14), wood, 0,0.68,0.02,dr); mk(G.sph(0.05,8,6), M(0xf3c35a,{metalness:0.7,roughness:0.3}), 0.24,0.7,0.1,dr); }
+  for (const [y,a] of [[F+2.6,0.6],[F+2.9,-1.5],[F+2.0,Math.PI-0.5],[F+4.1,Math.PI+0.6]]){ const w=mk(G.cyl(0.32,0.32,0.08,16), glowMat(0xffd27a), Math.sin(a)*(R+0.02), y, Math.cos(a)*(R+0.02), g); w.rotation.set(Math.PI/2,0,0); w.rotation.y=a; w.lookAt(Math.sin(a)*10, y, Math.cos(a)*10); w.rotateX(Math.PI/2); }
   // door
   mk(G.box(1.4,2.35,0.1), M(0x8a7a6a), 0,F+1.12,R+0.04,g); const dr=mk(G.box(1.1,1.9,0.16), M(0x5a3e2a), 0,F+0.95,R+0.1,g); const arch=mk(new THREE.CylinderGeometry(0.55,0.55,0.16,16,1,false,-Math.PI/2,Math.PI), M(0x5a3e2a), 0,F+1.9,R+0.1,g); arch.rotation.set(-Math.PI/2,0,0);
   mk(G.sph(0.07,8,6), M(0xf3c35a,{metalness:0.7,roughness:0.3}), 0.35,F+0.95,R+0.2,g);
@@ -316,6 +324,7 @@ export function buildTower(){
   // a few floating sparkles that bob (animated by the game)
   const orbs=[]; for(let i=0;i<4;i++){ const o=mk(G.ico(0.06,1), glowMat(0xfff0b0), 0,0,0,g); o.castShadow=false; o.userData.ph=i/4; orbs.push(o); } g.userData.orbs=orbs;
   g.userData.door=[0, R+0.9]; g.userData.rects=[[-R-0.2,-R-0.2,R+0.2,R+0.3]];
+  g.userData.roof=roof; g.userData.balcony={ y:BY, rIn:R+0.35, rOut:BR-0.38, doorA:BD };
   return g;
 }
 /* Wendell, the island wizard (an old goat in a starry hat) */

@@ -23,7 +23,7 @@ import * as THREE from 'three';
 import { TAU, clamp, lerp, smooth, mulberry32 } from './util.js';
 import { mk, G, glowMat, addGlow, buildGull } from './models.js';
 import { mergeStatic } from './cottage.js';
-import { perchKit, ringMove, ringCam, panCam, angD, wrap } from './lighthouse.js';
+import { perchKit, stairMove, stairTap, deckMove, followCam, VIEW, behind, fadeTo, angD, wrap } from './lighthouse.js';
 
 // ---- sizes (metres). Characters stand about 1.7 m tall; the old bluff lighthouse was 11 m to the top of its roof. ----
 export const BT = {
@@ -306,7 +306,7 @@ export function buildBluffTower(seed=1){
       'The lighthouse on Lantern Bluff, fresh red and white paint, the lamp turning slow and steady.' ][n];
   }
   setStage(0);
-  g.userData = Object.assign(g.userData, { skyMat:k.sky, segs, brackets, treads, railRuns, beam, beamMat, ladder, beamGroup:beam, setStage, get stage(){ return stage; },
+  g.userData = Object.assign(g.userData, { skyMat:k.sky, roofM:mat.roof, segs, brackets, treads, railRuns, beam, beamMat, ladder, beamGroup:beam, setStage, get stage(){ return stage; },
     setLit:on=>{ if (on) setStage(3); else if (stage===3) setStage(2); },
     rects:[[-BT.foot,-BT.foot,BT.foot,BT.foot]], foot:BT.foot, beamSE:[beamS, beamE] });
   return g;
@@ -347,7 +347,7 @@ export function makeBluffLighthouse(ctx){
   const at = (a, rr, h) => toW(Math.sin(a)*rr, h, Math.cos(a)*rr);
   const toL = (wx, wz) => { const dx=wx-cx, dz=wz-cz; return [dx*cs-dz*sn, dx*sn+dz*cs]; };
   const Gy=baseY+BT.G, Fy=baseY+BT.base;
-  const st = { mode:'off', t:0, look:new THREE.Vector3(), camP:new THREE.Vector3(), camA:W(0), ang:W(A1), lookYaw:0, panFrom:0, seen:0 };
+  const st = { mode:'off', t:0, look:new THREE.Vector3(), camP:new THREE.Vector3(), camSnap:false, seen:0, s:0, r:0, a:A1, dir:1 };
   const kit=perchKit(ctx, { fog:[46, 170] }), P=kit.P, { hud, walkAnim, still } = kit;
   let stageN=0, stageT=0;
   const cur = () => stageN;
@@ -360,7 +360,7 @@ export function makeBluffLighthouse(ctx){
   // the way in is the landmark itself (main.js gives it 'Go in'), so a tap anywhere on the tower works
   const exitE = thing('blhexit', lpol(0, BT.floorR-0.1), BT.base, ()=>st.mode==='floor' ? 'Go outside' : null, ()=>{ if (st.mode==='floor') leave(); });
   const footA = BT.a0-0.28, footR = rIn(BT.base)-BT.pathIn;
-  const foot = thing('blhstair', lpol(footA, footR), BT.base, ()=>st.mode==='floor' ? 'Climb the stair' : null, ()=>{ if (st.mode==='floor') climb(); }, 1.4);
+  const foot = thing('blhstair', lpol(footA, footR), BT.base, ()=>st.mode==='floor' ? 'Up the stair' : null, ()=>{ if (st.mode==='floor') climb(); }, 1.4);
   const pages = BLUFF_PAGES.map((pg, i)=>{ const [a,d]=[[-0.55,2.15],[-2.6,1.55],[3.3,1.25]][i];
     return thing('blhpage'+i, lpol(a,d), BT.base, ()=>st.mode==='floor' && cur()<3 ? 'Read' : null, ()=>ctx.dialog('Lantern Bluff', 420, pg)); });
   const book = thing('blhbook', lpol(-1.3, 2.75), BT.base, ()=>st.mode==='floor' && cur()===3 ? 'Read the logbook' : null,
@@ -370,7 +370,7 @@ export function makeBluffLighthouse(ctx){
   const hatch=new ctx.Thing('blhdown', hp.x, hp.z, 0.3, new THREE.Group(), ()=>st.mode==='top'?'Head down':null, ()=>{ if (st.mode==='top') goDown(); }, { solid:false, reach:5.6 });
   hatch.pos.y=Gy; hatch.obj.position.y=Gy;
   const lp=at(A1-0.7+Math.PI, 1.2, BT.G);
-  const lampE=new ctx.Thing('blhlamp', lp.x, lp.z, 0.3, new THREE.Group(), ()=>st.mode==='top' ? (cur()===3 ? 'Look at the lamp' : 'Look round the lamp room') : null, ()=>{ if (st.mode==='top'){ st.lampLook=true; st.lampDlg=false; st.lampT=0; st.lampA=lampAngle(st.ang); ctx.updateSky(); ctx.lampAct(); } }, { solid:false, reach:5.6 });
+  const lampE=new ctx.Thing('blhlamp', lp.x, lp.z, 0.3, new THREE.Group(), ()=>st.mode==='top' ? (cur()===3 ? 'Look at the lamp' : 'Look round the lamp room') : null, ()=>{ if (st.mode==='top'){ st.lampLook=true; st.lampDlg=false; st.lampT=0; st.lampA=lampAngle(W(st.a)); st.camP.copy(ctx.camera.position); ctx.stopMove(); ctx.updateSky(); ctx.lampAct(); } }, { solid:false, reach:5.6 });
   lampE.pos.y=Gy; lampE.obj.position.y=Gy;
 
   // ---- the ground floor: what you can't walk through ----
@@ -393,59 +393,72 @@ export function makeBluffLighthouse(ctx){
 
   // ---- getting in and out ----
   const IN_T=1.3;
-  function enter(){ if (st.mode!=='off' || ctx.busy()) return; ctx.prep(); ctx.stopMove(); hud('climb'); ctx.setPerch(perch);
+  const startCam = () => { st.camP.copy(ctx.camera.position); st.look.copy(P.pos); st.look.y+=0.9; st.camSnap=false; };
+  function enter(){ if (st.mode!=='off' || ctx.busy()) return; ctx.prep(); ctx.stopMove(); hud('top'); ctx.setPerch(perch);
     const [px,pz]=toL(P.pos.x,P.pos.z);
-    if (Math.abs(Math.atan2(px,pz))>0.5){ st.mode='fading'; ctx.fade(()=>{ const p=at(0, BT.foot+1.0, 0); p.y=ctx.groundY(p.x,p.z); P.pos.copy(p); P.obj.position.copy(p); goIn(); }); return; }   // round the back: come in by the door
-    goIn(); }
+    if (Math.abs(Math.atan2(px,pz))>0.5){ st.mode='fading'; ctx.fade(()=>{ const p=at(0, BT.foot+1.0, 0); p.y=ctx.groundY(p.x,p.z); P.pos.copy(p); P.obj.position.copy(p); st.camSnap=true; goIn(); }); return; }   // round the back: come in by the door
+    startCam(); goIn(); }
   function goIn(){ ctx.Snd.door();
-    st.mode='in'; st.t=0; st.from=P.pos.clone(); st.camA=W(0); st.camP.copy(at(0, BT.camD, BT.base+BT.camH)); st.look.copy(P.pos); refreshStage();
+    st.mode='in'; st.t=0; st.from=P.pos.clone(); refreshStage();
     if (!st.seen){ st.seen=1; const n=cur(); setTimeout(()=>{ if (st.mode==='floor' || st.mode==='in') ctx.toast(['Nobody has been in here for years.','Fresh sawdust on the floor. Someone has been at the stair.','It smells of new wood and paint.','Warm, dry and freshly painted.'][n]); }, 900); } }
-  function leave(){ st.mode='leaving'; st.t=0; ctx.stopMove(); hud('climb'); ctx.Snd.door(); }
-  function outside(){ st.mode='off'; P.obj.visible=true; cutaway(false); hud(false); ctx.setPerch(null); ctx.setCamYaw(0);
+  function leave(){ st.mode='leaving'; st.t=0; ctx.stopMove(); ctx.Snd.door(); }
+  function outside(){ st.mode='off'; P.obj.visible=true; cutaway(false); fadeTo(U.roofM, false, 1); hud(false); ctx.setPerch(null); ctx.setCamYaw(0);
     const p=at(0, BT.foot+1.2, 0); p.y=ctx.groundY(p.x,p.z); P.pos.copy(p); P.obj.position.copy(p); P.face=W(0); P.obj.rotation.y=P.face;
     ctx.camTarget.copy(P.pos); ctx.updateSky(); ctx.updateCamera(1); }
   // #dev: straight onto the ground floor (or up top), from wherever you are on the isle
-  function jumpIn(top){ if (st.mode!=='off' || ctx.busy()) return false; ctx.prep(); ctx.stopMove(); ctx.setPerch(perch); refreshStage(); st.seen=1;
-    if (top){ arrive(); endPan(); return true; }
-    toFloor(0.2, 2.3, Math.PI); st.camA=W(0); st.camP.copy(at(0, BT.camD, BT.base+BT.camH)); st.look.copy(P.pos); return true; }
+  function jumpIn(top){ if (st.mode!=='off' || ctx.busy()) return false; ctx.prep(); ctx.stopMove(); ctx.setPerch(perch); refreshStage(); st.seen=1; st.camSnap=true;
+    if (top){ onDeck(A1, BT.walkR); pose(A1, BT.walkR, BT.G, W(A1)); arrive(); return true; }
+    toFloor(0.2, 2.3, Math.PI); return true; }
   function toFloor(a, d, face){ st.mode='floor'; st.t=0; hud('top'); ctx.updateSky(); P.obj.visible=true; const [lx,lz]=lpol(a,d); st.lx=lx; st.lz=lz; const p=toW(lx, BT.base, lz); P.pos.copy(p); P.obj.position.copy(p); P.face=W(face); P.obj.rotation.y=P.face; }
 
-  // ---- the stair ----
-  const CLIMB_T = 15, OUT_T = 1.2;
-  let noteI=0, stepI=0, hopped=false, hugged=false;
+  // ---- the stair: you walk it yourself, stepping round what's broken ----
+  const OUT_T = 1.1;
+  let noteI=0, hopped=false;
   const NOTES = [
     [[0.18,'Half the treads up here are rotten. You keep close to the wall.'],[0.45,'Cobwebs across the stair. Nobody has been up in years.'],[0.62,'Gulls have been nesting on the window sills.'],[0.85,'Nearly there. Mind the rail, there isn\'t much of it.']],
     [[0.18,'Somebody has nailed fresh planks over the worst of the gaps.'],[0.45,'Still some snapped treads. You keep close to the wall.'],[0.8,'A rope has been tied across where the rail is missing.']],
     [[0.2,'New treads all the way up, still smelling of sawdust.'],[0.5,'The boards are off the windows. You can see the sea from the stair.'],[0.85,'A new rail, painted black. Nearly there.']],
     [[0.2,'Fresh paint, a polished brass rail and lamps on the walls.'],[0.55,'The windows have been cleaned. The view gets better every turn.'],[0.85,'Your legs are burning a bit. Nearly there.']] ];
-  function climb(){ st.mode='climbin'; st.t=0; noteI=0; stepI=0; hopped=false; hugged=false; hud('climb'); ctx.stopMove(); st.cf=P.pos.clone(); }
-  // where you are on the stair at s treads up (0 at the foot, steps at the top), and how you step round what's broken
-  function stairAt(s){ const n=cur(), a=BT.a0+s*BT.dA; let h=BT.base+Math.min(s+0.5, BT.steps)*BT.rise, rr=rIn(h)-BT.pathIn;
+  // the tap on 'Up the stair' (or the action button there): a step or two across to the bottom tread
+  function climb(){ st.mode='climbin'; st.t=0; ctx.stopMove(); st.cf=P.pos.clone(); }
+  // where you are on the stair at s treads up (0 at the foot, steps at the top): the hop over a missing tread is in h
+  function stairAt(s){ const n=cur(), a=BT.a0+s*BT.dA; let h=BT.base+clamp(s+0.5, 0, BT.steps)*BT.rise, rr=rIn(h)-BT.pathIn;
     if (n<=1){ let w=0; for (const i of BROKEN){ const q=1-Math.abs(s-(i+0.5))/1.1; if (q>w) w=q; } rr += smooth(0,1,w)*(BT.pathIn-0.36); }
     if (n===0){ for (const i of MISSING){ const u=(s-(i-0.5))/2; if (u>0 && u<1) h += Math.sin(u*Math.PI)*0.42; } }
     return { a, h, rr }; }
-  const hazard = s => { const n=cur(), i=Math.floor(s); return n===0 && (MISSING.has(i)||MISSING.has(i+1)) ? 'hop' : n<=1 && (BROKEN.has(i)||BROKEN.has(i+1)) ? 'hug' : null; };
-  function goDown(){ st.mode='down'; ctx.stopMove(); hud('climb'); ctx.Snd.door();
-    ctx.fade(()=>{ cutaway(false); ctx.setCamYaw(0); toFloor(footA+0.25, footR-0.6, Math.PI*0.5+footA); st.camA=W(footA); st.camP.copy(at(footA, BT.camD, BT.base+BT.camH)); }); }
-  function arrive(){ P.obj.visible=false; st.mode='pan'; st.t=0; st.panFrom=W(A1); st.ang=W(A1);
-    ctx.toast('The top of the Lantern Bluff lighthouse', null, '', 'Tap to look around on your own.'); }
-  function endPan(){ if (st.mode!=='pan') return; st.mode='top'; st.t=0; hud('top'); st.lookYaw=0; ctx.setCamYaw(0); st.camP.copy(ctx.camera.position);
-    const n=cur(); setTimeout(()=>{ if (st.mode==='top') ctx.toast(['An empty lamp room, cracked glass and a gull\'s nest. It wants a whole new lamp.','Marlo\'s new lens is up here in its crate, waiting for a frame.','New glass all round. The lamp room just needs its lamp now.','The lamp turns slow and steady.'][n]); }, 300); }
+  // how far across the tread you can stand: a snapped tread only leaves the bit by the wall
+  function band(s){ const n=cur(), h=BT.base+clamp(s+0.5, 0, BT.steps)*BT.rise, hi=rIn(h)-0.32; let lo=rIn(h)-BT.tread+0.3;
+    if (n<=1){ let w=0; for (const i of BROKEN){ const q=1-Math.abs(s-(i+0.5))/1.1; if (q>w) w=q; } lo=lerp(lo, rIn(h)-0.6, smooth(0,1,w)); }
+    return [lo, hi]; }
+  const STAIR = { cx, cz, rot, baseY, steps:BT.steps, dA:BT.dA, speed:4.0, at:s=>stairAt(s), band };
+  // the gallery: the fallen bit of rail (until it's patched) and Wick's telescope are in the way, the lamp room door takes you back in
+  const DECK = { cx, cz, rot, Gy, rMin:BT.glassR+0.35, rMax:BT.railR-0.3, door:{ a:A1, half:LR_GAP-0.08 }, speed:3.0, wedges:()=>[],
+    circles:()=>{ const n=cur(), L=[]; if (n<=1) L.push([GAP_A, BT.railR-0.1, 0.75]); if (n===3) L.push([SCOPE_A, 3.98, 0.42]); return L; } };
+  function onStair(s, r, dir){ st.mode='stair'; st.t=0; st.s=s; st.r=r; st.dir=dir; st.goS=null; st.push=null; st.stepI=undefined; hud('top'); }
+  function onDeck(a, r){ st.mode='top'; st.t=0; st.a=a; st.r=r; st.lampLook=false; hud('top'); cutaway(false); P.obj.visible=true; }
+  function goDown(){ st.mode='down'; ctx.stopMove(); ctx.Snd.door();
+    ctx.fade(()=>{ cutaway(false); fadeTo(U.roofM, false, 1); toFloor(footA-0.1, footR-0.5, W(footA)+Math.PI); st.camSnap=true; }); }
+  function arrive(){ ctx.toast('The top of the Lantern Bluff lighthouse', null, '', 'Walk round the gallery. Go back in at the lamp room door to walk down.');
+    const n=cur(); setTimeout(()=>{ if (st.mode==='top') ctx.toast(['An empty lamp room, cracked glass and a gull\'s nest. It wants a whole new lamp.','Marlo\'s new lens is up here in its crate, waiting for a frame.','New glass all round. The lamp room just needs its lamp now.','The lamp turns slow and steady.'][n]); }, 2600); }
 
   // ---- the cut-away: the wall, the treads and the struts between you and the camera ----
   function cutaway(on, camW, py){ const local = camW!==undefined ? camW-rot : 0, ly=(py??baseY)-baseY;
     U.segs.forEach((sg,i)=>{ sg.visible = !on || Math.abs(angD(segMid(i), local))>1.15; });
     U.brackets.forEach(b=>{ b.visible = !on || Math.abs(angD(b.userData.a, local))>1.0; });
     const shut = st.mode==='off', lo = BT.base+3.5;   // from outside only the bottom of the stair shows, through the door: skip drawing the rest
-    for (const T of U.treads) T.g.visible = shut ? T.y<lo : (!on || !(Math.abs(angD(T.a, local))<1.25 && T.y>ly+0.35));
-    for (const R of U.railRuns) R.g.visible = shut ? R.y<lo : (!on || !(Math.abs(angD(R.a, local))<1.3 && R.y>ly-0.6));
+    for (const T of U.treads) T.g.visible = shut ? T.y<lo : (!on || !(Math.abs(angD(T.a, local))<1.4 && T.y>ly+0.35));
+    for (const R of U.railRuns) R.g.visible = shut ? R.y<lo : (!on || !(Math.abs(angD(R.a, local))<1.4 && R.y>ly-0.6));
     if (U.ladder) U.ladder.visible = cur()===2 && (!on || Math.abs(angD(-1.0, local))>1.1); }
-  const ring = { cx, cz, Gy, walkR:BT.walkR, railR:BT.railR, panR:BT.panR, cutaway:on=>cutaway(on),
-    blockers:()=>{ const n=cur(), L=[]; if (n<=1) L.push([W(GAP_A), 0.2]); if (n===3) L.push([W(SCOPE_A), 0.12]); return L; } };
+  const camAng = () => Math.atan2(ctx.camera.position.x-cx, ctx.camera.position.z-cz);
 
   // ---- hooks main.js calls ----
   const pose = (a, rr, h, face) => { const p=at(a, rr, h); P.pos.copy(p); P.obj.position.copy(p); if (face!==undefined){ P.face=face; P.obj.rotation.y=face; } };
   const turnTo = (face, dt) => { let df=face-P.obj.rotation.y; df=Math.atan2(Math.sin(df),Math.cos(df)); P.obj.rotation.y+=df*Math.min(1,dt*12); P.face=P.obj.rotation.y; };
+  // the stick or keys as a world direction, turned by the camera the way main.js does it outdoors
+  const stick = () => { let [ix,iz]=ctx.input(); if (ctx.dialogOpen() || (!ix && !iz)) return null; const Y=ctx.getCamYaw(), m=Math.min(1,Math.hypot(ix,iz)), L=Math.hypot(ix,iz)||1;
+    return [(ix*Math.cos(Y)+iz*Math.sin(Y))/L*m, (-ix*Math.sin(Y)+iz*Math.cos(Y))/L*m]; };
+  // walking into the bottom of the stair from the floor puts you on it
+  const intoStair = (lx, lz) => { const d=Math.hypot(lx,lz), da=wrap(Math.atan2(lx,lz)-BT.a0+0.15); return da<0.6 && d>rIn(BT.base)-BT.tread-0.3; };
   const perch = {
     get mode(){ return st.mode; },
     move(dt, t){
@@ -460,69 +473,68 @@ export function makeBluffLighthouse(ctx){
         p.y=k<0.55 ? Fy : lerp(Fy, ctx.groundY(p.x,p.z), smooth(0.55,1,k)); P.pos.copy(p); P.obj.position.copy(p); turnTo(W(0), dt); walkAnim(t, 0.8);
         if (k>=1) outside(); return true; }
       if (st.mode==='floor'){
-        let [ix,iz]=ctx.input(); if (ctx.dialogOpen()) ix=iz=0;
         let mx=0, mz=0;   // the way you want to go this frame, in world terms
-        if (ix||iz){ ctx.stopMove(); const c=ctx.camera.position, fx0=st.look.x-c.x, fz0=st.look.z-c.z, fl=Math.hypot(fx0,fz0)||1, fx=fx0/fl, fz=fz0/fl, rx=-fz, rz=fx;
-          const m=Math.min(1,Math.hypot(ix,iz)), L=Math.hypot(ix,iz)||1; mx=(rx*ix-fx*iz)/L*m; mz=(rz*ix-fz*iz)/L*m; }
+        const sd=stick();
+        if (sd){ ctx.stopMove(); [mx,mz]=sd; }
         else if (P.target && !ctx.dialogOpen()){ const dx=P.target.x-P.pos.x, dz=P.target.z-P.pos.z, d=Math.hypot(dx,dz), E=P.targetEnt;
           const near = E ? Math.hypot(E.pos.x-P.pos.x, E.pos.z-P.pos.z) <= Math.min(E.reach, 1.2) : d<0.12;
           if (near){ const cb=P.cb; ctx.stopMove(); if (cb) cb(); } else { mx=dx/d; mz=dz/d; } }
         const sp=3.0*dt;
-        if (mx||mz){ const [lx,lz]=[st.lx,st.lz], dlx=(mx*cs-mz*sn)*sp, dlz=(mx*sn+mz*cs)*sp, [nx,nz]=slide(lx,lz,dlx,dlz);
+        if (mx||mz){ const [lx,lz]=[st.lx,st.lz], dlx=(mx*cs-mz*sn)*sp, dlz=(mx*sn+mz*cs)*sp;
+          if (sd && intoStair(lx+dlx*4, lz+dlz*4)){ const d=Math.hypot(lx,lz); onStair(0.15, clamp(d, ...band(0.15)), 1); return true; }   // walked into the stair: on you go
+          const [nx,nz]=slide(lx,lz,dlx,dlz);
           // walking out through the doorway takes you outside
           const d=Math.hypot(lx,lz), oa=Math.atan2(lx,lz); if (Math.abs(oa)<0.32 && d>BT.floorR-0.25 && dlz>0 && Math.hypot(nx,nz)>=d-1e-4){ leave(); return true; }
-          const moved=Math.hypot(nx-lx, nz-lz); if (moved<1e-4 && P.target && !(ix||iz)){ if ((st.stuck=(st.stuck||0)+dt)>0.6){ st.stuck=0; const E=P.targetEnt, cb=P.cb; ctx.stopMove(); if (E && Math.hypot(E.pos.x-P.pos.x,E.pos.z-P.pos.z)<=E.reach+0.4 && cb) cb(); } } else st.stuck=0;
+          const moved=Math.hypot(nx-lx, nz-lz); if (moved<1e-4 && P.target && !sd){ if ((st.stuck=(st.stuck||0)+dt)>0.6){ st.stuck=0; const E=P.targetEnt, cb=P.cb; ctx.stopMove(); if (E && Math.hypot(E.pos.x-P.pos.x,E.pos.z-P.pos.z)<=E.reach+0.4 && cb) cb(); } } else st.stuck=0;
           st.lx=nx; st.lz=nz; turnTo(Math.atan2(mx,mz), dt); walkAnim(t, 0.9*Math.min(1, moved/sp+0.3)); }
         else still();
         const p=toW(st.lx, BT.base, st.lz); P.pos.copy(p); P.obj.position.copy(p);
         return true; }
-      if (st.mode==='climbin'){ // across the floor to the foot of the stair
-        const k=smooth(0,1,st.t/0.8), to=at(BT.a0, footR, BT.base); P.pos.lerpVectors(st.cf, to, k); P.obj.position.copy(P.pos); turnTo(W(BT.a0)+Math.PI/2, dt); walkAnim(t, 0.8);
-        if (st.t>=0.8){ st.mode='up'; st.t=0; } return true; }
-      if (st.mode==='up'){
-        const f=clamp(st.t/CLIMB_T, 0, 1), A=0.05, v=1/(1-A), e=f<A ? v*f*f/(2*A) : f>1-A ? 1-v*(1-f)*(1-f)/(2*A) : v*(f-A/2);
-        const s=e*BT.steps, H=stairAt(s); pose(H.a, H.rr, H.h, W(H.a)+Math.PI/2+0.08); walkAnim(t, 0.9);
-        const si=Math.floor(s); if (si>stepI){ stepI=si; if (si%3===0) ctx.step(); }
-        const hz=hazard(s); if (hz==='hop' && !hopped){ hopped=true; ctx.toast('A tread is gone altogether. You hop the gap.'); } if (hz==='hug' && !hugged && cur()===0){ hugged=true; }
-        const N=NOTES[cur()]; if (noteI<N.length && e>=N[noteI][0]){ ctx.toast(N[noteI][1]); noteI++; }
-        if (f>=1){ st.mode='out'; st.t=0; }
+      if (st.mode==='climbin'){ // across the floor to the bottom tread
+        const k=smooth(0,1,st.t/0.6), H=stairAt(0.15), to=at(H.a, footR, H.h); P.pos.lerpVectors(st.cf, to, k); P.obj.position.copy(P.pos); turnTo(W(BT.a0)+Math.PI/2, dt); walkAnim(t, 0.8);
+        if (st.t>=0.6) onStair(0.15, footR, 1); return true; }
+      if (st.mode==='stair'){
+        const r=stairMove(ctx, kit, st, STAIR, dt, t);
+        if (r==='top'){ st.mode='out'; st.t=0; st.r0=st.r; return true; }
+        if (r==='bottom'){ const d=Math.min(st.r, BT.floorR-0.1); toFloor(BT.a0-0.4, d, W(BT.a0-0.4)-Math.PI/2); return true; }
+        if (st.dir>0){ const N=NOTES[cur()], f=st.s/BT.steps; if (noteI<N.length && f>=N[noteI][0]){ ctx.toast(N[noteI][1]); noteI++; } }
+        const i=Math.floor(st.s); if (cur()===0 && !hopped && (MISSING.has(i)||MISSING.has(i+1))){ hopped=true; ctx.toast('A tread is gone altogether. You hop the gap.'); }
         return true; }
-      if (st.mode==='out'){ const k=smooth(0,1,st.t/OUT_T), H=stairAt(BT.steps), rr=lerp(H.rr, BT.walkR, k); pose(BT.a1, rr, BT.G, W(BT.a1)); walkAnim(t, 0.7);
-        if (st.t>=OUT_T){ st.ang=W(A1); arrive(); } return true; }
-      if (st.mode==='pan' || st.mode==='down' || st.mode==='fading'){ still(); return true; }
-      if (st.mode==='top') return ringMove(ctx, kit, st, ring, dt, t);
+      if (st.mode==='out'){ // up into the lamp room and out of its door onto the gallery
+        const k=smooth(0,1,st.t/OUT_T), rr=lerp(st.r0, BT.walkR, k); pose(BT.a1, rr, BT.G, W(BT.a1)); walkAnim(t, 0.7);
+        if (st.t>=OUT_T){ onDeck(A1, BT.walkR); if (!st.upSeen){ st.upSeen=1; arrive(); } } return true; }
+      if (st.mode==='backin'){ // in at the lamp room door and onto the top of the stair, facing down
+        const k=smooth(0,1,st.t/OUT_T), H=stairAt(BT.steps-0.3), rr=lerp(st.r0, H.rr, k); pose(lerp(st.a0, BT.a1, k), rr, BT.G, W(BT.a1)+Math.PI); walkAnim(t, 0.7);
+        if (st.t>=OUT_T) onStair(BT.steps-0.3, H.rr, -1); return true; }
+      if (st.mode==='down' || st.mode==='fading'){ still(); return true; }
+      if (st.mode==='top'){ if (st.lampLook){ still(); return true; }
+        if (deckMove(ctx, kit, st, DECK, dt, t)==='door'){ ctx.stopMove(); st.mode='backin'; st.t=0; st.r0=st.r; st.a0=BT.a1+angD(st.a, A1); }
+        return true; }
       return false;
     },
     cam(dt){
+      if (st.mode==='off') return false;
       const c=ctx.camera, k=Math.min(1, dt*4);
-      if (st.mode==='in' || st.mode==='floor' || st.mode==='leaving' || st.mode==='climbin'){
-        // outside the wall on your side, looking down into the room; the wall, treads and rail between cut away
-        const [lx,lz]=toL(P.pos.x,P.pos.z), d=Math.hypot(lx,lz);
-        if (st.mode!=='in' && d>1.3) st.camA += angD(Math.atan2(P.pos.x-cx, P.pos.z-cz), st.camA)*Math.min(1, dt*1.2);
-        const want=new THREE.Vector3(cx+Math.sin(st.camA)*BT.camD, Fy+BT.camH, cz+Math.cos(st.camA)*BT.camD);
-        st.camP.lerp(want, k); st.look.lerp(P.pos.clone().add(new THREE.Vector3(0,0.7,0)), k*1.5);
-        c.position.copy(st.camP); c.lookAt(st.look); cutaway(true, st.camA, P.pos.y); ctx.skyFollow(P.pos); return true; }
-      if (st.mode==='up' || st.mode==='out'){
-        const pa=Math.atan2(P.pos.x-cx, P.pos.z-cz); st.camA += angD(pa+0.35, st.camA)*Math.min(1,dt*3);
-        const camY=Math.min(P.pos.y+BT.camUp, Gy-0.6), want=new THREE.Vector3(cx+Math.sin(st.camA)*BT.camD, camY, cz+Math.cos(st.camA)*BT.camD);
-        st.camP.lerp(want, k); st.look.lerp(P.pos.clone().add(new THREE.Vector3(0,0.8,0)), k*1.5);
-        c.position.copy(st.camP); c.lookAt(st.look); cutaway(true, st.camA, P.pos.y); ctx.skyFollow(P.pos); return true; }
-      if (st.mode==='pan'){ if (panCam(ctx, kit, st, ring)) endPan(); return true; }
       if (st.mode==='top' && st.lampLook){   // looking in through the glass at the lamp room while it talks about it (the talk can open a moment after the tap)
         const open=ctx.dialogOpen(); if (open) st.lampDlg=true; st.lampT+=dt;
-        if (!open && (st.lampDlg || st.lampT>1.5)){ st.lampLook=false; ctx.updateSky(); return ringCam(ctx, kit, st, ring, dt, null); }
-        const a=st.lampA ?? st.ang, want=new THREE.Vector3(cx+Math.sin(a)*(BT.glassR+0.3), Gy+2.1, cz+Math.cos(a)*(BT.glassR+0.3)), look=new THREE.Vector3(cx, Gy+0.8, cz);
-        st.camP.lerp(want, k); st.look.lerp(look, k); c.position.copy(st.camP); c.lookAt(st.look); cutaway(false); kit.farFog(); ctx.skyFollow(P.pos); return true; }
-      if (st.mode==='top') return ringCam(ctx, kit, st, ring, dt, null);
-      if (st.mode==='down'){ ringCam(ctx, kit, st, ring, dt, null); return true; }
-      return false;
+        if (!open && (st.lampDlg || st.lampT>1.5)){ st.lampLook=false; ctx.updateSky(); }
+        else { const a=st.lampA ?? W(st.a), want=new THREE.Vector3(cx+Math.sin(a)*(BT.glassR+0.3), Gy+2.1, cz+Math.cos(a)*(BT.glassR+0.3)), look=new THREE.Vector3(cx, Gy+0.8, cz);
+          st.camP.lerp(want, k); st.look.lerp(look, k); c.position.copy(st.camP); c.lookAt(st.look); cutaway(false); fadeTo(U.roofM, false, 1); P.obj.visible=false; kit.farFog(); ctx.skyFollow(P.pos); return true; } }
+      P.obj.visible=true;
+      const top = st.mode==='top' || st.mode==='down';
+      const o = top ? VIEW.top : st.mode==='stair' || st.mode==='out' || st.mode==='backin' ? { ...VIEW.stair, capY:Gy-0.6 } : VIEW.stair;
+      followCam(ctx, kit, st, o, dt);
+      if (top || st.mode==='out' || st.mode==='backin'){ cutaway(false); fadeTo(U.roofM, behind(P, cx, cz, ctx.getCamYaw()), dt); if (top) kit.farFog(); }
+      else { cutaway(true, camAng(), P.pos.y); fadeTo(U.roofM, false, dt); }
+      return true;
     },
     tap(p){
-      if (st.mode==='pan'){ endPan(); return; }
-      if (st.mode==='top'){ if (ctx.dialogOpen()) return;
-        const R=ctx.ray(); if (R){ for (const [e,y,r2] of [[lampE,1.2,1.1],[hatch,0.1,0.5]]){ const q=e.pos.clone(); q.y+=y; if (R.ray.distanceSqToPoint(q)<r2 && R.ray.origin.distanceTo(q)<14){ P.target=e.pos.clone(); P.targetEnt=e; P.cb=()=>ctx.interact(e); return; } } }
+      if (ctx.dialogOpen()) return;
+      if (st.mode==='top'){ if (st.lampLook) return;
+        const R=ctx.ray(); if (R){ for (const [e,y,r2] of [[lampE,1.2,1.1],[hatch,0.1,0.5]]){ const q=e.pos.clone(); q.y+=y; if (R.ray.distanceSqToPoint(q)<r2 && R.ray.origin.distanceTo(q)<18){ P.target=e.pos.clone(); P.targetEnt=e; P.cb=()=>ctx.interact(e); return; } } }
         const pt = p && (p.ground || p.water || p.point); if (pt){ P.target=pt.clone(); P.targetEnt=null; P.cb=null; } return; }
-      if (st.mode!=='floor' || ctx.dialogOpen()) return;
+      if (st.mode==='stair'){ const R=ctx.ray(); stairTap(st, STAIR, R && R.ray); return; }
+      if (st.mode!=='floor') return;
       // the near wall is only hidden, so main.js's pick would hit it: look along the tap ray ourselves
       const R=ctx.ray(); if (!R) return; let best=null, bd=0.5;
       for (const e of floorThings){ if (!e.label()) continue; const d=R.ray.distanceSqToPoint(e.pos.clone().add(new THREE.Vector3(0,0.3,0))); if (d<bd){ bd=d; best=e; } }
@@ -530,8 +542,7 @@ export function makeBluffLighthouse(ctx){
       const hit=new THREE.Vector3(); if (R.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0,1,0), -Fy), hit)){ P.target=hit; P.targetEnt=null; P.cb=null; }
     },
     act(){
-      if (st.mode==='pan'){ endPan(); return; }
-      if (st.mode==='top'){ const e=ctx.nearestEnt(); if (e){ ctx.stopMove(); ctx.interact(e, 'manual'); } return; }
+      if (st.mode==='top'){ if (st.lampLook) return; const e=ctx.nearestEnt(); if (e){ ctx.stopMove(); ctx.interact(e, 'manual'); } return; }
       if (st.mode!=='floor') return;
       let best=null, bd=1e9; for (const e of floorThings){ if (!e.label()) continue; const d=Math.hypot(e.pos.x-P.pos.x, e.pos.z-P.pos.z); if (d<=e.reach+0.3 && d<bd){ bd=d; best=e; } }
       if (best){ ctx.stopMove(); ctx.interact(best, 'manual'); }
@@ -542,7 +553,7 @@ export function makeBluffLighthouse(ctx){
   // under the roof: no rain, and enough light to see by at night (cold and grey while it's a ruin, lamp-warm once it's lit)
   // look in through clear glass: before stage 2, step off a boarded pane to the next one along
   function lampAngle(a){ if (cur()>=2) return a; for (const b of BOARD_A){ const bw=b+rot, d=angD(a,bw); if (Math.abs(d)<0.4) return bw+(d>=0?0.55:-0.55); } return a; }
-  const ROOFED = new Set(['floor','climbin','up','down','leaving']), _lc = new THREE.Color();
+  const ROOFED = new Set(['floor','climbin','stair','out','backin','down','leaving']), _lc = new THREE.Color();
   function indoorLight(hemi, sun, night){ U.skyMat.color.setHex(0xd8ecf4).lerp(_lc.setHex(0x26304a), clamp(night,0,1));   // the doorway and windows seen from inside: day or night out there
     if (!ROOFED.has(st.mode) && !(st.mode==='top' && st.lampLook)) return; const n=cur();
     hemi.intensity = Math.max(hemi.intensity, [0.95,1.05,1.15,1.3][n] - night*0.12);

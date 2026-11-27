@@ -64,9 +64,9 @@ export function buildTower(seed=1){
   const insides=new THREE.Group(); g.add(insides);
   mk(G.cyl(rIn(LT.base)-0.01,rIn(LT.base)-0.01,0.06,24), M(0xb89a78), 0,LT.base+0.03,0,insides).receiveShadow=false;
   mk(G.cyl(0.28,0.3,LT.G-LT.base,12), white, 0,(LT.G+LT.base)/2,0,insides);
-  const dA=LT.turns*TAU/LT.steps;
+  const dA=LT.turns*TAU/LT.steps, treads=[];
   for (let i=0;i<LT.steps;i++){ const a=LT.a0+(i+0.5)*dA, y=LT.base+(i+1)*LT.rise, rr=rIn(y)-0.04;
-    const s=mk(new THREE.CylinderGeometry(rr,rr,0.1,4,1,false,a-dA*0.56,dA*1.12), i%2?wood:M(0x8e6240), 0,y-0.05,0,insides); s.receiveShadow=false; }
+    const s=mk(new THREE.CylinderGeometry(rr,rr,0.1,4,1,false,a-dA*0.56,dA*1.12), i%2?wood:M(0x8e6240), 0,y-0.05,0,insides); s.receiveShadow=false; treads.push({ m:s, a, y }); }
   { const pts=[]; for (let k=0;k<=96;k++){ const f=k/96, a=LT.a0+f*LT.turns*TAU, y=LT.base+f*(LT.G-LT.base)+0.9; const rr=rIn(y)-0.14; pts.push(new THREE.Vector3(Math.sin(a)*rr, y, Math.cos(a)*rr)); }
     const rail=mk(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 220, 0.035, 6), brass, 0,0,0,insides); rail.castShadow=false; }
   // little things on the way up: lamps on the wall, a painted fish, a shelf of logbooks, a barometer
@@ -92,7 +92,7 @@ export function buildTower(seed=1){
   const gl=new THREE.Mesh(new THREE.CylinderGeometry(LT.glassR,LT.glassR,1.75,32,1,true,LT.a1+gap,TAU-gap*2), glass); gl.position.y=LT.G+0.5+0.875; gl.renderOrder=2; lamp.add(gl);
   for (let i=0;i<10;i++){ const a=LT.a1+gap+i/9*(TAU-gap*2); mk(G.box(0.07,2.25,0.07), dark, Math.sin(a)*LT.glassR,LT.G+1.12,Math.cos(a)*LT.glassR,lamp).castShadow=false; }
   { const t=mk(G.tor(LT.glassR,0.05,6,40), dark, 0,LT.G+2.25,0,lamp); t.rotation.x=Math.PI/2; }
-  mk(G.cone(1.9,1.15,24), red, 0,LT.G+2.25+0.57,0,lamp); mk(G.cyl(0.18,0.24,0.3,10), dark, 0,LT.G+3.5,0,lamp); mk(G.sph(0.2,10,8), dark, 0,LT.G+3.75,0,lamp);
+  const roofM=M(0xd8483a).clone(); mk(G.cone(1.9,1.15,24), roofM, 0,LT.G+2.25+0.57,0,lamp); mk(G.cyl(0.18,0.24,0.3,10), dark, 0,LT.G+3.5,0,lamp); mk(G.sph(0.2,10,8), dark, 0,LT.G+3.75,0,lamp);
   { const v=new THREE.Group(); v.position.y=LT.G+4.0; lamp.add(v); mk(G.cyl(0.02,0.02,0.6,4), dark, 0,0.2,0,v); const arrow=mk(G.box(0.05,0.12,0.7), dark, 0,0.42,0,v); arrow.castShadow=false; mk(G.cone(0.1,0.22,4), dark, 0,0.42,0.42,v).rotation.x=Math.PI/2; lamp.userData.vane=v; }
   // the lamp itself: a brass pedestal and a lens of glowing rings that turns
   mk(G.cyl(0.38,0.48,0.5,12), brass, 0,LT.G+0.25,0,lamp);
@@ -113,7 +113,7 @@ export function buildTower(seed=1){
   const scope=new THREE.Group(); { const a=Math.PI+0.55; scope.position.set(Math.sin(a)*2.62,LT.G,Math.cos(a)*2.62); scope.rotation.y=a; deck.add(scope);
     for (let k=0;k<3;k++){ const b=k/3*TAU, l=mk(G.cyl(0.02,0.02,1.2,4), wood, -Math.sin(b)*0.166,0.56,-Math.cos(b)*0.166,scope); l.rotation.set(0.28,b,0,'YXZ'); }
     const tube=mk(G.cyl(0.07,0.09,0.8,10), brass, 0,1.18,0.1,scope); tube.rotation.x=Math.PI/2-0.25; }
-  g.userData = { segs, brackets, lens, beam, beamM, vane:lamp.userData.vane, inside:insides };
+  g.userData = { segs, brackets, treads, roofM, lens, beam, beamM, vane:lamp.userData.vane, inside:insides };
   return g;
 }
 
@@ -130,61 +130,66 @@ export function buildFarIsles(seed){
 }
 
 /* ---------- the controller ----------
-   ctx (from main.js): THREE scene bits and game functions. See setupLighthouse() in main.js for the list. */
+   ctx (from main.js): THREE scene bits and game functions. See setupLighthouse() in main.js for the list.
+   You walk it all yourself in the usual camera: in at the door, up the stair with the stick (or a tap on a tread),
+   out round the gallery, and back in at the lamp room door and down again, or straight down with Head down. */
 export function makeLighthouse(ctx){
   const { tower, cx, cz, rot } = ctx, baseY=tower.position.y, U=tower.userData;
   const W = a => a+rot;                                                  // local angle to world angle
   const at = (a, rr, h) => new THREE.Vector3(cx+Math.sin(W(a))*rr, baseY+h, cz+Math.cos(W(a))*rr);
-  const Gy = baseY+LT.G;
-  const st = { mode:'off', t:0, look:new THREE.Vector3(), camP:new THREE.Vector3(), ang:W(Math.PI), lookYaw:0, panFrom:0, greeted:false };
+  const Gy = baseY+LT.G, A1=wrap(LT.a1), dA=LT.turns*TAU/LT.steps;
+  const st = { mode:'off', t:0, look:new THREE.Vector3(), camP:new THREE.Vector3(), camSnap:false, greeted:false, s:0, r:LT.pathR, a:A1, dir:1 };
   const P = ctx.player;
   // things up top: the keeper (stands by the telescope) and the way back down
-  const keeperA = Math.PI+0.18, scopeA = Math.PI+0.55, hatchA = LT.a1;
+  const keeperA = Math.PI+0.18, keeperR = 2.55, scopeA = Math.PI+0.55, hatchA = LT.a1;
   let keeper=null;
-  if (ctx.keeperSpec){ const k=at(keeperA, LT.walkR, LT.G); keeper=ctx.folkKeeper(k.x, k.z, W(keeperA)+Math.PI/2);
+  if (ctx.keeperSpec){ const k=at(keeperA, keeperR, LT.G); keeper=ctx.folkKeeper(k.x, k.z, W(keeperA)+Math.PI/2);
     keeper.pos.y=Gy; keeper.obj.position.y=Gy; keeper.rest=W(keeperA); keeper.reach=1.9; keeper.label=()=>st.mode==='top'?'Talk':null; }
   const hp=at(hatchA, 1.75, LT.G);
   const hatch=new ctx.Thing('lhdown', hp.x, hp.z, 0.3, new THREE.Group(), ()=>st.mode==='top'?'Head down':null, ()=>{ if (st.mode==='top') goDown(); }, { solid:false, reach:4.2 });   // reach covers the whole ring, so 'Head down' is on the button whenever the keeper isn't closer
   hatch.pos.y=Gy; hatch.obj.position.y=Gy;
   const dp=at(0, LT.rBot+0.7, 0); dp.y=ctx.groundY(dp.x, dp.z);
-  const door=new ctx.Thing('lhdoor', dp.x, dp.z, 0.4, new THREE.Group(), ()=>st.mode==='off' ? (ctx.TX.climbed?'Climb up again':'Climb up') : null, ()=>{ if (st.mode==='off') climb(); }, { solid:false, reach:1.8, hit:[0.8,1.0] });
-  const blockers = () => [[W(keeperA), 0.34], [W(scopeA), 0.2]];        // [world angle, half-width in radians] on the walking ring
-  const ring = { cx, cz, Gy, walkR:LT.walkR, railR:LT.railR, panR:1.1, blockers, cutaway:on=>cutaway(on) };
+  const door=new ctx.Thing('lhdoor', dp.x, dp.z, 0.4, new THREE.Group(), ()=>st.mode==='off' ? (ctx.TX.climbed?'Go in again':'Go in') : null, ()=>{ if (st.mode==='off') climb(); }, { solid:false, reach:1.8, hit:[0.8,1.0] });
+
+  // ---- the stair and the gallery, for the shared walking code ----
+  const STAIR = { cx, cz, rot, baseY, steps:LT.steps, dA, speed:3.0,
+    at:s=>({ a:LT.a0+s*dA, h:LT.base+clamp(s+0.5,0,LT.steps)*LT.rise, rr:LT.pathR }),
+    band:s=>{ const h=LT.base+clamp(s+0.5,0,LT.steps)*LT.rise; return [0.6, rIn(h)-0.3]; } };
+  const DECK = { cx, cz, rot, Gy, rMin:LT.glassR+0.3, rMax:LT.railR-0.3, door:{ a:A1, half:0.3 }, speed:3.0,
+    wedges:()=>[], circles:()=>[[keeperA, keeperR, 0.35], [scopeA, 2.62, 0.25]] };
 
   // ---- helpers ----
   const kit=perchKit(ctx), { hud, walkAnim, still } = kit;
   const pose = (a, rr, h, face) => { const p=at(a, rr, h); P.pos.copy(p); P.obj.position.copy(p); if (face!==undefined){ P.face=face; P.obj.rotation.y=face; } };
-  const cutaway = (on, camW) => { const local = camW!==undefined ? camW-rot : 0; U.segs.forEach((sg,i)=>{ sg.visible = !on || Math.abs(angD(segMid(i), local))>1.2; });
-    (U.brackets||[]).forEach(b=>{ b.visible = !on || Math.abs(angD(b.userData.a, local))>1.0; }); };   // the deck's struts would hide you near the top
-  // where you are on the stair for f in 0..1, in local terms
-  const helix = f => { const a=LT.a0+f*LT.turns*TAU; return { a, h:LT.base+f*(LT.G-LT.base) }; };
-  const CLIMB_T = 10, IN_T = 1.1, OUT_T = 1.1;
+  // the shaft wall, the struts and the treads above you on the camera's side hide, so you can see in
+  const cutaway = (on, camW, py) => { const local = camW!==undefined ? camW-rot : 0, ly=(py??baseY)-baseY;
+    U.segs.forEach((sg,i)=>{ sg.visible = !on || Math.abs(angD(segMid(i), local))>1.2; });
+    (U.brackets||[]).forEach(b=>{ b.visible = !on || Math.abs(angD(b.userData.a, local))>1.0; });
+    (U.treads||[]).forEach(T=>{ T.m.visible = !on || !(Math.abs(angD(T.a, local))<1.5 && T.y>ly+0.3); }); };
+  const camAng = () => Math.atan2(ctx.camera.position.x-cx, ctx.camera.position.z-cz);
+  const IN_T = 1.1, OUT_T = 1.0;
   const NOTES = [[0.22,'Round and round. The keeper has painted a little blue fish on the wall.'],[0.5,'Halfway. A shelf of old logbooks, every storm written down.'],[0.78,'Your legs are burning a bit. Nearly there.']];
-  let noteI=0, stepI=0;
+  let noteI=0;
+  const startCam = () => { st.camP.copy(ctx.camera.position); st.look.copy(P.pos); st.look.y+=0.9; st.camSnap=false; };
 
   function climb(){
-    if (ctx.busy()) return; ctx.prep(); ctx.stopMove(); hud('climb'); ctx.setPerch(perch);
-    st.mode='in'; st.t=0; noteI=0; stepI=0; ctx.Snd.door();
-    st.camA=W(0); st.camP.copy(at(0, 8.6, 2.6)); st.look.copy(P.pos); st.h0=dp.y-baseY;
+    if (ctx.busy()) return; ctx.prep(); ctx.stopMove(); hud('top'); ctx.setPerch(perch);
+    st.mode='in'; st.t=0; noteI=0; ctx.Snd.door(); startCam(); st.h0=dp.y-baseY;
     if (!ctx.TX.climbed){ ctx.TX.climbed=1; ctx.save(); }
   }
-  function jumpTop(){   // #dev shortcut: straight to the gallery, skipping the stair and the view
-    if (st.mode!=='off' || ctx.busy()) return false; ctx.prep(); ctx.stopMove(); ctx.setPerch(perch); arrive(); endPan(); return true; }
-  function goDown(){
-    st.mode='down'; ctx.stopMove(); hud('climb');
-    ctx.fade(()=>{ st.mode='off'; P.obj.visible=true; cutaway(false); hud(false); ctx.setPerch(null); ctx.setCamYaw(0);
-      const a=0, p=at(a, LT.rBot+1.1, 0); p.y=ctx.groundY(p.x,p.z); P.pos.copy(p); P.obj.position.copy(p); P.face=W(a); P.obj.rotation.y=P.face;
-      ctx.camTarget.copy(P.pos); ctx.updateSky(); ctx.updateCamera(1); });
-    ctx.Snd.door();
-  }
+  function onStair(s, r, dir){ st.mode='stair'; st.t=0; st.s=s; st.r=r; st.dir=dir; st.goS=null; st.push=null; st.stepI=undefined; hud('top'); }
+  function onDeck(a, r){ st.mode='top'; st.t=0; st.a=a; st.r=r; hud('top'); cutaway(false); }
+  function jumpTop(){   // #dev shortcut: straight out onto the gallery
+    if (st.mode!=='off' || ctx.busy()) return false; ctx.prep(); ctx.stopMove(); ctx.setPerch(perch); P.obj.visible=true;
+    onDeck(A1, LT.walkR); pose(A1, LT.walkR, LT.G, W(A1)); st.camSnap=true; arrive(); return true; }
+  function outside(){ st.mode='off'; P.obj.visible=true; cutaway(false); fadeTo(U.roofM, false, 1); hud(false); ctx.setPerch(null); ctx.setCamYaw(0);
+    const a=0, p=at(a, LT.rBot+1.1, 0); p.y=ctx.groundY(p.x,p.z); P.pos.copy(p); P.obj.position.copy(p); P.face=W(a); P.obj.rotation.y=P.face;
+    ctx.camTarget.copy(P.pos); ctx.updateSky(); ctx.updateCamera(1); }
+  function goDown(){ st.mode='down'; ctx.stopMove(); ctx.fade(outside); ctx.Snd.door(); }
   function arrive(){
-    P.obj.visible=false; st.mode='pan'; st.t=0; st.panFrom=W(LT.a1); st.ang=W(LT.a1);
-    ctx.toast('The top of the lighthouse', null, '', 'Tap to look around on your own.');
-  }
-  function endPan(){
-    if (st.mode!=='pan') return; st.mode='top'; st.t=0; hud('top'); st.lookYaw=0; ctx.setCamYaw(0); st.camP.copy(ctx.camera.position);   // ease on from where the pan left the camera
+    ctx.toast('The top of the lighthouse', null, '', 'Walk round the gallery. Go back in at the lamp room door to walk down.');
     if (keeper && !st.greeted){ st.greeted=true; const S=ctx.keeperSpec;
-      setTimeout(()=>{ if (st.mode==='top') ctx.dialog(S.name, S.voice, [ctx.TX.lantern ? 'Back up again? The view never gets old, does it.' : `Oh! A visitor, all the way up here. ${LT.steps} steps! Hardly anyone makes it.`, 'Come say hello when you\'ve had a look round.']); }, 250); }
+      setTimeout(()=>{ if (st.mode==='top') ctx.dialog(S.name, S.voice, [ctx.TX.lantern ? 'Back up again? The view never gets old, does it.' : `Oh! A visitor, all the way up here. ${LT.steps} steps! Hardly anyone makes it.`, 'Come say hello when you\'ve had a look round.']); }, 350); }
   }
 
   // ---- hooks main.js calls while you're inside or up top ----
@@ -193,46 +198,51 @@ export function makeLighthouse(ctx){
     move(dt, t){
       st.t+=dt;
       if (st.mode==='in'){ // from the doorway to the foot of the stair
-        const k=smooth(0,1,st.t/IN_T), h0=helix(0), a=lerp(0, h0.a, k), rr=lerp(LT.rBot+0.7, LT.pathR, k);
+        const k=smooth(0,1,st.t/IN_T), h0=STAIR.at(0), a=lerp(0, h0.a, k), rr=lerp(LT.rBot+0.7, LT.pathR, k);
         pose(a, rr, lerp(st.h0, h0.h, k), W(a)+Math.PI); walkAnim(t, 0.8);
-        if (st.t>=IN_T){ st.mode='up'; st.t=0; }
+        if (st.t>=IN_T) onStair(0, LT.pathR, 1);
         return true; }
-      if (st.mode==='up'){
-        const f=clamp(st.t/CLIMB_T, 0, 1), A=0.06, v=1/(1-A), e=f<A ? v*f*f/(2*A) : f>1-A ? 1-v*(1-f)*(1-f)/(2*A) : v*(f-A/2);   // ease in and out
-        const H=helix(e), tang=W(H.a)+Math.PI/2+0.08; pose(H.a, LT.pathR, H.h, tang); walkAnim(t, 0.9);
-        const si=Math.floor(e*LT.steps); if (si>stepI){ stepI=si; if (si%3===0) ctx.step(); }
-        if (noteI<NOTES.length && e>=NOTES[noteI][0]){ ctx.toast(NOTES[noteI][1]); noteI++; }
-        if (f>=1){ st.mode='out'; st.t=0; }
+      if (st.mode==='leaving'){ // from the foot of the stair out of the door
+        const k=smooth(0,1,st.t/IN_T), h0=STAIR.at(0), a=lerp(h0.a, 0, k), rr=lerp(st.r, LT.rBot+1.0, k);
+        const p=at(a, rr, 0); pose(a, rr, lerp(h0.h, ctx.groundY(p.x,p.z)-baseY, k), W(a)); walkAnim(t, 0.8);
+        if (st.t>=IN_T) outside();
+        return true; }
+      if (st.mode==='stair'){
+        const r=stairMove(ctx, kit, st, STAIR, dt, t);
+        if (r==='top'){ st.mode='out'; st.t=0; st.r0=st.r; return true; }
+        if (r==='bottom'){ st.mode='leaving'; st.t=0; ctx.Snd.door(); return true; }
+        const f=st.s/LT.steps; if (st.dir>0 && noteI<NOTES.length && f>=NOTES[noteI][0]){ ctx.toast(NOTES[noteI][1]); noteI++; }
         return true; }
       if (st.mode==='out'){ // up through the hatch, out of the lamp room door, onto the gallery
-        const k=smooth(0,1,st.t/OUT_T), rr=lerp(LT.pathR, LT.walkR, k); pose(LT.a1, rr, LT.G, W(LT.a1)); walkAnim(t, 0.7);
-        if (st.t>=OUT_T){ st.ang=W(LT.a1); arrive(); }
+        const k=smooth(0,1,st.t/OUT_T), rr=lerp(st.r0, LT.walkR, k); pose(LT.a1, rr, LT.G, W(LT.a1)); walkAnim(t, 0.7);
+        if (st.t>=OUT_T){ onDeck(A1, LT.walkR); arrive(); }
         return true; }
-      if (st.mode==='pan' || st.mode==='down'){ still(); return true; }
-      if (st.mode==='top') return ringMove(ctx, kit, st, ring, dt, t);
+      if (st.mode==='backin'){ // in at the lamp room door and onto the top of the stair, facing down
+        const k=smooth(0,1,st.t/OUT_T), rr=lerp(st.r0, LT.pathR, k); pose(lerp(st.a0, LT.a1, k), rr, LT.G, W(LT.a1)+Math.PI);
+        walkAnim(t, 0.7);
+        if (st.t>=OUT_T) onStair(LT.steps-0.3, LT.pathR, -1);
+        return true; }
+      if (st.mode==='down'){ still(); return true; }
+      if (st.mode==='top'){ if (deckMove(ctx, kit, st, DECK, dt, t)==='door'){ ctx.stopMove(); st.mode='backin'; st.t=0; st.r0=st.r; st.a0=LT.a1+angD(st.a, A1); } return true; }
       return false;
     },
     cam(dt){
-      const c=ctx.camera, k=Math.min(1, dt*4);
-      if (st.mode==='in' || st.mode==='up' || st.mode==='out'){
-        // outside the tower, on your side of it, a little above you; the wall between you and the camera cuts away
-        const pa=Math.atan2(P.pos.x-cx, P.pos.z-cz), lead=st.mode==='in' ? 0 : 0.35;
-        st.camA = st.mode==='in' ? pa : st.camA+angD(pa+lead, st.camA)*Math.min(1,dt*3);
-        const camY=Math.min(P.pos.y+2.4, Gy-0.45), want=new THREE.Vector3(cx+Math.sin(st.camA)*8.6, camY, cz+Math.cos(st.camA)*8.6);
-        st.camP.lerp(want, k); st.look.lerp(P.pos.clone().add(new THREE.Vector3(0,0.8,0)), k*1.5);
-        c.position.copy(st.camP); c.lookAt(st.look); cutaway(true, st.camA); ctx.skyFollow(P.pos); return true; }
-      if (st.mode==='pan'){ if (panCam(ctx, kit, st, ring)) endPan(); return true; }
-      if (st.mode==='top' || st.mode==='down') return ringCam(ctx, kit, st, ring, dt, keeper ? { keeper, keeperA:W(keeperA) } : null);
-      return false;
+      if (st.mode==='off') return false;
+      const top = st.mode==='top' || st.mode==='down';
+      const o = top ? VIEW.top : { ...VIEW.stair, capY: Gy-0.55 };
+      followCam(ctx, kit, st, o, dt);
+      if (top || st.mode==='out' || st.mode==='backin'){ cutaway(false); fadeTo(U.roofM, behind(P, cx, cz, ctx.getCamYaw()), dt); if (top) kit.farFog(); }
+      else { cutaway(true, camAng(), P.pos.y); fadeTo(U.roofM, false, dt); }
+      return true;
     },
     tap(p){
-      if (st.mode==='pan'){ endPan(); return; }
-      if (st.mode!=='top' || ctx.dialogOpen()) return;
+      if (ctx.dialogOpen()) return;
+      if (st.mode==='stair'){ const R=ctx.ray && ctx.ray(); stairTap(st, STAIR, R && R.ray); return; }
+      if (st.mode!=='top') return;
       if (p && p.ent && (p.ent===keeper || p.ent===hatch)){ const e=p.ent; P.target=e.pos.clone(); P.targetEnt=e; P.cb=()=>ctx.interact(e); return; }
       const pt = p && (p.ground || p.water || p.point); if (pt){ P.target=pt.clone(); P.targetEnt=null; P.cb=null; }
     },
     act(){
-      if (st.mode==='pan'){ endPan(); return; }
       if (st.mode!=='top') return;
       const e=ctx.nearestEnt(); if (e){ ctx.stopMove(); ctx.interact(e, 'manual'); }
     },
@@ -244,9 +254,8 @@ export function makeLighthouse(ctx){
 }
 
 /* ---------- shared by both climbable lighthouses: this one and the Lantern Bluff one (bluffhouse.js) ----------
-   kit: HUD modes and the walk cycle. A ring is the gallery: { cx, cz, Gy, walkR, railR, panR, blockers(), cutaway(on) },
-   blockers() gives [world angle, half-width in radians] for things you can't walk through on it.
-   st (the controller's own state) carries ang, lookYaw, camP, look, panFrom and t. */
+   kit: HUD modes and the walk cycle. The walking code and camera below take the stair (S) and gallery (D) as plain descriptions.
+   st (the controller's own state) carries the stair or gallery position, camP, look and t. */
 export function perchKit(ctx, o={}){
   const P=ctx.player;
   // on the stair the HUD goes away like a cutscene; up top you get the action button and joystick back, but no tools or bag
@@ -259,44 +268,110 @@ export function perchKit(ctx, o={}){
   const farFog = () => { const f=ctx.scene.fog; if (!f) return; f.near=Math.max(f.near, fogN); f.far=Math.max(f.far, fogF); };
   return { P, hud, walkAnim, still, farFog };
 }
-// walking round the gallery: joystick or keys go along the ring relative to the camera, a tap walks there the short way round
-export function ringMove(ctx, kit, st, o, dt, t){
-  const P=kit.P, { cx, cz, Gy, walkR } = o;
-  const crosses = (a, d) => o.blockers().some(([ba]) => { const q=angD(ba, a); return Math.sign(q)===Math.sign(d) && Math.abs(q) < Math.abs(d)-0.05; });   // would walking d radians from a run into something? then go the other way round
-  let w=0;   // how far round the ring you want to go this frame, in radians
-  let [ix,iz]=ctx.input(); if (ctx.dialogOpen()) ix=iz=0;
-  const fA=st.ang+st.lookYaw, fx=Math.sin(fA), fz=Math.cos(fA), rx=-fz, rz=fx;   // camera forward and right
-  const tx=Math.cos(st.ang), tz=-Math.sin(st.ang);                                 // the way round the ring (angle increasing)
-  const speed=3.2/walkR;
-  if (ix||iz){ ctx.stopMove(); const mx=rx*ix-fx*iz, mz=rz*ix-fz*iz, L=Math.hypot(mx,mz)||1; w=(mx*tx+mz*tz)/L*speed*dt*Math.min(1,Math.hypot(ix,iz)); }
-  else if (P.target && !ctx.dialogOpen()){ const tA=Math.atan2(P.target.x-cx, P.target.z-cz); let d=angD(tA, st.ang); if (crosses(st.ang, d)) d-=Math.sign(d)*TAU; const stopAt=P.targetEnt ? (P.targetEnt.reach-0.2)/walkR : 0.03;
-    const near = P.targetEnt ? Math.hypot(P.targetEnt.pos.x-P.pos.x, P.targetEnt.pos.z-P.pos.z) <= P.targetEnt.reach : Math.abs(d)<=stopAt;
-    if (near){ const cb=P.cb; ctx.stopMove(); if (cb) cb(); } else w=Math.sign(d)*Math.min(Math.abs(d), speed*dt); }
-  if (w){ let na=st.ang+w; for (const [ba,hw] of o.blockers()){ const d0=angD(st.ang,ba), d1=angD(na,ba); if (Math.abs(d1)<hw && Math.abs(d1)<Math.abs(d0)){ na=st.ang; if (P.target && !P.targetEnt) ctx.stopMove(); } }
-    st.ang=na; kit.walkAnim(t, 0.9); } else kit.still();
-  const face = w ? st.ang+Math.sign(w)*Math.PI/2 : P.face;
-  P.pos.set(cx+Math.sin(st.ang)*walkR, Gy, cz+Math.cos(st.ang)*walkR); P.obj.position.copy(P.pos);
-  let df=face-P.obj.rotation.y; df=Math.atan2(Math.sin(df),Math.cos(df)); P.obj.rotation.y+=df*Math.min(1,dt*12); P.face=face;
+/* ---------- v1.78 walking it yourself, in the usual view ----------
+   No more ride up the stair with the camera circling the tower, no turn on the spot in the lamp room, no eye-level view
+   round the gallery. You walk the stair and the gallery yourself (stick, keys or a tap), and the camera stays where
+   the island camera is: behind and above you, pointing the way you last turned it. It only ever slides along with you.
+   Positions here are local polar: angle a (local, add the tower's rot for world) and radius r from the middle. */
+const _v=new THREE.Vector3(), _w=new THREE.Vector3();
+// the stick or keys as a world direction, turned by the camera the same way main.js does it; null when idle
+export function inputDir(ctx){
+  let [ix,iz]=ctx.input(); if (ctx.dialogOpen()) return null; if (!ix && !iz) return null;
+  const Y=ctx.getCamYaw(), mx=ix*Math.cos(Y)+iz*Math.sin(Y), mz=-ix*Math.sin(Y)+iz*Math.cos(Y), L=Math.hypot(mx,mz)||1;
+  return { x:mx/L, z:mz/L, m:Math.min(1, Math.hypot(ix,iz)) };
+}
+const faceTo = (P, face, dt) => { let df=face-P.obj.rotation.y; df=Math.atan2(Math.sin(df),Math.cos(df)); P.obj.rotation.y+=df*Math.min(1,dt*12); P.face=P.obj.rotation.y; };
+
+/* The stair. S: { cx, cz, rot, baseY, steps, dA (radians a tread), at(s)->{ a, h, rr? } (local angle, height over the base,
+   the line you'd walk), band(s)->[inner r, outer r] where you can stand, speed }. st carries s (treads up, 0..steps), r, dir and
+   goS (a tapped tread). The camera stays put, so the stair turns under the stick: whichever way along it your push points
+   when you start (up or down), holding the stick or a key keeps you going that way all the way round. Push the other way
+   to turn back. Returns 'top' or 'bottom' when you walk off that end, else true. */
+export function stairMove(ctx, kit, st, S, dt, t){
+  const P=kit.P, H0=S.at(st.s), wa=H0.a+S.rot, tx=Math.cos(wa), tz=-Math.sin(wa);
+  const sp=S.speed||3.0, arc=Math.max(0.6, st.r)*S.dA; let ds=0;
+  const d=inputDir(ctx);
+  if (d){ st.goS=null; st.goCb=null; if (P.target) ctx.stopMove();
+    const tg=d.x*tx+d.z*tz;
+    if (!st.push || d.x*st.push.x+d.z*st.push.z < -0.4){   // a fresh push, or a turn back: pick the way along the stair it points
+      st.push={ x:d.x, z:d.z }; st.dir = Math.abs(tg)>0.15 ? Math.sign(tg) : (1); }
+    ds=st.dir*d.m*sp*dt/arc; }
+  else { st.push=null;
+    if (st.goS!=null && !ctx.dialogOpen()){ const g=st.goS-st.s;
+      if (Math.abs(g)<0.2){ const cb=st.goCb; st.goS=null; st.goCb=null; if (cb) cb(); }
+      else { ds=Math.sign(g)*Math.min(Math.abs(g), sp*dt/arc); st.dir=Math.sign(g); } } }
+  if (ds>0 && st.s+ds>S.steps) return 'top';
+  if (ds<0 && st.s+ds<0) return 'bottom';
+  st.s=clamp(st.s+ds, 0, S.steps);
+  const H=S.at(st.s), [r0,r1]=S.band(st.s), want=clamp(H.rr ?? st.r, r0, r1);
+  st.r=clamp(st.r+(want-st.r)*Math.min(1, dt*5), r0, r1);    // drift onto the walking line (it hugs the wall past broken treads)
+  const w=H.a+S.rot; P.pos.set(S.cx+Math.sin(w)*st.r, S.baseY+H.h, S.cz+Math.cos(w)*st.r); P.obj.position.copy(P.pos);
+  if (ds){ const sg=Math.sign(ds); faceTo(P, Math.atan2(Math.cos(w)*sg, -Math.sin(w)*sg), dt); kit.walkAnim(t, 0.9); }
+  else kit.still();
+  const si=Math.floor(st.s); if (si!==st.stepI){ if (st.stepI!==undefined && si%3===0) ctx.step(); st.stepI=si; }
   return true;
 }
-// standing in the lamp room, turning slowly all the way round (st.t from 0 to PAN seconds); true once it's done
-export const PAN_T = 9;
-export function panCam(ctx, kit, st, o){
-  const c=ctx.camera, { cx, cz, Gy } = o, f=clamp(st.t/PAN_T,0,1), a=st.panFrom+smooth(0,1,f)*TAU; o.cutaway(false);
-  c.position.set(cx+Math.sin(a)*o.panR, Gy+1.9, cz+Math.cos(a)*o.panR); st.look.set(cx+Math.sin(a)*13, Gy-0.9, cz+Math.cos(a)*13); c.lookAt(st.look);   // stand just in front of the lamp, so it stays behind you
-  kit.farFog(); ctx.skyFollow(kit.P.pos); return f>=1;
+// a tap on the stair: walk to the tread nearest the tap (looking at the treads within a turn and a half of you)
+export function stairTap(st, S, ray, cb){
+  if (!ray) return; const span=Math.ceil(1.5*TAU/S.dA); let best=-1, bd=1.2;
+  for (let i=Math.max(0, Math.floor(st.s)-span); i<=Math.min(S.steps, Math.floor(st.s)+span); i++){ const H=S.at(i+0.5), w=H.a+S.rot, [r0,r1]=S.band(i+0.5), rr=(r0+r1)/2;
+    _v.set(S.cx+Math.sin(w)*rr, S.baseY+H.h+0.1, S.cz+Math.cos(w)*rr); const dd=ray.distanceSqToPoint(_v); if (dd<bd){ bd=dd; best=i; } }
+  if (best>=0){ st.goS=clamp(best+0.5, 0, S.steps); st.goCb=cb||null; return true; } return false;
 }
-// on the gallery you see from your own eyes: it's too narrow for a camera behind you. chat: { keeper, keeperA (world) } turns to face the keeper while you talk
-export function ringCam(ctx, kit, st, o, dt, chat){
-  const c=ctx.camera, P=kit.P, { cx, cz, Gy, walkR } = o, k=Math.min(1, dt*4);
-  st.lookYaw=clamp(ctx.getCamYaw(), -1.3, 1.3); const a=st.ang+st.lookYaw;
-  const want=new THREE.Vector3(cx+Math.sin(st.ang)*(walkR-0.25), Gy+1.65, cz+Math.cos(st.ang)*(walkR-0.25));
-  const look=new THREE.Vector3(want.x+Math.sin(a)*12, Gy-1.2, want.z+Math.cos(a)*12);
-  const kp=chat && chat.keeper; if (kp && ctx.dialogOpen() && Math.hypot(kp.pos.x-P.pos.x, kp.pos.z-P.pos.z)<3){   // chatting: step back along the rail and look at the keeper, not the sea
-    // stand by the rail well round from the keeper, so the sightline clears the lamp room's frame and the whole keeper fits
-    const ca=chat.keeperA-Math.sign(angD(chat.keeperA, st.ang))*1.6, cr=o.railR-0.2;
-    want.set(cx+Math.sin(ca)*cr, Gy+1.85, cz+Math.cos(ca)*cr); look.set(kp.pos.x, Gy+1.05, kp.pos.z); }
-  st.camP.lerp(want, k); st.look.lerp(look, k); c.position.copy(st.camP); c.lookAt(st.look); o.cutaway(false);
-  kit.farFog(); ctx.skyFollow(P.pos); return true;
+
+/* The gallery (and anything round and flat like it). D: { cx, cz, rot, Gy, rMin, rMax, door:{ a, half } (local),
+   wedges()->[[local a, half-width]] you can't walk into, circles()->[[local a, r, radius]] you can't walk through, speed }.
+   st carries a and r. Joystick, keys or a tap (P.target, P.targetEnt) move you. Returns 'door' when you walk in at the door. */
+export function deckMove(ctx, kit, st, D, dt, t){
+  const P=kit.P, sp=D.speed||3.0;
+  const free = (a, r) => { if (r<D.rMin-1e-4 || r>D.rMax+1e-4) return false;
+    for (const [wa,hw] of D.wedges()) if (Math.abs(angD(a,wa))<hw) return false;
+    const x=Math.sin(a)*r, z=Math.cos(a)*r; for (const [ca,cr,rad] of D.circles()) if (Math.hypot(x-Math.sin(ca)*cr, z-Math.cos(ca)*cr)<rad) return false;
+    return true; };
+  const wa=st.a+D.rot, tx=Math.cos(wa), tz=-Math.sin(wa), rx=Math.sin(wa), rz=Math.cos(wa);
+  let mx=0, mz=0, m=0; const d=inputDir(ctx);
+  if (d){ if (P.target) ctx.stopMove(); mx=d.x; mz=d.z; m=d.m; }
+  else if (P.target && !ctx.dialogOpen()){ const E=P.targetEnt;
+    const dx=P.target.x-P.pos.x, dz=P.target.z-P.pos.z;
+    const near = E ? Math.hypot(E.pos.x-P.pos.x, E.pos.z-P.pos.z) <= Math.min(E.reach, 1.6) : Math.hypot(dx,dz)<0.15;
+    if (near){ const cb=P.cb; ctx.stopMove(); st.stuck=0; if (cb) cb(); }
+    else { // round the ring the short way (the other way if something's in the way), drifting toward the tapped radius
+      const ta=Math.atan2(P.target.x-D.cx, P.target.z-D.cz)-D.rot, tr=clamp(Math.hypot(P.target.x-D.cx, P.target.z-D.cz), D.rMin, D.rMax);
+      let g=angD(ta, st.a); const crosses=D.wedges().some(([b])=>{ const q=angD(b, st.a); return Math.sign(q)===Math.sign(g) && Math.abs(q)<Math.abs(g); }); if (crosses) g-=Math.sign(g)*TAU;
+      const along=g*st.r, across=tr-st.r, L=Math.hypot(along, across)||1;
+      if (Math.abs(along)<0.6){ mx=dx; mz=dz; const l=Math.hypot(mx,mz)||1; mx/=l; mz/=l; }
+      else { const ka=along/L, kr=across/L; mx=tx*ka+rx*kr; mz=tz*ka+rz*kr; }
+      m=1; } }
+  // walking in at the door takes a push mostly at the door (within about 40 degrees), so brushing past it on the way round doesn't send you in
+  if (m){ const step=sp*m*dt, ta=(mx*tx+mz*tz)*step, ra=(mx*rx+mz*rz)*step;
+    if (ra<-0.75*step && st.r<=D.rMin+0.03 && D.door && Math.abs(angD(st.a, D.door.a))<D.door.half && (d || (P.target && !P.targetEnt))) return 'door';
+    const na=st.a+ta/Math.max(st.r,0.5), nr=clamp(st.r+ra, D.rMin, D.rMax); let moved=true;   // at the glass or the rail you slide along it
+    if (free(na,nr)){ st.a=na; st.r=nr; } else if (Math.abs(ta)>step*0.2 && free(na,st.r)){ st.a=na; } else if (Math.abs(ra)>step*0.2 && free(st.a,nr)){ st.r=nr; } else {
+      // something round in the way: step round it, toward whichever side of the ring has more room
+      const s2=step*0.9, mid=(D.rMin+D.rMax)/2, sides = st.r>mid ? [-s2, s2] : [s2, -s2]; let done=false;
+      for (const dr of sides){ const r2=clamp(st.r+dr, D.rMin, D.rMax), a2=st.a+ta*0.5/Math.max(r2,0.5); if (Math.abs(ta)>step*0.2 && free(a2, r2)){ st.a=a2; st.r=r2; done=true; break; } if (free(st.a, r2) && Math.abs(ta)>step*0.2 && r2!==st.r){ st.r=r2; done=true; break; } }
+      if (!done) moved=false; }
+    if (!moved && P.target && !d){ if ((st.stuck=(st.stuck||0)+dt)>0.6){ st.stuck=0; const E=P.targetEnt, cb=P.cb; ctx.stopMove(); if (E && Math.hypot(E.pos.x-P.pos.x,E.pos.z-P.pos.z)<=E.reach+0.4 && cb) cb(); } } else st.stuck=0;
+    faceTo(P, Math.atan2(mx,mz), dt); kit.walkAnim(t, 0.9*m); }
+  else kit.still();
+  const w=st.a+D.rot; P.pos.set(D.cx+Math.sin(w)*st.r, D.Gy, D.cz+Math.cos(w)*st.r); P.obj.position.copy(P.pos);
+  return true;
 }
+
+/* The camera: like the island's, behind and above you on the side the camera yaw points to. It never turns by itself
+   (drag or the turn keys still turn it, as outdoors); it slides with you. o: { dist, pitch, up, capY }.
+   Returns the yaw, for the cut-away. */
+export const VIEW = { stair:{ dist:13, pitch:0.5, up:0.9 }, top:{ dist:13.5, pitch:0.55, up:1.0 } };
+export function followCam(ctx, kit, st, o, dt){
+  const c=ctx.camera, P=kit.P, Y=ctx.getCamYaw(), ch=Math.cos(o.pitch)*o.dist;
+  let y=P.pos.y+o.up+Math.sin(o.pitch)*o.dist; if (o.capY!=null) y=Math.min(y, o.capY);
+  _v.set(P.pos.x+Math.sin(Y)*ch, y, P.pos.z+Math.cos(Y)*ch); _w.copy(P.pos); _w.y+=o.up;
+  if (st.camSnap){ st.camSnap=false; st.camP.copy(_v); st.look.copy(_w); } else { const k=Math.min(1, dt*5); st.camP.lerp(_v, k); st.look.lerp(_w, k); }
+  c.position.copy(st.camP); c.lookAt(st.look); ctx.skyFollow(P.pos); return Y;
+}
+// is the player round the far side of the middle from the camera? (then the lamp room's roof would hide them)
+export const behind = (P, cx, cz, yaw) => { const dx=P.pos.x-cx, dz=P.pos.z-cz, L=Math.hypot(dx,dz)||1; return (dx*Math.sin(yaw)+dz*Math.cos(yaw))/L < 0.15; };
+// fade a roof material toward see-through while you're behind it
+export function fadeTo(mat, see, dt){ if (!mat) return; const want=see?0.22:1; mat.opacity+= (want-mat.opacity)*Math.min(1, dt*6);
+  const tr=mat.opacity<0.99; if (tr!==mat.transparent){ mat.transparent=tr; mat.needsUpdate=true; } mat.depthWrite=!tr; if (!tr) mat.opacity=1; }
 export { angD, wrap };

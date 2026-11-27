@@ -61,7 +61,12 @@ export function createCustom(C){
     C.toast(`You made the ${ITEMS[id].name}!`, C.thumb(id), 'new', `It's in your bag.${first}`); return true; }
 
   /* ---------- 3D preview in the panel ---------- */
-  let R=null, scene=null, cam=null, holder=null, spin=0, raf=0;
+  // v1.72: the piece no longer spins on its own. It holds still at a three-quarter view and turns only when you drag it.
+  let R=null, scene=null, cam=null, holder=null, yaw=-0.6, raf=0;
+  function dragTurn(canvas){ let dn=null; canvas.style.touchAction='pan-y'; canvas.style.cursor='grab';
+    canvas.onpointerdown=e=>{ dn={ x:e.clientX, y:yaw, id:e.pointerId }; try{ canvas.setPointerCapture(e.pointerId); }catch(_){} canvas.style.cursor='grabbing'; };
+    canvas.onpointermove=e=>{ if (dn && e.pointerId===dn.id) yaw=dn.y+(e.clientX-dn.x)*0.012; };
+    canvas.onpointerup=canvas.onpointercancel=()=>{ dn=null; canvas.style.cursor='grab'; }; }
   function preview(canvas, id){
     if (!R){ R=new THREE.WebGLRenderer({ antialias:true, alpha:true }); R.outputColorSpace=THREE.SRGBColorSpace; R.toneMapping=THREE.ACESFilmicToneMapping; R.shadowMap.enabled=true;
       scene=new THREE.Scene(); scene.add(new THREE.HemisphereLight(0xfff6e8,0x8a7a6a,1.5)); const sun=new THREE.DirectionalLight(0xffffff,2.1); sun.position.set(3,6,5); sun.castShadow=true; sun.shadow.mapSize.set(1024,1024); scene.add(sun);
@@ -74,7 +79,8 @@ export function createCustom(C){
     const box=new THREE.Box3().setFromObject(holder), size=box.getSize(new THREE.Vector3()), r=Math.max(size.x, size.y*1.1, size.z)*0.5+0.15;
     const y=size.y*0.5, tf=Math.tan(cam.fov*Math.PI/360), hh=size.y*0.62+0.12, hw=Math.max(size.x,size.z)*0.62+0.12, dist=Math.max(hh/tf, hw/(tf*cam.aspect))*1.05; cam.position.set(0, y+dist*0.32, dist); cam.lookAt(0, y, 0);
     const ctx=canvas.getContext('2d'); cancelAnimationFrame(raf); let last=performance.now();
-    const loop=t=>{ if (!canvas.isConnected) return; if (t-last>33){ spin+=(t-last)/1000*0.5; last=t; holder.rotation.y=spin;
+    dragTurn(canvas);
+    const loop=t=>{ if (!canvas.isConnected) return; if (t-last>33){ last=t; holder.rotation.y=yaw;
         for (const a of holder.userData.anims||[]) a(t/1000, 0.033); R.render(scene, cam); canvas.width=R.domElement.width; canvas.height=R.domElement.height; ctx.drawImage(R.domElement,0,0); }
       raf=requestAnimationFrame(loop); };
     raf=requestAnimationFrame(loop); }
@@ -109,22 +115,34 @@ export function createCustom(C){
           <div style="display:flex;gap:6px;margin-top:6px"><button class="btn" data-cmake="${id}" ${!can||miss.length?'disabled':''}>Make</button><button class="btn alt" data-cedit="${id}" ${t?'':'disabled'}>Change</button><button class="btn alt" data-cdel="${id}">Forget</button></div></div></div>`; } h+='</div>'; }
     else h+='<div class="muted" data-shide style="margin-top:8px">No designs yet. Start one above.</div>';
     return h; }
+  // v1.72: the preview, the name, the cost and the Make button stay pinned at the top while you scroll, and the options are split
+  // into Shape and Colors so the list is short. Colors your table can't do yet are left out instead of shown faded.
+  let section='shape';
   function editHTML(){
     const d=draft, B=BASES[d.base], t=Math.max(1,tier()), id=encode(d), it=ITEMS[id], can=canBuildHere(d), miss=lacks(d), c=st();
-    let h=`<canvas id="cuPrev" style="width:100%;height:220px;display:block;background:linear-gradient(#fbf3e4,#f1e4cc);border-radius:14px;margin-bottom:8px"></canvas>`;
-    h+=`<div class="notice" style="margin-top:0"><b>${esc(it.name)}</b> <span class="muted">· ${STYLE_NAME[styleOf(d)]}</span><div class="sub" style="margin-top:4px">${matsHTML(d)}</div>
-      <div class="sub">Each copy sells for ${C.fmt(copyPrice(d))}.${c.sold.includes(id)?'':` Your first sale of this design adds ${C.fmt(firstBonus(d))} for craftsmanship.`}</div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px"><button class="btn" id="cuMake" ${!can||miss.length?'disabled':''}>Make it</button><button class="btn alt" id="cuSave">Save design</button><button class="btn alt" id="cuBack">Back</button></div>
-      ${!can?`<div class="sub" style="margin-top:6px"><b>${foundAll(d)?`Needs a ${BENCH_NAME[needTier(d)]}.`:'Uses a part you haven\'t found a sketch for.'}</b></div>`:''}</div>`;
-    h+=`<div style="margin:6px 0 2px"><b>Surprise me</b> <span class="muted" style="font-size:12px">· a matching set of parts in one style</span></div><div>${STYLES.map(s=>chip(STYLE_NAME[s], `data-csty="${s}"`, s===style)).join('')}</div>`;
-    for (const sl of B.slots){ h+=`<div style="margin:8px 0 2px"><b>${B.labels[sl]}</b></div><div>`;
-      B[sl].forEach((o,i)=>{ const op=open(d.base, sl, i, t); if (!op && o.find && !known().includes(d.base+'.'+sl+'.'+i)) return;
-        h+=chip(esc(o.name), `data-cpart="${sl}:${i}"`, d.parts[sl]===i, !op, op?'':`Needs a ${BENCH_NAME[o.t]}`); });
-      h+='</div>'; }
-    const row = (label, key, list, colorOf) => { let r=`<div style="margin:8px 0 2px"><b>${label}</b></div><div>`; list.forEach((x,i)=>{ const op=matOpen(list,i,t); r+=swatch(colorOf(x), `data-cmat="${key}:${i}"`, d[key]===i, !op, x.name+(op?'':` (needs a ${BENCH_NAME[x.tier]})`)); }); return r+'</div>'; };
+    let h=`<div id="cuTop" style="position:sticky;top:-14px;z-index:2;background:var(--cream,#fdf6e8);margin:0 -16px 6px;padding:2px 16px 6px;border-bottom:2px solid #efe0c4">
+      <canvas id="cuPrev" style="width:100%;height:clamp(130px,24vh,200px);display:block;background:linear-gradient(#fbf3e4,#f1e4cc);border-radius:14px"></canvas>
+      <div style="display:flex;align-items:baseline;gap:6px;margin-top:5px"><b style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(it.name)}</b><span class="muted" style="font-size:11px;white-space:nowrap">${STYLE_NAME[styleOf(d)]} · drag to turn</span></div>
+      <div class="sub" style="font-size:12px;margin-top:2px">${matsHTML(d)} · sells for ${C.fmt(copyPrice(d))}${c.sold.includes(id)?'':` (+${C.fmt(firstBonus(d))} first sale)`}</div>
+      ${!can?`<div class="sub" style="font-size:12px"><b>${foundAll(d)?`Needs a ${BENCH_NAME[needTier(d)]}.`:'Uses a part you haven\'t found a sketch for.'}</b></div>`:''}
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;align-items:center"><button class="btn" id="cuMake" ${!can||miss.length?'disabled':''}>Make it</button><button class="btn alt" id="cuSave">Save</button><button class="btn alt" id="cuBack">Back</button>
+        <span style="flex:1"></span>${[['shape','Shape'],['color','Colors']].map(([k,n])=>chip(n, `data-csec="${k}"`, section===k)).join('')}</div></div>`;
+    if (section==='shape'){
+      h+=`<div style="margin:2px 0 2px"><b>Surprise me</b> <span class="muted" style="font-size:12px">· a matching set of parts in one style</span></div><div>${STYLES.map(s=>chip(STYLE_NAME[s], `data-csty="${s}"`, s===style)).join('')}</div>`;
+      for (const sl of B.slots){ h+=`<div style="margin:6px 0 2px"><b>${B.labels[sl]}</b> <span class="muted" style="font-size:12px">· ${esc(B[sl][d.parts[sl]].name)}</span></div><div>`;
+        B[sl].forEach((o,i)=>{ const op=open(d.base, sl, i, t); if (!op && o.find && !known().includes(d.base+'.'+sl+'.'+i)) return;
+          h+=chip(esc(o.name), `data-cpart="${sl}:${i}"`, d.parts[sl]===i, !op, op?'':`Needs a ${BENCH_NAME[o.t]}`); });
+        h+='</div>'; }
+      return h; }
+    // Colors: only what the table in reach can do. A locked color already on the design (a sketch or a copy) still shows, marked, so you can see what to swap.
+    let hidden=0;
+    const row = (label, key, list, colorOf) => { const cur=list[d[key]]; let r=`<div style="margin:6px 0 2px"><b>${label}</b> <span class="muted" style="font-size:12px">· ${esc(cur?cur.name:'')}</span></div><div>`;
+      list.forEach((x,i)=>{ const op=matOpen(list,i,t); if (!op && d[key]!==i){ hidden++; return; } r+=swatch(colorOf(x), `data-cmat="${key}:${i}"`, d[key]===i, !op, x.name+(op?'':` (needs a ${BENCH_NAME[x.tier]})`)); }); return r+'</div>'; };
     h+=row('Wood or paint', 'w', WOODS, x=>x.c) + row('Second wood', 'w2', WOODS, x=>x.c);
     if (usesMetal(d)) h+=row('Metal', 'm', METALS, x=>x.c);
-    if (usesFabric(d)){ h+=row('Fabric', 'f', FABRICS, x=>x.c); h+=`<div style="margin:8px 0 2px"><b>Pattern</b></div><div>${PATTERNS.map((p,i)=>chip(p.name, `data-cmat="p:${i}"`, d.p===i, !matOpen(PATTERNS,i,t))).join('')}</div>`; }
+    if (usesFabric(d)){ h+=row('Fabric', 'f', FABRICS, x=>x.c);
+      h+=`<div style="margin:6px 0 2px"><b>Pattern</b> <span class="muted" style="font-size:12px">· ${esc(PATTERNS[d.p].name)}</span></div><div>${PATTERNS.map((p,i)=>{ const op=matOpen(PATTERNS,i,t); if (!op && d.p!==i){ hidden++; return ''; } return chip(p.name, `data-cmat="p:${i}"`, d.p===i, !op); }).join('')}</div>`; }
+    if (hidden && t<3) h+=`<div class="muted" style="font-size:12px;margin-top:6px">A ${BENCH_NAME[t+1]} opens more colors${t+1<3?' and finishes':''}.</div>`;
     return h; }
   function bindTab(pB){
     const re=()=>renderTab(...lastArgs);
@@ -135,6 +153,7 @@ export function createCustom(C){
     pB.querySelectorAll('[data-cdel]').forEach(b=>b.onclick=()=>{ const c=st(); c.designs=c.designs.filter(x=>x!==b.dataset.cdel); C.save(); C.Snd.click(); re(); });
     pB.querySelectorAll('[data-cpart]').forEach(b=>b.onclick=()=>{ const [sl,i]=b.dataset.cpart.split(':'); draft.parts[sl]=+i; C.Snd.click(); re(); });
     pB.querySelectorAll('[data-cmat]').forEach(b=>b.onclick=()=>{ const [k,i]=b.dataset.cmat.split(':'); draft[k]=+i; C.Snd.click(); re(); });
+    pB.querySelectorAll('[data-csec]').forEach(b=>b.onclick=()=>{ if (section===b.dataset.csec) return; section=b.dataset.csec; C.Snd.click(); re(); const top=pB.querySelector('#cuTop'); if (top) pB.scrollTop=Math.min(pB.scrollTop, top.offsetTop); });
     pB.querySelectorAll('[data-csty]').forEach(b=>b.onclick=()=>{ style=b.dataset.csty; const r=mulberry32((Date.now()^hashStr(style))>>>0);
       draft=generate(r, { base:draft.base, style, open:(bb,sl,i)=>open(bb,sl,i), tier:Math.max(1,tier()) }); delete draft.style; C.Snd.click(); re(); });
     const q=s=>pB.querySelector(s);

@@ -61,7 +61,7 @@ export function createCustom(C){
     C.toast(`You made the ${ITEMS[id].name}!`, C.thumb(id), 'new', `It's in your bag.${first}`); return true; }
 
   /* ---------- 3D preview in the panel ---------- */
-  // v1.72: the piece no longer spins on its own. It holds still at a three-quarter view and turns only when you drag it.
+  // v1.74: the piece no longer spins on its own. It holds still at a three-quarter view and turns only when you drag it.
   let R=null, scene=null, cam=null, holder=null, yaw=-0.6, raf=0;
   function dragTurn(canvas){ let dn=null; canvas.style.touchAction='pan-y'; canvas.style.cursor='grab';
     canvas.onpointerdown=e=>{ dn={ x:e.clientX, y:yaw, id:e.pointerId }; try{ canvas.setPointerCapture(e.pointerId); }catch(_){} canvas.style.cursor='grabbing'; };
@@ -115,7 +115,7 @@ export function createCustom(C){
           <div style="display:flex;gap:6px;margin-top:6px"><button class="btn" data-cmake="${id}" ${!can||miss.length?'disabled':''}>Make</button><button class="btn alt" data-cedit="${id}" ${t?'':'disabled'}>Change</button><button class="btn alt" data-cdel="${id}">Forget</button></div></div></div>`; } h+='</div>'; }
     else h+='<div class="muted" data-shide style="margin-top:8px">No designs yet. Start one above.</div>';
     return h; }
-  // v1.72: the preview, the name, the cost and the Make button stay pinned at the top while you scroll, and the options are split
+  // v1.74: the preview, the name, the cost and the Make button stay pinned at the top while you scroll, and the options are split
   // into Shape and Colors so the list is short. Colors your table can't do yet are left out instead of shown faded.
   let section='shape';
   function editHTML(){

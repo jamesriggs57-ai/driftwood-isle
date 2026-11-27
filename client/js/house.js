@@ -50,7 +50,7 @@ function reachable(F, startK){ const occ=planGrid(F), seen=new Set([startK]), q=
   while (q.length){ const k=q.pop(); const r=F.rooms[k];
     for (let j=r.z;j<r.z+r.d;j++) for (let i=r.x;i<r.x+r.w;i++) for (const [di,dj] of SIDES){ const n=occ[j+dj]?.[i+di]; if (n===undefined||n<0||n===k||seen.has(n)) continue; if (linkOf(F,F.rooms[k].id,F.rooms[n].id)==='wall') continue; seen.add(n); q.push(n); } }
   return seen.size; }
-/* v1.72: inside walls. A wall, or a wall with a doorway, along a grid line inside one room, so part of a room can be closed off
+/* v1.74: inside walls. A wall, or a wall with a doorway, along a grid line inside one room, so part of a room can be closed off
    without splitting it into two rooms (a room of its own would get a roof of its own). Kept per floor in F.iw = { key:'wall'|'door' }.
    'v:i,j' is the line x=i between squares (i-1,j) and (i,j); 'h:i,j' is the line z=j between squares (i,j-1) and (i,j).
    A line only counts while both of its squares belong to the same room. */
@@ -541,7 +541,7 @@ export function buildHomeInterior(home, n=0){
     if (s.horiz){ const z=cz(s.cells[0][1]+1); addWall(a0,z,a1,z,'int',A,-1,B,+1,gap); }
     else { const x=cx(s.cells[0][0]+1); addWall(x,a0,x,a1,'int',A,-1,B,+1,gap); }
   }
-  // v1.72: inside walls within one room (both faces take that room's wallpaper), each with an optional doorway
+  // v1.74: inside walls within one room (both faces take that room's wallpaper), each with an optional doorway
   for (const w of innerWalls(plan, occ)){ const room=plan.rooms[w.k], gap = w.t==='door' ? [(IC/2-0.65)/IC, (IC/2+0.65)/IC] : null;
     if (w.kind==='h'){ const z=cz(w.j); addWall(cx(w.i), z, cx(w.i+1), z, 'int', room, -1, room, +1, gap); }
     else { const x=cx(w.i); addWall(x, cz(w.j), x, cz(w.j+1), 'int', room, -1, room, +1, gap); } }

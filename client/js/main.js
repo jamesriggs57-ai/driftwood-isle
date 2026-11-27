@@ -54,7 +54,7 @@ import { buildShopBuilding, buildMuseum, buildKeeper, buildMossby, buildExhibit,
 import { hasUpstairs, winAt, winKey, trelAt, balcAt, buildCustomHouse, buildHomeInterior, planGrid, planCells, planProblem, fixDoor, linkKey, linkOf, defaultExt, defaultRoom,
   NFLOORS, FLOOR_KEYS, STAIR_KEYS, FLOOR_NAME, FLOOR_SHORT, floorOf, floorHas, topFloor, stairsOf, shiftPlan, ex as hex_, ez as hez_, ix as hix_, iz as hiz_, cellInside, ridgeOf, cellRects,
   buildMossLayer, defaultMoss, mossCellAt, roofHit, roofPick, roofHalfCells, MOSS_GRID, balconyList, SIDES, LT } from './house.js';
-import { iwKey, innerWalls, pruneInner, shiftInner } from './house.js';   // v1.72 inside walls
+import { iwKey, innerWalls, pruneInner, shiftInner } from './house.js';   // v1.74 inside walls
 
 const $ = s => document.querySelector(s);
 const World = { weather:'sunny', season:seasonOf(Time.month()), night:0, inside:null };
@@ -8176,7 +8176,7 @@ function remodelEdits(a, b){ let n=0;
   for (let f=0;f<NFLOORS;f++){ const A=floorOf(a,f), Bf=floorOf(b,f), ra=A.rooms||[], rb=Bf.rooms||[], la=A.links||{}, lb=Bf.links||{};
     for (const id of new Set([...ra.map(r=>r.id), ...rb.map(r=>r.id)])){ const x=ra.find(r=>r.id===id), y=rb.find(r=>r.id===id); if (!x || !y || x.x!==y.x || x.z!==y.z || x.w!==y.w || x.d!==y.d) n++; }
     const has=new Set(rb.map(r=>r.id)); for (const k of new Set([...Object.keys(la), ...Object.keys(lb)])){ const [p,q]=k.split('|'); if (has.has(p) && has.has(q) && (la[k]||'door')!==(lb[k]||'door')) n++; }
-    const ia=A.iw||{}, ib=Bf.iw||{}; let iwN=0; for (const k of new Set([...Object.keys(ia), ...Object.keys(ib)])) if ((ia[k]||'')!==(ib[k]||'')) iwN++; n+=Math.ceil(iwN/4); }   // v1.72: inside walls, one edit per 4 squares
+    const ia=A.iw||{}, ib=Bf.iw||{}; let iwN=0; for (const k of new Set([...Object.keys(ia), ...Object.keys(ib)])) if ((ia[k]||'')!==(ib[k]||'')) iwN++; n+=Math.ceil(iwN/4); }   // v1.74: inside walls, one edit per 4 squares
   for (const k of new Set([...Object.keys(a.win||{}), ...Object.keys(b.win||{})])){ const [row,rest]=k.split(':'), [i,j,sd]=rest.split(',').map(Number); if (winAt(a,i,j,sd,+row)!==winAt(b,i,j,sd,+row)) n++; }
   for (const k of new Set([...Object.keys(a.balc||{}), ...Object.keys(b.balc||{})])) if (!!(a.balc&&a.balc[k]) !== !!(b.balc&&b.balc[k])) n++;
   if (a.door && b.door && (a.door.i!==b.door.i || a.door.j!==b.door.j)) n++;
@@ -8280,7 +8280,7 @@ function drawPlan(cv, drawRect){
       if (nb===k || di<0 || dj<0) return; const t=linkOf(plan,plan.rooms[k].id,plan.rooms[nb].id);
       if (t==='wall') line(x1,y1,x2,y2,LW,'#5b4332'); else if (t==='open') line(x1,y1,x2,y2,Math.max(1.5,LW/2),'rgba(91,67,50,.45)',[4,4]);
       else { line(x1,y1,x2,y2,LW,'#5b4332'); if (mids[[i,j,di,dj].join(',')]){ const mx=(x1+x2)/2, my=(y1+y2)/2, hl=cs*0.27; line(mx-(dj?hl:0),my-(di?hl:0),mx+(dj?hl:0),my+(di?hl:0),LW+2,'#fff8ea'); } } }); }
-  // v1.72 inside walls (and, in the Doors & walls tool, faint lines where one can go)
+  // v1.74 inside walls (and, in the Doors & walls tool, faint lines where one can go)
   if (B.mode==='doors' && B.tab==='layout' && cs>12){ for (const r of plan.rooms){ for (let i=r.x+1;i<r.x+r.w;i++) line(X(i),Y(r.z),X(i),Y(r.z+r.d),1,'rgba(91,67,50,.22)',[2,4]); for (let j=r.z+1;j<r.z+r.d;j++) line(X(r.x),Y(j),X(r.x+r.w),Y(j),1,'rgba(91,67,50,.22)',[2,4]); } }
   for (const w of innerWalls(plan, occ)){ const x1=X(w.i), y1=Y(w.j), x2=w.kind==='v'?x1:X(w.i+1), y2=w.kind==='v'?Y(w.j+1):y1; line(x1,y1,x2,y2,LW,'#5b4332');
     if (w.t==='door'){ const mx=(x1+x2)/2, my=(y1+y2)/2, hl=cs*0.27, hz=w.kind==='h'; line(mx-(hz?hl:0),my-(hz?0:hl),mx+(hz?hl:0),my+(hz?0:hl),LW+2,'#fff8ea'); } }
@@ -8401,7 +8401,7 @@ function stairsTap(fx,fz){
   const B=buildMode, full=B.draft.plan, n=B.floor, sk=STAIR_KEYS[n], i=Math.floor(fx), j=Math.floor(fz), old=full[sk];
   if (!n || !floorHas(full,n)){ toast(`Add a room on the ${FLOOR_NAME[n]} first, then place the stairs.`); return; }
   if (applyOrRevert(()=>{ full[sk]={i,j}; }, ()=>{ full[sk]=old; })){ Snd.pop(); previewBuild(); } renderBuild(true); }
-/* v1.72 inside walls. In the Doors & walls tool, a tap on a grid line inside one room cycles it: wall, wall with a doorway, nothing.
+/* v1.74 inside walls. In the Doors & walls tool, a tap on a grid line inside one room cycles it: wall, wall with a doorway, nothing.
    Press and drag along the line to wall off (or clear) several squares at once. Kept in floor.iw (see house.js). */
 // tight: a drag only starts a wall when it begins right on a line, so one finger still pans the plan from anywhere else
 function iwLine(fx,fz,tight){ const plan=FP(), occ=planGrid(plan), ex=fx-Math.round(fx), ez=fz-Math.round(fz), cs=buildMode.pv.cs, m = tight ? Math.min(0.25, Math.max(0.12, 7/cs)) : Math.min(0.42, Math.max(0.32, 10/cs));
@@ -8430,7 +8430,7 @@ function doorTap(fx,fz){
   else if (Math.abs(ez)<m){ const L=Math.round(fz), i=Math.floor(fx); A=occ[L-1]?.[i]; Bn=occ[L]?.[i]; if (A>=0 && !(Bn>=0) && B.floor===0) front={ i, j:L-1 }; }
   else return;
   if (front){ const old=full.door; if (applyOrRevert(()=>{ full.door=front; }, ()=>{ full.door=old; })){ Snd.pop(); previewBuild(); toast('Front door moved.'); } renderBuild(true); return; }
-  if (A>=0 && A===Bn){ const ln=iwLine(fx,fz); if (ln){ iwTap(ln); return; } }   // v1.72 a line inside one room: an inside wall
+  if (A>=0 && A===Bn){ const ln=iwLine(fx,fz); if (ln){ iwTap(ln); return; } }   // v1.74 a line inside one room: an inside wall
   if (!(A>=0) || !(Bn>=0) || A===Bn){ toast(B.floor?'Tap a wall between two rooms on this floor.':'Tap a wall between two rooms, or a front-facing outside wall.'); return; }
   const key=linkKey(plan.rooms[A].id, plan.rooms[Bn].id), cur=plan.links[key]||'door', nxt={ door:'open', open:'wall', wall:'door' }[cur];
   if (applyOrRevert(()=>{ plan.links[key]=nxt; }, ()=>{ plan.links[key]=cur; })){ Snd.click(); previewBuild(); toast({ door:'Doorway', open:'Open (no wall)', wall:'Solid wall' }[nxt]); }

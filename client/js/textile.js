@@ -57,7 +57,7 @@ export function createSewing(C){
     return true; }
 
   /* ---------- 3D preview ---------- */
-  // v1.72: no more spinning or rocking on its own. Clothes face you, rugs sit square, and either turns only when you drag it.
+  // v1.74: no more spinning or rocking on its own. Clothes face you, rugs sit square, and either turns only when you drag it.
   let R=null, scene=null, cam=null, holder=null, raf=0, yaw=0, yawKind='';
   function dragTurn(canvas){ let dn=null; canvas.style.touchAction='pan-y'; canvas.style.cursor='grab';
     canvas.onpointerdown=e=>{ dn={ x:e.clientX, y:yaw, id:e.pointerId }; try{ canvas.setPointerCapture(e.pointerId); }catch(_){} canvas.style.cursor='grabbing'; };

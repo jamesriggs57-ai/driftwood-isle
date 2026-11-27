@@ -1,6 +1,7 @@
 // v1.21 museum: a real museum hall. Aquarium tanks down the left wall, insect terrariums down the right,
-// fossils on lit pedestals across the back and beach finds in a glass case in the middle.
-// Each tank holds one group of 5 to 12 species; clicking a tank opens a fullscreen view of it (buildTankView).
+// fossils on lit pedestals and in glass cases at the back and beach finds in a glass case near the door.
+// v1.68: tanks are shared (up to 20 specimens from several groups) and the hall only grows when something is full.
+// Clicking a tank opens a fullscreen view of it (buildTankView).
 import * as THREE from 'three';
 import { TAU, mulberry32 } from './util.js';
 import { ITEMS } from './content.js';
@@ -40,14 +41,13 @@ export const TANK_GROUPS = (() => { const out={};
     for (const it of Object.values(ITEMS)) if (it.kind===k && !seen.has(it.id)) gs[gs.length-1].ids.push(it.id); out[k]=gs; }
   return out; })();
 export const tankOf = id => { for (const k in TANK_GROUPS) for (const g of TANK_GROUPS[k]) if (g.ids.includes(id)) return g; return null; };
-// Big fossils stand on their own pedestals. v1.65: the order here is their place in the full Fossil Hall, back row first.
+// Big fossils stand on their own pedestals, in this order (v1.68: pedestals are added two at a time as they are needed).
 const BIG_ORDER = ['pteroskull','duckbillskull','trikeskull','trexskull','dinoegg','stegoplate','claw','femur',
   'ammonite','ichthyosaur','mosasaurjaw','armorfish','firstbird','tusk','cavebear','dawnhorse'];
 const BIG_FOSSIL = new Set(BIG_ORDER);
 export const isBigFossil = id => BIG_FOSSIL.has(id);
-/* v1.65: once the fossils outgrow the second Fossil Hall, the builders fit out the full hall. Every fossil in the game has
-   its own spot there: a pedestal for each big one and a place in one of the themed glass cases (8 to a case) for the rest,
-   so an empty spot shows what is still out there to find. Fossils added later that aren't listed get extra cases. */
+/* Small fossils share glass cases of 8. They are shelved in this order, so related fossils sit together, and each case is
+   named after the theme most of its fossils come from. Fossils added later that aren't listed go at the end. */
 const FOSSIL_CASES0 = [
   { name:'Shells of the Old Sea', sub:'Coiled and pointed shells', ids:['orthocone','belemnite','nautilus','hookammonite','turritella','moonsnail','gryphaea','opalclam'] },
   { name:'Clams and Corals', sub:'Reef builders', ids:['brachiopod','fossilscallop','horncoral','honeycomb','chaincoral','lacecoral','vasesponge','stromatolite'] },
@@ -62,74 +62,142 @@ export const FOSSIL_HALL = (() => {
   const used=new Set([...big, ...cases.flatMap(c=>c.ids)]), rest=Object.values(ITEMS).filter(i=>i.kind==='fossil' && !used.has(i.id)).map(i=>i.id);
   for (let i=0;i<rest.length;i+=8) cases.push({ name:'More Finds', sub:'New to the museum', ids:rest.slice(i,i+8) });
   return { big, cases }; })();
-// Before a section has its own hall, everything of that kind shares one tank in the main room
+// Before there is more than one tank, the tank on each side is a shared one with these names
 export const MIX_GROUPS = {
-  fish:{ id:'mixfish', kind:'fish', name:'Island Waters', theme:'river', ids:[], slots:8 },
-  bug: { id:'mixbug',  kind:'bug',  name:'Island Critters', theme:'garden', ids:[], slots:8 } };
-export const FOSSIL_CAP = [3, 6, 99], SHELL_CAP = [4, 99];
+  fish:{ id:'mixfish', kind:'fish', name:'Island Waters', theme:'river', ids:[] },
+  bug: { id:'mixbug',  kind:'bug',  name:'Island Critters', theme:'garden', ids:[] } };
 
-/* ---------- Layout (room coordinates: door at +z, back wall at -z) ----------
-   The museum starts as one small room: a shared fish tank on the left wall, a shared terrarium on the right,
-   three fossil pedestals at the back and a little case of beach finds. Each section grows on its own once it runs
-   out of room: the Aquarium and Insectarium become wings off the sides with one themed tank per group, and the
-   fossils move into a Fossil Hall across the back. When that fills (v1.65) it becomes the full Fossil Hall, as wide as
-   the museum, with a pedestal or a case spot for every fossil in the game (FOSSIL_HALL).
-   st = { fish:null|[group ids], bug:null|[group ids], fossil:0..2, shell:0..1 } */
-const W0=11, WING=5.4, SLOT=3.9, TLEN=3.4;
-// v1.65 full Fossil Hall: pedestal rows 2.4 apart, then rows of glass cases (4 to a row) 2.7 apart
+/* ---------- v1.68: a compact museum that grows only when it is full ----------
+   Everything shares one hall. Fish tanks run down the left wall and terrariums down the right; fossils stand in the
+   middle at the back and the beach finds sit in a case near the door.
+   - Tanks are shared: each holds up to TANK_CAP specimens from any groups. Groups are kept together in one tank
+     where they fit; the builders add a tank only when a group no longer fits in any tank.
+   - Big fossils stand on pedestals, PED_STEP at a time (2 to start). Small fossils share glass cases of 8.
+   - Beach finds: a case of 4, then a case of 8.
+   - The hall is 11 wide and gets longer as the tank rows do. It widens only when the fossils in the middle would
+     otherwise make it longer than the tanks need.
+   A donation that has no space waits in the back room and the builders make room overnight.
+   st = { v:2, fish:tanks, bug:tanks, ped:pedestals, cases:fossil cases, shell:0|1 } */
+export const TANK_CAP=20, TANK_LEN=5.0, CASE_CAP=8, PED_STEP=2, SHELL_CAP=[4, 8];
+const GROUP_IX = {}, IN_GROUP = {};
+for (const k of ['fish','bug']) TANK_GROUPS[k].forEach((g,gi)=>{ GROUP_IX[g.id]=gi; g.ids.forEach((id,i)=>{ IN_GROUP[id]=[g, gi*1000+i]; }); });
+const BIG_RANK = Object.fromEntries(FOSSIL_HALL.big.map((id,i)=>[id,i]));
+const SMALL_RANK = {}, CASE_THEME = {};
+FOSSIL_HALL.cases.forEach((c,ci)=>c.ids.forEach((id,i)=>{ SMALL_RANK[id]=ci*100+i; CASE_THEME[id]=c; }));
+
+// Groups (in museum order) with the donated members of each, in catalog order
+function groupsOf(kind, ids){ const by=new Map();
+  for (const id of ids){ const e=IN_GROUP[id]; if (!e) continue; if (!by.has(e[0])) by.set(e[0], []); by.get(e[0]).push(id); }
+  return [...by.entries()].sort((a,b)=>GROUP_IX[a[0].id]-GROUP_IX[b[0].id]).map(([g,m])=>({ g, m:m.sort((a,b)=>IN_GROUP[a][1]-IN_GROUP[b][1]) })); }
+// First fit: each group goes whole into the first tank with room for it (a new tank if none has). Returns the tanks.
+function packWhole(gs, cap){ const bins=[];
+  for (const x of gs){ let b=bins.find(b=>b.n+x.m.length<=cap); if (!b){ b={ n:0, parts:[] }; bins.push(b); } b.parts.push({ g:x.g, m:x.m.slice() }); b.n+=x.m.length; }
+  return bins; }
+export const tanksNeeded = (kind, ids) => Math.max(1, packWhole(groupsOf(kind, ids), TANK_CAP).length);
+// Put what's shown into n tanks: whole groups where they fit, and if a group fits nowhere whole (only until the builders
+// come that night) it is split over the free space, so nothing on display ever goes back into storage.
+function fillTanks(kind, ids, n){
+  const gs=groupsOf(kind, ids), bins=Array.from({ length:n }, ()=>({ n:0, parts:[] })), left=[];
+  for (const x of gs){ const b=bins.find(b=>b.n+x.m.length<=TANK_CAP); if (b){ b.parts.push({ g:x.g, m:x.m.slice() }); b.n+=x.m.length; } else left.push(x); }
+  for (const x of left){ let m=x.m.slice(); for (const b of bins){ if (!m.length) break; const k=TANK_CAP-b.n; if (k<=0) continue; b.parts.push({ g:x.g, m:m.slice(0,k) }); b.n+=Math.min(k,m.length); m=m.slice(k); } }
+  return bins.map((b,i)=>{
+    const have=b.parts.flatMap(p=>p.m), main=b.parts.slice().sort((p,q)=>q.m.length-p.m.length)[0];
+    // a group's missing species show as "?" in the tank that holds most of it
+    const home=b.parts.filter(p=>{ let best=0, at=-1; bins.forEach((bb,j)=>{ const c=bb.parts.filter(q=>q.g===p.g).reduce((s,q)=>s+q.m.length,0); if (c>best){ best=c; at=j; } }); return at===i; }).map(p=>p.g);
+    const gNames=[...new Set(b.parts.map(p=>p.g.name))];
+    const name = !b.parts.length ? MIX_GROUPS[kind].name : gNames.length===1 ? gNames[0] : gNames.length===2 ? gNames.join(' and ') : MIX_GROUPS[kind].name;
+    const miss=[...new Set(home)].flatMap(g=>g.ids.filter(id=>!have.includes(id) && !ids.includes(id)));
+    return { id:`${kind}tank${i}`, kind, name, theme:main?main.g.theme:MIX_GROUPS[kind].theme, have, ids:[...have, ...miss], slots:TANK_CAP, groups:gNames }; }); }
+const byTime = (don, kind) => don[kind] || [];
+// The smallest museum that shows every donation
+export function museumFit(don){
+  const fos=byTime(don,'fossil'), big=fos.filter(id=>BIG_FOSSIL.has(id)).length, small=fos.length-big;
+  return { v:2, fish:tanksNeeded('fish', byTime(don,'fish')), bug:tanksNeeded('bug', byTime(don,'bug')),
+    ped:Math.max(PED_STEP, PED_STEP*Math.ceil(big/PED_STEP)), cases:Math.max(1, Math.ceil(small/CASE_CAP)), shell:byTime(don,'shell').length>SHELL_CAP[0]?1:0 }; }
+const GROW_KEYS = ['fish','bug','ped','cases','shell'];
+// What the builders add tonight (never takes anything away)
+export const museumGrown = (st, don) => { const f=museumFit(don), out={ ...st }; for (const k of GROW_KEYS) out[k]=Math.max(st[k]||0, f[k]); out.v=2; return out; };
+export const museumShort = (st, don) => { const f=museumFit(don); return GROW_KEYS.filter(k=>f[k]>(st[k]||0)); };
+const WORDS=['no','one','two','three','four','five','six','seven','eight','nine','ten'];
+const nw = n => WORDS[n] || String(n);
+export function museumPlanWords(st, don){ const f=museumFit(don), out=[];
+  for (const k of museumShort(st, don)){ const d=f[k]-(st[k]||0);
+    if (k==='fish') out.push(d===1 ? 'another fish tank' : `${nw(d)} more fish tanks`);
+    if (k==='bug') out.push(d===1 ? 'another terrarium for the bugs' : `${nw(d)} more terrariums for the bugs`);
+    if (k==='ped') out.push(`${nw(d)} more pedestals for the big fossils`);
+    if (k==='cases') out.push(d===1 ? 'another glass case for fossils' : `${nw(d)} more glass cases for fossils`);
+    if (k==='shell') out.push('a bigger case for the beach finds'); }
+  return out; }
+// Which "wing" milestones the collection has passed (for the town hall and Wendell's isles): more than 8 fish,
+// more than 8 bugs, more than 3 fossils. These are the points where the old museum built its wings and halls.
+export const museumTierOf = don => Math.min(3, (byTime(don,'fish').length>8?1:0)+(byTime(don,'bug').length>8?1:0)+(byTime(don,'fossil').length>3?1:0));
+// What is on display and where. Anything past the space there is (the newest donations) waits in the back room.
+export function museumShow(st, don){
+  const out={ tanks:{}, shown:{} };
+  for (const k of ['fish','bug']){ const ids=byTime(don,k).slice(0, st[k]*TANK_CAP); out.tanks[k]=fillTanks(k, ids, st[k]); out.shown[k]=out.tanks[k].flatMap(t=>t.have); }
+  const fos=byTime(don,'fossil'), big=fos.filter(id=>BIG_FOSSIL.has(id)).slice(0, st.ped).sort((a,b)=>BIG_RANK[a]-BIG_RANK[b]);
+  const small=fos.filter(id=>!BIG_FOSSIL.has(id)).slice(0, st.cases*CASE_CAP).sort((a,b)=>(SMALL_RANK[a]??1e6)-(SMALL_RANK[b]??1e6));
+  out.peds=Array.from({ length:st.ped }, (_,i)=>big[i]||null);
+  out.cases=Array.from({ length:st.cases }, (_,i)=>{ const ids=small.slice(i*CASE_CAP, i*CASE_CAP+CASE_CAP), cnt=new Map();
+    for (const id of ids){ const c=CASE_THEME[id]; if (c) cnt.set(c, (cnt.get(c)||0)+1); }
+    const top=[...cnt.entries()].sort((a,b)=>b[1]-a[1])[0];
+    return { ids, name: top ? top[0].name : 'Fossil Finds', sub: !ids.length ? 'Waiting for fossils' : cnt.size===1 && top ? top[0].sub : 'Mixed finds' }; });
+  out.shown.fossil=[...big, ...small];
+  out.shown.shell=byTime(don,'shell').slice(0, SHELL_CAP[st.shell?1:0]);
+  return out; }
+
+/* ---------- Layout (room coordinates: door at +z, back wall at -z) ---------- */
 export const FCASE_LEN=3.4, FCASE_DEP=1.3;
-const PED_STEP=2.4, CASE_STEP=2.7, CASES_PER_ROW=4;
-export function museumLayout(st, nFossil){
-  const L={ tanks:[], pedestals:[], fcases:null, shells:null, blocks:[], benches:[], plants:[], cols:[], zones:[], signs:[], sconces:[], lights:[], desk:null, keeper:null, center:null };
-  const wings={ fish:!!st.fish, bug:!!st.bug }, anyWing=wings.fish||wings.bug, full=st.fossil>=2;
-  const wide = anyWing || full;   // the full Fossil Hall needs the whole width, wings or not
-  const W = W0 + (wide ? 2*WING : 0);
-  const nT = Math.max(wings.fish?st.fish.length:0, wings.bug?st.bug.length:0);
-  const D0 = Math.max(10.5, nT*SLOT+3.2);
-  // fossil pedestals: how many rows the back needs
-  const nPed = full ? FOSSIL_HALL.big.length : FOSSIL_CAP[st.fossil];
-  const span = (st.fossil ? W/2 : W0/2) - 2.4, perRow = full ? 8 : Math.max(3, Math.floor(2*span/1.9)), rows = Math.ceil(nPed/perRow);
-  const caseRows = full ? Math.ceil(FOSSIL_HALL.cases.length/CASES_PER_ROW) : 0;
-  const fd = full ? 1.2 + (rows-1)*PED_STEP + caseRows*CASE_STEP + 2.2 - (caseRows?0:1.0) : st.fossil ? 1.0 + rows*2.0 + 0.6 : 0;
-  const D = D0 + fd, front = D/2, back = -D/2, zLB = back+fd;
-  Object.assign(L, { W, D, front, back, zLB, W0, wings, fd });
-  // floors and colonnades marking each hall
-  L.zones.push({ x0:-W0/2, z0:zLB, x1:W0/2, z1:front, floor:'planks', rug:true });
-  for (const [k,s] of [['fish',-1],['bug',1]]){
-    const x0 = s<0 ? -W/2 : W0/2, x1 = s<0 ? -W0/2 : W/2;
-    if (wings[k]){ L.zones.push({ x0, z0:zLB, x1, z1:front, floor:k }); L.cols.push({ x:s*W0/2, z0:zLB, z1:front-0.4, axis:'z' }); }
-    else if (wide) L.zones.push({ x0, z0:zLB, x1, z1:front, floor:'planks' }); }
-  if (st.fossil){ L.zones.push({ x0:-W/2, z0:back, x1:W/2, z1:zLB, floor:'fossil' }); L.cols.push({ z:zLB, x0:-W/2+0.4, x1:W/2-0.4, axis:'x', gap:1.8 }); }
-  // tanks
-  for (const [k,s] of [['fish',-1],['bug',1]]){ const x=s*(W/2-0.75), rot=s<0?Math.PI/2:-Math.PI/2;
-    const add=(group, z, len)=>{ L.tanks.push({ kind:k, group, x, z, len, rot, front:[x-s*0.95, z] }); L.blocks.push([x-0.62, z-len/2-0.08, x+0.62, z+len/2+0.08]);
-      L.sconces.push({ wall:s<0?'L':'R', at:z-len/2-0.3 }, { wall:s<0?'L':'R', at:z+len/2+0.3 }); };
-    if (wings[k]){ const gs=TANK_GROUPS[k].filter(g=>st[k].includes(g.id)), z1=front-2.6;
-      gs.forEach((g,i)=>add(g, z1-SLOT*(i+0.5), TLEN));
-      const zm=z1-SLOT*gs.length/2; L.signs.push({ wall:s<0?'L':'R', at:zm, text:k==='fish'?'Aquarium':'Insectarium', w:3.0 });
-      L.lights.push([s*(W/2-WING/2-0.3), zm]);
-      if (gs.length>=2){ const bx=s*(W/2-3.4); L.benches.push([bx, zm, s<0?Math.PI/2:-Math.PI/2]); L.blocks.push([bx-0.45, zm-1.0, bx+0.45, zm+1.0]); } }
-    else { const z=zLB+(front-zLB)*0.45-0.3; add(MIX_GROUPS[k], z, 2.6); L.signs.push({ wall:s<0?'L':'R', at:z, text:MIX_GROUPS[k].name, w:2.6 }); } }
-  // fossils
-  { const n=nPed, zRow0 = st.fossil ? back+1.2 : zLB+1.15, rowStep = full ? PED_STEP : 2.0;
-    for (let r=0;r<rows;r++){ const cnt=Math.min(perRow, n-r*perRow), step=Math.min(full?2.15:3.0, 2*span/cnt), z=zRow0+r*rowStep;
-      for (let i=0;i<cnt;i++){ const x=-(cnt-1)*step/2+i*step; L.pedestals.push({ x, z, h:r===0?1.05:0.8, id:full?FOSSIL_HALL.big[r*perRow+i]:undefined }); L.blocks.push([x-0.62, z-0.62, x+0.62, z+0.62]); } }
-    if (full){ L.fcases=[]; const z0=zRow0+(rows-1)*PED_STEP+CASE_STEP, gap=1.4;
-      FOSSIL_HALL.cases.forEach((c,i)=>{ const r=Math.floor(i/CASES_PER_ROW), inRow=Math.min(CASES_PER_ROW, FOSSIL_HALL.cases.length-r*CASES_PER_ROW), k=i%CASES_PER_ROW;
-        const x=-(inRow-1)*(FCASE_LEN+gap)/2+k*(FCASE_LEN+gap), z=z0+r*CASE_STEP;
-        L.fcases.push({ x, z, len:FCASE_LEN, name:c.name, sub:c.sub, ids:c.ids }); L.blocks.push([x-FCASE_LEN/2-0.05, z-FCASE_DEP/2-0.05, x+FCASE_LEN/2+0.05, z+FCASE_DEP/2+0.05]); }); }
-    L.signs.push({ wall:'B', at:0, text:st.fossil?'Fossil Hall':'Fossils', w:st.fossil?3.0:2.2 });
-    if (st.fossil) L.lights.push([0, back+fd/2]); }
-  // beach finds
-  { const len=st.shell?3.6:2.0, z=zLB+(front-zLB)*0.45+(st.fossil?-0.6:0.4); L.shells={ x:0, z, len, slots:st.shell?8:4 }; L.blocks.push([-len/2-0.2, z-0.62, len/2+0.2, z+0.62]);
-    // a fountain once the main room is deep enough to hold one
-    const cz=(z+0.8+front-3.6)/2; if (front-3.6-(z+0.8)>3.9){ L.center={ x:0, z:cz }; L.blocks.push([-1.75,cz-1.75,1.75,cz+1.75]); } }
-  L.lights.push([0, zLB+(front-zLB)*0.45]);
+const SLOT=TANK_LEN+0.6, PED_ROW=2.3, PED_GAP=2.3, CASE_ROW=2.6, CASE_GAP=1.2, WIDTHS=[11, 15, 19, 23];
+const TANK0=3.6;   // the tank rows start this far in from the front wall (clear of the curator's desk)
+const centerW = W => W-5.8;   // the middle strip between the two tank aisles
+const pedPerRow = W => Math.max(2, Math.floor((centerW(W)-1.24)/PED_GAP)+1);
+const casesPerRow = W => Math.max(1, Math.floor((centerW(W)+CASE_GAP)/(FCASE_LEN+CASE_GAP)));
+// depth the middle needs, back wall to the front: fossil rows, the beach case, then room for the desk
+function middle(W, st){
+  const pr=Math.ceil(st.ped/pedPerRow(W)), cr=Math.ceil(st.cases/casesPerRow(W));
+  const zPed0=1.3, pedEnd=zPed0+(pr-1)*PED_ROW+0.62, zCase0=pedEnd+1.35+FCASE_DEP/2, caseEnd=cr?zCase0+(cr-1)*CASE_ROW+FCASE_DEP/2:pedEnd;
+  const zShell=caseEnd+1.6+0.6;
+  return { pr, cr, zPed0, pedEnd, zCase0, caseEnd, zShell, need:zShell+0.62+4.2 }; }
+export function museumLayout(st){
+  const L={ tanks:[], pedestals:[], fcases:[], shells:null, blocks:[], benches:[], plants:[], cols:[], zones:[], signs:[], sconces:[], lights:[], desk:null, keeper:null, center:null };
+  const nT=Math.max(st.fish, st.bug), dTanks=Math.max(10.5, TANK0+nT*SLOT+0.6);
+  // the narrowest hall whose middle is no longer than the tank rows; if none is, the narrowest that makes the middle shortest
+  let W=WIDTHS[0], best=1e9; for (const w of WIDTHS){ const n=middle(w, st).need; if (n<=dTanks+1.0){ W=w; break; } if (n<best-0.01){ best=n; W=w; } }
+  const M=middle(W, st), D=Math.max(dTanks, M.need), front=D/2, back=-D/2, cw=centerW(W);
+  const wings={ fish:st.fish>1, bug:st.bug>1 }, fd=M.caseEnd+0.9, zLB=back+fd;
+  Object.assign(L, { W, D, front, back, zLB, W0:W, wings, fd, cw });
+  // floors: a tiled aisle along each tank row, stone under the fossils, planks and a rug down the middle
+  const run0=front-TANK0+0.2, run1=front-TANK0-nT*SLOT-0.2, aisle=2.6;
+  if (st.fish) L.zones.push({ x0:-W/2, z0:front-TANK0-st.fish*SLOT-0.2, x1:-W/2+aisle, z1:run0, floor:'fish' });
+  if (st.bug) L.zones.push({ x0:W/2-aisle, z0:front-TANK0-st.bug*SLOT-0.2, x1:W/2, z1:run0, floor:'bug' });
+  L.zones.push({ x0:-W/2+aisle, z0:back, x1:W/2-aisle, z1:zLB, floor:'fossil' });
+  L.zones.push({ x0:-W/2+aisle, z0:zLB, x1:W/2-aisle, z1:front, floor:'planks', rug:true });
+  // tanks: fish down the left wall, bugs down the right, front to back
+  for (const [k,s] of [['fish',-1],['bug',1]]){ const x=s*(W/2-0.75), rot=s<0?Math.PI/2:-Math.PI/2, z1=front-TANK0;
+    for (let i=0;i<st[k];i++){ const z=z1-SLOT*(i+0.5);
+      L.tanks.push({ kind:k, index:i, x, z, len:TANK_LEN, rot, front:[x-s*0.95, z] }); L.blocks.push([x-0.62, z-TANK_LEN/2-0.08, x+0.62, z+TANK_LEN/2+0.08]);
+      L.sconces.push({ wall:s<0?'L':'R', at:z-TANK_LEN/2-0.3 }, { wall:s<0?'L':'R', at:z+TANK_LEN/2+0.3 }); }
+    const zm=z1-SLOT*st[k]/2; L.signs.push({ wall:s<0?'L':'R', at:zm, text:st[k]>1?(k==='fish'?'Aquarium':'Insectarium'):MIX_GROUPS[k].name, w:st[k]>1?3.0:2.6 }); }
+  // fossils: pedestals at the back, then the glass cases
+  const ppr=pedPerRow(W), cpr=casesPerRow(W);
+  for (let r=0;r<M.pr;r++){ const cnt=Math.min(ppr, st.ped-r*ppr), z=back+M.zPed0+r*PED_ROW;
+    for (let i=0;i<cnt;i++){ const x=-(cnt-1)*PED_GAP/2+i*PED_GAP; L.pedestals.push({ x, z, h:r===0?1.05:0.8 }); L.blocks.push([x-0.62, z-0.62, x+0.62, z+0.62]); } }
+  for (let i=0;i<st.cases;i++){ const r=Math.floor(i/cpr), inRow=Math.min(cpr, st.cases-r*cpr), k=i%cpr;
+    const x=-(inRow-1)*(FCASE_LEN+CASE_GAP)/2+k*(FCASE_LEN+CASE_GAP), z=back+M.zCase0+r*CASE_ROW;
+    L.fcases.push({ x, z, len:FCASE_LEN }); L.blocks.push([x-FCASE_LEN/2-0.05, z-FCASE_DEP/2-0.05, x+FCASE_LEN/2+0.05, z+FCASE_DEP/2+0.05]); }
+  const big=st.ped>PED_STEP || st.cases>1; L.signs.push({ wall:'B', at:0, text:big?'Fossil Hall':'Fossils', w:big?3.0:2.2 });
+  // beach finds near the door
+  { const len=st.shell?3.6:2.0, z=front-4.8; L.shells={ x:0, z, len, slots:SHELL_CAP[st.shell?1:0] }; L.blocks.push([-len/2-0.2, z-0.62, len/2+0.2, z+0.62]); }
+  // the free middle between the fossils and the beach case: a fountain once there's room, then benches facing the tanks
+  { let z0=back+fd+0.4, z1=front-4.8-0.62-0.6;
+    if (z1-z0>=4.2){ const cz=z1-2.0; L.center={ x:0, z:cz }; L.blocks.push([-1.75,cz-1.75,1.75,cz+1.75]); z1=cz-1.75-0.8; }
+    for (let z=z1-1.0; z-1.0>=z0; z-=4.2){ L.benches.push([0, z, 0]); L.blocks.push([-0.42, z-1.0, 0.42, z+1.0]); } }
+  // warm lights down the middle, one every 9 or so
+  { const n=Math.min(4, Math.max(1, Math.round(D/9))); for (let i=0;i<n;i++) L.lights.push([0, back+D*(i+0.5)/n]); }
   // Professor Thistle's desk by the door, plants in the front corners
   L.desk=[-3.3, front-2.3]; L.keeper=[-3.3, front-3.15]; L.blocks.push([-4.6, front-2.75, -2.0, front-1.85]);
-  for (const x of [-W0/2+0.9, W0/2-0.9]){ const z=front-1.0; if (!wide && Math.abs(x)>W0/2-1.6){ L.plants.push([x,z]); L.blocks.push([x-0.45,z-0.45,x+0.45,z+0.45]); } }
-  if (wide) for (const x of [-W/2+0.9, W/2-0.9]){ const z=front-1.0; L.plants.push([x,z]); L.blocks.push([x-0.45,z-0.45,x+0.45,z+0.45]); }
-  for (const c of L.cols) for (const p of colPoints(c)) L.blocks.push([p[0]-0.26,p[1]-0.26,p[0]+0.26,p[1]+0.26]);
+  for (const x of [-W/2+0.9, W/2-0.9]){ const z=front-1.0; L.plants.push([x,z]); L.blocks.push([x-0.45,z-0.45,x+0.45,z+0.45]); }
   return L;
 }
 export function colPoints(c){ const out=[];
@@ -165,8 +233,10 @@ function textPlate(text, sub, w=512, h=128, style='brass'){
     const g=x.createLinearGradient(0,0,0,h); if (style==='brass'){ g.addColorStop(0,'#f2d58a'); g.addColorStop(0.5,'#d6a64a'); g.addColorStop(1,'#a8782a'); } else { g.addColorStop(0,'#4a3222'); g.addColorStop(1,'#2e1e14'); }
     x.fillStyle=g; x.fillRect(0,0,w,h); x.strokeStyle=style==='brass'?'#8a5e1e':'#c9a050'; x.lineWidth=h*0.06; x.strokeRect(h*0.06,h*0.06,w-h*0.12,h-h*0.12);
     x.fillStyle=style==='brass'?'#3e2810':'#f4d690'; x.textAlign='center'; x.textBaseline='middle';
-    x.font=`700 ${Math.round(h*(sub?0.36:0.48))}px Fredoka, sans-serif`; x.fillText(text, w/2, sub?h*0.4:h*0.53);
-    if (sub){ x.font=`500 ${Math.round(h*0.22)}px Fredoka, sans-serif`; x.globalAlpha=0.8; x.fillText(sub, w/2, h*0.74); } }); }
+    // v1.68 long names (a shared tank's two group names) shrink to fit the plate
+    const fit=(size, weight, t)=>{ let f=size; x.font=`${weight} ${f}px Fredoka, sans-serif`; const mw=w*0.88, tw=x.measureText ? x.measureText(t).width : 0; if (tw>mw){ f=Math.max(8, Math.floor(f*mw/tw)); x.font=`${weight} ${f}px Fredoka, sans-serif`; } };
+    fit(Math.round(h*(sub?0.36:0.48)), 700, text); x.fillText(text, w/2, sub?h*0.4:h*0.53);
+    if (sub){ fit(Math.round(h*0.22), 500, sub); x.globalAlpha=0.8; x.fillText(sub, w/2, h*0.74); } }); }
 function wrapModel(id, size, axis){   // model centered on its middle, scaled so its longest side (or length) is `size`
   const m=buildItemModel(id), box=new THREE.Box3().setFromObject(m), s=box.getSize(new THREE.Vector3()), c=box.getCenter(new THREE.Vector3());
   const k=size/Math.max(0.001, axis==='x'?s.x:Math.max(s.x,s.z)); m.position.sub(c); const p=new THREE.Group(); p.add(m); p.scale.setScalar(k); p.userData.u=m.userData; p.userData.h=s.y*k; return p; }

@@ -47,7 +47,7 @@ import { openCreator } from './creator.js';
 import { createParty } from './party.js';
 import { buildPlot, buildStand, buildStore, buildTownHall, buildMuseumTier, buildCrop, buildStairs } from './models3.js';
 import { buildCottage, cottageStyle as COTTAGE_STYLE, mergeStatic } from './cottage.js';
-import { MIX_GROUPS, FOSSIL_CAP, SHELL_CAP, TANK_GROUPS, tankOf, isBigFossil, museumLayout, buildMuseumHall, buildDesk, buildBench, buildPalm, buildCenterpiece, buildShellCase, shellSlots, buildPedestal, fossilModel, shellModel, buildFossilCase, fossilCaseSlots, caseFossilModel, FCASE_TOP, buildTank, buildTankView } from './museum.js';
+import { museumFit, museumGrown, museumShort, museumPlanWords, museumTierOf, museumShow, museumLayout, buildMuseumHall, buildDesk, buildBench, buildPalm, buildCenterpiece, buildShellCase, shellSlots, buildPedestal, fossilModel, shellModel, buildFossilCase, fossilCaseSlots, caseFossilModel, FCASE_TOP, buildTank, buildTankView } from './museum.js';
 import { buildShopBuilding, buildMuseum, buildKeeper, buildMossby, buildExhibit, buildTower, buildWizard } from './models2.js';
 import { hasUpstairs, winAt, winKey, trelAt, balcAt, buildCustomHouse, buildHomeInterior, planGrid, planCells, planProblem, fixDoor, linkKey, linkOf, defaultExt, defaultRoom,
   NFLOORS, FLOOR_KEYS, STAIR_KEYS, FLOOR_NAME, FLOOR_SHORT, floorOf, floorHas, topFloor, stairsOf, shiftPlan, ex as hex_, ez as hez_, ix as hix_, iz as hiz_, cellInside, ridgeOf, cellRects,
@@ -2112,50 +2112,36 @@ function buildShop(id){
 // a stand closes up for the night (and opens in the morning)
 function refreshStands(){ for (const id of ['aquarium','garden']) if (shopTier(id)===0 && shopEnts[id] && shopEnts[id].standOpen!==shopOpen(id) && World.inside!==id) buildShop(id); }
 
-/* The museum starts as one small room and each section grows on its own once it runs out of room (v1.22):
-   - fish and bugs share one tank each (8 spaces) until it overflows; then that section gets its own wing with one
-     themed tank per group, and later a new tank whenever a group with no tank yet gets its first donation
-   - fossils: 3 pedestals in the main room, then a Fossil Hall with 6, then (v1.65) the full Fossil Hall with a spot for
-     every fossil in the game: a pedestal for each big one and themed glass cases for the rest
+/* v1.68 the museum is one compact hall that grows only when something is full (the rules and numbers are in museum.js):
+   - fish and bugs share tanks of 20, a group kept together in one tank where it fits; a new tank only when a group
+     fits in none of them
+   - big fossils on pedestals (two more at a time), small fossils in shared glass cases of 8
    - beach finds: a small case of 4, then a long case of 8
-   A donation that doesn't fit waits in the back room; the builders make room overnight. */
+   A donation that doesn't fit waits in the back room; the builders make room overnight.
+   S.museum.st2 is the museum's size. S.museum.st (the size before v1.68) is left as it was. */
 const _ord = Object.fromEntries(Object.keys(ITEMS).map((k,i)=>[k,i]));
 function donatedOf(kind){ return Object.keys(S.museum.items).filter(id=>ITEMS[id] && ITEMS[id].kind===kind).sort((a,b)=>(S.museum.items[a]-S.museum.items[b]) || (_ord[a]-_ord[b])); }
-const tankGid = id => (tankOf(id)||{}).id;
-const sortGroups = (k, ids) => TANK_GROUPS[k].map(g=>g.id).filter(g=>ids.includes(g));
-function museumFitState(){   // the smallest museum that shows everything already donated (islands from before v1.22)
-  const st={}; for (const k of ['fish','bug']){ const d=donatedOf(k); st[k] = d.length<=MIX_GROUPS[k].slots ? null : sortGroups(k, d.map(tankGid)); }
-  const nf=donatedOf('fossil').length; st.fossil = nf<=FOSSIL_CAP[0]?0 : nf<=FOSSIL_CAP[1]?1 : 2; st.shell = donatedOf('shell').length<=SHELL_CAP[0]?0:1; return st; }
-if (!S.museum.st) S.museum.st=museumFitState();
-function onDisplay(kind){ const st=S.museum.st, d=donatedOf(kind);
-  if (kind==='fish'||kind==='bug') return st[kind] ? d.filter(id=>st[kind].includes(tankGid(id))) : d.slice(0, MIX_GROUPS[kind].slots);
-  if (kind==='fossil') return st.fossil>=2 ? d : d.slice(0, FOSSIL_CAP[st.fossil]);
-  return d.slice(0, SHELL_CAP[st.shell]); }
-const museumNeeds = () => MUSEUM.kinds.filter(k=>onDisplay(k).length<donatedOf(k).length);
-const inStorage = () => MUSEUM.kinds.reduce((n,k)=>n+donatedOf(k).length-onDisplay(k).length, 0);
-const museumTierNow = () => { const st=S.museum.st; return Math.min(3, (st.fish?1:0)+(st.bug?1:0)+(st.fossil?1:0)); };
-const tankName = (k,g) => (TANK_GROUPS[k].find(x=>x.id===g)||{}).name;
+const donatedAll = () => Object.fromEntries(MUSEUM.kinds.map(k=>[k, donatedOf(k)]));
+const museumFitState = () => museumFit(donatedAll());   // the smallest museum that shows everything already donated
+if (!S.museum.items) S.museum.items={};
+if (!S.museum.st2 || S.museum.st2.v!==2){ const old=S.museum.st; S.museum.st2=museumFitState();
+  // islands from before v1.68 were rebuilt compact; Thistle mentions it once if the old museum had grown
+  if (old && (old.fish || old.bug || old.fossil)) S.museum.tidyNews=true; }
+const museumShowNow = () => museumShow(S.museum.st2, donatedAll());
+function onDisplay(kind){ return museumShowNow().shown[kind] || []; }
+const museumNeeds = () => museumShort(S.museum.st2, donatedAll());
+const inStorage = () => { const sh=museumShowNow().shown; return MUSEUM.kinds.reduce((n,k)=>n+donatedOf(k).length-(sh[k]||[]).length, 0); };
+const museumTierNow = () => museumTierOf(donatedAll());
 // What the builders will do tonight, in words (for Professor Thistle)
-function museumPlans(){ const st=S.museum.st, out=[];
-  for (const k of museumNeeds()){
-    if (k==='fish'||k==='bug'){ const nm=k==='fish'?'Aquarium':'Insectarium';
-      if (!st[k]) out.push(`a proper ${nm} wing with a tank for each kind of ${k==='fish'?'fish':'bug'}`);
-      else { const add=sortGroups(k, donatedOf(k).map(tankGid)).filter(g=>!st[k].includes(g)); out.push(`a new ${add.map(g=>tankName(k,g)).join(' and ')} ${k==='fish'?'tank':'terrarium'} in the ${nm}`); } }
-    if (k==='fossil') out.push(st.fossil===0 ? 'a Fossil Hall across the back' : 'the full Fossil Hall, with a pedestal or a glass case spot for every fossil there is');
-    if (k==='shell') out.push('a bigger case for the beach finds'); }
-  return out; }
-function museumExpand(){ const st=S.museum.st, plans=museumPlans();
-  for (const k of museumNeeds()){
-    if (k==='fish'||k==='bug') st[k]=sortGroups(k, [...(st[k]||[]), ...donatedOf(k).map(tankGid)]);
-    if (k==='fossil'){ st.fossil++; while (st.fossil<2 && FOSSIL_CAP[st.fossil]<donatedOf('fossil').length) st.fossil++; }
-    if (k==='shell') st.shell=1; }
+const museumPlans = () => [...museumPlanWords(S.museum.st2, donatedAll()), ...(museumTierNow()>(S.museum.tier||0) ? ['a bigger building outside'] : [])];
+function museumExpand(){ const plans=museumPlans(); S.museum.st2=museumGrown(S.museum.st2, donatedAll());
   S.museum.tier=Math.max(S.museum.tier||0, museumTierNow()); return plans; }
 if (S.museum.tier===undefined) S.museum.tier=museumTierNow();
-const museumKey = () => JSON.stringify(S.museum.st)+'|'+S.museum.tier;
+const museumKey = () => JSON.stringify(S.museum.st2)+'|'+S.museum.tier;
 let museumEnt=null, thistle=null;
 const museumRoom=()=>ROOMS.museum;
 function buildMuseumAll(){
-  const t=S.museum.tier, LY=museumLayout(S.museum.st, donatedOf('fossil').length), W=LY.W, D=LY.D;
+  const t=S.museum.tier, LY=museumLayout(S.museum.st2), W=LY.W, D=LY.D;
   if (museumEnt) museumEnt.remove(); setRects('museum',[]); clearMuseumEnts();
   museumEnt=placeBuilding('museum', PLACES.museum[0], PLACES.museum[1], buildMuseumTier(t), 'Enter', ()=>enterRoom('museum')); museumEnt.tier=t; museumEnt.key=museumKey();
   clearRoom('museum');
@@ -2166,7 +2152,6 @@ function buildMuseumAll(){
   for (const [x,z,ry] of LY.benches) put(buildBench(), x, z, ry);
   for (const [x,z] of LY.plants) put(buildPalm(), x, z);
   put(buildShellCase(LY.shells.len, LY.shells.slots), LY.shells.x, LY.shells.z);
-  if (LY.fcases) for (const c of LY.fcases) put(buildFossilCase(c.len, c.name, c.sub), c.x, c.z);
   if (LY.center) put(buildCenterpiece(t), LY.center.x, LY.center.z);
   ROOMS.museum={ id:'museum', ox, oz, w:W, d:D, group:container, shell, spec:{ mood:'museum' }, layout:LY, entry:[ox, oz+D/2-1.2], exit:[museumEnt.doorPt[0], museumEnt.doorPt[1]+0.2], bed:[ox,oz],
     walk:(x,z)=>{ const lx=x-ox, lz=z-oz; if (!(Math.abs(lx)<W/2-0.4 && lz>-D/2+0.4 && lz<D/2-0.05)) return false; for (const b of LY.blocks) if (lx>b[0]-0.28 && lx<b[2]+0.28 && lz>b[1]-0.28 && lz<b[3]+0.28) return false; return true; } };
@@ -2322,6 +2307,7 @@ function applyTown(){
   if (SY.shop && SY.shop.news){ SY.shop.news=false; setTimeout(()=>{ Snd.fanfare(); toast(`${npcName(SY.shop.owner)}'s Workshop is open!`, null, 'new', 'Out on Old Pinewood. Bring wood, take planks.'); }, 3600); }
   if (T.departed){ const R=RESIDENTS.find(x=>x.id===T.departed); T.departed=null; if (R) setTimeout(()=>toast(`${R.name} moved away.`, null, '', 'Their plot is empty now. Someone new may take it.'), 2600); }
   if (T.hallNews){ T.hallNews=false; setTimeout(()=>{ Snd.fanfare(); toast(`The ${HALL_NAMES[T.hall]} is finished!`, null, 'new', T.hall===1?'Newcomers may start to notice the island, and the plaza got flower beds.':'A fountain in the plaza, and Wendell can now make new land.'); }, 3200); }
+  if (S.museum.tidyNews && !VISIT){ S.museum.tidyNews=false; setTimeout(()=>toast('The museum was rearranged!', null, 'new', 'Professor Thistle had the builders put the collection closer together. Everything you donated is still on display.'), 4400); }
   if (S.museum.grewNews){ const g=S.museum.grewNews; S.museum.grewNews=false; setTimeout(()=>toast('The museum grew overnight!', null, 'new', Array.isArray(g)?'New: '+g.join(', ')+'.':''), 4000); }
   if (S.museum.news){ const nw=S.museum.news; S.museum.news=null; if (nw.clams) setTimeout(()=>{ Snd.coin(); toast(`+${fmt(nw.clams)} clams`, null, 'new', 'Someone left a donation at the museum. Professor Thistle sent it your way.'); }, 5000); }
   save();
@@ -5381,7 +5367,7 @@ const MOVE_OFFER = {
   aquarium:'Ooh, with the new tanks going in we could move the whole shop! Closer to the water, maybe? Anywhere you like, partner.',
   garden:'Since we\'re building anyway... do you want the shop somewhere sunnier? Or shadier? Your call!',
   hall:'The builders say that if the hall is ever going to stand somewhere else, now\'s the time, dear. Shall we pick a new spot?',
-  museum:'Hm. The new wing is up. While the scaffolding still stands one could, in principle, move the entire museum. Would you like to?',
+  museum:'Hm. The builders have finished in the museum. While the scaffolding still stands one could, in principle, move the entire museum. Would you like to?',
   inc:'With the new {name}, I could set up somewhere else if you\'d like. Want to show me a spot?' };
 function offerMove(key, who, line, back){
   if (VISIT || GUEST || TRIP || !placeOf(key)) { if (back) back(); return; }
@@ -7118,9 +7104,10 @@ class Exhibit extends Ent {
   update(dt){ if (this.spin) this.spin.rotation.y+=dt*0.35; }
 }
 // A whole aquarium tank or terrarium. Walk up and press View (or click it) for the fullscreen view.
+// v1.68 a tank is shared: T.group is made fresh from what's on display (its name, theme, specimens and "?" spots).
 class MuseumTank extends Ent {
-  constructor(T, R, shown){ super('tank', R.ox+T.x, R.oz+T.z, 0.5); this.T=T; this.solid=false; this.reach=T.len/2+1.2;
-    this.have=T.group.slots ? shown.slice(0, T.group.slots) : shown.filter(id=>T.group.ids.includes(id)); const g=buildTank(T.group, T.len, this.have); g.rotation.y=T.rot; this.attach(g); }
+  constructor(T, R){ super('tank', R.ox+T.x, R.oz+T.z, 0.5); this.T=T; this.solid=false; this.reach=T.len/2+1.2;
+    this.have=T.group.have; const g=buildTank(T.group, T.len, this.have); g.rotation.y=T.rot; this.attach(g); }
   label(){ return 'View'; }
   act(){ openTankView(this); }
   update(dt,t){ const u=this.obj.userData; if (u.update && World.inside==='museum') u.update(t,dt); }
@@ -7134,19 +7121,23 @@ function queueExhibit(fn){ exhibitQ.push(fn); if (exhibitJob) return; exhibitJob
     if (exhibitQ.length) return true; exhibitJob=false; return false; }); }
 function clearMuseumEnts(){ exhibitQ.length=0; for (const id in exhibits){ exhibits[id].remove(); delete exhibits[id]; } for (const e of museumTanks) e.remove(); museumTanks.length=0; }
 // Everything on display is rebuilt together (cheap, and only when something changes)
-function spawnExhibits(){ const R=museumRoom(); if (!R || !R.layout) return; clearMuseumEnts(); const LY=R.layout;
-  const shown={ fish:onDisplay('fish'), bug:onDisplay('bug') };
-  for (const T of LY.tanks) museumTanks.push(new MuseumTank(T, R, shown[T.kind]));
-  const fos=onDisplay('fossil'), full=!!LY.fcases, have=new Set(fos);
+function spawnExhibits(){ const R=museumRoom(); if (!R || !R.layout) return; clearMuseumEnts(); const LY=R.layout, show=museumShowNow();
+  for (const T of LY.tanks){ const grp=show.tanks[T.kind][T.index]; if (grp) museumTanks.push(new MuseumTank({ ...T, group:grp }, R)); }
   // v1.65: fossil models come in a few per frame once you're inside (80 of them would freeze a phone for seconds)
-  LY.pedestals.forEach((p,i)=>{ const id=full ? (have.has(p.id)?p.id:null) : (fos[i]||null), big=full || (!!id && isBigFossil(id)), g=buildPedestal(id, p.h, big, !!id);
+  LY.pedestals.forEach((p,i)=>{ const id=show.peds[i]||null, g=buildPedestal(id, p.h, true, !!id);
     const e=exhibits[id||('ped'+i)]=new Exhibit(id, R.ox+p.x, R.oz+p.z, g, null, 'fossil');
-    if (id) queueExhibit(()=>{ const m=fossilModel(id, big); m.position.y=p.h+0.05+m.userData.h/2+0.02; g.add(m); m.traverse(c=>{ c.userData.ent=e; }); e.spin=m; }); });
-  if (full) for (const c of LY.fcases){ const sl=fossilCaseSlots(c.len);
-    c.ids.forEach((id,i)=>{ if (!have.has(id) || !sl[i]) return; const g=new THREE.Group(), e=exhibits[id]=new Exhibit(id, R.ox+c.x+sl[i][0], R.oz+c.z+sl[i][1], g, null, 'fossil');
-      queueExhibit(()=>{ const m=caseFossilModel(id); m.position.y=FCASE_TOP+m.userData.h/2+0.005; g.add(m); m.traverse(k=>{ k.userData.ent=e; }); }); }); }
-  const sl=shellSlots(LY.shells.len, LY.shells.slots); onDisplay('shell').forEach((id,i)=>{ if (!sl[i]) return; const m=shellModel(id), g=new THREE.Group(); m.position.y=0.89+m.userData.h/2; g.add(m);
+    if (id) queueExhibit(()=>{ const m=fossilModel(id, true); m.position.y=p.h+0.05+m.userData.h/2+0.02; g.add(m); m.traverse(c=>{ c.userData.ent=e; }); e.spin=m; }); });
+  // v1.68 the glass cases are rebuilt with what's in them, so each is named after the fossils it holds
+  LY.fcases.forEach((c,ci)=>{ const sc=show.cases[ci]; if (!sc) return; const sl=fossilCaseSlots(c.len);
+    museumTanks.push(new MuseumCase(R, c.x, c.z, buildFossilCase(c.len, sc.name, sc.sub)));
+    sc.ids.forEach((id,i)=>{ if (!sl[i]) return; const g=new THREE.Group(), e=exhibits[id]=new Exhibit(id, R.ox+c.x+sl[i][0], R.oz+c.z+sl[i][1], g, null, 'fossil');
+      queueExhibit(()=>{ const m=caseFossilModel(id); m.position.y=FCASE_TOP+m.userData.h/2+0.005; g.add(m); m.traverse(k=>{ k.userData.ent=e; }); }); }); });
+  const sl=shellSlots(LY.shells.len, LY.shells.slots); show.shown.shell.forEach((id,i)=>{ if (!sl[i]) return; const m=shellModel(id), g=new THREE.Group(); m.position.y=0.89+m.userData.h/2; g.add(m);
     exhibits[id]=new Exhibit(id, R.ox+LY.shells.x+sl[i][0], R.oz+LY.shells.z+sl[i][1], g, null, 'shell'); }); }
+// a fossil glass case (just furniture; each fossil in it is its own Exhibit)
+class MuseumCase extends Ent {
+  constructor(R, x, z, obj){ super('fcase', R.ox+x, R.oz+z, 0.5); this.solid=false; this.attach(obj); }
+}
 
 /* ---------- Fullscreen tank view ---------- */
 let tankView=null, tankZoom=null;
@@ -7186,16 +7177,15 @@ function openTankView(ent){
     catch(e){ console.error(e); tankView=null; tvEl.classList.remove('show'); document.body.classList.remove('tankOpen'); player.obj.visible=true; updateCamera(1); } }), 420);
 }
 function closeTankView(){ if (!tankView) return; Snd.click(); fade(()=>{ tvEl.classList.remove('show'); document.body.classList.remove('tankOpen'); player.obj.visible=true; tankView.dispose(); tankView=null; updateCamera(1); updateActButton.nh=undefined; }); }
-function renderTankUI(){ const V=tankView, g=V.group, have=new Set(V.ent.have);
-  const ids = g.slots ? [...V.ent.have, ...Array(Math.max(0,g.slots-have.size)).fill('')] : g.ids;
-  tvEl.querySelector('.tvName').textContent=g.name; tvEl.querySelector('.tvSub').textContent = g.slots ? `${have.size} of ${g.slots} spaces · shared ${g.kind==='fish'?'tank':'terrarium'}` : `${have.size} of ${g.ids.length} species${have.size===g.ids.length?' · complete!':''}`;
-  const em=tvEl.querySelector('.tvEmpty'); em.style.display=have.size?'none':'block'; em.textContent=`Nothing in this ${g.kind==='fish'?'tank':'terrarium'} yet. Bring Professor Thistle a ${g.kind==='fish'?'fish':'bug'}${g.slots?'':' from this group'} and it will go right in.`;
+function renderTankUI(){ const V=tankView, g=V.group, have=new Set(V.ent.have), ids=g.ids, miss=ids.length-have.size;
+  tvEl.querySelector('.tvName').textContent=g.name; tvEl.querySelector('.tvSub').textContent = `${have.size} of ${g.slots} spaces${miss?` · ${miss} still to find`:have.size&&g.groups.length?' · every one found':''}`;
+  const em=tvEl.querySelector('.tvEmpty'); em.style.display=have.size?'none':'block'; em.textContent=`Nothing in this ${g.kind==='fish'?'tank':'terrarium'} yet. Bring Professor Thistle a ${g.kind==='fish'?'fish':'bug'} and it will go right in.`;
   tvEl.querySelector('.tvStrip').innerHTML=ids.map(id=>have.has(id)?`<button class="tvChip" data-id="${id}" title="${ITEMS[id].name}"><img src="${thumb(id)}" alt=""></button>`:`<button class="tvChip no" data-id="${id}">?</button>`).join('');
   tvEl.querySelectorAll('.tvChip').forEach(b=>b.onclick=e=>{ e.stopPropagation(); Snd.click(); tankSelect(b.dataset.id||'', true); });
   tvEl.querySelector('.tvCard').classList.remove('show'); }
 function tankSelect(id, follow){ const V=tankView; if (!V) return; const card=tvEl.querySelector('.tvCard');
   tvEl.querySelectorAll('.tvChip').forEach(b=>b.classList.toggle('sel', !!id && b.dataset.id===id));
-  if (id===''){ card.innerHTML=`<div><b>An empty space</b><div class="sub">This tank is shared until the ${V.group.kind==='fish'?'Aquarium':'Insectarium'} gets its own wing. Each new ${V.group.kind==='fish'?'fish':'bug'} you donate fills a space.</div></div>`; card.classList.add('show'); V.view.follow=null; return; }
+  if (id===''){ card.innerHTML=`<div><b>An empty space</b><div class="sub">Each new ${V.group.kind==='fish'?'fish':'bug'} you donate fills a space. When every ${V.group.kind==='fish'?'tank':'terrarium'} is full the builders add another.</div></div>`; card.classList.add('show'); V.view.follow=null; return; }
   if (!id){ card.classList.remove('show'); V.view.follow=null; V.sel=null; return; } V.sel=id; const it=ITEMS[id];
   if (!S.museum.items[id]){ const seen=!!S.rec[id]; card.innerHTML=`<div><b>${seen?it.name:'Not in the collection yet'}</b><div class="sub">${seen?'You have caught one before. Bring one to Professor Thistle to add it here.':`Somewhere out there: ${(whereText(it)||'on the island')}.`}</div></div>`; card.classList.add('show'); V.view.follow=null; return; }
   card.innerHTML=`<img src="${thumb(id)}" alt=""><div><b>${it.name}</b><div class="sub">${whereText(it)} · ${monthsText(it.months)} · ${hoursText(it.hours)}<br>${exhibitInfo(id)}</div></div>`; card.classList.add('show');
@@ -7216,7 +7206,7 @@ function anonDonation(r){
   const n=300+Math.floor(r()*6)*100; S.clams = GUEST ? Math.max(S.clams, Math.min(GUEST_CAP.clams, S.clams+n)) : S.clams+n; S.museum.news={ clams:n }; return n;
 }
 // The museum grows overnight once the collection outgrows it
-function museumGrowCheck(){ if (museumNeeds().length && !S.museum.grow){ S.museum.grow=1; save(); return true; } return false; }
+function museumGrowCheck(){ if ((museumNeeds().length || museumTierNow()>(S.museum.tier||0)) && !S.museum.grow){ S.museum.grow=1; save(); return true; } return false; }
 if (!TRIP){ initTownBuildings(); applyTown(); }
 /* =====================================================================
    v1.26: BOAT TRIPS. Skipper Wick waits at the dock with her boat. Pay a flat fee for a random little island (mostly
@@ -7969,7 +7959,7 @@ function openDonate(){ if (noEdit()) return;
     pBody.innerHTML=h;
     const before=museumPlans().join('|');
     const after=()=>{ spawnExhibits(); checkMuseumGifts(); museumGrowCheck(); const plans=museumPlans();
-      if (plans.length && plans.join('|')!==before) setTimeout(()=>dialog(KEEPERS.thistle.name, KEEPERS.thistle.voice, ['My word, we are out of room! I will keep it safe in the back for now.', `Tonight the builders will put in ${plans.join(', and ')}.`]), 300); render(); };
+      if (plans.length && plans.join('|')!==before) setTimeout(()=>dialog(KEEPERS.thistle.name, KEEPERS.thistle.voice, [museumNeeds().length ? 'My word, we are out of room! I will keep it safe in the back for now.' : 'My word, the collection is really growing!', `Tonight the builders will put in ${plans.join(', and ')}.`]), 300); render(); };
     const full=()=>{ toast('Every display spot is taken!'); Snd.fail(); };
     pBody.querySelectorAll('[data-d]').forEach(b=>b.onclick=()=>{ const i=+b.dataset.d, id=S.inv[i].id; if (!donate(i)){ full(); return; } itemToast(id,false,'Donated'); after(); });
     const da=pBody.querySelector('#dAll'); if(da) da.onclick=()=>{ let n=0; for(;;){ const el2=eligibleDonations(); if(!el2.length) break; if (!donate(el2[0])){ full(); break; } n++; } if (n) toast(`Donated ${n} things! Professor Thistle is delighted.`); after(); };

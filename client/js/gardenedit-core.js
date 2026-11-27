@@ -1,5 +1,5 @@
 /* =====================================================================
-   v1.68 GARDEN EDITOR: the parts with no 3D in them, so they can be tested on their own.
+   v1.71 GARDEN EDITOR: the parts with no 3D in them, so they can be tested on their own.
    Squares are 'i,j' keys on the CELL grid; fence sides are edge keys 'i,j,E' (between (i,j) and (i+1,j))
    or 'i,j,S' (between (i,j) and (i,j+1)), the same as main.js.
    A quarter turn matches three.js rotation.y = +PI/2: a local offset (a,b) becomes (b,-a).

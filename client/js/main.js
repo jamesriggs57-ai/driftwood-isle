@@ -35,7 +35,7 @@ import * as SQ from './search.js';   // v1.70 search in the crafting menus
 import { registerRug } from './textile-models.js';   // v1.64 sewing (rugs and the machine)
 import { createPets, registerPetModels } from './pets.js';   // v1.67 pets
 import * as PETS_CORE from './pets-core.js';
-import { createGardenEdit } from './gardenedit.js';   // v1.68 the garden editor
+import { createGardenEdit } from './gardenedit.js';   // v1.71 the garden editor
 import { buildBike, MODEL, M, mk, G, outline, windowMat, glowMats, glowMat, glowSprites, addGlow, textSprite, PALETTE, buildItemModel, thumb, hasThumb, toolThumb, FURN_BUILDERS, MF,
   buildTree, buildStump, buildShrub, buildFlower, buildWildFlower, buildTool, buildAnimal, buildPlayer, buildHouse, buildStall, buildBoard, buildPlankDeck, buildRoom, buildBird, buildGull, buildDuck, buildWeedClump, ITEM_BUILDERS } from './models.js';
 import './furn.js';
@@ -1148,7 +1148,7 @@ class Tree extends Ent {
     if (!VISIT && S.fruitPicked && S.fruitPicked[this.key]!==undefined && dayNum(today())-S.fruitPicked[this.key] < FRUIT_REGROW_DAYS) return 0;
     const v=S.day.fruit[this.key]; return v===undefined?3:v; }
   refresh(){ const n=this.fruitLeft(), fr=this.obj.userData.fruits||[], per=fr.length>3?2:1; fr.forEach((m,i)=>m.visible=i<n*per); }
-  label(){ if (S.equip==='axe' && this.stage>=2) return 'Chop'; if (S.equip==='shovel' && this.stage<=1 && !(this.rec && !this.rec.wild)) return 'Dig up';   // v1.68 the shovel leaves trees you planted alone (the garden editor moves them)
+  label(){ if (S.equip==='axe' && this.stage>=2) return 'Chop'; if (S.equip==='shovel' && this.stage<=1 && !(this.rec && !this.rec.wild)) return 'Dig up';   // v1.71 the shovel leaves trees you planted alone (the garden editor moves them)
     if (S.equip==='can' && this.stage<3 && this.rec && this.rec.watered!==today()) return 'Water'; return this.stage>=2 ? 'Shake' : 'Look'; }
   act(){ return dropGroup('tree:'+this.key, ()=>this.act0()); }   // v1.56 one click picks up everything this tree drops
   act0(){
@@ -1277,7 +1277,7 @@ function harvestRec(rec, bulk){ const P=PLANTS[rec.sp], C=CROPS[P.crop], n=C.n[0
   if (C.regrow){ rec.stage=C.regrowTo||1; if (e) e.rebuild(); } else { S.plants.splice(S.plants.indexOf(rec),1); if (e) e.remove(); }
   S.stats.harvested=(S.stats.harvested||0)+n; track('harvest'); return { n, seeds, isNew, dropped }; }
 /* ---------- Planted flowers and shrubs ---------- */
-// v1.68 holding the shovel over something you planted
+// v1.71 holding the shovel over something you planted
 function mineHint(head){ toast(head||'You planted this one.', null, null, 'The shovel leaves your plants alone. To move it or take it out, use the Garden button or its garden\'s stake.'); }
 function waterPlant(rec, pos){ if(!useTool('can')) return; rec.watered=today(); S.stats.watered++; track('water');
   for (const p of EN.sprayAround(rec, today())){ p.watered=today(); S.stats.watered++; track('water'); puff(new THREE.Vector3(p.x,groundY(p.x,p.z)+0.8,p.z),0x7fc8f0,2,0.2,-1,0.4,0.5); }   // v1.40 Wide Spray
@@ -1300,7 +1300,7 @@ class Plant extends Ent {
   rebuild(){ const ry=this.obj.rotation.y; this.swap(this.model()); this.hitSphere(0.4,0.3); this.obj.rotation.y=ry; this.solid = PLANTS[this.rec.sp].ptype==='shrub' && this.rec.stage>=2; this.r = this.solid?0.6:0.3; }
   label(){ const P=PLANTS[this.rec.sp];
     if (S.equip==='can' && this.rec.watered!==today() && (this.rec.stage<3)) return 'Water';
-    if (S.equip==='shovel' && this.rec.wild) return 'Dig up';   // v1.68 only wild plants: the shovel leaves anything you planted alone, so ripe ones still harvest
+    if (S.equip==='shovel' && this.rec.wild) return 'Dig up';   // v1.71 only wild plants: the shovel leaves anything you planted alone, so ripe ones still harvest
     if (P.ptype==='flower' && this.rec.stage===3) return 'Pick';
     if (P.ptype==='crop' && this.rec.stage===3) return 'Harvest';
     if (S.equip==='can' && this.rec.watered!==today()) return 'Water';
@@ -5613,7 +5613,7 @@ function moveNote(M){ const U=M.under, n=U ? U.placed.length+U.plants.length+U.g
   return L.length ? `<br><span class="muted">${L.join(' ')}</span>` : ''; }
 function renderMagicBar(){
   const M=magicMode, bar=$('#magicBar'); if(!M) return; bar.classList.add('show');
-  if (M.kind==='garden'){ GE.renderBar(bar); return; }   // v1.68
+  if (M.kind==='garden'){ GE.renderBar(bar); return; }   // v1.71
   if (M.kind==='move'){ const full=moveCost(M), cost=full-voucherOff(full), go=M.who ? 'Move it here' : `Cast ${fmt(cost)}`;
     bar.innerHTML=`<div><b>Move: ${moveName(M.key)}</b></div>
       <div class="row2"><div class="msg">${M.ok?(cost?`Looks good! ${fmt(cost)} clams.`:'Looks good! This one\'s free.')+moveNote(M):`<span style="color:#c0503a">${M.why||'Pick a spot.'}</span>`}</div><button class="btn alt" id="mgNo">Cancel</button><button class="btn" id="mgOk" ${!M.ok||S.clams<cost?'disabled':''}>${go}</button></div>`; }
@@ -6178,7 +6178,7 @@ const PETS = createPets({ Ent, GroundItem, ents, player, S:()=>S, save:()=>save(
   walkable, blocked, groundY, rawHeight, SAND_H, OUT, ROOMS, roomAt, World, VISIT, TRIP, today, coastR:a=>islandR0(a), inRects, PLACES, ITEMS, scene,
   countItem:id=>countItem(id), removeItem:(id,n)=>removeItem(id,n), addItem:(id,m)=>addItem(id,m), canAdd:(id,m)=>canAdd(id,m), thumb:id=>thumb(id), noEdit:()=>noEdit(),
   takeGround:e=>{ const i=S.ground.indexOf(e.rec); if (i>=0) S.ground.splice(i,1); e.remove(); }, started:()=>started, riding:()=>riding });
-// v1.68 the garden editor (gardenedit.js): move plants you planted, or a whole garden, and take plants out
+// v1.71 the garden editor (gardenedit.js): move plants you planted, or a whole garden, and take plants out
 const GE = createGardenEdit({ S:()=>S, save:()=>save(), toast:(...a)=>toast(...a), Snd, scene, CELL, groundY, rawHeight, walkable, onDock, onBridge, visPathDist, blocked, SAND_H, trees, PLANTS, ITEMS,
   gardenAtXZ, gardenAtCell, gardenPlants, cellOf, indexGardens, rebuildGardens, addToGarden, addItem:(id,m)=>addItem(id,m), dropNear:(...a)=>dropNear(...a), harvestRec, isRipe, plantEntOf, player,
   pickAt, groundAtScreen, puff:(...a)=>puff(...a), renderBar:()=>renderMagicBar(), end:()=>endMagic() });
@@ -8203,7 +8203,7 @@ function closeBuild(commit){
 }
 $('#bCancel').onclick=()=>closeBuild(false); $('#bDone').onclick=()=>closeBuild(true);
 $('#bBuild').onclick=()=>openBuild();
-$('#bGarden').onclick=()=>startGardenEdit();   // v1.68
+$('#bGarden').onclick=()=>startGardenEdit();   // v1.71
 
 function renderBuild(keepScroll){
   const B=buildMode; if(!B) return; const plan=B.draft.plan; const st=bBody.scrollTop;
@@ -8948,7 +8948,7 @@ $('#pOk').onclick=()=>{ if (placing && placing.mode==='grid'){ plantGrid(); retu
 const TILE_GEO=new THREE.PlaneGeometry(CELL*0.86, CELL*0.86).rotateX(-Math.PI/2), TILE_MAT=new THREE.MeshBasicMaterial({ color:0xffffff, transparent:true, opacity:0.55, depthWrite:false });
 const GREEN=new THREE.Color(0x8fe08a), RED=new THREE.Color(0xe2604d);
 function openPlantPanel(id, g){ if (noEdit()) return; const it=ITEMS[id]; const have=countItem(id); if (!have) return;
-  const last=S.settings.plantRow||{}; let w=Math.max(1, Math.min(10, last.w||3)), n=Math.max(1, Math.min(have, last.n||9, w*10));   // v1.68 starts from what you planted last time (a 3 by 3 patch at first), not every seed you have
+  const last=S.settings.plantRow||{}; let w=Math.max(1, Math.min(10, last.w||3)), n=Math.max(1, Math.min(have, last.n||9, w*10));   // v1.71 starts from what you planted last time (a 3 by 3 patch at first), not every seed you have
   openPanel('Plant '+it.name);
   pBody.innerHTML=`<div class="row"><img src="${thumb(id)}"><div class="grow"><div class="nm">${it.name}</div><div class="sub">You have ${have}</div></div></div>
     <label class="f">How many: <b id="gpN"></b></label><input type="range" id="gpNr" min="1" max="${Math.min(have,100)}" value="${n}">
@@ -8961,7 +8961,7 @@ function openPlantPanel(id, g){ if (noEdit()) return; const it=ITEMS[id]; const 
   $('#gpNr').oninput=e=>{ n=+e.target.value; draw(); }; $('#gpWr').oninput=e=>{ w=+e.target.value; draw(); }; draw();
   $('#gpGo').onclick=()=>{ S.settings.plantRow={ n, w }; panelClose=null; closePanel(); startGridPlacing(id, n, w, g); }; }
 
-/* v1.68 the patch is exactly what you're planting: rows no longer than the number of seeds, it sits centred where you aim,
+/* v1.71 the patch is exactly what you're planting: rows no longer than the number of seeds, it sits centred where you aim,
    it only nudges one square to sit flush against a garden it's about to touch, and squares that can't take a seed are shown red
    and left out (it no longer hunts further rows for room, which scattered seeds away from the spot). */
 const gridW = P => Math.max(1, Math.min(P.w, P.n));
@@ -9078,7 +9078,7 @@ function openGarden(g){
     h+=`<div class="row"><div class="grow"><div class="nm">Harvest everything ready</div><div class="sub">${ripe.length ? `${ripe.length} plant${ripe.length>1?'s':''}` : 'Nothing is ready yet'}</div></div><button class="btn" id="gHv" ${ripe.length?'':'disabled'}>Harvest</button></div>`;
     h+=`<div class="row"><div class="grow"><div class="nm">Water everything</div><div class="sub">${!hasTool('can') ? 'Needs a watering can' : dry.length ? `${dry.length} plant${dry.length>1?'s':''} need water` : 'All watered today'}</div></div><button class="btn" id="gWa" ${hasTool('can')&&dry.length&&CAN_EDIT?'':'disabled'}>Water</button></div>`;
     if (CAN_EDIT){
-      h+=`<div class="row"><div class="grow"><div class="nm">Garden editor</div><div class="sub">Move this garden, rearrange its plants or take some out</div></div><button class="btn" id="gEd">Edit</button></div>`;   // v1.68
+      h+=`<div class="row"><div class="grow"><div class="nm">Garden editor</div><div class="sub">Move this garden, rearrange its plants or take some out</div></div><button class="btn" id="gEd">Edit</button></div>`;   // v1.71
       h+=`<div class="f" style="margin-top:12px;font-weight:700">Plant here</div>`;
       h+= seedStacks.length ? `<div style="display:flex;flex-wrap:wrap;gap:6px">${seedStacks.map(id=>`<button class="btn alt" data-gs="${id}" style="display:flex;align-items:center;gap:6px;padding:4px 10px"><img src="${thumb(id)}" style="width:28px;height:28px">${ITEMS[id].name} x${countItem(id)}</button>`).join('')}</div>` : `<div class="muted">No seeds in your bag.</div>`;
       h+=`<div class="f" style="margin-top:14px;font-weight:700">Fence</div>`;
@@ -9412,7 +9412,7 @@ function updateActButton(){
   if (magicMode) return;
   const nearHome = homeFloorOf(World.inside)>=0 || (!World.inside && Math.hypot(player.pos.x-LOT.x, player.pos.z-LOT.z)<12);
   if (nearHome!==updateActButton.nh){ updateActButton.nh=nearHome; $('#bBuild').style.display=nearHome?'':'none'; }
-  { const now=performance.now(); if (!(now<updateActButton.gt)){ updateActButton.gt=now+500;   // v1.68 the Garden button: near anything you planted, outdoors on your own island
+  { const now=performance.now(); if (!(now<updateActButton.gt)){ updateActButton.gt=now+500;   // v1.71 the Garden button: near anything you planted, outdoors on your own island
     const ng = CAN_EDIT && !VISIT && !TRIP && !World.inside && GE.near(player.pos.x, player.pos.z); if (ng!==updateActButton.ng){ updateActButton.ng=ng; $('#bGarden').style.display=ng?'':'none'; } } }
   if (layoutMode) return;
   let lab=''; if(!dlgState && !placing && !buildMode && !scrim.classList.contains('show')){ if(CatchMeter.bug) lab='Swing!'; else if(Fishing.state!=='idle') lab='Reel';  else { const e=nearestEnt(); if(e) lab=e.label(); else if(facingWater()) lab='Fish'; } }
@@ -9859,7 +9859,7 @@ window.__game.v144 = Object.assign({ SR, shopStock:w=>shopStock(w), talkGill:()=
 window.__game.v145 = { fishPool, bugPool, isleNear, isleAt, bayMore, bayTipIds, bayPool:()=>bayPool(), waterType, isleSpot, get trees(){ return trees; }, get bugs(){ return bugs; }, newBug:(id,x,z,e)=>new Bug(id,x,z,e||{}), updateBugs:dt=>{ bugT=0; updateBugs(dt||3); }, spawnFish:()=>spawnFish(), get fishes(){ return fishes; },
   openDonate:()=>openDonate(), museumExpand:()=>museumExpand(), buildMuseumAll:()=>buildMuseumAll(), enterRoom:id=>enterRoom(id), tanks:()=>ents.filter(e=>e instanceof MuseumTank), openTankView:e=>openTankView(e), closeTankView:()=>closeTankView(), get tankView(){ return tankView; } };
 window.__game.custom = CU.dev; window.__game.sew = SX.dev; window.__game.pets = PETS;   // v1.67 pet tests
-window.__game.gardenEdit = { GE, start:o=>startGardenEdit(o) };   // v1.68 garden editor tests
+window.__game.gardenEdit = { GE, start:o=>startGardenEdit(o) };   // v1.71 garden editor tests
 window.__game.sewMachine = { open:()=>SX.open(), choices:()=>SX.keeperChoices({ name:'Pemberton', voice:1 }, ()=>{}).map(c=>c.label), buy:()=>SX.keeperChoices({ name:'Pemberton', voice:1 }, ()=>{})[0].fn(), place:()=>{ const P=player.pos, rec={ id:'sewmachine', x:P.x+1.6, z:P.z, rot:0 }; S.placed.push(rec); const f=new Furniture(rec); return f.label(); } };   // v1.64 tests   // v1.64 sewing tests   // v1.63 custom furniture tests
 // v1.26 test hooks
 window.__game.v126 = { townNewDay, applyTown, findHomeSpot, claimHomeSpot, townCap, incomeNewDay, refreshIncome, talkIncome, incCollect, incOf, INCOME, incEnts, openMap, talkSkipperHome, talkSkipperTrip, tripGoHome, tripRecap, storyWho, askToLeave, canAskToLeave, pitchOnBuy, merchantDay, get peddler(){ return peddler; }, get skipper(){ return skipper; }, newSquares, LOAN_MAX_SQ, TRIP, TRIP_THEME, residents, residentHomes, plotEnts, KEEPOUT, Q, PATHS, camTarget, updateCamera, set camDist(v){ camDist=v; }, get camDist(){ return camDist; }, set camYaw(v){ camYaw=v; } };

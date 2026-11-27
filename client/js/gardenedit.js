@@ -1,5 +1,5 @@
 /* =====================================================================
-   v1.68 THE GARDEN EDITOR. Plants you planted are safe from the shovel; this is where you change them instead.
+   v1.71 THE GARDEN EDITOR. Plants you planted are safe from the shovel; this is where you change them instead.
    Open it with the Garden button (shown near anything you planted) or from a garden's stake menu.
    The view goes overhead. Tap plants you planted to pick them (tap again to drop one), or tap a garden's soil
    or stake to pick the whole garden. Then:

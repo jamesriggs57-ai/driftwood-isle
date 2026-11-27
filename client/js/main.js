@@ -34,6 +34,7 @@ import { createSewing } from './textile.js';   // v1.64 sewing
 import { registerRug } from './textile-models.js';   // v1.64 sewing (rugs and the machine)
 import { createPets, registerPetModels } from './pets.js';   // v1.67 pets
 import * as PETS_CORE from './pets-core.js';
+import { createGardenEdit } from './gardenedit.js';   // v1.68 the garden editor
 import { buildBike, MODEL, M, mk, G, outline, windowMat, glowMats, glowMat, glowSprites, addGlow, textSprite, PALETTE, buildItemModel, thumb, hasThumb, toolThumb, FURN_BUILDERS, MF,
   buildTree, buildStump, buildShrub, buildFlower, buildWildFlower, buildTool, buildAnimal, buildPlayer, buildHouse, buildStall, buildBoard, buildPlankDeck, buildRoom, buildBird, buildGull, buildDuck, buildWeedClump, ITEM_BUILDERS } from './models.js';
 import './furn.js';
@@ -1146,7 +1147,8 @@ class Tree extends Ent {
     if (!VISIT && S.fruitPicked && S.fruitPicked[this.key]!==undefined && dayNum(today())-S.fruitPicked[this.key] < FRUIT_REGROW_DAYS) return 0;
     const v=S.day.fruit[this.key]; return v===undefined?3:v; }
   refresh(){ const n=this.fruitLeft(), fr=this.obj.userData.fruits||[], per=fr.length>3?2:1; fr.forEach((m,i)=>m.visible=i<n*per); }
-  label(){ if (S.equip==='axe' && this.stage>=2) return 'Chop'; if (S.equip==='shovel' && this.stage<=1) return 'Dig up'; if (S.equip==='can' && this.stage<3 && this.rec && this.rec.watered!==today()) return 'Water'; return this.stage>=2 ? 'Shake' : 'Look'; }
+  label(){ if (S.equip==='axe' && this.stage>=2) return 'Chop'; if (S.equip==='shovel' && this.stage<=1 && !(this.rec && !this.rec.wild)) return 'Dig up';   // v1.68 the shovel leaves trees you planted alone (the garden editor moves them)
+    if (S.equip==='can' && this.stage<3 && this.rec && this.rec.watered!==today()) return 'Water'; return this.stage>=2 ? 'Shake' : 'Look'; }
   act(){ return dropGroup('tree:'+this.key, ()=>this.act0()); }   // v1.56 one click picks up everything this tree drops
   act0(){
     const lab=this.label();
@@ -1154,7 +1156,7 @@ class Tree extends Ent {
     if (lab==='Chop') return this.chop();
     if (lab==='Dig up'){ if(!useTool('shovel')) return; Snd.dig(); FX.hole(this.pos.clone(), 0.4, 1.4); S.plants.splice(S.plants.indexOf(this.rec),1); this.remove(); const id = this.type==='fruittree' ? this.fruit : this.type+'_sapling'; dropNear(ITEMS[id]?id:'oak_sapling', this.pos, 0.3, true); S.stats.dug++; save(); return; }
     if (lab==='Water'){ waterPlant(this.rec, this.pos); return; }
-    if (lab==='Look') return;
+    if (lab==='Look'){ if (S.equip==='shovel' && this.rec && !this.rec.wild) mineHint(); return; }
     this.shake=1; Snd.rustle(); const tp=this.pos.clone(); tp.y+=2.8; puff(tp, World.season==='winter'?0xffffff:0x6cc050, 6, 0.8, 1, 1.2, 1);
     const n=this.fruitLeft();
     if (n>0){ track('shake'); S.day.fruit[this.key]=0; if (!VISIT) (S.fruitPicked=S.fruitPicked||{})[this.key]=dayNum(today()); const g=DROP_GRP; for(let i=0;i<n;i++) setTimeout(()=>dropNear(this.fruit, this.pos, 1.6, false, undefined, g), 250+i*120); }
@@ -1274,6 +1276,8 @@ function harvestRec(rec, bulk){ const P=PLANTS[rec.sp], C=CROPS[P.crop], n=C.n[0
   if (C.regrow){ rec.stage=C.regrowTo||1; if (e) e.rebuild(); } else { S.plants.splice(S.plants.indexOf(rec),1); if (e) e.remove(); }
   S.stats.harvested=(S.stats.harvested||0)+n; track('harvest'); return { n, seeds, isNew, dropped }; }
 /* ---------- Planted flowers and shrubs ---------- */
+// v1.68 holding the shovel over something you planted
+function mineHint(head){ toast(head||'You planted this one.', null, null, 'The shovel leaves your plants alone. To move it or take it out, use the Garden button or its garden\'s stake.'); }
 function waterPlant(rec, pos){ if(!useTool('can')) return; rec.watered=today(); S.stats.watered++; track('water');
   for (const p of EN.sprayAround(rec, today())){ p.watered=today(); S.stats.watered++; track('water'); puff(new THREE.Vector3(p.x,groundY(p.x,p.z)+0.8,p.z),0x7fc8f0,2,0.2,-1,0.4,0.5); }   // v1.40 Wide Spray
   Snd.water(); for(let i=0;i<8;i++) puff(pos.clone().add(new THREE.Vector3((Math.random()-0.5)*0.6,0.8,(Math.random()-0.5)*0.6)),0x7fc8f0,1,0.15,-1,0.4,0.5); toast('Watered. It will grow faster tomorrow.'); save(); }
@@ -1295,7 +1299,7 @@ class Plant extends Ent {
   rebuild(){ const ry=this.obj.rotation.y; this.swap(this.model()); this.hitSphere(0.4,0.3); this.obj.rotation.y=ry; this.solid = PLANTS[this.rec.sp].ptype==='shrub' && this.rec.stage>=2; this.r = this.solid?0.6:0.3; }
   label(){ const P=PLANTS[this.rec.sp];
     if (S.equip==='can' && this.rec.watered!==today() && (this.rec.stage<3)) return 'Water';
-    if (S.equip==='shovel') return 'Dig up';
+    if (S.equip==='shovel' && this.rec.wild) return 'Dig up';   // v1.68 only wild plants: the shovel leaves anything you planted alone, so ripe ones still harvest
     if (P.ptype==='flower' && this.rec.stage===3) return 'Pick';
     if (P.ptype==='crop' && this.rec.stage===3) return 'Harvest';
     if (S.equip==='can' && this.rec.watered!==today()) return 'Water';
@@ -1308,6 +1312,7 @@ class Plant extends Ent {
     if (lab==='Pick'){ const r=addItem(this.rec.sp); if(!r){ toast('Your bag is full.'); return; } this.rec.stage=2; Snd.pop(); this.rebuild(); itemToast(this.rec.sp, r==='new', 'Picked'); save(); return; }
     if (lab==='Dig up'){ if(!useTool('shovel')) return; Snd.dig(); FX.hole(this.pos.clone(), 0.32, 1.2); S.plants.splice(S.plants.indexOf(this.rec),1); this.remove(); dropNear(P.ptype==='crop'?P.crop+'_seeds':P.ptype==='flower'?this.rec.sp+'_seeds':this.rec.sp+'_start', this.pos, 0.3, true); S.stats.dug++; save(); return; }
     const st=(P.ptype==='crop'?['just planted','sprouting','growing','ready to harvest']:['just planted','sprouting','growing','fully grown'])[this.rec.stage];
+    if (S.equip==='shovel' && !this.rec.wild){ mineHint(`${P.name}: ${st}.`); return; }
     toast(`${P.name}: ${st}.`);
   }
 }
@@ -5409,7 +5414,7 @@ function startMagic(kind, key, o={}){
   else { magicMode.grid=new THREE.Group(); scene.add(magicMode.grid); magicMode.marks=new THREE.Group(); scene.add(magicMode.marks); drawGrid(); }
   renderMagicBar();
 }
-function endMagic(keep){ if (!magicMode) return; const M=magicMode; if (M.hid && !keep) for (const e of M.hid) e.obj.visible=true; if (M.ghost) scene.remove(M.ghost); if (M.grid) scene.remove(M.grid); if (!keep){ if (M.marks) scene.remove(M.marks); if (M.bghost) scene.remove(M.bghost); } magicMode=null; $('#magicBar').classList.remove('show'); if (!cine) $('#hud').classList.remove('magic'); }
+function endMagic(keep){ if (!magicMode) return; const M=magicMode; if (M.kind==='garden') GE.cleanup(); if (M.hid && !keep) for (const e of M.hid) e.obj.visible=true; if (M.ghost) scene.remove(M.ghost); if (M.grid) scene.remove(M.grid); if (!keep){ if (M.marks) scene.remove(M.marks); if (M.bghost) scene.remove(M.bghost); } magicMode=null; $('#magicBar').classList.remove('show'); if (!cine) $('#hud').classList.remove('magic'); }
 // the building entity for a place key
 function bldObj(key){ if (key.startsWith('inc:')){ const E=incEnts[key.slice(4)]; return E ? E.props : null; }
   const e = key==='home'?houseEnt : key==='shop'?storeEnt : key==='museum'?museumEnt : key==='tower'?towerEnt : key==='hall'?hallEnt : shopEnts[key]
@@ -5621,6 +5626,7 @@ function moveNote(M){ const U=M.under, n=U ? U.placed.length+U.plants.length+U.g
   return L.length ? `<br><span class="muted">${L.join(' ')}</span>` : ''; }
 function renderMagicBar(){
   const M=magicMode, bar=$('#magicBar'); if(!M) return; bar.classList.add('show');
+  if (M.kind==='garden'){ GE.renderBar(bar); return; }   // v1.68
   if (M.kind==='move'){ const full=moveCost(M), cost=full-voucherOff(full), go=M.who ? 'Move it here' : `Cast ${fmt(cost)}`;
     bar.innerHTML=`<div><b>Move: ${moveName(M.key)}</b></div>
       <div class="row2"><div class="msg">${M.ok?(cost?`Looks good! ${fmt(cost)} clams.`:'Looks good! This one\'s free.')+moveNote(M):`<span style="color:#c0503a">${M.why||'Pick a spot.'}</span>`}</div><button class="btn alt" id="mgNo">Cancel</button><button class="btn" id="mgOk" ${!M.ok||S.clams<cost?'disabled':''}>${go}</button></div>`; }
@@ -5742,7 +5748,7 @@ async function magicExit(P){
 }
 function magicPan(dx,dy){ const M=magicMode; const k=M.dist/innerHeight*1.5; M.camT.x-=dx*k; M.camT.z-=dy*k; const r=60*SC; M.camT.x=clamp(M.camT.x,Math.min(-r,HG.x0+6),Math.max(r,HG.x0+HG.nx*HG.step-6)); M.camT.z=clamp(M.camT.z,Math.min(-r,HG.z0+6),Math.max(r,HG.z0+HG.nz*HG.step-6));   // v1.58 out over the far shore too M.camT.y=groundY(M.camT.x,M.camT.z);
   if (M.kind==='land'){ const ci=Math.floor(M.camT.x/TC), cj=Math.floor(M.camT.z/TC); if (!M.gridAt || Math.abs(ci-M.gridAt[0])>3 || Math.abs(cj-M.gridAt[1])>3) drawGrid(); } }
-function magicTap(cx,cy){ const g=groundAtScreen(cx,cy); if(!g) return; if (magicMode.kind==='move'){ magicPlace(g.x,g.z); magicMode.camT.set(g.x, groundY(g.x,g.z), g.z); } else landTap(g.x,g.z); }
+function magicTap(cx,cy){ if (magicMode.kind==='garden') return GE.tap(cx,cy); const g=groundAtScreen(cx,cy); if(!g) return; if (magicMode.kind==='move'){ magicPlace(g.x,g.z); magicMode.camT.set(g.x, groundY(g.x,g.z), g.z); } else landTap(g.x,g.z); }
 // after the wizard's spell the page reloads behind a lilac shimmer: this is where you were and what changed
 const PORTAL_RET = (()=>{ try { const v=sessionStorage.getItem('dw-portal'); sessionStorage.removeItem('dw-portal'); return !!v; } catch(e){ return false; } })();
 const MAGIC_RET = (()=>{ try { const v=sessionStorage.getItem('dw-magic'); sessionStorage.removeItem('dw-magic'); const o=v&&JSON.parse(v); return o&&o.at?o:null; } catch(e){ return null; } })();
@@ -6185,6 +6191,13 @@ const PETS = createPets({ Ent, GroundItem, ents, player, S:()=>S, save:()=>save(
   walkable, blocked, groundY, rawHeight, SAND_H, OUT, ROOMS, roomAt, World, VISIT, TRIP, today, coastR:a=>islandR0(a), inRects, PLACES, ITEMS, scene,
   countItem:id=>countItem(id), removeItem:(id,n)=>removeItem(id,n), addItem:(id,m)=>addItem(id,m), canAdd:(id,m)=>canAdd(id,m), thumb:id=>thumb(id), noEdit:()=>noEdit(),
   takeGround:e=>{ const i=S.ground.indexOf(e.rec); if (i>=0) S.ground.splice(i,1); e.remove(); }, started:()=>started, riding:()=>riding });
+// v1.68 the garden editor (gardenedit.js): move plants you planted, or a whole garden, and take plants out
+const GE = createGardenEdit({ S:()=>S, save:()=>save(), toast:(...a)=>toast(...a), Snd, scene, CELL, groundY, rawHeight, walkable, onDock, onBridge, visPathDist, blocked, SAND_H, trees, PLANTS, ITEMS,
+  gardenAtXZ, gardenAtCell, gardenPlants, cellOf, indexGardens, rebuildGardens, addToGarden, addItem:(id,m)=>addItem(id,m), dropNear:(...a)=>dropNear(...a), harvestRec, isRipe, plantEntOf, player,
+  pickAt, groundAtScreen, puff:(...a)=>puff(...a), renderBar:()=>renderMagicBar(), end:()=>endMagic() });
+function startGardenEdit(o={}){ if (noEdit()) return; if (World.inside || VISIT || TRIP){ toast('The garden editor works outdoors on your own island.'); return; }
+  if (placing) endPlacing(); if (magicMode) endMagic(); if (riding) setRiding(false); stopMove();
+  magicMode=GE.start(o); $('#hud').classList.add('magic'); renderMagicBar(); }
 setTimeout(()=>{ try { refreshNurseryTank(); spawnRowboat(); pinesRegrow(); } catch(e){ console.warn(e); } }, 0);   // v1.37 (after the rest of the island exists)
 function ensureFavors(){ if (VISIT || TRIP || Q.rolledFor===S.day.key) return; rollFavors(mulberry32(hashStr(S.day.key+':favors:'+S.seed))); Q.rolledFor=S.day.key;
   for (const [k,v] of Object.entries(S.fruitPicked||{})) if (dayNum(S.day.key)-v >= FRUIT_REGROW_DAYS) delete S.fruitPicked[k]; save(); }
@@ -8197,6 +8210,7 @@ function closeBuild(commit){
 }
 $('#bCancel').onclick=()=>closeBuild(false); $('#bDone').onclick=()=>closeBuild(true);
 $('#bBuild').onclick=()=>openBuild();
+$('#bGarden').onclick=()=>startGardenEdit();   // v1.68
 
 function renderBuild(keepScroll){
   const B=buildMode; if(!B) return; const plan=B.draft.plan; const st=bBody.scrollTop;
@@ -8727,12 +8741,12 @@ $('#bBag').onclick=()=>openBag(); $('#bBook').onclick=()=>openBook(); $('#bMenu'
 
 /* Phones: the top bar keeps only what you reach for all the time (Bike, Build near home, Bag) and a More button.
    Book, Craft, Sled, Friends and Menu move into the More list. Buttons keep their own handlers wherever they sit. */
-const MAIN_BTNS=['bBike','bBuild','bBag','bMore'];
+const MAIN_BTNS=['bBike','bBuild','bGarden','bBag','bMore'];
 const barEl=$('#bar'), morePop=$('#morePop'), moreBtn=$('#bMore');
 const isCompact = () => isTouchDevice || innerWidth<760;
 function layoutBar(){ const compact=isCompact(); document.body.classList.toggle('compact', compact);
   barObs.disconnect();
-  const order=['bBike','bSled','bBook','bCraft','bBuild','bBag','bNet','bMenu','bMore'], moreOrder=['bBook','bCraft','bNet','bSled','bMenu'];
+  const order=['bBike','bSled','bBook','bCraft','bBuild','bGarden','bBag','bNet','bMenu','bMore'], moreOrder=['bBook','bCraft','bNet','bSled','bMenu'];
   const all=[...barEl.querySelectorAll('.rbtn'), ...morePop.querySelectorAll('.rbtn')];
   const inBar=all.filter(b=>!compact || MAIN_BTNS.includes(b.id)).sort((a,b)=>order.indexOf(a.id)-order.indexOf(b.id));
   const inMore=all.filter(b=>!inBar.includes(b)).sort((a,b)=>moreOrder.indexOf(a.id)-moreOrder.indexOf(b.id));
@@ -8897,47 +8911,62 @@ $('#pOk').onclick=()=>{ if (placing && placing.mode==='grid'){ plantGrid(); retu
 const TILE_GEO=new THREE.PlaneGeometry(CELL*0.86, CELL*0.86).rotateX(-Math.PI/2), TILE_MAT=new THREE.MeshBasicMaterial({ color:0xffffff, transparent:true, opacity:0.55, depthWrite:false });
 const GREEN=new THREE.Color(0x8fe08a), RED=new THREE.Color(0xe2604d);
 function openPlantPanel(id, g){ if (noEdit()) return; const it=ITEMS[id]; const have=countItem(id); if (!have) return;
-  let w=Math.min(10, have), n=Math.min(have, 100);
+  const last=S.settings.plantRow||{}; let w=Math.max(1, Math.min(10, last.w||3)), n=Math.max(1, Math.min(have, last.n||9, w*10));   // v1.68 starts from what you planted last time (a 3 by 3 patch at first), not every seed you have
   openPanel('Plant '+it.name);
   pBody.innerHTML=`<div class="row"><img src="${thumb(id)}"><div class="grow"><div class="nm">${it.name}</div><div class="sub">You have ${have}</div></div></div>
     <label class="f">How many: <b id="gpN"></b></label><input type="range" id="gpNr" min="1" max="${Math.min(have,100)}" value="${n}">
     <label class="f">Row length: <b id="gpW"></b></label><input type="range" id="gpWr" min="1" max="10" value="${w}">
     <div id="gpGrid" style="display:grid;gap:3px;margin:12px auto 4px;width:max-content"></div>`;
   setFoot(`<button class="btn" id="gpGo">Choose a spot</button>`);
-  const draw=()=>{ const max=Math.min(have, w*10); if (n>max) n=max; const nr=$('#gpNr'); nr.max=max; nr.value=n; const rows=Math.ceil(n/w);
-    $('#gpN').textContent=n; $('#gpW').textContent=`${w} · ${rows} row${rows>1?'s':''}`;
-    const gd=$('#gpGrid'); gd.style.gridTemplateColumns=`repeat(${w}, 16px)`; gd.innerHTML=Array.from({length:rows*w},(_,k)=>`<i style="display:block;width:16px;height:16px;border-radius:4px;background:${k<n?'#7a5a3a':'#eadfca'}"></i>`).join(''); };
+  const draw=()=>{ const max=Math.min(have, w*10); if (n>max) n=max; const nr=$('#gpNr'); nr.max=max; nr.value=n; const wE=Math.min(w,n), rows=Math.ceil(n/wE);   // a row is never longer than what you're planting
+    $('#gpN').textContent=n; $('#gpW').textContent=`${wE} · ${rows} row${rows>1?'s':''}`;
+    const gd=$('#gpGrid'); gd.style.gridTemplateColumns=`repeat(${wE}, 16px)`; gd.innerHTML=Array.from({length:rows*wE},(_,k)=>`<i style="display:block;width:16px;height:16px;border-radius:4px;background:${k<n?'#7a5a3a':'#eadfca'}"></i>`).join(''); };
   $('#gpNr').oninput=e=>{ n=+e.target.value; draw(); }; $('#gpWr').oninput=e=>{ w=+e.target.value; draw(); }; draw();
-  $('#gpGo').onclick=()=>{ panelClose=null; closePanel(); startGridPlacing(id, n, w, g); }; }
+  $('#gpGo').onclick=()=>{ S.settings.plantRow={ n, w }; panelClose=null; closePanel(); startGridPlacing(id, n, w, g); }; }
 
+/* v1.68 the patch is exactly what you're planting: rows no longer than the number of seeds, it sits centred where you aim,
+   it only nudges one square to sit flush against a garden it's about to touch, and squares that can't take a seed are shown red
+   and left out (it no longer hunts further rows for room, which scattered seeds away from the spot). */
+const gridW = P => Math.max(1, Math.min(P.w, P.n));
+function gridSize(P){ const w=gridW(P), rows=Math.ceil(P.n/w); return P.orient ? [rows, w] : [w, rows]; }   // squares along x and z
 function startGridPlacing(id, n, w, g){ if (noEdit()) return; if (placing) endPlacing();
-  const grp=new THREE.Group(), tiles=new THREE.InstancedMesh(TILE_GEO, TILE_MAT, w*10); tiles.frustumCulled=false; tiles.count=0; grp.add(tiles); scene.add(grp);
-  const f=player.face, rows=Math.ceil(n/w), orient = Math.abs(Math.sin(f))>Math.abs(Math.cos(f)) ? 1 : 0;   // rows run across the way you're facing
-  const reach=(rows*CELL)/2+1.2; grp.position.set(player.pos.x+Math.sin(f)*reach, 0, player.pos.z+Math.cos(f)*reach);
-  if (g && g.cells.length){ const b=gardenBox(g); grp.position.set((b.i0+b.i1)/2*CELL, 0, (b.j0+b.j1)/2*CELL); }
-  placing={ id, mode:'grid', m:grp, tiles, n, w, orient, rot:0, cells:[] }; $('#placeBar').classList.add('show'); $('#pNo').textContent='Cancel';
+  const W0=Math.max(1, Math.min(w, n)), grp=new THREE.Group(), tiles=new THREE.InstancedMesh(TILE_GEO, TILE_MAT, W0*Math.ceil(n/W0)); tiles.frustumCulled=false; tiles.count=0; grp.add(tiles); scene.add(grp);
+  const f=player.face, orient = Math.abs(Math.sin(f))>Math.abs(Math.cos(f)) ? 1 : 0;   // rows run across the way you're facing
+  placing={ id, mode:'grid', m:grp, tiles, n, w, orient, rot:0, cells:[] };
+  const [EW,EH]=gridSize(placing), reach=Math.max(EW,EH)*CELL/2+1.2; grp.position.set(player.pos.x+Math.sin(f)*reach, 0, player.pos.z+Math.cos(f)*reach);
+  if (g && g.cells.length){ const at=gridBeside(g, EW, EH); if (at) grp.position.set((at[0]+(EW-1)/2)*CELL, 0, (at[1]+(EH-1)/2)*CELL); }
+  $('#placeBar').classList.add('show'); $('#pNo').textContent='Cancel';
   checkGrid(); }
-// cells to plant, in reading order, from an origin square; skips squares that can't take a seed
-function gridFill(i0, j0, P, near){ const out=[], bad=[]; const W=P.w;
-  for (let r=0;r<10 && out.length<P.n;r++) for (let c=0;c<W && out.length<P.n;c++){ const [i,j] = P.orient ? [i0+r, j0+c] : [i0+c, j0+r]; (cellFree(i,j,near)?out:bad).push([i,j]); }
+// from a garden's menu: the spot in or right beside that garden with the most room, nearest you on a tie
+function gridBeside(g, EW, EH){ const b=gardenBox(g), P=placing; let best=null, bn=0, bd=1e9;
+  const cand=[[b.i0,b.j0],[b.i1-EW+1,b.j1-EH+1],[b.i1+1,b.j0],[b.i1+1,b.j1-EH+1],[b.i0-EW,b.j0],[b.i0-EW,b.j1-EH+1],[b.i0,b.j1+1],[b.i1-EW+1,b.j1+1],[b.i0,b.j0-EH],[b.i1-EW+1,b.j0-EH]];
+  for (const [i0,j0] of cand){ const n=gridFill(i0, j0, P, null).out.length, d=Math.hypot((i0+(EW-1)/2)*CELL-player.pos.x, (j0+(EH-1)/2)*CELL-player.pos.z);
+    if (n>bn || (n===bn && n>0 && d<bd)){ bn=n; bd=d; best=[i0,j0]; } }
+  return best; }
+// the squares of the patch, in reading order; the ones that can't take a seed go in bad
+function gridFill(i0, j0, P, near){ const out=[], bad=[], W=gridW(P), rows=Math.ceil(P.n/W);
+  for (let r=0;r<rows;r++) for (let c=0;c<W && r*W+c<P.n;c++){ const [i,j] = P.orient ? [i0+r, j0+c] : [i0+c, j0+r]; (cellFree(i,j,near)?out:bad).push([i,j]); }
   return { out, bad }; }
+// a patch one empty square away from a garden's side slides that one square so it joins the garden
+function gridNudge(i0, j0, EW, EH){
+  for (const g of S.gardens){ if (!g.cells.length) continue; const b=gardenBox(g);
+    const overI = i0<=b.i1 && i0+EW-1>=b.i0, overJ = j0<=b.j1 && j0+EH-1>=b.j0;
+    if (overJ && i0===b.i1+2) return [i0-1, j0]; if (overJ && i0+EW-1===b.i0-2) return [i0+1, j0];
+    if (overI && j0===b.j1+2) return [i0, j0-1]; if (overI && j0+EH-1===b.j0-2) return [i0, j0+1]; }
+  return null; }
 function checkGrid(){ const P=placing, m=P.m, ax=m.position.x, az=m.position.z;
-  const rows=Math.ceil(P.n/P.w), EW=P.orient?rows:P.w, EH=P.orient?P.w:rows;   // extent in squares along x and z
+  const [EW,EH]=gridSize(P);   // extent in squares along x and z
   let i0=Math.round(ax/CELL-(EW-1)/2), j0=Math.round(az/CELL-(EH-1)/2);
-  // snap: into a nearby garden's empty squares, or flush against one of its sides
-  let best=null, bd=1.6+(EW+EH)*CELL*0.25;
-  for (const g of S.gardens){ const b=gardenBox(g), cx=(b.i0+b.i1)/2*CELL, cz=(b.j0+b.j1)/2*CELL; if (Math.hypot(cx-ax,cz-az) > 8+(b.i1-b.i0+b.j1-b.j0)*CELL) continue;
-    const cand=[[b.i1+1,b.j0],[b.i1+1,b.j1-EH+1],[b.i0-EW,b.j0],[b.i0-EW,b.j1-EH+1],[b.i0,b.j1+1],[b.i1-EW+1,b.j1+1],[b.i0,b.j0-EH],[b.i1-EW+1,b.j0-EH]];
-    if (gardenPlants(g).length<g.cells.length) cand.push([b.i0,b.j0]);
-    for (const [ci,cj] of cand){ const d=Math.hypot((ci+(EW-1)/2)*CELL-ax, (cj+(EH-1)/2)*CELL-az); if (d<bd){ bd=d; best=[ci,cj]; } } }
-  if (best){ [i0,j0]=best; }
-  const near=S.plants.filter(q=>q.x>(i0-1)*CELL && q.x<(i0+EW+11)*CELL && q.z>(j0-1)*CELL && q.z<(j0+EH+11)*CELL);
+  const nudge=gridNudge(i0, j0, EW, EH); if (nudge) [i0,j0]=nudge;
+  const near=S.plants.filter(q=>q.x>(i0-1)*CELL && q.x<(i0+EW+1)*CELL && q.z>(j0-1)*CELL && q.z<(j0+EH+1)*CELL);
   const { out, bad }=gridFill(i0, j0, P, near); P.cells=out;
-  const cx=(i0+(EW-1)/2)*CELL, cz=(j0+(EH-1)/2)*CELL;
+  const cx=(i0+(EW-1)/2)*CELL, cz=(j0+(EH-1)/2)*CELL; P.box=[i0*CELL, (i0+EW-1)*CELL, j0*CELL, (j0+EH-1)*CELL];
   const d=new THREE.Object3D(); let k=0; const put=([i,j],col)=>{ const x=i*CELL, z=j*CELL; d.position.set(x-cx, groundY(x,z)+0.09, z-cz); d.updateMatrix(); P.tiles.setMatrixAt(k,d.matrix); P.tiles.setColorAt(k,col); k++; };
   out.forEach(c=>put(c,GREEN)); bad.slice(0, P.tiles.instanceMatrix.count-out.length).forEach(c=>put(c,RED)); P.tiles.count=k; P.tiles.instanceMatrix.needsUpdate=true; if (P.tiles.instanceColor) P.tiles.instanceColor.needsUpdate=true;
   m.position.set(cx, 0, cz);
   P.ok=out.length>0; $('#pOk').disabled=!P.ok; $('#pOk').textContent=out.length?`Plant ${out.length}`:'No room'; return P.ok; }
+// is a point on the ground on the patch (or just beside it)? then dragging moves it without jumping
+const onGridPatch = (x, z) => { const b=placing && placing.box; return !!b && x>b[0]-CELL && x<b[1]+CELL && z>b[2]-CELL && z<b[3]+CELL; };
 function plantGrid(){ const P=placing; if (!checkGrid()) return; const id=P.id, it=ITEMS[id], PL=PLANTS[it.plant], n=Math.min(P.cells.length, countItem(id)); if (n<1){ endPlacing(); return; }
   const cells=P.cells.slice(0,n), made=[], base=Date.now().toString(36);
   cells.forEach(([i,j],k)=>{ const rec={ id:'p'+base+k.toString(36)+Math.floor(Math.random()*1e3), sp:it.plant, x:i*CELL, z:j*CELL, stage:0, rot:(PL.ptype==='crop'?(Math.random()-0.5)*0.5:Math.random()*TAU), color:(PL.colors&&PL.colors.length)?PL.colors[Math.floor(Math.random()*PL.colors.length)]:undefined, lastGrow:today() };
@@ -9012,6 +9041,7 @@ function openGarden(g){
     h+=`<div class="row"><div class="grow"><div class="nm">Harvest everything ready</div><div class="sub">${ripe.length ? `${ripe.length} plant${ripe.length>1?'s':''}` : 'Nothing is ready yet'}</div></div><button class="btn" id="gHv" ${ripe.length?'':'disabled'}>Harvest</button></div>`;
     h+=`<div class="row"><div class="grow"><div class="nm">Water everything</div><div class="sub">${!hasTool('can') ? 'Needs a watering can' : dry.length ? `${dry.length} plant${dry.length>1?'s':''} need water` : 'All watered today'}</div></div><button class="btn" id="gWa" ${hasTool('can')&&dry.length&&CAN_EDIT?'':'disabled'}>Water</button></div>`;
     if (CAN_EDIT){
+      h+=`<div class="row"><div class="grow"><div class="nm">Garden editor</div><div class="sub">Move this garden, rearrange its plants or take some out</div></div><button class="btn" id="gEd">Edit</button></div>`;   // v1.68
       h+=`<div class="f" style="margin-top:12px;font-weight:700">Plant here</div>`;
       h+= seedStacks.length ? `<div style="display:flex;flex-wrap:wrap;gap:6px">${seedStacks.map(id=>`<button class="btn alt" data-gs="${id}" style="display:flex;align-items:center;gap:6px;padding:4px 10px"><img src="${thumb(id)}" style="width:28px;height:28px">${ITEMS[id].name} x${countItem(id)}</button>`).join('')}</div>` : `<div class="muted">No seeds in your bag.</div>`;
       h+=`<div class="f" style="margin-top:14px;font-weight:700">Fence</div>`;
@@ -9040,6 +9070,7 @@ function openGarden(g){
     pBody.querySelectorAll('[data-gf]').forEach(b=>b.onclick=()=>{ const st=b.dataset.gf; if (!pay(sides.length*GARDEN_FENCES[st].per)) return; g.fence=st; g.fenced=sides.map(e=>e.key); rebuildGardens(); save(); toast(`${GARDEN_FENCES[st].name} it is.`); render(); });
     on('#gGate', ()=>{ const e=nearestSide(g, player.pos.x, player.pos.z); if (!e) return; const old=g.gate; g.gate=e.key; if (g.fence && old && !(g.fenced||[]).includes(old)) g.fenced=[...(g.fenced||[]), old]; Snd.click(); rebuildGardens(); save(); render(); });
     pBody.querySelectorAll('[data-gd]').forEach(b=>b.onclick=()=>{ const k=b.dataset.gd; g.decor=g.decor||{}; if (g.decor[k]) g.decor[k] = g.decor[k]==='off' ? true : 'off'; else { if (!pay(GARDEN_DECOR[k].price)) return; g.decor[k]=true; } Snd.pop(); rebuildGardens(); save(); render(); });
+    on('#gEd', ()=>{ panelClose=null; closePanel(); startGardenEdit({ g }); });
     on('#gDel', ()=>{ if (gardenPlants(g).length) return; S.gardens.splice(S.gardens.indexOf(g),1); rebuildGardens(); save(); closePanel(); toast('The garden is gone. The grass will grow back.'); });
   };
   openPanel('Garden'); render(); }
@@ -9229,8 +9260,8 @@ function groundAtScreen(cx,cy){ const rect=canvas.getBoundingClientRect(); ndc.s
 canvas.addEventListener('pointerdown', e=>{ canvas.focus(); ptrs.set(e.pointerId,{ x:e.clientX, y:e.clientY, t:performance.now(), sx:e.clientX, sy:e.clientY, held:false }); if(ptrs.size===2){ const [a,b]=[...ptrs.values()]; pinch0=Math.hypot(a.x-b.x,a.y-b.y); dist0=camDist; twist0=Math.atan2(b.y-a.y,b.x-a.x); yaw0=camYaw; if(placing) placing.drag=null; }
   if (buildMode && ptrs.size===1 && buildMode.brush && buildMode.view==='out'){ buildMode.stroke=new Set(); mossPaintAt(e.clientX,e.clientY); }
   if (buildMode && ptrs.size===2){ const [a,b]=[...ptrs.values()]; buildMode.mid=[(a.x+b.x)/2,(a.y+b.y)/2]; buildMode.stroke=null; }
-  if (placing && ptrs.size===1 && !dlgState){ const g=groundAtScreen(e.clientX,e.clientY); if(g){ const m=placing.m.position; const near=Math.hypot(g.x-m.x,g.z-m.z)<2.2; placing.drag={ id:e.pointerId, ox:near?m.x-g.x:0, oz:near?m.z-g.z:0 }; placing.dragged=false; } } });
-canvas.addEventListener('pointermove', e=>{ const p=ptrs.get(e.pointerId); if(!p) return; const px=p.x; p.x=e.clientX; p.y=e.clientY; if(ptrs.size===2){ const [a,b]=[...ptrs.values()]; const pd=Math.hypot(a.x-b.x,a.y-b.y); if(buildMode){ const B=buildMode; if(p.pd) B.dist=clamp(B.dist*p.pd/pd,6,140); p.pd=pd; const mid=[(a.x+b.x)/2,(a.y+b.y)/2]; if (B.mid) buildPan(mid[0]-B.mid[0], mid[1]-B.mid[1]); B.mid=mid; } else if(magicMode){ if(p.pd) magicMode.dist=clamp(magicMode.dist*p.pd/pd,14,60); p.pd=pd; } else { camDist=clamp(dist0*pinch0/pd,11,36); let da=Math.atan2(b.y-a.y,b.x-a.x)-twist0; da=Math.atan2(Math.sin(da),Math.cos(da)); camYaw=yaw0-da; } return; }
+  if (placing && ptrs.size===1 && !dlgState){ const g=groundAtScreen(e.clientX,e.clientY); if(g){ const m=placing.m.position; const near = placing.mode==='grid' ? onGridPatch(g.x, g.z) : Math.hypot(g.x-m.x,g.z-m.z)<2.2; placing.drag={ id:e.pointerId, ox:near?m.x-g.x:0, oz:near?m.z-g.z:0 }; placing.dragged=false; } } });
+canvas.addEventListener('pointermove', e=>{ const p=ptrs.get(e.pointerId); if(!p) return; const px=p.x; p.x=e.clientX; p.y=e.clientY; if(ptrs.size===2){ const [a,b]=[...ptrs.values()]; const pd=Math.hypot(a.x-b.x,a.y-b.y); if(buildMode){ const B=buildMode; if(p.pd) B.dist=clamp(B.dist*p.pd/pd,6,140); p.pd=pd; const mid=[(a.x+b.x)/2,(a.y+b.y)/2]; if (B.mid) buildPan(mid[0]-B.mid[0], mid[1]-B.mid[1]); B.mid=mid; } else if(magicMode){ if(p.pd) magicMode.dist=clamp(magicMode.dist*p.pd/pd,magicMode.minD||14,60); p.pd=pd; } else { camDist=clamp(dist0*pinch0/pd,11,36); let da=Math.atan2(b.y-a.y,b.x-a.x)-twist0; da=Math.atan2(Math.sin(da),Math.cos(da)); camYaw=yaw0-da; } return; }
   if (buildMode && ptrs.size===1){ const B=buildMode, py=p.py??p.sy; p.py=e.clientY;
     if (B.brush && B.view==='out') mossPaintAt(e.clientX,e.clientY);
     else if (B.view==='out'){ B.yaw -= (e.clientX-px)*0.008; B.pitch=clamp(B.pitch+(e.clientY-py)*0.004,0.12,1.4); }
@@ -9238,11 +9269,11 @@ canvas.addEventListener('pointermove', e=>{ const p=ptrs.get(e.pointerId); if(!p
     p.held=true; return; }
   if (magicMode && ptrs.size===1){ const py=p.py??p.sy; p.py=e.clientY; if (Math.hypot(p.x-p.sx,p.y-p.sy)>8){
       // moving a building: drag the ghost if you grabbed it, otherwise look around
-      if (p.mg===undefined){ const g0=groundAtScreen(p.sx,p.sy), M=magicMode; p.mg = M.kind==='move' && g0 && M.at && Math.hypot(g0.x-M.at[0], g0.z-M.at[1]) < footOf(M.key)+1.5; }
-      if (p.mg){ const g=groundAtScreen(e.clientX,e.clientY); if(g) magicPlace(g.x,g.z,true); } else magicPan(e.clientX-px, e.clientY-py); p.held=true; } return; }
+      if (p.mg===undefined){ const g0=groundAtScreen(p.sx,p.sy), M=magicMode; p.mg = M.kind==='garden' ? GE.grab(g0) : M.kind==='move' && g0 && M.at && Math.hypot(g0.x-M.at[0], g0.z-M.at[1]) < footOf(M.key)+1.5; }
+      if (p.mg){ const g=groundAtScreen(e.clientX,e.clientY); if(g){ if (magicMode.kind==='garden') GE.drag(g); else magicPlace(g.x,g.z,true); } } else magicPan(e.clientX-px, e.clientY-py); p.held=true; } return; }
   if (e.pointerType==='mouse' && ptrs.size===1 && !(placing && placing.drag) && Math.hypot(p.x-p.sx,p.y-p.sy)>5){ camYaw-=(e.clientX-px)*0.008; lookDragT=performance.now(); p.held=true; return; }   // computer: drag to look around
   if (placing && placing.drag && placing.drag.id===e.pointerId && Math.hypot(p.x-p.sx,p.y-p.sy)>4){ const g=groundAtScreen(e.clientX,e.clientY); if(g){ const x=g.x+placing.drag.ox, z=g.z+placing.drag.oz; placing.m.position.set(x, World.inside?0:groundY(x,z), z); placing.dragged=true; p.held=true; checkPlace(); } } });
-function endPtr(e){ const p=ptrs.get(e.pointerId); if(!p) return; ptrs.delete(e.pointerId); if (p.mg && magicMode && magicMode.at) magicPlace(magicMode.at[0], magicMode.at[1]);   // v1.49 a drag that ends a little off slides to a spot that fits
+function endPtr(e){ const p=ptrs.get(e.pointerId); if(!p) return; ptrs.delete(e.pointerId); if (p.mg && magicMode && magicMode.kind==='move' && magicMode.at) magicPlace(magicMode.at[0], magicMode.at[1]);   // v1.49 a drag that ends a little off slides to a spot that fits
   const moved=Math.hypot(p.x-p.sx,p.y-p.sy), dt=performance.now()-p.t;
   const tap = ptrs.size===0 && !p.held && moved<14 && dt<450 && !layoutMode;
   if (tap && dlgState){ if (!dlgChoices.children.length) advanceDialog(); }
@@ -9254,7 +9285,7 @@ canvas.addEventListener('pointerup', endPtr); canvas.addEventListener('pointerca
 // Wheel: zoom. Trackpad: two-finger swipe left/right turns the view, pinch zooms.
 canvas.addEventListener('wheel', e=>{ e.preventDefault(); const dz=e.ctrlKey ? e.deltaY*3 : e.deltaY;
   if(buildMode){ const B=buildMode; if (e.shiftKey) B.pitch=clamp(B.pitch-dz*0.002,0.12,1.4); else B.dist=clamp(B.dist*Math.exp(dz*0.0012),6,140); if (B.view==='out') B.yaw-=e.deltaX*0.006; else buildPan(-e.deltaX*0.5,0); }
-  else if(magicMode) magicMode.dist=clamp(magicMode.dist+dz*0.03,14,60);
+  else if(magicMode) magicMode.dist=clamp(magicMode.dist+dz*0.03,magicMode.minD||14,60);
   else { if (Math.abs(e.deltaX)>Math.abs(e.deltaY)*0.6 && !e.ctrlKey){ camYaw-=e.deltaX*0.006; lookDragT=performance.now(); } else camDist=clamp(camDist+dz*0.02,11,36); } }, { passive:false });
 let lookDragT=0;
 const _bt=new THREE.Vector3();
@@ -9344,6 +9375,8 @@ function updateActButton(){
   if (magicMode) return;
   const nearHome = homeFloorOf(World.inside)>=0 || (!World.inside && Math.hypot(player.pos.x-LOT.x, player.pos.z-LOT.z)<12);
   if (nearHome!==updateActButton.nh){ updateActButton.nh=nearHome; $('#bBuild').style.display=nearHome?'':'none'; }
+  { const now=performance.now(); if (!(now<updateActButton.gt)){ updateActButton.gt=now+500;   // v1.68 the Garden button: near anything you planted, outdoors on your own island
+    const ng = CAN_EDIT && !VISIT && !TRIP && !World.inside && GE.near(player.pos.x, player.pos.z); if (ng!==updateActButton.ng){ updateActButton.ng=ng; $('#bGarden').style.display=ng?'':'none'; } } }
   if (layoutMode) return;
   let lab=''; if(!dlgState && !placing && !buildMode && !scrim.classList.contains('show')){ if(CatchMeter.bug) lab='Swing!'; else if(Fishing.state!=='idle') lab='Reel';  else { const e=nearestEnt(); if(e) lab=e.label(); else if(facingWater()) lab='Fish'; } }
   if(lab!==actLabel){ actLabel=lab; if(lab){ actBtn.textContent=lab; actBtn.classList.add('show'); } else actBtn.classList.remove('show'); }
@@ -9789,6 +9822,7 @@ window.__game.v144 = Object.assign({ SR, shopStock:w=>shopStock(w), talkGill:()=
 window.__game.v145 = { fishPool, bugPool, isleNear, isleAt, bayMore, bayTipIds, bayPool:()=>bayPool(), waterType, isleSpot, get trees(){ return trees; }, get bugs(){ return bugs; }, newBug:(id,x,z,e)=>new Bug(id,x,z,e||{}), updateBugs:dt=>{ bugT=0; updateBugs(dt||3); }, spawnFish:()=>spawnFish(), get fishes(){ return fishes; },
   openDonate:()=>openDonate(), museumExpand:()=>museumExpand(), buildMuseumAll:()=>buildMuseumAll(), enterRoom:id=>enterRoom(id), tanks:()=>ents.filter(e=>e instanceof MuseumTank), openTankView:e=>openTankView(e), closeTankView:()=>closeTankView(), get tankView(){ return tankView; } };
 window.__game.custom = CU.dev; window.__game.sew = SX.dev; window.__game.pets = PETS;   // v1.67 pet tests
+window.__game.gardenEdit = { GE, start:o=>startGardenEdit(o) };   // v1.68 garden editor tests
 window.__game.sewMachine = { open:()=>SX.open(), choices:()=>SX.keeperChoices({ name:'Pemberton', voice:1 }, ()=>{}).map(c=>c.label), buy:()=>SX.keeperChoices({ name:'Pemberton', voice:1 }, ()=>{})[0].fn(), place:()=>{ const P=player.pos, rec={ id:'sewmachine', x:P.x+1.6, z:P.z, rot:0 }; S.placed.push(rec); const f=new Furniture(rec); return f.label(); } };   // v1.64 tests   // v1.64 sewing tests   // v1.63 custom furniture tests
 // v1.26 test hooks
 window.__game.v126 = { townNewDay, applyTown, findHomeSpot, claimHomeSpot, townCap, incomeNewDay, refreshIncome, talkIncome, incCollect, incOf, INCOME, incEnts, openMap, talkSkipperHome, talkSkipperTrip, tripGoHome, tripRecap, storyWho, askToLeave, canAskToLeave, pitchOnBuy, merchantDay, get peddler(){ return peddler; }, get skipper(){ return skipper; }, newSquares, LOAN_MAX_SQ, TRIP, TRIP_THEME, residents, residentHomes, plotEnts, KEEPOUT, Q, PATHS, camTarget, updateCamera, set camDist(v){ camDist=v; }, get camDist(){ return camDist; }, set camYaw(v){ camYaw=v; } };

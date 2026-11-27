@@ -8770,17 +8770,21 @@ function mapExtent(){ let x0=1e9, z0=1e9, x1=-1e9, z1=-1e9; const grow=(x,z)=>{ 
   for (let i=0;i<128;i++){ const a=i/128*TAU, r=islandR(a)*1.12; grow(Math.cos(a)*r, Math.sin(a)*r); }
   for (const I of ISLES){ grow(I.cx-I.r*1.1, I.cz-I.r*1.1); grow(I.cx+I.r*1.1, I.cz+I.r*1.1); }
   return { cx:(x0+x1)/2, cz:(z0+z1)/2, E:Math.max(x1-x0, z1-z0)/2 }; }
-function drawIslandMap(cv){
-  const ctx=cv.getContext('2d'), W=cv.width, H=cv.height, { cx:mcx, cz:mcz, E }=mapExtent(), k=Math.min(W,H)/(E*2), X=x=>W/2+(x-mcx)*k, Z=z=>H/2+(z-mcz)*k;
-  // land and water, sampled from the real terrain
-  const N=Math.min(240, W), img=ctx.createImageData(N,N), step=E*2/N;
-  for (let j=0;j<N;j++) for (let i=0;i<N;i++){ const x=mcx-E+(i+0.5)*step, z=mcz-E+(j+0.5)*step, h=rawHeight(x,z), o=(j*N+i)*4; let c;
+// land and water for one square of the map, sampled from the real terrain (N x N samples)
+function mapTerrain(x0, z0, span, N){ const img=new ImageData(N,N), step=span/N;
+  for (let j=0;j<N;j++) for (let i=0;i<N;i++){ const x=x0+(i+0.5)*step, z=z0+(j+0.5)*step, h=rawHeight(x,z), o=(j*N+i)*4; let c;
     if (h< -0.15 || (!walkable(x,z) && h<0.2)){ const d=clamp(-h/3,0,1); c=[86-30*d, 186-40*d, 206-30*d]; }
     else if (h<SAND_H+0.08) c=[238,218,166];
     else { const t=clamp((h-SAND_H)/6,0,1); c=[128-40*t, 190-50*t, 98-30*t]; }
     img.data[o]=c[0]; img.data[o+1]=c[1]; img.data[o+2]=c[2]; img.data[o+3]=255; }
-  const tmp=document.createElement('canvas'); tmp.width=tmp.height=N; tmp.getContext('2d').putImageData(img,0,0);
-  ctx.imageSmoothingEnabled=true; ctx.drawImage(tmp, 0,0,N,N, X(mcx-E),Z(mcz-E),E*2*k,E*2*k);
+  const cv=document.createElement('canvas'); cv.width=cv.height=N; cv.getContext('2d').putImageData(img,0,0); return { cv, x0, z0, span, N }; }
+// v1.69 o: { W, H } the size to draw at (when the caller has already scaled for the screen), { zoom, cx, cz } the view, terr/sharp cached terrain
+function drawIslandMap(cv, o={}){
+  const ext=o.ext||mapExtent(), { cx:mcx, cz:mcz, E }=ext, zoom=o.zoom||1, vcx=o.cx??mcx, vcz=o.cz??mcz;
+  const ctx=cv.getContext('2d'), W=o.W||cv.width, H=o.H||cv.height, k=Math.min(W,H)/(E*2)*zoom, X=x=>W/2+(x-vcx)*k, Z=z=>H/2+(z-vcz)*k, ms=clamp(Math.sqrt(zoom),1,1.6);
+  // land and water: the whole map, then a sharper copy of the part you've zoomed in on
+  ctx.imageSmoothingEnabled=true;
+  for (const T of [o.terr||mapTerrain(mcx-E, mcz-E, E*2, Math.min(240, W)), o.sharp]) if (T) ctx.drawImage(T.cv, 0,0,T.N,T.N, X(T.x0),Z(T.z0),T.span*k,T.span*k);
   // paths and the dock
   ctx.strokeStyle='#e6cf9a'; ctx.lineWidth=Math.max(2,1.6*k); ctx.lineCap='round'; ctx.lineJoin='round';
   for (const P of PATHS){ ctx.beginPath(); P.forEach((q,i)=>i?ctx.lineTo(X(q[0]),Z(q[1])):ctx.moveTo(X(q[0]),Z(q[1]))); ctx.stroke(); }
@@ -8790,7 +8794,7 @@ function drawIslandMap(cv){
     ctx.strokeStyle='#a87a4e'; ctx.lineWidth=Math.max(3,2.2*k); ctx.beginPath(); ctx.moveTo(X(I.bridge.a[0]),Z(I.bridge.a[1])); ctx.lineTo(X(I.bridge.b[0]),Z(I.bridge.b[1])); ctx.stroke(); ctx.lineWidth=Math.max(2,1.6*k); }
   // buildings
   const labels=[];
-  const mark=(p, col, name, big)=>{ if (!p) return; const r=big?7:5; ctx.fillStyle=col; ctx.strokeStyle='#5b4336'; ctx.lineWidth=1.6;
+  const mark=(p, col, name, big)=>{ if (!p) return; const r=(big?7:5)*ms; ctx.fillStyle=col; ctx.strokeStyle='#5b4336'; ctx.lineWidth=1.6;
     ctx.beginPath(); ctx.moveTo(X(p[0]),Z(p[1])-r); ctx.lineTo(X(p[0])+r,Z(p[1])); ctx.lineTo(X(p[0])+r*0.75,Z(p[1])); ctx.lineTo(X(p[0])+r*0.75,Z(p[1])+r*0.9); ctx.lineTo(X(p[0])-r*0.75,Z(p[1])+r*0.9); ctx.lineTo(X(p[0])-r*0.75,Z(p[1])); ctx.lineTo(X(p[0])-r,Z(p[1])); ctx.closePath(); ctx.fill(); ctx.stroke();
     if (name) labels.push([X(p[0]), Z(p[1])+r+3, name, big]); };
   ctx.fillStyle='#d8bc86'; ctx.beginPath(); ctx.arc(X(0),Z(0),Math.max(6,4.5*k),0,TAU); ctx.fill(); labels.push([X(0),Z(0)+Math.max(6,4.5*k)+3,'Plaza']);
@@ -8809,13 +8813,53 @@ function drawIslandMap(cv){
   // compass
   ctx.fillStyle='#5b4336'; ctx.font='700 14px Fredoka, sans-serif'; ctx.textAlign='center'; ctx.fillText('N', W-22, 10); ctx.beginPath(); ctx.moveTo(W-22,28); ctx.lineTo(W-27,40); ctx.lineTo(W-17,40); ctx.closePath(); ctx.fill();
 }
+/* v1.69 the map zooms: pinch, the mouse wheel or + and -, drag to move around once zoomed in, double-tap to zoom in there or back out.
+   The view never leaves the map's edges, so the island can't be dragged off screen. Markers and names stay the same size at every zoom. */
+const MAP_ZOOM_MAX=5;
 function openMap(){
   openPanel(`Map of ${S.island||'the island'}`); Snd.click();
-  const w=Math.max(260, Math.min(pBody.clientWidth-8, 620)), cv=document.createElement('canvas'), dpr=Math.min(2, devicePixelRatio||1);
-  cv.width=Math.round(w*dpr); cv.height=Math.round(w*dpr); cv.style.width=w+'px'; cv.style.height=w+'px'; cv.style.borderRadius='14px'; cv.style.display='block'; cv.style.margin='0 auto'; cv.style.background='#56bace';
-  pBody.appendChild(cv); const ctx=cv.getContext('2d'); ctx.scale(dpr,dpr); cv.width; // keep scale
-  const off=document.createElement('canvas'); off.width=w; off.height=w; drawIslandMap(off); ctx.drawImage(off,0,0);
-  const note=document.createElement('div'); note.className='muted'; note.style.cssText='margin-top:8px;text-align:center'; note.textContent=World.inside?'You\'re indoors right now.':'The red arrow is you.'; pBody.appendChild(note);
+  const w=Math.max(260, Math.min(pBody.clientWidth-8, 620)), cv=document.createElement('canvas'), dpr=Math.min(2, devicePixelRatio||1), ext=mapExtent(), V={ zoom:1, cx:ext.cx, cz:ext.cz };
+  const box=document.createElement('div'); box.style.cssText=`position:relative;width:${w}px;height:${w}px;margin:0 auto`;
+  cv.width=Math.round(w*dpr); cv.height=Math.round(w*dpr); cv.style.cssText=`width:${w}px;height:${w}px;border-radius:14px;display:block;background:#56bace;touch-action:none;cursor:grab`;
+  box.appendChild(cv); box.insertAdjacentHTML('beforeend', `<div class="bpz" style="top:auto;bottom:6px"><button data-z="in" title="Zoom in" aria-label="Zoom in">+</button><button data-z="out" title="Zoom out" aria-label="Zoom out">&minus;</button><button data-z="fit" title="Show the whole map">Fit</button></div>`);
+  pBody.appendChild(box); const ctx=cv.getContext('2d'), btn=z=>box.querySelector(`[data-z="${z}"]`);
+  const terr=mapTerrain(ext.cx-ext.E, ext.cz-ext.E, ext.E*2, Math.min(240, w)); let sharp=null, raf=0, sharpT=0, anim=0;
+  const scale=()=>w/(ext.E*2)*V.zoom;
+  const clampView=()=>{ V.zoom=clamp(V.zoom,1,MAP_ZOOM_MAX); const h=ext.E/V.zoom; V.cx=clamp(V.cx, ext.cx-ext.E+h, ext.cx+ext.E-h); V.cz=clamp(V.cz, ext.cz-ext.E+h, ext.cz+ext.E-h); };
+  const draw=()=>{ raf=0; if (!cv.isConnected) return; ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,w,w); drawIslandMap(cv, { W:w, H:w, ext, zoom:V.zoom, cx:V.cx, cz:V.cz, terr, sharp });
+    const zin=V.zoom>1.01; btn('in').disabled=V.zoom>=MAP_ZOOM_MAX-0.01; btn('out').disabled=!zin; btn('fit').disabled=!zin; for (const b of box.querySelectorAll('[data-z]')) b.style.opacity=b.disabled?0.45:1; cv.style.cursor=zin?'grab':'zoom-in'; };
+  // once you stop moving, the part you're looking at is sampled again at a finer step (a little wider than the view, so a short drag stays sharp)
+  const sharpen=()=>{ if (!cv.isConnected) return; if (V.zoom<1.4){ sharp=null; return; } const h=ext.E/V.zoom*1.3, x0=clamp(V.cx-h, ext.cx-ext.E, ext.cx+ext.E-2*h), z0=clamp(V.cz-h, ext.cz-ext.E, ext.cz+ext.E-2*h), span=Math.min(2*h, ext.E*2);
+    const S0=sharp, need=ext.E/V.zoom; if (S0 && S0.span<=span*1.15 && V.cx-need>=S0.x0 && V.cx+need<=S0.x0+S0.span && V.cz-need>=S0.z0 && V.cz+need<=S0.z0+S0.span) return;
+    sharp=mapTerrain(x0, z0, span, Math.min(280, Math.round(w*Math.min(dpr,1.5)))); redraw(true); };
+  const redraw=quiet=>{ if (!raf) raf=requestAnimationFrame(draw); if (!quiet){ clearTimeout(sharpT); sharpT=setTimeout(sharpen, 200); } };
+  const zoomAt=(f, sx=w/2, sy=w/2)=>{ const k0=scale(), wx=V.cx+(sx-w/2)/k0, wz=V.cz+(sy-w/2)/k0; V.zoom=clamp(V.zoom*f,1,MAP_ZOOM_MAX); const k1=scale(); V.cx=wx-(sx-w/2)/k1; V.cz=wz-(sy-w/2)/k1; clampView(); redraw(); };
+  const glide=(zoom, cx, cz)=>{ cancelAnimationFrame(anim); const a={ ...V }, t0=performance.now();
+    const step=t=>{ const u=clamp((t-t0)/220,0,1), e=1-(1-u)*(1-u)*(1-u); V.zoom=Math.exp(Math.log(a.zoom)+(Math.log(zoom)-Math.log(a.zoom))*e); V.cx=a.cx+(cx-a.cx)*e; V.cz=a.cz+(cz-a.cz)*e; clampView(); redraw(); if (u<1 && cv.isConnected) anim=requestAnimationFrame(step); };
+    anim=requestAnimationFrame(step); };
+  const fit=()=>glide(1, ext.cx, ext.cz);
+  const zoomTo=(f, sx, sy)=>{ const k0=scale(), wx=V.cx+(sx-w/2)/k0, wz=V.cz+(sy-w/2)/k0, z=clamp(V.zoom*f,1,MAP_ZOOM_MAX), k1=w/(ext.E*2)*z; glide(z, wx-(sx-w/2)/k1, wz-(sy-w/2)/k1); };
+  // pointers: one finger or the mouse drags, two fingers pinch (and drag), a quick second tap zooms in there or back out
+  const ptr=new Map(); let pinch=null, drag=null, lastTap=null;
+  const local=e=>{ const r=cv.getBoundingClientRect(); return [e.clientX-r.left, e.clientY-r.top]; };
+  cv.addEventListener('wheel', e=>{ e.preventDefault(); cancelAnimationFrame(anim); const [sx,sy]=local(e); zoomAt(Math.exp(-(e.ctrlKey?e.deltaY*3:e.deltaY)*0.0015), sx, sy); }, { passive:false });
+  cv.addEventListener('pointerdown', e=>{ e.preventDefault(); e.stopPropagation(); cancelAnimationFrame(anim); try { cv.setPointerCapture(e.pointerId); } catch(_){} ptr.set(e.pointerId, local(e));
+    if (ptr.size===2){ const [a,b]=[...ptr.values()]; pinch={ d:Math.hypot(a[0]-b[0],a[1]-b[1])||1, mx:(a[0]+b[0])/2, my:(a[1]+b[1])/2 }; drag=null; return; }
+    if (ptr.size===1){ const [x,y]=ptr.get(e.pointerId); drag={ x, y, sx:x, sy:y, moved:false, t:performance.now() }; if (V.zoom>1.01) cv.style.cursor='grabbing'; } });
+  cv.addEventListener('pointermove', e=>{ if (!ptr.has(e.pointerId)) return; const p=local(e); ptr.set(e.pointerId, p);
+    if (pinch && ptr.size===2){ const [a,b]=[...ptr.values()], d=Math.hypot(a[0]-b[0],a[1]-b[1])||1, mx=(a[0]+b[0])/2, my=(a[1]+b[1])/2;
+      zoomAt(d/pinch.d, mx, my); const k=scale(); V.cx-=(mx-pinch.mx)/k; V.cz-=(my-pinch.my)/k; clampView(); pinch={ d, mx, my }; return; }
+    if (!drag || ptr.size!==1) return; if (Math.hypot(p[0]-drag.sx,p[1]-drag.sy)>6) drag.moved=true;
+    if (drag.moved){ const k=scale(); V.cx-=(p[0]-drag.x)/k; V.cz-=(p[1]-drag.y)/k; clampView(); redraw(); } drag.x=p[0]; drag.y=p[1]; });
+  const end=e=>{ if (!ptr.has(e.pointerId)) return; const p=local(e); ptr.delete(e.pointerId); if (ptr.size<2) pinch=null; const d=drag; drag=null; draw();
+    if (e.type!=='pointerup' || ptr.size || !d || d.moved || performance.now()-d.t>400){ if (d && d.moved) lastTap=null; return; }
+    const now=performance.now(); if (lastTap && now-lastTap.t<350 && Math.hypot(p[0]-lastTap.x,p[1]-lastTap.y)<30){ lastTap=null; if (V.zoom>1.01) fit(); else zoomTo(2.5, p[0], p[1]); Snd.click(); }
+    else lastTap={ t:now, x:p[0], y:p[1] }; };
+  cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end); cv.addEventListener('contextmenu', e=>e.preventDefault());
+  for (const b of box.querySelectorAll('[data-z]')) b.onclick=ev=>{ ev.stopPropagation(); if (b.disabled) return; Snd.click(); const z=b.dataset.z; if (z==='in') zoomTo(1.6, w/2, w/2); else if (z==='out') zoomTo(1/1.6, w/2, w/2); else fit(); };
+  draw();
+  const note=document.createElement('div'); note.className='muted'; note.style.cssText='margin-top:8px;text-align:center'; note.textContent=(World.inside?'You\'re indoors right now. ':'The red arrow is you. ')+'Pinch, scroll or use + and − to zoom, drag to look around, double-tap to zoom in or back out.'; pBody.appendChild(note);
+  if (window.__game) window.__game.v169 = { view:V, zoomAt, fit, get sharp(){ return sharp; }, MAP_ZOOM_MAX, ext, cv };   // v1.69 test hooks
 }
 addEventListener('pointerdown', e=>{ if(!toolPop.contains(e.target) && e.target!==toolBtn && !toolBtn.contains(e.target)) toolPop.classList.remove('show'); });
 function positionToolPop(){ const r=toolBtn.getBoundingClientRect(); const w=Math.min(300, innerWidth-20); toolPop.style.width=w+'px'; toolPop.style.left=clamp(r.left+r.width/2-w/2,10,innerWidth-w-10)+'px'; toolPop.style.top=Math.max(10, r.top-toolPop.offsetHeight-10)+'px'; }

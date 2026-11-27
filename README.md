@@ -518,3 +518,12 @@ Code: `fossils2.js` (the 69 new fossil builders and their rocks, `buildFossil2In
   - The original trees are laid out again without the isles' bridges, which can move a few of them (on one test island: one tree went, one came back and a palm moved about 2 m).
 - Test hooks (#dev): `window.__game.v166`.
 - Save: no new keys.
+
+## v1.69: zoom on the island map
+- **Zoom.** The map (round button top left, or Look at the town hall table) zooms from the whole map (1x) up to 5x (`MAP_ZOOM_MAX`): pinch on a phone, mouse wheel or trackpad pinch on a computer, or the +, − and Fit buttons at the bottom right of the map. + and − step by 1.6x around the middle; the wheel and pinch zoom around the cursor or between the fingers.
+- **Moving around.** Once zoomed in, drag with one finger or the mouse. The view is clamped to the map's square, so the island can't be dragged off screen. Double-tap (or double-click) zooms 2.5x on that spot; when already zoomed in it glides back to the whole map. The map always opens at the whole view.
+- **Drawing.** `drawIslandMap(cv, o)` takes an optional view (`zoom`, `cx`, `cz`), a draw size (`W`, `H`) and cached terrain (`terr`, `sharp`); with no options it draws exactly as before (town hall table, treasure map). Terrain sampling moved into `mapTerrain()`. Paths and the plaza grow with the zoom, building markers grow a little (up to 1.6x), names, the arrow, the X and the compass stay the same size. The map is now drawn at the screen's pixel density instead of being scaled up from a 1x copy.
+- **Sharper when zoomed.** 200 ms after the view stops moving at 1.4x or more, the part in view (plus 30% around it) is sampled again from the real terrain at up to 280 x 280 and drawn over the base map, so coastlines stay crisp.
+- Test hooks: `window.__game.v169` (set while the map is open).
+- Save: no new keys.
+

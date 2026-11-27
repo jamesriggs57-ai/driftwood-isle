@@ -229,7 +229,7 @@ ${note('If the islander a story favor was written for doesn\'t live on your isla
 
 { id:'tools', group:'island', title:'Tools, bags and the bike', data:'tools', html:`
 <p>Tools break after a number of uses. Golden tools need you to prove yourself first, and Heirloom tools never break. Only Sturdy and Golden (and Heirloom) axes can cut a tree down; the Flimsy axe only chops wood.</p>
-<p>Other gear: the <b>bike</b> (60,000), the <b>Wooden Sled</b> (3,000, for winter hills) and the <b>map</b>, which has its own round button at the top left of the screen, under the clock, and shows land, paths, buildings and whose house is whose (not where anyone is).</p>
+<p>Other gear: the <b>bike</b> (60,000), the <b>Wooden Sled</b> (3,000, for winter hills) and the <b>map</b>, which has its own round button at the top left of the screen, under the clock, and shows land, paths, buildings and whose house is whose (not where anyone is). You can zoom in up to 5 times: pinch, scroll the mouse wheel or tap + and −, then drag to look around. Double-tap a spot to zoom in on it, and double-tap again (or tap Fit) to see the whole map. Names stay the same size however far in you go.</p>
 <h3>Repairing</h3>
 <p>Fix a worn tool before it breaks. Two ways:</p>
 <ul><li><b>Yourself</b>: the Tools tab in the Craft panel, anywhere, no crafting table needed. It costs materials by tier (see the table below), scaled by how worn the tool is, at least 1 of each.</li>

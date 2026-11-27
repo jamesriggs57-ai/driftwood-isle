@@ -437,6 +437,7 @@ ${tip('Your saved designs are kept, so making a matching set of chairs is quick:
 <ul><li><b>The telescope</b>: by day you see sky and clouds. At night you see one of five constellations, a different one each day, or Starfall Isle hanging over the Crags once it has risen.</li>
 <li><b>The glass dome</b>: an empty cushion waiting for Starglass. Once Starfall Isle has risen, a Starglass Shard sits there.</li>
 <li>The orrery, the star globe and the desk are for looking at.</li></ul>
+<p><b>The balcony</b>: a little door in the observatory glass leads out to an iron balcony round the top of the tower. Wendell only lets friends out there. Until your friendship with him reaches 5 he stops you at the door. A chat with him is worth 1 the first time each day, and each favor you do him is worth 3. Once you're friends, step out, walk round the balcony for the view over the island, and walk back in at the door.</p>
 <h3>Luck potions</h3>
 <p>Each lasts 10 real minutes and makes rare finds of one kind far more likely (rare things about 3.5x, very rare and legendary about 3x).</p>
 <table class="t"><tr><th>Potion</th><th>Price</th><th>Luck for</th></tr>
@@ -542,7 +543,7 @@ ${note('Relics can\'t be sold, gifted, mailed or traded. A storage chest holds t
 <tr><td>Fishing Hamlet</td><td>The old angler pays triple for one fish</td></tr>
 <tr><td>Hilltop Abbey</td><td>Trade 5 fruit for 5 seeds your island doesn't grow</td></tr>
 <tr><td>Circus Camp</td><td>A 300-clam cup game that wins boat tickets</td></tr>
-<tr><td>Lighthouse Point</td><td>Tap Climb up at the door to climb the stairs to the top. Walk round the rail for the view. The keeper waits up there and gives you a Lighthouse Lantern once per visit. Tap Head down to leave.</td></tr>
+<tr><td>Lighthouse Point</td><td>Tap Go in at the door, then walk up the winding stair yourself (push the way you want to go, or tap a step higher up). The camera stays behind you as it does outdoors. At the top you come out on the gallery: walk round it for the view. The keeper waits up there and gives you a Lighthouse Lantern once per visit. To leave, walk back in at the lamp room door and down the stair, or tap Head down to go straight out.</td></tr>
 <tr><td>Smugglers' Cove</td><td>Favor-only and rare pieces at twice the price</td></tr>
 <tr><td>Noticeboard Village</td><td>Three small favors, a ticket each</td></tr></table>
 <p>Townsfolk are made fresh for each town and go into your contacts as pen pals.</p>
@@ -713,7 +714,7 @@ ${steps(['Marlo grinds a lens: <b>10,000</b>, waiting up the bluff the next day.
  'Climb to the lamp room at the top of the lighthouse and fit the lamp there. The beam turns at night.'])}
 <p>Payoff: two night fish in Cay Bay (once Schooling), Wick's weekly night voyage to a Moonlit isle (8,000), and a stake after your first voyage.</p>
 <h3>Inside the lighthouse</h3>
-<p>The old lighthouse is a tall striped tower on top of the bluff. Its red and white paint stays faded until the lamp is lit, then it gets a fresh coat. Tap Go in at the tower to walk inside. On the ground floor you can walk about, read the old keeper's logbook pages and tap Climb the stair. The stair winds round the inside wall all the way up to the lamp room and the gallery. At the top, walk round the gallery for the view, look round the lamp room, or tap Head down. Tap Go outside, or walk out through the door, to leave.</p>
+<p>The old lighthouse is a tall striped tower on top of the bluff. Its red and white paint stays faded until the lamp is lit, then it gets a fresh coat. Tap Go in at the tower to walk inside. On the ground floor you can walk about and read the old keeper's logbook pages. The stair winds round the inside wall all the way up to the lamp room. Walk onto its foot, or tap Up the stair, and climb it yourself: push the way you want to go, or tap a step higher up. The camera keeps the same view as outdoors, and the wall on the camera's side is cut away so you can see in. Until the stair is mended you hop over a missing tread or two near the bottom. At the top you step out onto the gallery. Walk round it for the view and look round the lamp room. Walk back in at the lamp room door to walk down again, or tap Head down to go straight to the ground floor. Tap Go outside, or walk out through the door, to leave.</p>
 <p>The tower is in a bad way to begin with, and it gets mended as the story moves on:</p>
 <table><tr><th>When</th><th>What you see</th></tr>
 <tr><td>Before the lens</td><td>Treads missing or snapped on the stair (you hop the gaps and keep to the wall), a fallen beam across the floor, puddles, cobwebs, peeling paint and rust, boarded windows, gulls' nests, logbook pages on the floor, and an empty lamp room with cracked glass.</td></tr>

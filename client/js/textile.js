@@ -15,6 +15,7 @@ import * as T from './textile-core.js';
 import { buildRug } from './textile-models.js';
 import * as CH from './chars.js';
 import { COLLAR, COLLAR_MATS } from './pets-core.js';   // v1.67 pet collars
+import { searchBox, sk, bindSearch } from './search.js';   // v1.70
 export * from './textile-core.js';
 
 const BONUS_PER_DAY = 2;
@@ -86,24 +87,24 @@ export function createSewing(C){
   const lockTitle = lv => `Needs ${T.LEVELS[lv].name} skill (${T.LEVELS[lv].at} pieces sewn)`;
   const matsHTML = d => Object.entries(matsOf(d)).map(([m,n])=>{ const hv=C.countItem(m); return `<span style="color:${hv>=n?'inherit':'#c0503a'};font-weight:${hv>=n?400:700}">${matName(m)} ${hv}/${n}</span>`; }).join(' · ');
   function levelBar(){ const c=st(), l=lvl(), nx=T.LEVELS[l+1]; const pct = nx ? Math.round((c.made-T.LEVELS[l].at)/(nx.at-T.LEVELS[l].at)*100) : 100;
-    return `<div class="notice"><b>Sewing: ${L().name}</b> <span class="muted">· ${c.made} sewn · ${L().grid}x${L().grid} grid${L().alts?` · ${L().alts} alteration${L().alts>1?'s':''}`:''}</span>
+    return `<div class="notice" data-shide><b>Sewing: ${L().name}</b> <span class="muted">· ${c.made} sewn · ${L().grid}x${L().grid} grid${L().alts?` · ${L().alts} alteration${L().alts>1?'s':''}`:''}</span>
       <div style="height:8px;background:#f1e4cc;border-radius:6px;margin-top:6px;overflow:hidden"><div style="height:100%;width:${pct}%;background:#7cc35a"></div></div>
       <div class="sub muted" style="margin-top:4px">${nx ? `${nx.at-c.made} more to ${nx.name}: ${nx.grid}x${nx.grid} grid${nx.alts>L().alts?' and stranger alterations':''}.` : 'The finest grid and every alteration are yours.'}</div></div>`; }
-  function listHTML(){ const c=st(); let h=levelBar();
+  function listHTML(){ const c=st(); let h=searchBox('Search clothes, rugs or materials')+levelBar();
     h+=`<div style="margin:6px 0"><button class="btn" data-snew="rug">New rug</button> <button class="btn" data-snew="garment">New clothes</button></div>`;
-    if (c.closet.length){ const worn=(CH.parseLook(C.look()).ct)||''; h+='<div style="margin:10px 0 4px"><b>Your closet</b></div>';
+    if (c.closet.length){ const worn=(CH.parseLook(C.look()).ct)||''; h+='<div data-sgrp><div style="margin:10px 0 4px"><b>Your closet</b></div>';
       for (const code of c.closet){ const d=T.decodeGarment(code); if (!d) continue; const on=worn===code;
-        h+=`<div class="row"><img src="${flatThumb(d)}" style="image-rendering:pixelated"><div class="grow"><div class="nm">${T.GARMENTS[d.base].name}${on?' <span class="muted">(wearing)</span>':''}</div><div class="sub">${T.SLEEVES[d.sleeve].name}${T.altList(d.alts).length?' · '+T.altList(d.alts).map(([a])=>a.name.toLowerCase()).join(', '):''}</div>
-          <div style="display:flex;gap:6px;margin-top:6px">${on?`<button class="btn alt" data-soff="1">Take off</button>`:`<button class="btn" data-swear="${code}">Wear</button>`}<button class="btn alt" data-sedit="${code}">Change</button><button class="btn alt" data-sbin="${code}">Unpick</button></div></div></div>`; } }
-    if (c.rugs.length){ h+='<div style="margin:10px 0 4px"><b>Your rug designs</b></div>';
+        h+=`<div class="row"${sk(T.GARMENTS[d.base].name, T.SLEEVES[d.sleeve].name, T.HEMS[d.hem]&&T.HEMS[d.hem].name, T.altList(d.alts).map(([a])=>a.name), on&&'wearing', 'clothes')}><img src="${flatThumb(d)}" style="image-rendering:pixelated"><div class="grow"><div class="nm">${T.GARMENTS[d.base].name}${on?' <span class="muted">(wearing)</span>':''}</div><div class="sub">${T.SLEEVES[d.sleeve].name}${T.altList(d.alts).length?' · '+T.altList(d.alts).map(([a])=>a.name.toLowerCase()).join(', '):''}</div>
+          <div style="display:flex;gap:6px;margin-top:6px">${on?`<button class="btn alt" data-soff="1">Take off</button>`:`<button class="btn" data-swear="${code}">Wear</button>`}<button class="btn alt" data-sedit="${code}">Change</button><button class="btn alt" data-sbin="${code}">Unpick</button></div></div></div>`; } h+='</div>'; }
+    if (c.rugs.length){ h+='<div data-sgrp><div style="margin:10px 0 4px"><b>Your rug designs</b></div>';
       for (const code of c.rugs){ const d=T.decodeRug(code); if (!d) continue; const id='cr_'+code, miss=lacks(d);
-        h+=`<div class="row"><img src="${C.thumb(id)}"><div class="grow"><div class="nm">${esc(ITEMS[id].name)}</div><div class="sub">${T.rugSize(d.w)} x ${d.shape===1?T.rugSize(d.w):T.rugSize(d.d)} m · ${matsHTML(d)}${!c.sold.includes(code)&&T.rugBonus(d)?`<br>First sale: +${C.fmt(T.rugBonus(d))} for the art`:''}</div>
-          <div style="display:flex;gap:6px;margin-top:6px"><button class="btn" data-smake="${code}" ${miss.length||T.needLevel(d)>lvl()?'disabled':''}>Make</button><button class="btn alt" data-sedit="${code}">Change</button><button class="btn alt" data-sforget="${code}">Forget</button></div></div></div>`; } }
-    if (!c.closet.length && !c.rugs.length) h+='<div class="muted" style="margin-top:8px">Nothing sewn yet. Weeds are your yarn: pull them, then start a rug or some clothes.</div>';
+        h+=`<div class="row"${sk(ITEMS[id].name, 'rug', T.RUG_SHAPES[d.shape]&&T.RUG_SHAPES[d.shape].name, Object.keys(matsOf(d)).map(matName))}><img src="${C.thumb(id)}"><div class="grow"><div class="nm">${esc(ITEMS[id].name)}</div><div class="sub">${T.rugSize(d.w)} x ${d.shape===1?T.rugSize(d.w):T.rugSize(d.d)} m · ${matsHTML(d)}${!c.sold.includes(code)&&T.rugBonus(d)?`<br>First sale: +${C.fmt(T.rugBonus(d))} for the art`:''}</div>
+          <div style="display:flex;gap:6px;margin-top:6px"><button class="btn" data-smake="${code}" ${miss.length||T.needLevel(d)>lvl()?'disabled':''}>Make</button><button class="btn alt" data-sedit="${code}">Change</button><button class="btn alt" data-sforget="${code}">Forget</button></div></div></div>`; } h+='</div>'; }
+    if (!c.closet.length && !c.rugs.length) h+='<div class="muted" data-shide style="margin-top:8px">Nothing sewn yet. Weeds are your yarn: pull them, then start a rug or some clothes.</div>';
     // v1.67: pet collars, a quick sew from weeds
     { const miss=Object.entries(COLLAR_MATS).some(([m,n])=>C.countItem(m)<n);
-      h+=`<div style="margin:10px 0 4px"><b>Little things</b></div><div class="row"><img src="${C.thumb(COLLAR)}"><div class="grow"><div class="nm">${esc(ITEMS[COLLAR].name)}</div><div class="sub">${Object.entries(COLLAR_MATS).map(([m,n])=>`${n} ${matName(m)}`).join(', ')} · fits a dog or a cat${C.countItem(COLLAR)?` · you have ${C.countItem(COLLAR)}`:''}</div>
-        <div style="display:flex;gap:6px;margin-top:6px"><button class="btn" data-scollar="1" ${miss?'disabled':''}>Sew one</button></div></div></div>`; }
+      h+=`<div data-sgrp><div style="margin:10px 0 4px"><b>Little things</b></div><div class="row"${sk(ITEMS[COLLAR].name, 'pet dog cat', Object.keys(COLLAR_MATS).map(matName))}><img src="${C.thumb(COLLAR)}"><div class="grow"><div class="nm">${esc(ITEMS[COLLAR].name)}</div><div class="sub">${Object.entries(COLLAR_MATS).map(([m,n])=>`${n} ${matName(m)}`).join(', ')} · fits a dog or a cat${C.countItem(COLLAR)?` · you have ${C.countItem(COLLAR)}`:''}</div>
+        <div style="display:flex;gap:6px;margin-top:6px"><button class="btn" data-scollar="1" ${miss?'disabled':''}>Sew one</button></div></div></div></div>`; }
     return h; }
   function editHTML(){ const d=draft, l=lvl(), G=d.G, rug=d.kind==='rug', need=T.needLevel(d), miss=lacks(d), maxG=T.GRIDS[l];
     let h=`<canvas id="sxPrev" style="width:100%;height:${rug?170:230}px;display:block;background:linear-gradient(#fbf3e4,#f1e4cc);border-radius:14px;margin-bottom:8px"></canvas>`;
@@ -138,7 +139,7 @@ export function createSewing(C){
     let ch=false; for (const ii of mirror ? [i, G-1-i] : [i]){ const k=j*G+ii; if (d.px[k]!==color){ d.px[k]=color; ch=true; } } return ch; }
   function renderTab(tabsH, bind){ lastArgs=[tabsH, bind]; const pB=C.pBody(); if (C.pTitle()) C.pTitle().textContent='Sewing'; C.setFoot('');
     if (!st()){ pB.innerHTML=tabsH; if (bind) bind(); return; }
-    pB.innerHTML = tabsH + (mode==='edit' && draft ? editHTML() : listHTML()); if (bind) bind(); bindTab(pB);
+    pB.innerHTML = tabsH + (mode==='edit' && draft ? editHTML() : listHTML()); if (bind) bind(); bindTab(pB); bindSearch(pB);
     if (mode==='edit' && draft){ const pv=pB.querySelector('#sxPrev'); if (pv) preview(pv, draft); const cv=pB.querySelector('#sxPaint'); if (cv) drawPainter(cv); } }
   function bindTab(pB){ const re=()=>{ const y=pB.scrollTop; renderTab(...lastArgs); pB.scrollTop=y; }, q=s=>pB.querySelector(s);
     pB.querySelectorAll('[data-snew]').forEach(b=>b.onclick=()=>{ draft = b.dataset.snew==='rug' ? newRug() : newGarment(); mode='edit'; C.Snd.click(); re(); pB.scrollTop=0; });

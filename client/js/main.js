@@ -31,6 +31,7 @@ import { createEnchant } from './enchant.js';   // v1.40 tools and enchanting
 import { createBenches } from './benches.js';   // v1.40 crafting tables
 import { createCustom } from './custom.js';
 import { createSewing } from './textile.js';   // v1.64 sewing
+import * as SQ from './search.js';   // v1.70 search in the crafting menus
 import { registerRug } from './textile-models.js';   // v1.64 sewing (rugs and the machine)
 import { createPets, registerPetModels } from './pets.js';   // v1.67 pets
 import * as PETS_CORE from './pets-core.js';
@@ -6545,9 +6546,9 @@ function giveGift(res, slot, menu){
 /* ---------- UI: panels, toasts, HUD ---------- */
 const scrim=$('#scrim'), pTitle=$('#pTitle'), pBody=$('#pBody'), pFoot=$('#pFoot');
 let panelClose=null;
-function openPanel(title, onClose){ pTitle.textContent=title; pBody.innerHTML=''; setFoot(''); scrim.classList.add('show'); panelClose=onClose||null; Snd.click(); pBody.scrollTop=0; }
+function openPanel(title, onClose){ SQ.resetSearch(); SQ.kbOff(); pTitle.textContent=title; pBody.innerHTML=''; setFoot(''); scrim.classList.add('show'); panelClose=onClose||null; Snd.click(); pBody.scrollTop=0; }
 function setFoot(html){ pFoot.innerHTML=html; pFoot.style.display=html?'':'none'; }
-function closePanel(){ const f=panelClose; panelClose=null; scrim.classList.remove('show'); hideInvTip(); coolPopup(); if(f) f(); }
+function closePanel(){ const f=panelClose; panelClose=null; scrim.classList.remove('show'); SQ.kbOff(); hideInvTip(); coolPopup(); if(f) f(); }
 $('#pClose').onclick=()=>closePanel();
 scrim.addEventListener('pointerdown', e=>{ if(e.target===scrim) closePanel(); });
 function dropToast(t){ if (t.dataset.gone) return; t.dataset.gone='1'; t.style.transition='opacity .25s'; t.style.opacity=0; setTimeout(()=>t.remove(),260); }
@@ -6684,6 +6685,8 @@ function nearStation(){ let best=null;
   return best; }
 const haveNeed = ([id,n],k=1) => (ITEMS[id] ? countItem(id) : S.inv.filter(s=>ITEMS[s.id].kind===id).reduce((a,s)=>a+s.n,0)) >= n*k;
 const needName = id => ITEMS[id] ? ITEMS[id].name : ({ fish:'Any fish', fruit:'Any fruit', berry:'Any berries' })[id];
+// v1.70 search words for a dish's ingredient: "Any fruit" also finds apple, pear and the rest
+const needWords = id => ITEMS[id] ? ITEMS[id].name : [needName(id), ...Object.values(ITEMS).filter(i=>i.kind===id).map(i=>i.name)];
 const needHave = id => ITEMS[id] ? countItem(id) : S.inv.filter(s=>ITEMS[s.id].kind===id).reduce((a,s)=>a+s.n,0);
 function cookMax(r){ let k=99; for (const [id,n] of r.need) k=Math.min(k, Math.floor(needHave(id)/n)); while (k>0 && !cookFits(r,k)) k--; return k; }
 function cookFits(r,k){ // never lose anything to a full bag: worst case, all ingredients free up no slot
@@ -6695,11 +6698,11 @@ function doCook(r,k,at){ if (k<=0 || (!r.fire && at!=='stove') || !at || !cookFi
   puff(player.pos.clone().add(new THREE.Vector3(Math.sin(player.face)*1.2,1.0,Math.cos(player.face)*1.2)),0xf4f4f4,8,0.4,1.6,0.9,1.0);
   toast(`${isNew?'New! ':''}You cooked ${k>1?k+' '+r.name+(/s$/.test(r.name)?'':'s'):article(r.name)+' '+r.name}!`, thumb(r.id), isNew?'new':''); return true; }
 function cookTab(h0){
-  const at=nearStation(); let h=h0||'';
-  h+=`<div class="notice"><b>Cookbook</b> <span class="muted">· ${S.cook.kinds.length} of ${RECIPES.length} dishes made</span><br><span class="muted">${at==='stove'?'You\'re at a Wood Stove: you can cook anything.':at==='campfire'?'You\'re at a campfire: grilled and simple things only. A Wood Stove does the rest.':'Stand next to a campfire or a Wood Stove you\'ve placed to cook.'} Dishes sell for more than what goes in them, islanders love them, and eating one helps you walk a little faster for a while.</span></div>`;
+  const at=nearStation(); let h=(h0||'')+SQ.searchBox('Search dishes or ingredients');
+  h+=`<div class="notice" data-shide><b>Cookbook</b> <span class="muted">· ${S.cook.kinds.length} of ${RECIPES.length} dishes made</span><br><span class="muted">${at==='stove'?'You\'re at a Wood Stove: you can cook anything.':at==='campfire'?'You\'re at a campfire: grilled and simple things only. A Wood Stove does the rest.':'Stand next to a campfire or a Wood Stove you\'ve placed to cook.'} Dishes sell for more than what goes in them, islanders love them, and eating one helps you walk a little faster for a while.</span></div>`;
   RECIPES.forEach((r,i)=>{ const mx=cookMax(r), ok=at && (r.fire || at==='stove');
     const need=r.need.map(([id,n])=>{ const has=needHave(id); return `<span style="color:${has>=n?'inherit':'#c0503a'};font-weight:${has>=n?400:700}">${needName(id)} ${has}/${n}</span>`; }).join(' · ');
-    h+=`<div class="row"><img src="${thumb(r.id)}"><div class="grow"><div class="nm">${r.name}${!S.cook.kinds.includes(r.id)?' <span style="color:#d08a10;font-size:12px">NEW</span>':''} <span class="muted" style="font-size:12px">${r.fire?'stove or campfire':'stove'}</span></div><div class="sub">${need} · sells for ${fmt(ITEMS[r.id].price)}</div></div>
+    h+=`<div class="row"${SQ.sk(r.name, r.need.map(([id])=>needWords(id)))}><img src="${thumb(r.id)}"><div class="grow"><div class="nm">${r.name}${!S.cook.kinds.includes(r.id)?' <span style="color:#d08a10;font-size:12px">NEW</span>':''} <span class="muted" style="font-size:12px">${r.fire?'stove or campfire':'stove'}</span></div><div class="sub">${need} · sells for ${fmt(ITEMS[r.id].price)}</div></div>
       <button class="btn alt" data-ck="${i}:1" ${!ok||mx<1?'disabled':''}>Cook</button>${mx>1?`<button class="btn" data-ck="${i}:${mx}" ${!ok?'disabled':''}>All ${mx}</button>`:''}</div>`; });
   return h; }
 function bindCook(render){ pBody.querySelectorAll('[data-ck]').forEach(b=>b.onclick=()=>{ const [i,k]=b.dataset.ck.split(':').map(Number); if (doCook(RECIPES[i], k, nearStation())){ const st=pBody.scrollTop; render(); pBody.scrollTop=st; } }); }
@@ -6781,12 +6784,12 @@ const RARE_MATS = ['heartwood','goldsap','starstone','moonpearl','glimmermoss'];
 function rareCraftSection(){
   const found=S.rare.plans.length, any=found || RARE_MATS.some(m=>countItem(m));
   if (!any) return '';   // v1.24: the rare section stays secret until you find your first plan or rare ingredient
-  let h=`<div class="notice" style="border-color:${RARITY_COLORS.Legendary}"><b>Rare plans</b> <span class="muted">· ${found} found${S.rare.made?` · ${S.rare.made} made`:''}</span>`;
+  let h=`<div class="notice" data-sgrp style="border-color:${RARITY_COLORS.Legendary}"><b>Rare plans</b> <span class="muted">· ${found} found${S.rare.made?` · ${S.rare.made} made`:''}</span>`;
   RARE_WORK.forEach((r,i)=>{ const it=ITEMS[r.id], known=knowsPlan(r.id);
     if (!known) return;
     const mx=craftMax(r), mats=Object.entries(r.mats).map(([m,n])=>{ const have=countItem(m), ok=have>=n, rare=ITEMS[m].rare; return `<span style="color:${ok?'inherit':'#c0503a'};font-weight:${ok&&!rare?400:700}">${ITEMS[m].name} ${have}/${n}</span>`; }).join(' · ');
-    h+=`<div class="row" style="margin:8px 0 0"><img src="${thumb(r.id)}"><div class="grow"><div class="nm">${it.name} ${rarityTag(it)}</div><div class="sub">${mats}${BN.note(r)}${bagBlocked(r)?'<br><b>Your bag is full.</b> Make room first.':''}</div></div><button class="btn" data-rc="${i}" ${mx<=0?'disabled':''}>Make</button></div>`; });
-  if (any) h+=`<div style="margin-top:10px"><b style="font-size:13px">Rare ingredients</b>`+RARE_MATS.filter(m=>countItem(m)).map(m=>`<div class="sub" style="margin-top:4px"><b>${ITEMS[m].name} ${countItem(m)}</b></div>`).join('')+'</div>';
+    h+=`<div class="row"${SQ.sk(it.name, Object.keys(r.mats).map(m=>ITEMS[m].name))} style="margin:8px 0 0"><img src="${thumb(r.id)}"><div class="grow"><div class="nm">${it.name} ${rarityTag(it)}</div><div class="sub">${mats}${BN.note(r)}${bagBlocked(r)?'<br><b>Your bag is full.</b> Make room first.':''}</div></div><button class="btn" data-rc="${i}" ${mx<=0?'disabled':''}>Make</button></div>`; });
+  if (any) h+=`<div data-shide style="margin-top:10px"><b style="font-size:13px">Rare ingredients</b>`+RARE_MATS.filter(m=>countItem(m)).map(m=>`<div class="sub" style="margin-top:4px"><b>${ITEMS[m].name} ${countItem(m)}</b></div>`).join('')+'</div>';
   return h+'</div>'; }
 function openCraft(start){
   if (!S.craft && !S.cook) return;
@@ -6795,23 +6798,23 @@ function openCraft(start){
   const render=()=>{
     const tabsH = (S.craft && S.cook) || EN.hasTab() || CU.hasTab() ? '<div class="tabs">'+[...(S.craft?[['wood','Woodworking']]:[]),...(CU.hasTab()?[['design','Design']]:[]),...(S.cook?[['cook','Cooking']]:[]),...(EN.hasTab()?[['tools','Tools']]:[])].map(([k,n])=>`<button class="tab${k===tab?' on':''}" data-ct="${k}">${n}</button>`).join('')+'</div>' : '';
     const bindTabs=()=>pBody.querySelectorAll('[data-ct]').forEach(b=>b.onclick=()=>{ tab=b.dataset.ct; Snd.click(); render(); pBody.scrollTop=0; });
-    if (tab==='cook'){ pTitle.textContent='Cooking'; pBody.innerHTML=cookTab(tabsH); bindTabs(); bindCook(render); return; }
+    if (tab==='cook'){ pTitle.textContent='Cooking'; pBody.innerHTML=cookTab(tabsH); bindTabs(); bindCook(render); SQ.bindSearch(pBody); return; }
     if (tab==='tools'){ EN.renderTab(tabsH, bindTabs); return; }   // v1.40
     if (tab==='design'){ CU.renderTab(tabsH, bindTabs); return; }
     pTitle.textContent='Woodworking';
     const kd=kindsMade(), left=woodUnknown().length;
     // v1.24: no progress bar or locked plans. New plans just turn up as you make things.
-    let h=tabsH+BN.banner()+`<div class="notice"><b>Woodworking</b> <span class="muted">· ${(S.craft.known||[]).length} plans known · ${fmt(S.craft.made)} crafted</span>`;
+    let h=tabsH+SQ.searchBox('Search plans or materials')+BN.banner()+`<div class="notice" data-shide><b>Woodworking</b> <span class="muted">· ${(S.craft.known||[]).length} plans known · ${fmt(S.craft.made)} crafted</span>`;
     h+= left ? '' : `<br><span class="muted">You know every plan. Bramble would be proud.</span>`;
     if (left && woodWaiting()) h+=`<br><span class="muted">Your head's full of ideas. New plans will come to you tomorrow.</span>`;   // v1.50
     else if (left) h+=`<br><span class="muted">New plans come from making lots of <b>different</b> things. Making the same piece over and over won't teach you anything new.</span>`;
     h+=`<div class="muted" style="margin-top:6px">Your materials: ${Object.keys(MAT_NAMES).map(m=>`${MAT_NAMES[m]} ${countItem(m)}`).join(' · ')}</div></div>`;
-    h+=EN.fixNote();   // v1.50: broken or nearly worn-out tools, with a jump to the Tools tab
+    h+=`<div data-shide>${EN.fixNote()}</div>`;   // v1.50: broken or nearly worn-out tools, with a jump to the Tools tab
     h+=rareCraftSection();
     // v1.34: study a piece you own to work out its plan
     const st=studyable();
-    if (st.length){ h+=`<div class="notice"><b>Study a piece</b> <span class="muted">· ${studyToday()?'You\'ve studied something today. Try again tomorrow.':'Take a close look at something you own to learn how it\'s made. One a day.'}</span>`;
-      for (const r of st.slice(0,6)) h+=`<div class="row" style="margin:8px 0 0"><img src="${thumb(r.id)}"><div class="grow"><div class="nm">${ITEMS[r.id].name}</div></div><button class="btn alt" data-study="${r.id}" ${studyToday()?'disabled':''}>Study</button></div>`;
+    if (st.length){ h+=`<div class="notice" data-sgrp><b>Study a piece</b> <span class="muted">· ${studyToday()?'You\'ve studied something today. Try again tomorrow.':'Take a close look at something you own to learn how it\'s made. One a day.'}</span>`;
+      for (const r of st.slice(0,6)) h+=`<div class="row"${SQ.sk(ITEMS[r.id].name)} style="margin:8px 0 0"><img src="${thumb(r.id)}"><div class="grow"><div class="nm">${ITEMS[r.id].name}</div></div><button class="btn alt" data-study="${r.id}" ${studyToday()?'disabled':''}>Study</button></div>`;
       h+='</div>'; }
     h+='<div class="tabs">'+[['all','All plans'],['now','Can make now']].map(([k,n])=>`<button class="tab${k===filter?' on':''}" data-f="${k}">${n}</button>`).join('')+'</div>';
     let shown=0;
@@ -6821,13 +6824,13 @@ function openCraft(start){
       const q=Math.max(1, Math.min(qty[i]||1, Math.max(1,mx)));
       const mats=Object.entries(r.mats).map(([m,n])=>{ const have=countItem(m), ok=have>=n*q; return `<span style="color:${ok?'inherit':'#c0503a'};font-weight:${ok?400:700}">${MAT_NAMES[m]||ITEMS[m].name} ${have}/${n*q}</span>`; }).join(' · ');
       const out=recipeOut(r)*q;
-      h+=`<div class="row"><img src="${thumb(r.id)}"><div class="grow"><div class="nm">${it.name}${S.craft.kinds&&!S.craft.kinds.includes(r.id)?' <span style="color:#d08a10;font-size:12px">NEW</span>':''}${recipeOut(r)>1?` <span class="muted">x${recipeOut(r)}</span>`:''}</div><div class="sub">${mats}${BN.note(r)}${bagBlocked(r)?'<br><b>Your bag is full.</b> Make room first.':''}</div>
+      h+=`<div class="row"${SQ.sk(it.name, Object.keys(r.mats).map(m=>MAT_NAMES[m]||ITEMS[m].name))}><img src="${thumb(r.id)}"><div class="grow"><div class="nm">${it.name}${S.craft.kinds&&!S.craft.kinds.includes(r.id)?' <span style="color:#d08a10;font-size:12px">NEW</span>':''}${recipeOut(r)>1?` <span class="muted">x${recipeOut(r)}</span>`:''}</div><div class="sub">${mats}${BN.note(r)}${bagBlocked(r)?'<br><b>Your bag is full.</b> Make room first.':''}</div>
         <div style="display:flex;gap:6px;align-items:center;margin-top:6px;flex-wrap:wrap">
           <button class="btn alt" data-q="${i}:-1" ${q<=1?'disabled':''} style="padding:4px 12px">-</button><b style="min-width:22px;text-align:center">${q}</b><button class="btn alt" data-q="${i}:1" ${q>=mx?'disabled':''} style="padding:4px 12px">+</button>
           <button class="btn alt" data-q="${i}:max" ${mx<=1?'disabled':''} style="padding:4px 10px">Max ${mx>1?mx:''}</button>
           <button class="btn" data-c="${i}" ${mx<=0?'disabled':''}>Make${out>1?' '+out:''}</button></div></div></div>`; });
-    if (!shown) h+='<div class="muted">Nothing you can make right now.</div>';
-    pBody.innerHTML=h; bindTabs();
+    if (!shown) h+='<div class="muted" data-shide>Nothing you can make right now.</div>';
+    pBody.innerHTML=h; bindTabs(); SQ.bindSearch(pBody);
     pBody.querySelectorAll('[data-f]').forEach(b=>b.onclick=()=>{ filter=b.dataset.f; Snd.click(); render(); });
     pBody.querySelectorAll('[data-q]').forEach(b=>b.onclick=()=>{ const [i,d]=b.dataset.q.split(':'); const r=WOODWORK[+i], mx=craftMax(r); qty[i]= d==='max'?mx:Math.max(1,Math.min(mx,(qty[i]||1)+(+d))); Snd.click(); render(); });
     pBody.querySelectorAll('[data-study]').forEach(b=>b.onclick=()=>{ if (studyPiece(b.dataset.study)){ const st=pBody.scrollTop; render(); pBody.scrollTop=st; } });

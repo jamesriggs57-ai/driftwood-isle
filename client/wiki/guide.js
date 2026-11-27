@@ -295,6 +295,8 @@ ${note('Guests can learn from Pippa and enchant, but don\'t find scrolls. On a f
 <ul><li>A batch of 3 at each variety milestone. Each different piece you make counts for up to 3 points: making it once is 1 point, three times is 3, and making it more often adds nothing. The milestones are at 24, 33, 42, 51, 60, 69, 78 and 87 points, so you need to make most of what you know, a few times each, before more comes. You get at most one batch a day; if you pass a milestone after that, the plans come the next day (open the Craft panel).</li>
 <li>Woodworking Plan items: dug up (1.5% of digs), from felled trees (1%), or Pemberton's one-a-day plan.</li>
 <li>Studying a piece you own from the Woodworking panel, once a day.</li></ul>
+<h3>Searching</h3>
+<p>The search box at the top of the Craft panel finds a plan by its name or by a material it uses: type <i>stone</i> to see every plan that needs stone, or two words (<i>wood chair</i>) to see only plans that match both. It only shows plans you already know. The search box is on the Woodworking, Cooking, Design and Tools tabs (Make a tool and Enchantments); what you type stays when you make something or switch tabs, and clears when you close the panel. The x clears it, and Enter puts the phone keyboard away.</p>
 <p>Digging up a stump gives a Tree Stump for stump furniture.</p>
 <p>What a piece sells for follows what went into it. A piece made only from wood, branches, stone and weeds sells for about its materials plus 15% (3 fences from 2 wood sell for 45 in all), so woodworking adds a little to chopping rather than replacing it. A piece that needs iron, clay, stumps, planks or rare finds sells for more, and never for less than its materials plus 15%.</p>
 ${tip('Making 14 <b>different</b> pieces is what starts Bramble\'s workshop story.')}
@@ -378,6 +380,7 @@ ${tip('Your saved designs are kept, so making a matching set of chairs is quick:
 { id:'sewing', group:'island', title:'Sewing: rugs and clothes', html:`
 <p>You sew at a <b>Sewing Machine</b>. Once you know woodworking, ask Pemberton <i>"Do you sell sewing machines?"</i> and he'll sell you one for <b>12,000 clams</b> (he only offers it while you don't already own one). Place it on your island or in your house, walk up and press <b>Sew</b>. Weeds are your yarn. Pick a rug or a piece of clothing, set its shape and size, then <b>paint it pixel by pixel</b> from 32 yarn colours.</p>
 <p>The machine sells back for 3,000. You can't use a machine on a friend's island.</p>
+<p>The search box at the top of the machine's list finds your clothes, rug designs and the Pet Collar by name, part or material (<i>weeds</i>, <i>long sleeves</i>).</p>
 <h3>Getting better</h3>
 <p>Every piece you sew counts toward your sewing skill. The better you get, the finer your grid (more detail) and the more alterations your clothes can carry.</p>
 <table class="t"><tr><th>Skill</th><th>Pieces sewn</th><th>Grid</th><th>Alterations</th><th>Opens</th></tr>
@@ -402,6 +405,7 @@ ${tip('Your saved designs are kept, so making a matching set of chairs is quick:
 `},
 { id:'cooking', group:'island', title:'Cooking', data:'recipes', html:`
 <p>Mabel teaches cooking once she knows you. Cook at a <b>campfire</b> (craftable; simple dishes marked "fire") or a <b>Wood Stove</b> (anything). Dishes sell well, islanders love them, and eating one makes you walk a little faster for 5 minutes. "Fish" or "fruit" in a recipe means any fish or fruit.</p>
+<p>Search the Cooking tab by dish or ingredient. A fish or fruit name also finds the dishes that take any fish or fruit, so <i>apple</i> finds Fruit Tart.</p>
 `},
 
 { id:'style', group:'island', title:'Clothes and your look', html:`

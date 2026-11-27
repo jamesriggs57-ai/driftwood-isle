@@ -10,6 +10,7 @@ import { ENCH, FAMILIES, TWIN, TWIN_SLOTS, POWER, CRAFT, REPAIR, SCROLL_ODDS, WO
   outputOf, oneSwing, luckFor, bonkPower, sureOf, bigRoll, sprayOf, sprayTargets, ONE_SWING_WOOD, carryDrops, upgradeTool, FENNICK_SCROLL_PRICE,
   brokenOf, brokenList, breakTool, fixNeed, canFix, fix, scrapsBroken, FIX_BENCH } from './enchant-core.js';
 import { toolBench, enchBench, TWIN_BENCH, BENCH_NAME } from './benches-core.js';
+import { searchBox, sk, bindSearch } from './search.js';   // v1.70
 export * from './enchant-core.js';
 
 const FAM_COLOR = { tough:0x8a9aa8, bonk:0xf08a3a, lucky:0x5ac06a, output:0xd8a040, sure:0x5ab0e0, big:0x3a6ad8, spray:0x7ad8f0 };
@@ -126,6 +127,8 @@ export function createEnchant(C){
     const s=S(), E=s.rare.ench, tools=Object.keys(TOOLS);
     if (sel && !s.tools[sel]) sel=null; if (!sel) sel=tools.find(t=>s.tools[t])||null;
     let h=tabsH+`<div class="tabs">${[['tools','Your tools'],['make','Make a tool'],['known','Enchantments']].map(([k,n])=>`<button class="tab${k===mode?' on':''}" data-em="${k}">${n}</button>`).join('')}</div>`;
+    if (mode==='make') h+=searchBox('Search tools or materials');   // v1.70
+    if (mode==='known') h+=searchBox('Search enchantments');
     if (C.benchBanner) h+=C.benchBanner();
     if (mode==='tools'){
       const br=brokenList(s);   // v1.50: broken tools wait here to be fixed at a crafting table
@@ -153,16 +156,16 @@ export function createEnchant(C){
             h+=`<div class="row" style="margin:8px 0 0"><img src="${thumbE(id)}"><div class="grow"><div class="nm">${ENCH[id].name}</div><div class="sub">${describe(id,sel)}${note?`<br><i>${note}</i>`:''}<br>${on?'':matsHTML(need)}${!on&&!c.ok&&!c.miss?`<br>${c.why}`:''}${on?'':benchLine(bb)}</div></div><button class="btn" data-eap="${id}" ${c.ok&&at?'':'disabled'}>${on?'On':'Enchant'}</button></div>`; }
           h+='</div>'; } } }
     if (mode==='make'){
-      h+='<div class="muted" style="margin-bottom:8px">Tools you make are the same as the ones Pemberton sells, and need the same experience. Making a better one of a tool you already have moves its enchantments over (an heirloom drops Tough, since it never wears out). A tool you don\'t have yet starts with none. A Flimsy tool can be made anywhere. Better ones need a bigger crafting table.</div>';
-      for (const t of tools){ const own=s.tools[t]; h+=`<div class="notice"><b>${TOOLS[t].name}</b> <span class="muted">· ${own?'You have: '+TOOLS[t].tiers[own.tier].name:'You don\'t have one'}</span>`;
+      h+='<div class="muted" data-shide style="margin-bottom:8px">Tools you make are the same as the ones Pemberton sells, and need the same experience. Making a better one of a tool you already have moves its enchantments over (an heirloom drops Tough, since it never wears out). A tool you don\'t have yet starts with none. A Flimsy tool can be made anywhere. Better ones need a bigger crafting table.</div>';
+      for (const t of tools){ const own=s.tools[t]; h+=`<div class="notice" data-sgrp><b>${TOOLS[t].name}</b> <span class="muted">· ${own?'You have: '+TOOLS[t].tiers[own.tier].name:'You don\'t have one'}</span>`;
         TOOLS[t].tiers.forEach((tr,k)=>{ const c=canCraft(s,t,k,inv,C.reqMet), need=craftNeed(t,k); if (!need) return; if (own && own.tier>=k) return; if (!C.reqMet(t,k) && k>((s.toolEver[t]??-1)+1)) return;
-          h+=`<div class="row" style="margin:8px 0 0"><img src="${C.toolThumb(t,k)}"><div class="grow"><div class="nm">${tr.name}</div><div class="sub">${matsHTML(need)}${!C.reqMet(t,k)&&tr.req?`<br>${tr.req.desc}`:''}${benchLine(toolBench(k))}</div></div><button class="btn" data-emk="${t}:${k}" ${c.ok&&toolBench(k)<=here()?'':'disabled'}>Make</button></div>`; });
+          h+=`<div class="row"${sk(tr.name, TOOLS[t].name, need.map(([m])=>ITEMS[m]?ITEMS[m].name:m))} style="margin:8px 0 0"><img src="${C.toolThumb(t,k)}"><div class="grow"><div class="nm">${tr.name}</div><div class="sub">${matsHTML(need)}${!C.reqMet(t,k)&&tr.req?`<br>${tr.req.desc}`:''}${benchLine(toolBench(k))}</div></div><button class="btn" data-emk="${t}:${k}" ${c.ok&&toolBench(k)<=here()?'':'disabled'}>Make</button></div>`; });
         h+='</div>'; } }
     if (mode==='known'){
-      h+=`<div class="muted" style="margin-bottom:8px">${E.known.length} of ${Object.keys(ENCH).length} known${E.twin?' · Twin Charm: tools hold two':''}</div>`;
+      h+=`<div class="muted" data-shide style="margin-bottom:8px">${E.known.length} of ${Object.keys(ENCH).length} known${E.twin?' · Twin Charm: tools hold two':''}</div>`;
       for (const e of Object.values(ENCH)){ const k=knows(s,e.id);
-        h+=`<div class="row" style="${k?'':'opacity:.6'}"><img src="${thumbE(e.id)}"><div class="grow"><div class="nm">${k?e.name:'???'}</div><div class="sub">${k?describe(e.id)+'<br>'+toolsText(e.id)+' · '+matsHTML(e.need):'Not learned yet'}</div></div></div>`; } }
-    pB.innerHTML=h; if (bind) bind();
+        h+=`<div class="row"${k?sk(e.name, describe(e.id), toolsText(e.id), e.need.map(([m])=>ITEMS[m]?ITEMS[m].name:m)):' data-sk=""'} style="${k?'':'opacity:.6'}"><img src="${thumbE(e.id)}"><div class="grow"><div class="nm">${k?e.name:'???'}</div><div class="sub">${k?describe(e.id)+'<br>'+toolsText(e.id)+' · '+matsHTML(e.need):'Not learned yet'}</div></div></div>`; } }
+    pB.innerHTML=h; if (bind) bind(); bindSearch(pB);
     pB.querySelectorAll('[data-em]').forEach(b=>b.onclick=()=>{ mode=b.dataset.em; C.Snd.click(); renderTab(tabsH, bind); pB.scrollTop=0; });
     pB.querySelectorAll('[data-et]').forEach(b=>b.onclick=()=>{ sel=b.dataset.et; C.Snd.click(); renderTab(tabsH, bind); });
     const rer=()=>{ const st=pB.scrollTop; renderTab(tabsH, bind); pB.scrollTop=st; };

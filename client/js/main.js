@@ -55,6 +55,7 @@ import { buildShopBuilding, buildMuseum, buildKeeper, buildMossby, buildExhibit,
 import { hasUpstairs, winAt, winKey, trelAt, balcAt, buildCustomHouse, buildHomeInterior, planGrid, planCells, planProblem, fixDoor, linkKey, linkOf, defaultExt, defaultRoom,
   NFLOORS, FLOOR_KEYS, STAIR_KEYS, FLOOR_NAME, FLOOR_SHORT, floorOf, floorHas, topFloor, stairsOf, shiftPlan, ex as hex_, ez as hez_, ix as hix_, iz as hiz_, cellInside, ridgeOf, cellRects,
   buildMossLayer, defaultMoss, mossCellAt, roofHit, roofPick, roofHalfCells, MOSS_GRID, balconyList, SIDES, LT } from './house.js';
+import { iwKey, innerWalls, pruneInner, shiftInner } from './house.js';   // v1.74 inside walls
 
 const $ = s => document.querySelector(s);
 const World = { weather:'sunny', season:seasonOf(Time.month()), night:0, inside:null };
@@ -1367,8 +1368,8 @@ function fenceHit(x,z,r){ for (const s of FENCE_SEGS){ if (x<Math.min(s[0],s[2])
 // Can a seed go in this square?
 function cellFree(i,j, near){ const x=i*CELL, z=j*CELL; if (World.inside) return false;
   if (!walkable(x,z) || onDock(x,z) || onBridge(x,z) || rawHeight(x,z)<=SAND_H+0.05 || visPathDist(x,z)<1.0) return false;
-  let lo=1e9, hi=-1e9; for (const [ox,oz] of [[-0.4,-0.4],[0.4,-0.4],[-0.4,0.4],[0.4,0.4]]){ if (!walkable(x+ox,z+oz)) return false; const y=rawHeight(x+ox,z+oz); lo=Math.min(lo,y); hi=Math.max(hi,y); }
-  if (hi-lo>0.35) return false;
+  for (const [ox,oz] of [[-0.4,-0.4],[0.4,-0.4],[-0.4,0.4],[0.4,0.4]]) if (!walkable(x+ox,z+oz)) return false;
+  // v1.73 no limit on how steep: the soil tilts to fit the slope
   if (blocked(x,z,0.3)) return false;
   for (const q of (near||S.plants)) if (Math.abs(q.x-x)<0.55 && Math.abs(q.z-z)<0.55) return false;
   for (const t of trees) if (!t.removed && Math.abs(t.pos.x-x)<1.0 && Math.abs(t.pos.z-z)<1.0 && Math.hypot(t.pos.x-x,t.pos.z-z)<1.0) return false;
@@ -8202,7 +8203,8 @@ const REMODEL_FEE=50;
 function remodelEdits(a, b){ let n=0;
   for (let f=0;f<NFLOORS;f++){ const A=floorOf(a,f), Bf=floorOf(b,f), ra=A.rooms||[], rb=Bf.rooms||[], la=A.links||{}, lb=Bf.links||{};
     for (const id of new Set([...ra.map(r=>r.id), ...rb.map(r=>r.id)])){ const x=ra.find(r=>r.id===id), y=rb.find(r=>r.id===id); if (!x || !y || x.x!==y.x || x.z!==y.z || x.w!==y.w || x.d!==y.d) n++; }
-    const has=new Set(rb.map(r=>r.id)); for (const k of new Set([...Object.keys(la), ...Object.keys(lb)])){ const [p,q]=k.split('|'); if (has.has(p) && has.has(q) && (la[k]||'door')!==(lb[k]||'door')) n++; } }
+    const has=new Set(rb.map(r=>r.id)); for (const k of new Set([...Object.keys(la), ...Object.keys(lb)])){ const [p,q]=k.split('|'); if (has.has(p) && has.has(q) && (la[k]||'door')!==(lb[k]||'door')) n++; }
+    const ia=A.iw||{}, ib=Bf.iw||{}; let iwN=0; for (const k of new Set([...Object.keys(ia), ...Object.keys(ib)])) if ((ia[k]||'')!==(ib[k]||'')) iwN++; n+=Math.ceil(iwN/4); }   // v1.74: inside walls, one edit per 4 squares
   for (const k of new Set([...Object.keys(a.win||{}), ...Object.keys(b.win||{})])){ const [row,rest]=k.split(':'), [i,j,sd]=rest.split(',').map(Number); if (winAt(a,i,j,sd,+row)!==winAt(b,i,j,sd,+row)) n++; }
   for (const k of new Set([...Object.keys(a.balc||{}), ...Object.keys(b.balc||{})])) if (!!(a.balc&&a.balc[k]) !== !!(b.balc&&b.balc[k])) n++;
   if (a.door && b.door && (a.door.i!==b.door.i || a.door.j!==b.door.j)) n++;
@@ -8306,6 +8308,10 @@ function drawPlan(cv, drawRect){
       if (nb===k || di<0 || dj<0) return; const t=linkOf(plan,plan.rooms[k].id,plan.rooms[nb].id);
       if (t==='wall') line(x1,y1,x2,y2,LW,'#5b4332'); else if (t==='open') line(x1,y1,x2,y2,Math.max(1.5,LW/2),'rgba(91,67,50,.45)',[4,4]);
       else { line(x1,y1,x2,y2,LW,'#5b4332'); if (mids[[i,j,di,dj].join(',')]){ const mx=(x1+x2)/2, my=(y1+y2)/2, hl=cs*0.27; line(mx-(dj?hl:0),my-(di?hl:0),mx+(dj?hl:0),my+(di?hl:0),LW+2,'#fff8ea'); } } }); }
+  // v1.74 inside walls (and, in the Doors & walls tool, faint lines where one can go)
+  if (B.mode==='doors' && B.tab==='layout' && cs>12){ for (const r of plan.rooms){ for (let i=r.x+1;i<r.x+r.w;i++) line(X(i),Y(r.z),X(i),Y(r.z+r.d),1,'rgba(91,67,50,.22)',[2,4]); for (let j=r.z+1;j<r.z+r.d;j++) line(X(r.x),Y(j),X(r.x+r.w),Y(j),1,'rgba(91,67,50,.22)',[2,4]); } }
+  for (const w of innerWalls(plan, occ)){ const x1=X(w.i), y1=Y(w.j), x2=w.kind==='v'?x1:X(w.i+1), y2=w.kind==='v'?Y(w.j+1):y1; line(x1,y1,x2,y2,LW,'#5b4332');
+    if (w.t==='door'){ const mx=(x1+x2)/2, my=(y1+y2)/2, hl=cs*0.27, hz=w.kind==='h'; line(mx-(hz?hl:0),my-(hz?0:hl),mx+(hz?hl:0),my+(hz?0:hl),LW+2,'#fff8ea'); } }
   // roofs (ridge lines) in the roof tool
   if (B.mode==='roof' && B.tab==='layout') for (const { r, q, dir } of roofParts(full, n)){ const cx=X(q.x+q.w/2), cy=Y(q.z+q.d/2), sel=r.id===B.sel;
     const hx = dir==='x' ? (q.w/2-0.25)*cs : 0, hy = dir==='z' ? (q.d/2-0.25)*cs : 0; line(cx-hx,cy-hy,cx+hx,cy+hy, sel?LW+3:LW+1, sel?'#c0503a':'#8b5e3a');
@@ -8318,7 +8324,7 @@ function drawPlan(cv, drawRect){
     if (B.tab==='layout' && B.mode==='rooms') for(const [hx,hy] of [[sel.x+sel.w/2,sel.z],[sel.x+sel.w/2,sel.z+sel.d],[sel.x,sel.z+sel.d/2],[sel.x+sel.w,sel.z+sel.d/2]]){ x.fillStyle='#4f9a3a'; x.beginPath(); x.arc(X(hx),Y(hy),7,0,TAU); x.fill(); x.fillStyle='#fff'; x.beginPath(); x.arc(X(hx),Y(hy),3,0,TAU); x.fill(); } }
   if (drawRect){ const [a,b]=drawRect; x.fillStyle='rgba(124,195,90,.45)'; x.strokeStyle='#4f9a3a'; x.lineWidth=2; const X0=Math.min(a[0],b[0]), Z0=Math.min(a[1],b[1]), w=Math.abs(a[0]-b[0])+1, d=Math.abs(a[1]-b[1])+1; x.fillRect(X(X0),Y(Z0),w*cs,d*cs); x.strokeRect(X(X0),Y(Z0),w*cs,d*cs); }
   x.restore();
-  x.fillStyle='#8b6b50'; x.font='600 12px Fredoka, sans-serif'; x.textAlign='center'; x.fillText(up?`${FLOOR_NAME[n]} (shaded: rooms below) · front is at the bottom`:'front of the lot (path side) is at the bottom', W/2, H+15);
+  x.fillStyle='#8b6b50'; x.font='600 12px Fredoka, sans-serif'; x.textAlign='center'; x.fillText(B.mode==='doors' && B.tab==='layout' ? 'Tap a dotted line in a room for a wall, again for a doorway. Drag along it for a long wall.' : up?`${FLOOR_NAME[n]} (shaded: rooms below) · front is at the bottom`:'front of the lot (path side) is at the bottom', W/2, H+15);
 }
 // Pointer handling for the plan: one finger or the mouse uses the current tool, two fingers pinch and pan, the wheel zooms
 function bindPlan(cv, tool){
@@ -8343,7 +8349,7 @@ function bindPlan(cv, tool){
     if (z==='in') bpZoom(cv,1.3); else if (z==='out') bpZoom(cv,1/1.3); else if (z==='fit') planFit(cv); else if (z==='tall'){ buildMode.tall=!buildMode.tall; buildMode.pv=null; renderBuild(true); return; } drawPlan(cv); });
 }
 function roomAtCell(plan,i,j){ return plan.rooms.find(r=>i>=r.x&&i<r.x+r.w&&j>=r.z&&j<r.z+r.d); }
-function applyOrRevert(fn, revert){ const plan=buildMode.draft.plan; fn(); fixDoor(plan); const p=planIssue(plan); if (p){ revert(); fixDoor(plan); toast(p); Snd.fail(); return false; } return true; }
+function applyOrRevert(fn, revert){ const plan=buildMode.draft.plan; fn(); for (let f=0;f<NFLOORS;f++) pruneInner(floorOf(plan,f)); fixDoor(plan); const p=planIssue(plan); if (p){ revert(); fixDoor(plan); toast(p); Snd.fail(); return false; } return true; }
 const floorChips = (onlyBuilt) => { const B=buildMode, plan=B.draft.plan, m=onlyBuilt ? topFloor(plan)+1 : maxFloors(); if (m<2) return '';
   let h='<div class="chips" style="margin-right:6px">'; for (let n=0;n<m;n++){ const can = n===0 || floorHas(plan,n-1); h+=`<button class="chip${B.floor===n?' on':''}" data-fl="${n}" ${can?'':'disabled'}>${FLOOR_SHORT[n]}</button>`; } return h+'</div>'; };
 function bindFloorChips(){ bBody.querySelectorAll('[data-fl]').forEach(b=>b.onclick=()=>{ const B=buildMode, n=+b.dataset.fl; if (B.floor===n) return; B.floor=n; const F=FP(); B.sel=F.rooms[0]?F.rooms[0].id:null; Snd.click();
@@ -8363,6 +8369,7 @@ function renderLayoutTab(){
   bindPlan(cv, {
     down:([fx,fz])=>{ const i=Math.floor(fx), j=Math.floor(fz);
       if (B.mode==='roof'){ const r=roomAtCell(plan,i,j); if (r){ B.sel=r.id; Snd.click(); renderBuild(true); } return null; }
+      if (B.mode==='doors') return iwDown(fx,fz);
       if (B.mode!=='rooms') return null;
       const r=roomAtCell(plan,i,j), m=handle(B.pv.cs);
       if (r && r.id===B.sel){ const d={ l:fx-r.x, r:r.x+r.w-fx, t:fz-r.z, b:r.z+r.d-fz }; const side=Object.entries(d).sort((a,b)=>a[1]-b[1])[0]; return { type: side[1]<m ? 'resize':'move', side:side[0], r, orig:{...r}, fx, fz, saved:JSON.stringify(full) }; }
@@ -8370,14 +8377,16 @@ function renderLayoutTab(){
       if (i>=0&&j>=0&&i<GW&&j<GD){ const t={ type:'draw', a:[i,j], b:[i,j] }; drawPlan(cv,[t.a,t.b]); return t; }
       return null; },
     move:(t,[fx,fz])=>{
+      if (t.type==='iw'){ iwMove(t,fx,fz); drawPlan(cv); return; }
       if (t.type==='draw'){ t.b=[clamp(Math.floor(fx),0,GW-1), clamp(Math.floor(fz),0,GD-1)]; drawPlan(cv,[t.a,t.b]); return; }
       if (t.type==='move'){ const o=t.orig; t.r.x=clamp(o.x+Math.round(fx-t.fx),0,GW-o.w); t.r.z=clamp(o.z+Math.round(fz-t.fz),0,GD-o.d); drawPlan(cv); return; }
       if (t.type==='resize'){ const o=t.orig, r=t.r, s=t.side;
         if (s==='r') r.w=clamp(Math.round(fx)-o.x,1,GW-o.x); if (s==='b') r.d=clamp(Math.round(fz)-o.z,1,GD-o.z);
         if (s==='l'){ const nx=clamp(Math.round(fx),0,o.x+o.w-1); r.x=nx; r.w=o.x+o.w-nx; } if (s==='t'){ const nz=clamp(Math.round(fz),0,o.z+o.d-1); r.z=nz; r.d=o.z+o.d-nz; }
         drawPlan(cv); } },
-    cancel:(t)=>{ if (t.type==='move'||t.type==='resize') Object.assign(t.r, t.orig); drawPlan(cv); },
+    cancel:(t)=>{ if (t.type==='iw') iwUndo(t); if (t.type==='move'||t.type==='resize') Object.assign(t.r, t.orig); drawPlan(cv); },
     up:(t,[fx,fz],moved)=>{
+      if (t.type==='iw'){ iwUp(t, fx, fz, moved); return; }
       if (t.type==='draw'){ const X0=Math.min(t.a[0],t.b[0]), Z0=Math.min(t.a[1],t.b[1]), w=Math.abs(t.a[0]-t.b[0])+1, dd=Math.abs(t.a[1]-t.b[1])+1;
         const like=plan.rooms.find(r=>r.id===B.sel)||plan.rooms[0]||full.rooms[0]; const nr=Object.assign(defaultRoom('r'+Date.now().toString(36),X0,Z0,w,dd), like?Object.fromEntries(ROOM_KEYS.filter(k=>k!=='roof').map(k=>[k,like[k]]).concat([['bright',like.bright??0.75],['warm',like.warm??0.5]])):{});
         const touches = !plan.rooms.length || plan.rooms.some(r=>(X0<r.x+r.w && r.x<X0+w && (Z0===r.z+r.d || r.z===Z0+dd)) || (Z0<r.z+r.d && r.z<Z0+dd && (X0===r.x+r.w || r.x===X0+w)));
@@ -8389,7 +8398,7 @@ function renderLayoutTab(){
         renderBuild(true); return; }
       const changed = t.r.x!==t.orig.x||t.r.z!==t.orig.z||t.r.w!==t.orig.w||t.r.d!==t.orig.d;
       if (!changed){ drawPlan(cv); if(t.justSel) renderBuild(true); return; }
-      if (applyOrRevert(()=>{}, ()=>{ const p=JSON.parse(t.saved); for (const k of Object.keys(full)) delete full[k]; Object.assign(full, p); })){ Snd.click(); previewBuild(); }
+      if (applyOrRevert(()=>{ if (t.type==='move') shiftInner(plan, t.orig, t.r.x-t.orig.x, t.r.z-t.orig.z); }, ()=>{ const p=JSON.parse(t.saved); for (const k of Object.keys(full)) delete full[k]; Object.assign(full, p); })){ Snd.click(); previewBuild(); }
       renderBuild(true); },
     tap:([fx,fz])=>{ if (B.mode==='doors') doorTap(fx,fz); else if (B.mode==='windows') edgeTap(fx,fz,'win'); else if (B.mode==='trellis') edgeTap(fx,fz,'trel'); else if (B.mode==='balcony') edgeTap(fx,fz,'balc'); else if (B.mode==='stairs') stairsTap(fx,fz); }
   });
@@ -8420,6 +8429,28 @@ function stairsTap(fx,fz){
   const B=buildMode, full=B.draft.plan, n=B.floor, sk=STAIR_KEYS[n], i=Math.floor(fx), j=Math.floor(fz), old=full[sk];
   if (!n || !floorHas(full,n)){ toast(`Add a room on the ${FLOOR_NAME[n]} first, then place the stairs.`); return; }
   if (applyOrRevert(()=>{ full[sk]={i,j}; }, ()=>{ full[sk]=old; })){ Snd.pop(); previewBuild(); } renderBuild(true); }
+/* v1.74 inside walls. In the Doors & walls tool, a tap on a grid line inside one room cycles it: wall, wall with a doorway, nothing.
+   Press and drag along the line to wall off (or clear) several squares at once. Kept in floor.iw (see house.js). */
+// tight: a drag only starts a wall when it begins right on a line, so one finger still pans the plan from anywhere else
+function iwLine(fx,fz,tight){ const plan=FP(), occ=planGrid(plan), ex=fx-Math.round(fx), ez=fz-Math.round(fz), cs=buildMode.pv.cs, m = tight ? Math.min(0.25, Math.max(0.12, 7/cs)) : Math.min(0.42, Math.max(0.32, 10/cs));
+  if (Math.abs(ex)<Math.abs(ez) && Math.abs(ex)<m){ const L=Math.round(fx), j=Math.floor(fz), a=occ[j]?.[L-1]; if (a>=0 && occ[j][L]===a) return { kind:'v', i:L, j }; }
+  else if (Math.abs(ez)<m){ const L=Math.round(fz), i=Math.floor(fx), a=occ[L-1]?.[i]; if (a>=0 && occ[L]?.[i]===a) return { kind:'h', i, j:L }; }
+  return null; }
+function iwSet(F, key, v){ F.iw=F.iw||{}; if (v) F.iw[key]=v; else delete F.iw[key]; }
+function iwDown(fx,fz){ const ln=iwLine(fx,fz,true); if (!ln) return null; const F=FP(), key=iwKey(ln.kind,ln.i,ln.j), cur=(F.iw||{})[key]||null;
+  return { type:'iw', ln, key, cur, paint: cur ? null : 'wall', prev:{}, saved:JSON.stringify(buildMode.draft.plan) }; }
+function iwMove(t,fx,fz){ const F=FP(), occ=planGrid(F), { ln }=t; iwUndo(t);
+  const along = ln.kind==='v' ? Math.floor(fz) : Math.floor(fx), a=Math.min(along, ln.kind==='v'?ln.j:ln.i), b=Math.max(along, ln.kind==='v'?ln.j:ln.i);
+  for (let q=a;q<=b;q++){ const i = ln.kind==='v' ? ln.i : q, j = ln.kind==='v' ? q : ln.j, c1 = ln.kind==='v' ? occ[j]?.[i-1] : occ[j-1]?.[i], c2=occ[j]?.[i];
+    if (!(c1>=0) || c1!==c2) continue; const key=iwKey(ln.kind,i,j), was=(F.iw||{})[key]||null; if (was===t.paint) continue; t.prev[key]=was; iwSet(F, key, t.paint); } }
+function iwUndo(t){ const F=FP(); for (const key in t.prev) iwSet(F, key, t.prev[key]); t.prev={}; if (F.iw && !Object.keys(F.iw).length) delete F.iw; }
+function iwTap(ln){ const F=FP(), key=iwKey(ln.kind,ln.i,ln.j), cur=(F.iw||{})[key]||null, nxt = cur==='wall' ? 'door' : cur ? null : 'wall';
+  if (applyOrRevert(()=>iwSet(F, key, nxt), ()=>iwSet(F, key, cur))){ Snd.click(); previewBuild(); toast(nxt==='wall'?'Inside wall':nxt==='door'?'Inside wall with a doorway':'Wall taken out'); } renderBuild(true); }
+function iwUp(t, fx, fz, moved){ const F=FP();
+  if (!moved){ iwUndo(t); iwTap(t.ln); return; }
+  const n=Object.keys(t.prev).length; if (!n){ renderBuild(true); return; }
+  const prev=t.prev; if (applyOrRevert(()=>{}, ()=>{ for (const key in prev) iwSet(F, key, prev[key]); })){ Snd.click(); previewBuild(); toast(t.paint ? `Inside wall, ${n} square${n>1?'s':''} long` : 'Walls taken out'); }
+  renderBuild(true); }
 function doorTap(fx,fz){
   const B=buildMode, full=B.draft.plan, plan=FP(), occ=planGrid(plan); const ex=fx-Math.round(fx), ez=fz-Math.round(fz); const m=Math.min(0.42, Math.max(0.32, 10/B.pv.cs));
   let A,Bn,front=null;
@@ -8427,6 +8458,7 @@ function doorTap(fx,fz){
   else if (Math.abs(ez)<m){ const L=Math.round(fz), i=Math.floor(fx); A=occ[L-1]?.[i]; Bn=occ[L]?.[i]; if (A>=0 && !(Bn>=0) && B.floor===0) front={ i, j:L-1 }; }
   else return;
   if (front){ const old=full.door; if (applyOrRevert(()=>{ full.door=front; }, ()=>{ full.door=old; })){ Snd.pop(); previewBuild(); toast('Front door moved.'); } renderBuild(true); return; }
+  if (A>=0 && A===Bn){ const ln=iwLine(fx,fz); if (ln){ iwTap(ln); return; } }   // v1.74 a line inside one room: an inside wall
   if (!(A>=0) || !(Bn>=0) || A===Bn){ toast(B.floor?'Tap a wall between two rooms on this floor.':'Tap a wall between two rooms, or a front-facing outside wall.'); return; }
   const key=linkKey(plan.rooms[A].id, plan.rooms[Bn].id), cur=plan.links[key]||'door', nxt={ door:'open', open:'wall', wall:'door' }[cur];
   if (applyOrRevert(()=>{ plan.links[key]=nxt; }, ()=>{ plan.links[key]=cur; })){ Snd.click(); previewBuild(); toast({ door:'Doorway', open:'Open (no wall)', wall:'Solid wall' }[nxt]); }
@@ -9014,8 +9046,10 @@ function gridBeside(g, EW, EH){ const b=gardenBox(g), P=placing; let best=null, 
 function gridFill(i0, j0, P, near){ const out=[], bad=[], W=gridW(P), rows=Math.ceil(P.n/W);
   for (let r=0;r<rows;r++) for (let c=0;c<W && r*W+c<P.n;c++){ const [i,j] = P.orient ? [i0+r, j0+c] : [i0+c, j0+r]; (cellFree(i,j,near)?out:bad).push([i,j]); }
   return { out, bad }; }
-// a patch one empty square away from a garden's side slides that one square so it joins the garden
+// a patch one empty square away from a garden's side slides that one square so it joins the garden.
+// v1.73 a patch that already sits in or right against a garden stays where you aimed (it used to hop toward another garden nearby)
 function gridNudge(i0, j0, EW, EH){
+  for (let i=i0-1;i<=i0+EW;i++) for (let j=j0-1;j<=j0+EH;j++){ const edge=(i<i0||i>i0+EW-1)&&(j<j0||j>j0+EH-1); if (!edge && gardenAtCell(i,j)) return null; }
   for (const g of S.gardens){ if (!g.cells.length) continue; const b=gardenBox(g);
     const overI = i0<=b.i1 && i0+EW-1>=b.i0, overJ = j0<=b.j1 && j0+EH-1>=b.j0;
     if (overJ && i0===b.i1+2) return [i0-1, j0]; if (overJ && i0+EW-1===b.i0-2) return [i0+1, j0];
@@ -9028,7 +9062,7 @@ function checkGrid(){ const P=placing, m=P.m, ax=m.position.x, az=m.position.z;
   const near=S.plants.filter(q=>q.x>(i0-1)*CELL && q.x<(i0+EW+1)*CELL && q.z>(j0-1)*CELL && q.z<(j0+EH+1)*CELL);
   const { out, bad }=gridFill(i0, j0, P, near); P.cells=out;
   const cx=(i0+(EW-1)/2)*CELL, cz=(j0+(EH-1)/2)*CELL; P.box=[i0*CELL, (i0+EW-1)*CELL, j0*CELL, (j0+EH-1)*CELL];
-  const d=new THREE.Object3D(); let k=0; const put=([i,j],col)=>{ const x=i*CELL, z=j*CELL; d.position.set(x-cx, groundY(x,z)+0.09, z-cz); d.updateMatrix(); P.tiles.setMatrixAt(k,d.matrix); P.tiles.setColorAt(k,col); k++; };
+  const d=new THREE.Object3D(); let k=0; const put=([i,j],col)=>{ const x=i*CELL, z=j*CELL; let y=groundY(x,z); for (const [a,b] of [[-0.36,-0.36],[0.36,-0.36],[-0.36,0.36],[0.36,0.36]]) y=Math.max(y, groundY(x+a,z+b)); d.position.set(x-cx, y+0.09, z-cz); d.updateMatrix(); P.tiles.setMatrixAt(k,d.matrix); P.tiles.setColorAt(k,col); k++; };
   out.forEach(c=>put(c,GREEN)); bad.slice(0, P.tiles.instanceMatrix.count-out.length).forEach(c=>put(c,RED)); P.tiles.count=k; P.tiles.instanceMatrix.needsUpdate=true; if (P.tiles.instanceColor) P.tiles.instanceColor.needsUpdate=true;
   m.position.set(cx, 0, cz);
   P.ok=out.length>0; $('#pOk').disabled=!P.ok; $('#pOk').textContent=out.length?`Plant ${out.length}`:'No room'; return P.ok; }
@@ -9108,7 +9142,7 @@ function openGarden(g){
     h+=`<div class="row"><div class="grow"><div class="nm">Harvest everything ready</div><div class="sub">${ripe.length ? `${ripe.length} plant${ripe.length>1?'s':''}` : 'Nothing is ready yet'}</div></div><button class="btn" id="gHv" ${ripe.length?'':'disabled'}>Harvest</button></div>`;
     h+=`<div class="row"><div class="grow"><div class="nm">Water everything</div><div class="sub">${!hasTool('can') ? 'Needs a watering can' : dry.length ? `${dry.length} plant${dry.length>1?'s':''} need water` : 'All watered today'}</div></div><button class="btn" id="gWa" ${hasTool('can')&&dry.length&&CAN_EDIT?'':'disabled'}>Water</button></div>`;
     if (CAN_EDIT){
-      h+=`<div class="row"><div class="grow"><div class="nm">Garden editor</div><div class="sub">Move this garden, rearrange its plants or take some out</div></div><button class="btn" id="gEd">Edit</button></div>`;   // v1.71
+      h+=`<div class="row"><div class="grow"><div class="nm">Garden editor</div><div class="sub">Move this garden, rearrange its plants or soil, or take some out</div></div><button class="btn" id="gEd">Edit</button></div>`;   // v1.71
       h+=`<div class="f" style="margin-top:12px;font-weight:700">Plant here</div>`;
       h+= seedStacks.length ? `<div style="display:flex;flex-wrap:wrap;gap:6px">${seedStacks.map(id=>`<button class="btn alt" data-gs="${id}" style="display:flex;align-items:center;gap:6px;padding:4px 10px"><img src="${thumb(id)}" style="width:28px;height:28px">${ITEMS[id].name} x${countItem(id)}</button>`).join('')}</div>` : `<div class="muted">No seeds in your bag.</div>`;
       h+=`<div class="f" style="margin-top:14px;font-weight:700">Fence</div>`;
@@ -9229,8 +9263,9 @@ function handleTap(cx,cy){
   if (buildMode) return;
   if (CatchMeter.bug){ resolveSwing(); return; }
   if (Fishing.state!=='idle'){ reel(); return; }
+  // v1.73 a tap while placing aims at the ground under your finger, not at a plant or stake in front of it (tapping between plants used to land on the plant)
+  if (placing){ if (placing.dragged) return; const p=pickAt(cx,cy), pt=groundAtScreen(cx,cy)||(p&&(p.ground||p.point||p.water)); if(pt){ placing.m.position.set(pt.x,World.inside?0:groundY(pt.x,pt.z),pt.z); checkPlace(); } return; }
   const p=pickAt(cx,cy); if(!p) return;
-  if (placing){ if (placing.dragged) return; const pt=p.ground||p.point||p.water; if(pt){ placing.m.position.set(pt.x,World.inside?0:groundY(pt.x,pt.z),pt.z); checkPlace(); } return; }
   // On a computer, clicking walks you there (v1.19, on by default, Menu > Controls). With it off, clicking only uses
   // things that are close enough and you walk with the keys.
   if (!isTouchDevice && CT().clickWalk===false){

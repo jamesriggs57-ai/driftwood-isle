@@ -34,3 +34,22 @@ export function itemBack(rec, P, ITEMS){ if (!P) return null;
 
 // planted by you (wild crops and wild flower clumps carry wild:true)
 export const isMine = rec => !!rec && !rec.wild;
+
+/* v1.73 soil squares. A set of squares split into the pieces that touch side by side (biggest first). */
+export function splitCells(keys){ const left=new Set(keys), out=[];
+  while (left.size){ const first=left.values().next().value, part=[first], q=[first]; left.delete(first);
+    while (q.length){ const [i,j]=parseCell(q.pop()); for (const [a,b] of [[1,0],[-1,0],[0,1],[0,-1]]){ const k=ckey(i+a,j+b); if (left.has(k)){ left.delete(k); part.push(k); q.push(k); } } }
+    out.push(part); }
+  return out.sort((a,b)=>b.length-a.length); }
+/* Take squares out of a list of gardens. A garden left in pieces splits: the biggest piece keeps the garden (its gate, fence and
+   decorations), the others become gardens of their own with the same fence style. Empty gardens go. newId makes ids.
+   Returns the new list of gardens. */
+export function cutSquares(gardens, keys, newId){ const cut=new Set(keys), out=[];
+  for (const g of gardens){ const rest=g.cells.filter(k=>!cut.has(k)); if (rest.length===g.cells.length){ out.push(g); continue; }
+    if (!rest.length) continue;
+    const parts=splitCells(rest); g.cells=parts[0]; out.push(g);
+    for (const p of parts.slice(1)) out.push({ id:newId(), cells:p, gate:null, fence:g.fence||null, fenced:(g.fenced||[]).slice(), decor:{} }); }
+  return out; }
+// the one garden whose squares are exactly these, or null
+export function wholeOf(gardens, keys){ const set=new Set(keys); if (!set.size) return null;
+  for (const g of gardens) if (g.cells.length===set.size && g.cells.every(k=>set.has(k))) return g; return null; }

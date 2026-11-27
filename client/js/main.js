@@ -9,7 +9,8 @@ import { TICKET_THEMES } from './content.js';   // v1.39 fixes: captain's partin
 import { ITEMS, NATIVE_FRUITS, PLANTS, TOOLS, WOODWORK, BACKPACKS, BASE_SLOTS, HOUSE_LEVELS, RESIDENTS, DIALOGUE, PEDDLER, EVENTS, rarityLabel, RARITY_COLORS, SHOPS, INVEST, KEEPERS, MUSEUM, BUILD,
   FOREIGN_FRUIT_PRICE, FRUIT_REGROW_DAYS, POTIONS, WIZARD, MAGIC, STORY, FAVOR_ASKS, CROPS, RECIPES, ARRIVE, MENTOR, islandSeedPool, ISLAND_SEED_BUY, islandFlowerPool, WILDFLOWER_SEEDS, GARDEN_FENCES, GARDEN_DECOR, FR, RARE_WORK, RARE_ODDS, PLAN_PRICE,
   WEAR_IDS, FAVOR_THEMES, DO_TASKS, ORIGINAL_RESIDENTS, LETTERS, LETTER_IDS, CORAL_KINDS, CORAL_NAMES, CORAL_FISH, NIGHT_BAY } from './content.js';
-import { whereText, BAY_MORE } from './content.js';   // v1.52 wave 1: isle, trip and late reef fish
+import { whereText, BAY_MORE } from './content.js';
+import { WOOD_KINDS, treeWood } from './content.js';   // v1.72 wood per tree kind   // v1.52 wave 1: isle, trip and late reef fish
 import * as S2 from './story2.js';   // v1.38 phase 2 buildings and furniture
 import * as S3 from './story3.js';   // v1.39 phase 3 buildings and furniture
 import * as S4 from './story4.js';   // v1.41 phase 4 buildings, festival and Starfall spells
@@ -193,9 +194,11 @@ function addItem(id, meta){
   const isNew = !S.seen[id]; if (isNew) S.seen[id] = Date.now();
   save(); return isNew ? 'new' : true;
 }
-function countItem(id){ return S.inv.reduce((a,s)=>a+(s.id===id?s.n:0),0); }
+function countItem(id){ if (id==='wood') return WOOD_KINDS.reduce((a,w)=>a+count1(w),0); return count1(id); }   // v1.72 'wood' in a recipe or favor means any kind of wood
+function count1(id){ return S.inv.reduce((a,s)=>a+(s.id===id?s.n:0),0); }
 function removeAt(i, n=1){ const s=S.inv[i]; if(!s) return; s.n-=n; if(s.n<=0) S.inv.splice(i,1); save(); }
-function removeItem(id, n=1){ for (let i=S.inv.length-1; i>=0 && n>0; i--){ const s=S.inv[i]; if (s.id!==id) continue; const k=Math.min(n,s.n); s.n-=k; n-=k; if (s.n<=0) S.inv.splice(i,1); } save(); }
+function removeItem(id, n=1){ if (id==='wood'){ for (const w of WOOD_KINDS){ const k=Math.min(n,count1(w)); if (k>0){ remove1(w,k); n-=k; } if (n<=0) break; } save(); return; } remove1(id,n); save(); }
+function remove1(id, n=1){ for (let i=S.inv.length-1; i>=0 && n>0; i--){ const s=S.inv[i]; if (s.id!==id) continue; const k=Math.min(n,s.n); s.n-=k; n-=k; if (s.n<=0) S.inv.splice(i,1); } }
 function entryPrice(s){ const it=ITEMS[s.id]; if (it.kind==='fruit' && s.id!=='coconut' && S.nativeFruit && s.id!==S.nativeFruit) return FOREIGN_FRUIT_PRICE; return s.m ? Math.round(it.price*(0.85+0.4*(s.m.f||0))) : it.price; }
 function addClams(n){ let v=Math.max(0,S.clams+n); if (GUEST && n>0 && v>GUEST_CAP.clams){ v=Math.max(S.clams,GUEST_CAP.clams); toast('Your wallet is full. Guest wallets hold up to 10,000 clams. Make an account to hold more.'); } S.clams=v; save(); updateHUD(); }
 // Visitors (not residents) can look, harvest and shop, but not change the island
@@ -1169,9 +1172,10 @@ class Tree extends Ent {
     const tier=toolTier('axe'), one=EN.oneSwing('axe'), out=EN.output('axe'); if(!useTool('axe')) return;   // v1.40
     const n=one?3:(S.day.chop[this.key]||0); S.day.chop[this.key]=n+1; S.stats.chopped++; track('chop');
     this.shake=0.7; Snd.chop(); puff(this.pos.clone().add(new THREE.Vector3(0,1,0)), 0xd8b080, 5, 0.4, 1.5, 0.8, 0.5);
-    if (n<3){ for (let k=0;k<out;k++){ dropNear('wood', this.pos, 1.6); if (tier>=2) dropNear('wood', this.pos, 1.6); } if (TRIP_THEME==='grove' && !this.rec && n===0) dropNear('heartwood', this.pos, 1.6); else rareRoll('chop', 'heartwood', this.pos); }
+    const wd=treeWood(this.type);   // v1.72 birch, pine, coconut and fruit trees each give their own wood
+    if (n<3){ for (let k=0;k<out;k++){ dropNear(wd, this.pos, 1.6); if (tier>=2) dropNear(wd, this.pos, 1.6); } if (TRIP_THEME==='grove' && !this.rec && n===0) dropNear('heartwood', this.pos, 1.6); else rareRoll('chop', 'heartwood', this.pos); }
     else if (TOOLS.axe.tiers[tier].nofell && !one) toast('Too flimsy to fell it.');
-    else { Snd.timber(); for (let k=0;k<(one?EN.ONE_SWING_WOOD:out)+(this.big?1:0);k++) dropNear('wood', this.pos, 1.6); EN.scrollRoll('fell', this.pos); CU.planRoll('fell', this.pos);   // v1.57 Old Pinewood's big trees give one more
+    else { Snd.timber(); for (let k=0;k<(one?EN.ONE_SWING_WOOD:out)+(this.big?1:0);k++) dropNear(wd, this.pos, 1.6); EN.scrollRoll('fell', this.pos); CU.planRoll('fell', this.pos);   // v1.57 Old Pinewood's big trees give one more
       if (this.rec){ S.plants.splice(S.plants.indexOf(this.rec),1); } else S.cut[this.key]='gone';
       const pin=/^x(\d+)_/.exec(this.key), pines=pin && ISLES[+pin[1]] && ISLES[+pin[1]].kind==='pines'; if (pin && ISLES[+pin[1]]) (S.pinesCut=S.pinesCut||{})[this.key]={ x:+this.pos.x.toFixed(2), z:+this.pos.z.toFixed(2), type:this.type, day:today(), ...(this.fruit?{ fruit:this.fruit }:{}) };   // v1.57 every isle's wild trees grow back (Old Pinewood's overnight, the rest in 3 days)
       rareRoll('fell', 'heartwood', this.pos); woodPlanRoll(0.01, this.pos); const st={ key:this.key, x:this.pos.x, z:this.pos.z }; S.stumps.push(st); new Stump(st); FX.fell(this.obj, this.pos.clone(), this.type); this.remove(true); if (!pines) onFelled(this.pos.clone()); }
@@ -6650,7 +6654,7 @@ function openBag(mode='view', onPick, onCancel){
    materials show have/need, and you can never lose materials to a full bag. */
 const MAT_NAMES = { wood:'Wood', softwood:'Branch', stone:'Stone', clay:'Clay', iron:'Iron', stump:'Stump', weed:'Weeds' };
 function craftNudge(id){
-  if (S.craft || S.craftHint || (id!=='wood' && id!=='softwood')) return;
+  if (S.craft || S.craftHint || (!WOOD_KINDS.includes(id) && id!=='softwood')) return;
   S.craftHint=true; save();
 }
 /* Bramble only shares his tools with someone he's gotten to know a little (chat or a gift first). He's gruff about it:
@@ -6765,7 +6769,7 @@ function studyPiece(id){ if (!S.craft || studyToday() || knowsWood(id)) return f
 function craftFits(r, k){
   // Simulate the bag: take the materials out, put the results in. Never lose materials to a full bag.
   const inv=S.inv.map(x=>({...x})), max=slotsMax();
-  for (const [m,n] of Object.entries(r.mats)){ let need=n*k; for(let i=inv.length-1;i>=0&&need>0;i--){ const x=inv[i]; if(x.id!==m||x.m) continue; const t=Math.min(need,x.n); x.n-=t; need-=t; if(x.n<=0) inv.splice(i,1); } }
+  for (const [m,n] of Object.entries(r.mats)){ let need=n*k; for(let i=inv.length-1;i>=0&&need>0;i--){ const x=inv[i]; if((m==='wood'?!WOOD_KINDS.includes(x.id):x.id!==m)||x.m) continue; const t=Math.min(need,x.n); x.n-=t; need-=t; if(x.n<=0) inv.splice(i,1); } }
   let add=recipeOut(r)*k; const st=ITEMS[r.id].stack;
   for (const x of inv){ if(add<=0) break; if(x.id===r.id && !x.m && x.n<st){ const t=Math.min(add, st-x.n); add-=t; } }
   const freeSlots=max-inv.length; return add <= freeSlots*st;
@@ -6866,7 +6870,7 @@ function fillThumbs(root){ const step=()=>{ const imgs=[...root.querySelectorAll
 function openBook(tab='fish'){
   const tabs=[['fish','Fish'],['bug','Bugs'],['fossil','Fossils'],['shell','Beach'],['flower','Flowers'],['furniture','Furniture']];
   const render=()=>{
-    const list=Object.values(ITEMS).filter(i=>i.kind===tab && !i.custom);   // v1.63 custom pieces aren't in the catalog const got=list.filter(i=>S.seen[i.id]).length;
+    const list=Object.values(ITEMS).filter(i=>i.kind===tab && !i.custom);   const got=list.filter(i=>S.seen[i.id]).length;   // v1.63 custom pieces aren't in the catalog (v1.72: the count was stuck inside this comment, so the catalog page broke)
     let h='<div class="tabs">'+tabs.map(([k,n])=>`<button class="tab${k===tab?' on':''}" data-t="${k}">${n}</button>`).join('')+'</div>';
     h+=`<div class="muted" style="margin-bottom:8px">${got} of ${list.length} discovered</div><div class="bar" style="margin-bottom:12px"><div style="width:${got/list.length*100}%"></div></div>`;
     for(const it of list){ const k=!!S.seen[it.id]; let sub='';
@@ -9859,6 +9863,7 @@ window.__game.v144 = Object.assign({ SR, shopStock:w=>shopStock(w), talkGill:()=
 window.__game.v145 = { fishPool, bugPool, isleNear, isleAt, bayMore, bayTipIds, bayPool:()=>bayPool(), waterType, isleSpot, get trees(){ return trees; }, get bugs(){ return bugs; }, newBug:(id,x,z,e)=>new Bug(id,x,z,e||{}), updateBugs:dt=>{ bugT=0; updateBugs(dt||3); }, spawnFish:()=>spawnFish(), get fishes(){ return fishes; },
   openDonate:()=>openDonate(), museumExpand:()=>museumExpand(), buildMuseumAll:()=>buildMuseumAll(), enterRoom:id=>enterRoom(id), tanks:()=>ents.filter(e=>e instanceof MuseumTank), openTankView:e=>openTankView(e), closeTankView:()=>closeTankView(), get tankView(){ return tankView; } };
 window.__game.custom = CU.dev; window.__game.sew = SX.dev; window.__game.pets = PETS;   // v1.67 pet tests
+window.__game.v172 = { countItem, removeItem, craftFits, craftMax, doCraft };   // v1.72 tests
 window.__game.gardenEdit = { GE, start:o=>startGardenEdit(o) };   // v1.71 garden editor tests
 window.__game.sewMachine = { open:()=>SX.open(), choices:()=>SX.keeperChoices({ name:'Pemberton', voice:1 }, ()=>{}).map(c=>c.label), buy:()=>SX.keeperChoices({ name:'Pemberton', voice:1 }, ()=>{})[0].fn(), place:()=>{ const P=player.pos, rec={ id:'sewmachine', x:P.x+1.6, z:P.z, rot:0 }; S.placed.push(rec); const f=new Furniture(rec); return f.label(); } };   // v1.64 tests   // v1.64 sewing tests   // v1.63 custom furniture tests
 // v1.26 test hooks

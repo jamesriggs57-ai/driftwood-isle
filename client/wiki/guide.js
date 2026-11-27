@@ -306,6 +306,14 @@ ${note('Guests can learn from Pippa and enchant, but don\'t find scrolls. On a f
 <h3>Searching</h3>
 <p>The search box at the top of the Craft panel finds a plan by its name or by a material it uses: type <i>stone</i> to see every plan that needs stone, or two words (<i>wood chair</i>) to see only plans that match both. It only shows plans you already know. The search box is on the Woodworking, Cooking, Design and Tools tabs (Make a tool and Enchantments); what you type stays when you make something or switch tabs, and clears when you close the panel. The x clears it, and Enter puts the phone keyboard away.</p>
 <p>Digging up a stump gives a Tree Stump for stump furniture.</p>
+<h3>Kinds of wood</h3>
+<p>Each kind of tree gives its own wood when you chop it or cut it down. A plan, favor, order or isle that asks for wood takes any kind, so it never matters which you carry. When it takes wood from your bag it uses the cheapest kind first.</p>
+<table><tr><th>Wood</th><th>From</th><th>Sells for</th></tr>
+<tr><td>Birch Wood</td><td>Birch</td><td>14</td></tr>
+<tr><td>Pine Wood</td><td>Pine and cedar</td><td>17</td></tr>
+<tr><td>Wood</td><td>Oak, maple and cherry blossom</td><td>20</td></tr>
+<tr><td>Coconut Wood</td><td>Palm</td><td>24</td></tr>
+<tr><td>Fruit Wood</td><td>Every fruit tree</td><td>28</td></tr></table>
 <p>What a piece sells for follows what went into it. A piece made only from wood, branches, stone and weeds sells for about its materials plus 15% (3 fences from 2 wood sell for 45 in all), so woodworking adds a little to chopping rather than replacing it. A piece that needs iron, clay, stumps, planks or rare finds sells for more, and never for less than its materials plus 15%.</p>
 ${tip('Making 14 <b>different</b> pieces is what starts Bramble\'s workshop story.')}
 <h3>Rare showpieces</h3>

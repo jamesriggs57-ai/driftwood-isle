@@ -126,7 +126,7 @@ export function createSewing(C){
   function learnPack(k){ const c=st(), P=T.PACKS[k]; if (!c || !P || c.packs.includes(k)) return false; c.packs.push(k); C.save(); C.Snd.fanfare();
     C.toast(`${P.name}!`, C.thumb(T.packItem(k)), 'new', `${P.colors.length} new colours for sewing: ${P.colors.map(i=>T.YARN_NAMES[i]).join(', ')}.`); return true; }
   const packsToFind = () => { const c=st(); return c ? T.PACK_IDS.filter(k=>T.PACKS[k].how==='find' && !c.packs.includes(k)) : []; };
-  function listHTML(){ const c=st(); let h=searchBox('Search clothes, rugs or materials')+levelBar();
+  function listHTML(){ const c=st(); let h=searchBox('Search clothes, rugs or materials')+(C.chestNote ? C.chestNote() : '')/* v1.76 chests beside the machine */+levelBar();
     h+=`<div style="margin:6px 0"><button class="btn" data-snew="rug">New rug</button> <button class="btn" data-snew="garment">New clothes</button></div>`;
     if (c.closet.length){ const worn=(CH.parseLook(C.look()).ct)||''; h+='<div data-sgrp><div style="margin:10px 0 4px"><b>Your closet</b></div>';
       for (const code of c.closet){ const d=T.decodeGarment(code); if (!d) continue; const on=worn===code;

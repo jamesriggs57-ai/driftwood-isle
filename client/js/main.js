@@ -30,6 +30,7 @@ import * as TH from './townhall.js';   // v1.49 town hall inside
 import { createEnchant } from './enchant.js';   // v1.40 tools and enchanting
 import { craftNeed as toolCraftNeed } from './enchant-core.js';   // heirloom recipes
 import { createBenches } from './benches.js';   // v1.40 crafting tables
+import { createTether } from './tether.js';   // v1.76 chests beside a crafting spot feed it, and sorting
 import { createCustom } from './custom.js';
 import { createSewing } from './textile.js';   // v1.64 sewing
 import * as SQ from './search.js';   // v1.70 search in the crafting menus
@@ -116,13 +117,20 @@ const SC = LAY.scale || 1;   // island size (generated islands are about twice t
 if (!S.terra) S.terra = { cells:{}, moved:{} };   // wizard work: reshaped land, dug water, moved buildings
 if (!S.magic) S.magic = {};                       // wizard tower (unlocked by a quest) and where it stands
 // v1.40 tools and enchanting (enchant.js). Everything is reached through lambdas, so the order of definitions below doesn't matter.
-const EN = createEnchant({ S:()=>S, toast:(...a)=>toast(...a), Snd, save:()=>save(), countItem:id=>countItem(id), removeItem:(id,n)=>removeItem(id,n), addItem:id=>addItem(id), canAdd:id=>canAdd(id),
+const EN = createEnchant({ S:()=>S, toast:(...a)=>toast(...a), Snd, save:()=>save(), countItem:id=>matCount(id), removeItem:(id,n)=>matTake(id,n), addItem:id=>addItem(id), canAdd:id=>canAdd(id),
   dropNear:(...a)=>dropNear(...a), dropGrp:()=>DROP_GRP, sparkle:p=>sparkle(p), thumb:id=>thumb(id), toolThumb:(t,k)=>toolThumb(t,k), fmt:n=>fmt(n), dialog:(...a)=>dialog(...a), openPanel:(...a)=>openPanel(...a),
   pBody:()=>pBody, pTitle:()=>pTitle, closePanel:()=>closePanel(), reqMet:(t,k)=>reqMet(t,k), friend:id=>S.friend[id]||0, updateHeld:()=>updateHeld(), updateHUD:()=>updateHUD(), equip:t=>equip(t),
-  noEdit:()=>noEdit(), GUEST:()=>GUEST, VISIT:()=>VISIT, addClams:n=>addClams(n), bench:()=>BN.tier(), benchBanner:()=>BN.banner() });
+  noEdit:()=>noEdit(), GUEST:()=>GUEST, VISIT:()=>VISIT, addClams:n=>addClams(n), bench:()=>BN.tier(), benchBanner:()=>BN.banner()+TQ.note() });
 // v1.40 crafting tables (benches.js): crafting tables in reach, as [id, distance, size]
 const BN = createBenches({ S:()=>S, save:()=>save(), addItem:id=>addItem(id), learnWood:id=>learnWood(id),
   tables:()=>ents.filter(e=>e instanceof Furniture && !e.removed && entVisible(e) && BN.isBench(e.rec.id)).map(e=>[e.rec.id, Math.hypot(e.pos.x-player.pos.x, e.pos.z-player.pos.z), ITEMS[e.rec.id].r]) });
+// v1.76 chests beside a crafting spot feed it (tether.js): materials count from your bag first, then those chests
+const TQ = createTether({ get scene(){ return scene; }, canUse:()=>CAN_EDIT && !TRIP, player:()=>player.pos, y:(x,z)=>World.inside?0:groundY(x,z),
+  furn:()=>ents.filter(e=>e instanceof Furniture && !e.removed && entVisible(e)).map(e=>({ id:e.rec.id, x:e.pos.x, z:e.pos.z, rec:e.rec })) });
+const bagHas = id => ITEMS[id] ? countItem(id) : S.inv.filter(s=>ITEMS[s.id] && ITEMS[s.id].kind===id).reduce((a,s)=>a+s.n,0);
+const matCount = id => bagHas(id) + TQ.extra(id);
+function matTake(id, n){ const b=Math.min(n, bagHas(id)); if (b>0) takeFor([[id,b]]); if (n>b){ TQ.take(id, n-b); save(); } }
+const matTakeAll = needs => { for (const [id,n] of needs) matTake(id,n); };
 // v1.44 shop rewards (shoprare.js): Pemberton's back room, Marlo's rare shelf, Sprig's rare seeds, and what's biting (Marlo and Gill)
 const SR = createShopRare({ S:()=>S, TRIP:()=>TRIP, VISIT:()=>VISIT, GUEST:()=>GUEST, noEdit:()=>noEdit(), save:()=>save(), toast:(...a)=>toast(...a), Snd, fmt:n=>fmt(n), thumb:id=>thumb(id),
   rarityTag:it=>rarityTag(it), shopTier:id=>shopTier(id), today:()=>today(), sday:()=>sday(), month:()=>Time.month(), buyPrice:(w,it)=>buyPrice(w,it), addTrade:(w,n)=>addTrade(w,n),
@@ -131,12 +139,12 @@ const SR = createShopRare({ S:()=>S, TRIP:()=>TRIP, VISIT:()=>VISIT, GUEST:()=>G
   homeWaters:()=>['sea','pond', ...(((RIVER&&RIVER.length&&LAY.riverType!=='sea') || XW.some(w=>w.type==='river') || (TERRA_ANY && Object.values(TERRA).some(c=>c&&c.w===2))) ? ['river'] : [])],
   bayIds:()=>SY.reef&&SY.reef.rowboat ? bayTipIds() : [], boatTier:()=>incOf('boat').tier, gillTips:()=>!VISIT && !GUEST && !!(SY.reef && SY.reef.rowboat) && reefStage()>=1 });
 // v1.63 custom furniture (custom.js): the Design tab, islanders' requests, sketches, the first-sale bonus
-const CU = createCustom({ S:()=>S, save:()=>save(), toast:(...a)=>toast(...a), Snd, thumb:id=>thumb(id), fmt:n=>fmt(n), countItem:id=>countItem(id), removeItem:(id,n)=>removeItem(id,n), addItem:id=>addItem(id), canAdd:id=>canAdd(id),
+const CU = createCustom({ S:()=>S, save:()=>save(), toast:(...a)=>toast(...a), Snd, thumb:id=>thumb(id), fmt:n=>fmt(n), countItem:id=>matCount(id), removeItem:(id,n)=>matTake(id,n), addItem:id=>addItem(id), canAdd:id=>canAdd(id),
   dialog:(...a)=>dialog(...a), openPanel:(...a)=>openPanel(...a), closePanel:()=>closePanel(), pBody:()=>pBody, pTitle:()=>pTitle, setFoot:h=>setFoot(h), addClams:n=>addClams(n), noEdit:()=>noEdit(),
-  GUEST:()=>GUEST, VISIT:()=>VISIT, bench:()=>BN.tier(), benchBanner:()=>BN.banner(), kinds:()=>kindsMade(), today:()=>today(), dayNum:()=>dayNum(today()), sparkle:p=>sparkle(p), track:(k,n)=>track(k,n) });
+  GUEST:()=>GUEST, VISIT:()=>VISIT, bench:()=>BN.tier(), benchBanner:()=>BN.banner()+TQ.note(), kinds:()=>kindsMade(), today:()=>today(), dayNum:()=>dayNum(today()), sparkle:p=>sparkle(p), track:(k,n)=>track(k,n) });
 // v1.64 sewing (textile.js): rugs and clothes painted pixel by pixel
 registerRug(ITEM_BUILDERS); registerPetModels(ITEM_BUILDERS);   // v1.67 pets: collar and basket pictures
-const SX = createSewing({ S:()=>S, save:()=>save(), toast:(...a)=>toast(...a), Snd, thumb:id=>thumb(id), fmt:n=>fmt(n), countItem:id=>countItem(id), removeItem:(id,n)=>removeItem(id,n), addItem:id=>addItem(id), canAdd:id=>canAdd(id),
+const SX = createSewing({ S:()=>S, save:()=>save(), toast:(...a)=>toast(...a), Snd, thumb:id=>thumb(id), fmt:n=>fmt(n), countItem:id=>matCount(id), removeItem:(id,n)=>matTake(id,n), chestNote:()=>TQ.note(), addItem:id=>addItem(id), canAdd:id=>canAdd(id),
   pBody:()=>pBody, pTitle:()=>pTitle, setFoot:h=>setFoot(h), addClams:n=>addClams(n), noEdit:()=>noEdit(), VISIT:()=>VISIT, today:()=>today(), track:(k,n)=>track(k,n),
   buildPlayer:look=>buildPlayer({ look }), setLook:code=>setPlayerLook(code), look:()=>S.look||CH.lookCode(CH.defaultLook()),
   openPanel:t=>openPanel(t), dialog:(...a)=>dialog(...a), owns:id=>countItem(id)>0 || S.placed.some(p=>p.id===id || (Array.isArray(p.store) && p.store.some(x=>x&&x.id===id))) });
@@ -1438,13 +1446,17 @@ function bagRoomFor(e){ const st=ITEMS[e.id].stack; if (e.m) return S.inv.length
   let room=S.inv.reduce((a,x)=>a+(x.id===e.id && !x.m ? Math.max(0,st-x.n) : 0),0); room+=(slotsMax()-S.inv.length)*st; return room; }
 function openChest(rec){
   rec.store=rec.store||[];
-  const cell=(s,i,key)=>`<div class="slot" data-${key}="${i}"><img src="${thumb(s.id)}" alt="">${s.n>1?`<span class="n">${s.n}</span>`:''}</div>`;
+  const cell=(s,i,key)=>`<div class="slot" data-${key}="${i}" data-tip="${escAttr(ITEMS[s.id].name+(s.n>1?' x'+s.n:'')+'|'+bagValue(s).replace(/<[^>]+>/g,''))}"><img src="${thumb(s.id)}" alt="">${s.n>1?`<span class="n">${s.n}</span>`:''}</div>`;
   const render=()=>{
     const bag=S.inv.map((s,i)=>cell(s,i,'put')).join('') + '<div class="slot empty"></div>'.repeat(Math.max(0,slotsMax()-S.inv.length));
     const box=rec.store.map((s,i)=>cell(s,i,'take')).join('') + '<div class="slot empty"></div>'.repeat(Math.min(6, CHEST_SLOTS-rec.store.length));
-    pBody.innerHTML=`<div class="muted" style="margin-bottom:6px">Tap something in your bag to put it in the chest. Tap something in the chest to take it out.</div>
-      <b>Bag</b> <span class="muted">${S.inv.length}/${slotsMax()}</span><div class="grid" style="margin:6px 0 12px">${bag}</div>
-      <b>Chest</b> <span class="muted">${rec.store.length}/${CHEST_SLOTS}</span><div class="grid" style="margin-top:6px">${box}</div>`;
+    const head=(nm, n, max, id, any)=>`<div style="display:flex;align-items:center;gap:6px"><b>${nm}</b> <span class="muted">${n}/${max}</span><span style="flex:1"></span>${any?sortBtn(id):''}</div>`;
+    pBody.innerHTML=`<div class="muted" style="margin-bottom:6px">Tap something in your bag to put it in the chest. Tap something in the chest to take it out. ${isTouchDevice?'Press and hold':'Point at'} anything to see what it's worth.</div>
+      ${head('Bag', S.inv.length, slotsMax(), 'csBag', S.inv.length>1)}<div class="grid" style="margin:6px 0 12px">${bag}</div>
+      ${head('Chest', rec.store.length, CHEST_SLOTS, 'csBox', rec.store.length>1)}<div class="grid" style="margin-top:6px">${box}</div>`;
+    const sb=pBody.querySelector('#csBag'), sc=pBody.querySelector('#csBox');
+    if (sb) sb.onclick=()=>{ if (sortList(S.inv, 'bag')) render(); };
+    if (sc) sc.onclick=()=>{ if (sortList(rec.store, 'chest')) render(); };
     pBody.querySelectorAll('[data-put]').forEach(el=>el.onclick=()=>{ const i=+el.dataset.put, s=S.inv[i]; if (!s) return;
       const st=ITEMS[s.id].stack; let n=s.n;
       if (!s.m) for (const x of rec.store){ if (n<=0) break; if (x.id===s.id && !x.m && x.n<st){ const k=Math.min(n, st-x.n); x.n+=k; n-=k; } }
@@ -6670,16 +6682,32 @@ function itemDetail(s, value){ const it=ITEMS[s.id]; let sub=kindName(it.kind); 
    and the same name and value show in the bar at the bottom of the panel, so tapping works as before. */
 const invTip = document.createElement('div'); invTip.id='invTip'; document.body.appendChild(invTip);
 const hideInvTip = () => { invTip.style.display='none'; };
-pBody.addEventListener('pointerover', e=>{ if (e.pointerType!=='mouse') return; const el=e.target.closest&&e.target.closest('.slot[data-tip]'); if (!el){ hideInvTip(); return; }
+function showInvTip(el){
   const [nm,val]=el.dataset.tip.split('|'); invTip.innerHTML=`<b></b><span></span>`; invTip.firstChild.textContent=nm; invTip.lastChild.textContent=val; invTip.style.display='block';
   const r=el.getBoundingClientRect(), w=invTip.offsetWidth, h=invTip.offsetHeight;
-  invTip.style.left=Math.max(6, Math.min(innerWidth-w-6, r.left+r.width/2-w/2))+'px'; invTip.style.top=(r.top-h-8<6 ? r.bottom+8 : r.top-h-8)+'px'; });
+  invTip.style.left=Math.max(6, Math.min(innerWidth-w-6, r.left+r.width/2-w/2))+'px'; invTip.style.top=(r.top-h-8<6 ? r.bottom+8 : r.top-h-8)+'px'; }
+pBody.addEventListener('pointerover', e=>{ if (e.pointerType!=='mouse') return; const el=e.target.closest&&e.target.closest('.slot[data-tip]'); if (!el){ hideInvTip(); return; } showInvTip(el); });
 pBody.addEventListener('pointerout', e=>{ if (!e.relatedTarget || !e.relatedTarget.closest || !e.relatedTarget.closest('.slot[data-tip]')) hideInvTip(); });
 pBody.addEventListener('scroll', hideInvTip); pBody.addEventListener('click', hideInvTip);
+/* v1.76 touch screens: press and hold a slot (in your bag, a chest or the shop) to see its name and value. Letting go after a
+   hold doesn't count as a tap, so holding something in a chest doesn't move it. The note fades a moment after you let go. */
+const LONG_PRESS=420; let lpTimer=0, lpStart=null, lpShown=0, lpHide=0;
+pBody.addEventListener('pointerdown', e=>{ if (e.pointerType==='mouse') return; const el=e.target.closest&&e.target.closest('.slot[data-tip]'); clearTimeout(lpTimer); lpShown=0; if (!el) return;
+  lpStart=[e.clientX, e.clientY]; lpTimer=setTimeout(()=>{ clearTimeout(lpHide); showInvTip(el); lpShown=performance.now(); }, LONG_PRESS); });
+pBody.addEventListener('pointermove', e=>{ if (lpStart && Math.hypot(e.clientX-lpStart[0], e.clientY-lpStart[1])>10){ clearTimeout(lpTimer); lpStart=null; } });
+const lpEnd = ()=>{ clearTimeout(lpTimer); lpStart=null; if (lpShown){ clearTimeout(lpHide); lpHide=setTimeout(hideInvTip, 1600); } };
+pBody.addEventListener('pointerup', lpEnd); pBody.addEventListener('pointercancel', lpEnd);
+pBody.addEventListener('contextmenu', e=>{ if (e.target.closest && e.target.closest('.slot[data-tip]')) e.preventDefault(); });
+pBody.addEventListener('click', e=>{ if (lpShown && performance.now()-lpShown<4000 && e.target.closest && e.target.closest('.slot[data-tip]')){ lpShown=0; e.stopPropagation(); e.preventDefault(); } }, true);
+// Sort (bag and chests): groups things by kind, then name, and tops up part stacks (tether-core.js)
+// v1.76 Sort button for the bag and chests (rules in tether-core.js)
+function sortList(list, what){ const before=list.map(e=>({...e})); TQ.sortInPlace(list);
+  if (TQ.sameOrder(before, list)){ toast(`Your ${what} is already sorted.`); return false; } Snd.click(); save(); updateHUD(); return true; }
+const sortBtn = (id, label='Sort') => `<button class="btn alt" id="${id}" style="padding:3px 12px;font-size:13px">${label}</button>`;
 function openBag(mode='view', onPick, onCancel){
   let sel=-1;
   const render=()=>{
-    pBody.innerHTML = (mode==='give'?'<div class="muted" style="margin-bottom:8px">Pick something to give.</div>':mode==='swap'?'<div class="muted" style="margin-bottom:8px">Pick something to make room. Fish and bugs are released; anything else (the whole stack) is set down on the ground next to you, so you can pick it up later.</div>':'') + invGrid(sel) + `<div class="muted" style="margin-top:10px">${S.inv.length}/${slotsMax()} slots${S.pack>=0?' ('+BACKPACKS[S.pack].name+')':''}</div>`;
+    pBody.innerHTML = (S.inv.length>1 ? `<div style="display:flex;justify-content:flex-end;margin:-2px 0 8px">${sortBtn('bagSort')}</div>` : '') + (mode==='give'?'<div class="muted" style="margin-bottom:8px">Pick something to give.</div>':mode==='swap'?'<div class="muted" style="margin-bottom:8px">Pick something to make room. Fish and bugs are released; anything else (the whole stack) is set down on the ground next to you, so you can pick it up later.</div>':'') + invGrid(sel) + `<div class="muted" style="margin-top:10px">${S.inv.length}/${slotsMax()} slots${S.pack>=0?' ('+BACKPACKS[S.pack].name+')':''}</div>`;
     const s=S.inv[sel];
     if (s){ const it=ITEMS[s.id]; let b='';
       if (mode==='give') b+= it.noGift ? '<span class="muted">This one stays with you.</span>' : `<button class="btn" data-a="give">Give</button>`;   // v1.38 relics and story parts
@@ -6688,6 +6716,7 @@ function openBag(mode='view', onPick, onCancel){
       setFoot(`<div class="detail">${itemDetail(s)}<div class="acts">${b}</div></div>`);
     } else setFoot(`<div class="muted" style="padding:4px 2px">${mode==='give'?'Tap an item to give it.':''}</div>`);
     pBody.querySelectorAll('.slot[data-i]').forEach(el=>el.onclick=()=>{ sel=+el.dataset.i; Snd.click(); render(); });
+    const sb=pBody.querySelector('#bagSort'); if (sb) sb.onclick=()=>{ if (sortList(S.inv, 'bag')){ sel=-1; render(); } };
     pFoot.querySelectorAll('[data-a]').forEach(b=>b.onclick=()=>{ const s=S.inv[sel]; if(!s) return; const a=b.dataset.a;
       if(a==='give') onPick(sel);
       if(a==='drink'){ drinkPotion(sel); if(!S.inv[sel]) sel=-1; render(); return; }
@@ -6758,18 +6787,18 @@ const haveNeed = ([id,n],k=1) => (ITEMS[id] ? countItem(id) : S.inv.filter(s=>IT
 const needName = id => ITEMS[id] ? ITEMS[id].name : ({ fish:'Any fish', fruit:'Any fruit', berry:'Any berries' })[id];
 // v1.70 search words for a dish's ingredient: "Any fruit" also finds apple, pear and the rest
 const needWords = id => ITEMS[id] ? ITEMS[id].name : [needName(id), ...Object.values(ITEMS).filter(i=>i.kind===id).map(i=>i.name)];
-const needHave = id => ITEMS[id] ? countItem(id) : S.inv.filter(s=>ITEMS[s.id].kind===id).reduce((a,s)=>a+s.n,0);
+const needHave = id => matCount(id);   // your bag, plus chests beside the stove or campfire
 function cookMax(r){ let k=99; for (const [id,n] of r.need) k=Math.min(k, Math.floor(needHave(id)/n)); while (k>0 && !cookFits(r,k)) k--; return k; }
 function cookFits(r,k){ // never lose anything to a full bag: worst case, all ingredients free up no slot
   const inv=S.inv.map(x=>({...x})); for (const [id,n] of r.need){ let need=n*k; for (let i=inv.length-1;i>=0&&need>0;i--){ const x=inv[i]; if ((ITEMS[id]?x.id!==id:ITEMS[x.id].kind!==id)) continue; const t=Math.min(need,x.n); x.n-=t; need-=t; if (x.n<=0) inv.splice(i,1); } }
   let add=k; const st=ITEMS[r.id].stack; for (const x of inv){ if (x.id===r.id && x.n<st) add-=st-x.n; } return add<=0 || Math.ceil(add/st)<=slotsMax()-inv.length; }
-function doCook(r,k,at){ if (k<=0 || (!r.fire && at!=='stove') || !at || !cookFits(r,k) || !r.need.every(q=>haveNeed(q,k))) return false;
-  takeFor(r.need.map(([id,n])=>[id,n*k])); let isNew=false; for (let i=0;i<k;i++) if (addItem(r.id)==='new') isNew=true;
+function doCook(r,k,at){ if (k<=0 || (!r.fire && at!=='stove') || !at || !cookFits(r,k) || !r.need.every(([id,n])=>needHave(id)>=n*k)) return false;
+  matTakeAll(r.need.map(([id,n])=>[id,n*k])); let isNew=false; for (let i=0;i<k;i++) if (addItem(r.id)==='new') isNew=true;
   S.cook.made+=k; track('cook',k); if (!S.cook.kinds.includes(r.id)) S.cook.kinds.push(r.id); save(); Snd.water(); setTimeout(()=>Snd.jingle(),160);
   puff(player.pos.clone().add(new THREE.Vector3(Math.sin(player.face)*1.2,1.0,Math.cos(player.face)*1.2)),0xf4f4f4,8,0.4,1.6,0.9,1.0);
   toast(`${isNew?'New! ':''}You cooked ${k>1?k+' '+r.name+(/s$/.test(r.name)?'':'s'):article(r.name)+' '+r.name}!`, thumb(r.id), isNew?'new':''); return true; }
 function cookTab(h0){
-  const at=nearStation(); let h=(h0||'')+SQ.searchBox('Search dishes or ingredients');
+  const at=nearStation(); let h=(h0||'')+SQ.searchBox('Search dishes or ingredients')+TQ.note();
   h+=`<div class="notice" data-shide><b>Cookbook</b> <span class="muted">· ${S.cook.kinds.length} of ${RECIPES.length} dishes made</span><br><span class="muted">${at==='stove'?'You\'re at a Wood Stove: you can cook anything.':at==='campfire'?'You\'re at a campfire: grilled and simple things only. A Wood Stove does the rest.':'Stand next to a campfire or a Wood Stove you\'ve placed to cook.'} Dishes sell for more than what goes in them, islanders love them, and eating one helps you walk a little faster for a while.</span></div>`;
   RECIPES.forEach((r,i)=>{ const mx=cookMax(r), ok=at && (r.fire || at==='stove');
     const need=r.need.map(([id,n])=>{ const has=needHave(id); return `<span style="color:${has>=n?'inherit':'#c0503a'};font-weight:${has>=n?400:700}">${needName(id)} ${has}/${n}</span>`; }).join(' · ');
@@ -6830,14 +6859,14 @@ function craftFits(r, k){
 }
 function craftMax(r){
   if (!BN.canHere(r)) return 0;   // v1.40: this needs a bigger crafting table than the one in reach
-  let k=Infinity; for (const [m,n] of Object.entries(r.mats)) k=Math.min(k, Math.floor(countItem(m)/n));
+  let k=Infinity; for (const [m,n] of Object.entries(r.mats)) k=Math.min(k, Math.floor(matCount(m)/n));
   k=Math.min(k, 99); while (k>0 && !craftFits(r,k)) k--; return k;
 }
-function bagBlocked(r){ return Object.entries(r.mats).every(([m,n])=>countItem(m)>=n) && !craftFits(r,1); }
+function bagBlocked(r){ return Object.entries(r.mats).every(([m,n])=>matCount(m)>=n) && !craftFits(r,1); }
 function doCraft(r, k){
   if (k<=0 || !recipeOpen(r) || !BN.canHere(r) || !craftFits(r,k)) return false;
-  for (const [m,n] of Object.entries(r.mats)) if (countItem(m)<n*k) return false;
-  for (const [m,n] of Object.entries(r.mats)) removeItem(m, n*k);
+  for (const [m,n] of Object.entries(r.mats)) if (matCount(m)<n*k) return false;
+  for (const [m,n] of Object.entries(r.mats)) matTake(m, n*k);   // bag first, then chests beside the table
   const n=recipeOut(r)*k; let isNew=false; for(let i=0;i<n;i++){ if(addItem(r.id)==='new') isNew=true; }
   const before=kindsMade(); S.craft.made+=k; track('craft',k); S.craft.kinds=S.craft.kinds||[];
   if (r.plan){ S.rare.made+=k; save(); Snd.chop(); setTimeout(()=>Snd.fanfare(),200); sparkle(player.pos.clone().add(new THREE.Vector3(0,2.2,0)));
@@ -6853,14 +6882,14 @@ function doCraft(r, k){
 // v1.13: rare plans sit at the top of Woodworking. Unfound ones show as silhouettes.
 const RARE_MATS = ['heartwood','goldsap','starstone','moonpearl','glimmermoss'];
 function rareCraftSection(){
-  const found=S.rare.plans.length, any=found || RARE_MATS.some(m=>countItem(m));
+  const found=S.rare.plans.length, any=found || RARE_MATS.some(m=>matCount(m));
   if (!any) return '';   // v1.24: the rare section stays secret until you find your first plan or rare ingredient
   let h=`<div class="notice" data-sgrp style="border-color:${RARITY_COLORS.Legendary}"><b>Rare plans</b> <span class="muted">· ${found} found${S.rare.made?` · ${S.rare.made} made`:''}</span>`;
   RARE_WORK.forEach((r,i)=>{ const it=ITEMS[r.id], known=knowsPlan(r.id);
     if (!known) return;
-    const mx=craftMax(r), mats=Object.entries(r.mats).map(([m,n])=>{ const have=countItem(m), ok=have>=n, rare=ITEMS[m].rare; return `<span style="color:${ok?'inherit':'#c0503a'};font-weight:${ok&&!rare?400:700}">${ITEMS[m].name} ${have}/${n}</span>`; }).join(' · ');
+    const mx=craftMax(r), mats=Object.entries(r.mats).map(([m,n])=>{ const have=matCount(m), ok=have>=n, rare=ITEMS[m].rare; return `<span style="color:${ok?'inherit':'#c0503a'};font-weight:${ok&&!rare?400:700}">${ITEMS[m].name} ${have}/${n}</span>`; }).join(' · ');
     h+=`<div class="row"${SQ.sk(it.name, Object.keys(r.mats).map(m=>ITEMS[m].name))} style="margin:8px 0 0"><img src="${thumb(r.id)}"><div class="grow"><div class="nm">${it.name} ${rarityTag(it)}</div><div class="sub">${mats}${BN.note(r)}${bagBlocked(r)?'<br><b>Your bag is full.</b> Make room first.':''}</div></div><button class="btn" data-rc="${i}" ${mx<=0?'disabled':''}>Make</button></div>`; });
-  if (any) h+=`<div data-shide style="margin-top:10px"><b style="font-size:13px">Rare ingredients</b>`+RARE_MATS.filter(m=>countItem(m)).map(m=>`<div class="sub" style="margin-top:4px"><b>${ITEMS[m].name} ${countItem(m)}</b></div>`).join('')+'</div>';
+  if (any) h+=`<div data-shide style="margin-top:10px"><b style="font-size:13px">Rare ingredients</b>`+RARE_MATS.filter(m=>matCount(m)).map(m=>`<div class="sub" style="margin-top:4px"><b>${ITEMS[m].name} ${matCount(m)}</b></div>`).join('')+'</div>';
   return h+'</div>'; }
 function openCraft(start){
   if (!S.craft && !S.cook) return;
@@ -6875,11 +6904,11 @@ function openCraft(start){
     pTitle.textContent='Woodworking';
     const kd=kindsMade(), left=woodUnknown().length;
     // v1.24: no progress bar or locked plans. New plans just turn up as you make things.
-    let h=tabsH+SQ.searchBox('Search plans or materials')+BN.banner()+`<div class="notice" data-shide><b>Woodworking</b> <span class="muted">· ${(S.craft.known||[]).length} plans known · ${fmt(S.craft.made)} crafted</span>`;
+    let h=tabsH+SQ.searchBox('Search plans or materials')+BN.banner()+TQ.note()+`<div class="notice" data-shide><b>Woodworking</b> <span class="muted">· ${(S.craft.known||[]).length} plans known · ${fmt(S.craft.made)} crafted</span>`;
     h+= left ? '' : `<br><span class="muted">You know every plan. Bramble would be proud.</span>`;
     if (left && woodWaiting()) h+=`<br><span class="muted">Your head's full of ideas. New plans will come to you tomorrow.</span>`;   // v1.50
     else if (left) h+=`<br><span class="muted">New plans come from making lots of <b>different</b> things. Making the same piece over and over won't teach you anything new.</span>`;
-    h+=`<div class="muted" style="margin-top:6px">Your materials: ${Object.keys(MAT_NAMES).map(m=>`${MAT_NAMES[m]} ${countItem(m)}`).join(' · ')}</div></div>`;
+    h+=`<div class="muted" style="margin-top:6px">Your materials: ${Object.keys(MAT_NAMES).map(m=>`${MAT_NAMES[m]} ${matCount(m)}`).join(' · ')}</div></div>`;
     h+=`<div data-shide>${EN.fixNote()}</div>`;   // v1.50: broken or nearly worn-out tools, with a jump to the Tools tab
     h+=rareCraftSection();
     // v1.34: study a piece you own to work out its plan
@@ -6893,7 +6922,7 @@ function openCraft(start){
       if (filter==='now' && mx<=0) return; shown++;
       if (!open){ shown--; return; }
       const q=Math.max(1, Math.min(qty[i]||1, Math.max(1,mx)));
-      const mats=Object.entries(r.mats).map(([m,n])=>{ const have=countItem(m), ok=have>=n*q; return `<span style="color:${ok?'inherit':'#c0503a'};font-weight:${ok?400:700}">${MAT_NAMES[m]||ITEMS[m].name} ${have}/${n*q}</span>`; }).join(' · ');
+      const mats=Object.entries(r.mats).map(([m,n])=>{ const have=matCount(m), ok=have>=n*q; return `<span style="color:${ok?'inherit':'#c0503a'};font-weight:${ok?400:700}">${MAT_NAMES[m]||ITEMS[m].name} ${have}/${n*q}</span>`; }).join(' · ');
       const out=recipeOut(r)*q;
       h+=`<div class="row"${SQ.sk(it.name, Object.keys(r.mats).map(m=>MAT_NAMES[m]||ITEMS[m].name))}><img src="${thumb(r.id)}"><div class="grow"><div class="nm">${it.name}${S.craft.kinds&&!S.craft.kinds.includes(r.id)?' <span style="color:#d08a10;font-size:12px">NEW</span>':''}${recipeOut(r)>1?` <span class="muted">x${recipeOut(r)}</span>`:''}</div><div class="sub">${mats}${BN.note(r)}${bagBlocked(r)?'<br><b>Your bag is full.</b> Make room first.':''}</div>
         <div style="display:flex;gap:6px;align-items:center;margin-top:6px;flex-wrap:wrap">
@@ -6924,7 +6953,7 @@ function fillThumbs(root){ const step=()=>{ const imgs=[...root.querySelectorAll
 function openBook(tab='fish'){
   const tabs=[['fish','Fish'],['bug','Bugs'],['fossil','Fossils'],['shell','Beach'],['flower','Flowers'],['furniture','Furniture']];
   const render=()=>{
-    const list=Object.values(ITEMS).filter(i=>i.kind===tab && !i.custom);   // v1.63 custom pieces aren't in the catalog const got=list.filter(i=>S.seen[i.id]).length;
+    const list=Object.values(ITEMS).filter(i=>i.kind===tab && !i.custom), got=list.filter(i=>S.seen[i.id]).length;   // v1.63 custom pieces aren't in the catalog
     let h='<div class="tabs">'+tabs.map(([k,n])=>`<button class="tab${k===tab?' on':''}" data-t="${k}">${n}</button>`).join('')+'</div>';
     h+=`<div class="muted" style="margin-bottom:8px">${got} of ${list.length} discovered</div><div class="bar" style="margin-bottom:12px"><div style="width:${got/list.length*100}%"></div></div>`;
     for(const it of list){ const k=!!S.seen[it.id]; let sub='';
@@ -9027,9 +9056,11 @@ function checkPlace(){
   const p=placing.m.position, it=ITEMS[placing.id]; let ok=walkable(p.x,p.z) && Math.hypot(p.x-player.pos.x,p.z-player.pos.z)>0.6 && !onDock(p.x,p.z) && !onBridge(p.x,p.z);
   if (placing.mode==='furn') ok = ok && (isFence(placing.id) ? !blockedFence(p.x,p.z,placing.moving) : it.flat ? !blockedFlat(p.x,p.z,it.r) : !blocked(p.x,p.z,it.r));
   else ok = ok && plantSpotOk(p.x,p.z,it);
-  placing.ok=ok; placing.m.traverse(c=>{ for(const mt of (Array.isArray(c.material)?c.material:[c.material])) if(mt&&mt.emissive&&!c.userData.outline) mt.emissive.setHex(ok?0x000000:0x882020); }); if(placing.ring) placing.ring.material.color.setHex(ok?0xffffff:0xe2604d); $('#pOk').disabled=!ok; return ok;
+  placing.ok=ok; placing.m.traverse(c=>{ for(const mt of (Array.isArray(c.material)?c.material:[c.material])) if(mt&&mt.emissive&&!c.userData.outline) mt.emissive.setHex(ok?0x000000:0x882020); }); if(placing.ring) placing.ring.material.color.setHex(ok?0xffffff:0xe2604d); $('#pOk').disabled=!ok;
+  if (placing.mode==='furn') TQ.showLines(placing.id, p.x, p.z, placing.moving && placing.moving.rec);   // faint tether lines: chest to crafting spot
+  return ok;
 }
-function endPlacing(){ const mv=placing.moving; if (mv && !placing.done){ mv.obj.visible=true; mv.solid=!ITEMS[mv.rec.id].flat; } scene.remove(placing.m); placing=null; $('#placeBar').classList.remove('show'); }
+function endPlacing(){ TQ.clearLines(); TQ.fresh(); const mv=placing.moving; if (mv && !placing.done){ mv.obj.visible=true; mv.solid=!ITEMS[mv.rec.id].flat; } scene.remove(placing.m); placing=null; $('#placeBar').classList.remove('show'); }
 const turnBy = a => { if(!placing) return; if (placing.mode==='orchard'){ placing.orient^=1; Snd.click(); checkOrchard(); return; } if (placing.mode==='grid'){ placing.orient^=1; Snd.click(); checkGrid(); return; } if (isFence(placing.id)) a=Math.sign(a)*Math.PI/4; placing.rot=((placing.rot+a)%TAU+TAU)%TAU; placing.m.rotation.y=placing.rot; Snd.click(); checkPlace(); };
 $('#pRotL').onclick=()=>turnBy(Math.PI/12); $('#pRotR').onclick=()=>turnBy(-Math.PI/12);
 $('#pNo').onclick=()=>{ endPlacing(); Snd.click(); };
@@ -9999,3 +10030,4 @@ window.__game.v172 = { nurseCap, nurseBase, nurseToday, openNursery, NURSE_STEPS
   // the open dialog, fast-forwarded to its choices (or closed): { name, lines, choices }
   dlgRun(){ const d=dlgState; if (!d) return null; const lines=[d.full, ...d.lines.slice(d.i)]; for (let k=0;k<40 && dlgState===d;k++){ d.chars=d.full.length; if (dlgChoices.children.length) break; advanceDialog(); }
     return { name:d.name, lines, choices:[...dlgChoices.children].map(b=>b.textContent) }; } };   // v1.75 tests
+window.__game.tether = { TQ, matCount, matTake, sortList, cookMax:r=>cookMax(r), craftMax:r=>craftMax(r) };   // v1.76 chests feeding crafting, sorting: tests

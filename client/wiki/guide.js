@@ -53,7 +53,8 @@ ${tip('Everything unlocks quietly. Characters hint at what they want in their ow
 <table class="t"><tr><th>Key</th><th>Does</th></tr>
 <tr><td>W A S D</td><td>Walk</td></tr><tr><td>E or Enter</td><td>Use, talk, pick up</td></tr>
 <tr><td>Space</td><td>Swing your tool (chop, dig, cast, catch, water)</td></tr><tr><td>Q</td><td>Switch tool</td></tr>
-<tr><td>B</td><td>Bike</td></tr><tr><td>G</td><td>Sled (winter)</td></tr><tr><td>I</td><td>Bag</td></tr><tr><td>Z / C</td><td>Turn the camera</td></tr></table>
+<tr><td>B</td><td>Bike</td></tr><tr><td>G</td><td>Sled (winter)</td></tr><tr><td>I</td><td>Bag</td></tr><tr><td>Z / C</td><td>Turn the camera</td></tr><tr><td>Hold Shift, or X</td><td>Sneak: walk slowly so bugs don't notice you. X turns it on and off.</td></tr></table>
+<p><b>Sneaking up on bugs.</b> A bug may fly or run off when you come close at a normal walk. Sneaking (hold Shift, or press X) slows you to 40% speed and you crouch a little; while you sneak, bugs never notice you, even when you clicked on one to walk to it. Standing still never scares them either. On a phone, push the joystick only a little to creep up the same way.</p>
 <p>Drag to look around. Clicking the ground walks you there (turn it off in Menu &gt; Controls). Every key can be changed in Menu &gt; Controls.</p>
 <p>Clicking one thing a tree or rock dropped (fruit, branches, wood, stone, clay, iron, and any rare find, plan or scroll from it) picks up everything else that same tree or rock dropped, as long as it fits in your bag. Pieces still falling go straight into your bag when they land. Pressing E picks up one thing at a time. Beach finds and things you dropped yourself are always picked up one at a time.</p>
 <h3>Phone and tablet</h3>

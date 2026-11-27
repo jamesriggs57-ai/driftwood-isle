@@ -177,7 +177,7 @@ else if (S.settings.controls.move!=='tap') S.settings.controls.move='joystick';
 function saveControls(){ try { localStorage.setItem(CTRL_KEY, JSON.stringify(S.settings.controls)); } catch(e){} }
 saveControls();
 // Keyboard shortcuts (Menu > Controls lets you change them)
-const KEY_DEFAULT = { act:'e', swing:' ', tool:'q', bike:'b', sled:'g', bag:'i', turnL:'z', turnR:'c' };
+const KEY_DEFAULT = { act:'e', swing:' ', tool:'q', bike:'b', sled:'g', bag:'i', turnL:'z', turnR:'c', sneak:'x' };   // v1.72 sneak: X turns slow walking on and off (holding Shift works too)
 S.settings.keys = Object.assign({}, KEY_DEFAULT, S.settings.keys||{});
 const KB = () => S.settings.keys;
 if (S.settings.bright===undefined) S.settings.bright=1;
@@ -1582,6 +1582,16 @@ class Peddler extends Ent {
   turn(want, k){ let df=want-this.obj.rotation.y; df=Math.atan2(Math.sin(df),Math.cos(df)); this.obj.rotation.y+=df*Math.min(1,k); }
 }
 
+/* v1.72 sneaking on a computer: hold Shift, or press X to turn it on and off. You walk at 40% speed, crouch a little,
+   and bugs never notice you, even the one you clicked on. (A joystick pushed only a little sneaks the same way on a phone.) */
+const SNEAK_SPD=0.4;
+let sneakOn=false, sneakEl=null;
+const sneaking = () => !riding && !sledding && (sneakOn || !!keys['shift']);
+function setSneak(on){ sneakOn=!!on; if (on && (riding || sledding)) sneakOn=false;
+  if (!sneakEl){ sneakEl=document.createElement('div'); sneakEl.className='pill'; sneakEl.id='sneakPill'; sneakEl.style.cssText='position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 18px);transform:translateX(-50%);z-index:5;padding:6px 14px;font-weight:700;font-size:14px;pointer-events:none;display:none'; document.body.appendChild(sneakEl); }
+  sneakEl.textContent=`Sneaking (${keyName(KB().sneak||'x')} to stop)`; sneakEl.style.display=sneakOn?'block':'none'; Snd.click(); }
+function sneakTip(){ if (isTouchDevice || S.settings.sneakTip || player.speedFrac<=0.55) return; S.settings.sneakTip=1; save();
+  setTimeout(()=>toast('Too fast! It saw you coming.', null, '', `Hold Shift, or press ${keyName(KB().sneak||'x')}, to sneak up on bugs.`), 300); }
 /* ---------- Bugs: sneak up slowly, or they flee ---------- */
 const bugs=[];
 const CATCH_BASE = { 'Common':0.85, 'Uncommon':0.72, 'Rare':0.58, 'Very rare':0.48, 'Legendary':0.4 };
@@ -1617,7 +1627,7 @@ class Bug extends Ent {
   update(dt,t){
     this.ph+=dt; const W=this.where;
     const pd=Math.hypot(player.pos.x-this.pos.x, player.pos.z-this.pos.z);
-    if (!this.flee && CatchMeter.bug!==this && pd < (W==='air'?2.6:3.2) && Math.random()<SKITTISH[this.rarity]*EN.sure('net').flee*dt*(player.speedFrac>0.55 ? 1 : player.targetEnt===this && player.speedFrac>0.05 ? 0.18 : 0)){ this.startFlee(); }
+    if (!this.flee && CatchMeter.bug!==this && pd < (W==='air'?2.6:3.2) && Math.random()<SKITTISH[this.rarity]*EN.sure('net').flee*dt*(player.speedFrac>0.55 ? 1 : player.targetEnt===this && player.speedFrac>0.05 && !sneaking() ? 0.18 : 0)){ this.startFlee(); sneakTip(); }
     if (this.flee){ this.flee+=dt; const sp=W==='air'||W==='flower'||W==='trunk'?5:3.5; this.pos.x+=Math.cos(this.fleeDir)*sp*dt; this.pos.z+=Math.sin(this.fleeDir)*sp*dt; if(W!=='ground'&&W!=='beach'&&W!=='pond') this.pos.y+=dt*2.5; this.obj.position.copy(this.pos); this.obj.rotation.y=Math.atan2(Math.cos(this.fleeDir),Math.sin(this.fleeDir)); this.flap(t,2); if(this.flee>2.2) this.despawn(); return; }
     if (W==='air'){ const w=this.ph*0.6; const x=this.home.x+Math.sin(w)*2.2+Math.sin(w*2.3)*0.8, z=this.home.z+Math.cos(w*0.8)*2.2; const ang=Math.atan2(x-this.pos.x, z-this.pos.z); this.pos.set(x, groundY(x,z)+this.alt+Math.sin(this.ph*3)*0.25, z); this.obj.rotation.y=ang; this.flap(t,1); }
     else if (W==='flower'){ if (Math.sin(this.ph*0.7)>0.93){ this.pos.y=groundY(this.pos.x,this.pos.z)+0.4+Math.sin(this.ph*8)*0.15; this.flap(t,1); } else { this.pos.y=groundY(this.pos.x,this.pos.z)+0.3; this.flap(t,0.15); } }
@@ -8656,7 +8666,7 @@ function openBoard(){
 
 /* Menu: settings, controls, testing tools */
 let menuOpen=false;
-const KEY_ROWS=[['act','Use / talk / pick up (Enter works too)'],['swing','Use your tool (chop, dig, cast...)'],['tool','Switch tool'],['bike','Hop on the bike'],['sled','Ride the sled'],['bag','Open the bag'],['turnL','Turn the view left'],['turnR','Turn the view right']];
+const KEY_ROWS=[['act','Use / talk / pick up (Enter works too)'],['swing','Use your tool (chop, dig, cast...)'],['tool','Switch tool'],['bike','Hop on the bike'],['sled','Ride the sled'],['bag','Open the bag'],['turnL','Turn the view left'],['turnR','Turn the view right'],['sneak','Sneak on or off (or hold Shift)']];
 const keyName = k => k===' '?'Space' : k.length===1 ? k.toUpperCase() : k[0].toUpperCase()+k.slice(1);
 function openMenu(){
   const c=CT();
@@ -8667,7 +8677,7 @@ function openMenu(){
     <label class="f">Brightness</label><input type="range" id="mBr" min="0.7" max="1.7" step="0.05" value="${S.settings.bright}">
     <label class="f">Battery saver <select id="mSaver"><option value="0">Off</option><option value="1">On</option></select></label><div class="muted" style="font-size:13px">Lower resolution, no shadows and less grass. Runs cooler.</div>
     <div class="notice" style="margin-top:14px"><b>Controls</b>
-      ${isTouchDevice?'':`<div class="muted" style="margin:4px 0 6px">WASD or the arrow keys walk (hold Shift to sneak). Drag with the mouse, or swipe sideways with two fingers on a trackpad, to look around. Click things that are close by to use them.</div>
+      ${isTouchDevice?'':`<div class="muted" style="margin:4px 0 6px">WASD or the arrow keys walk. Hold Shift, or press the sneak key, to walk slowly so bugs don't notice you. Drag with the mouse, or swipe sideways with two fingers on a trackpad, to look around. Click things that are close by to use them.</div>
       ${KEY_ROWS.map(([k,n])=>`<div class="row" style="padding:4px 0"><div class="grow">${n}</div><button class="btn alt" data-kb="${k}" style="min-width:70px">${keyName(KB()[k])}</button></div>`).join('')}
       <button class="btn alt" id="kbReset" style="margin-top:6px">Reset keys</button>
       <label class="f">Click the ground to walk there <select id="cClick"><option value="1">On</option><option value="0">Off</option></select></label>`}
@@ -9148,6 +9158,7 @@ addEventListener('keydown', e=>{ if(e.target.tagName==='INPUT'||e.target.tagName
   if (k===kb.act||k==='enter'){ e.preventDefault(); if (performance.now()>popupCool) doAction(); return; }
   if (scrim.classList.contains('show')){ if (k===kb.bag && !menuOpen) closePanel(); return; }
   if (PERCH) return;   // v1.39 fixes: no bike, sled, tools or bag on the lighthouse stair or gallery
+  if (k===kb.sneak && !isTouchDevice){ setSneak(!sneakOn); return; }   // v1.72
   if (k===kb.tool) cycleTool(); else if (k===kb.bike) toggleBike(); else if (k===kb.sled) toggleSled(); else if (k===kb.bag && !buildMode && !placing) openBag(); });
 let keyCapture=null;   // set while Menu > Controls waits for you to press a new key
 /* v1.34: while a pop-up is up (a panel, the Friends panel, the tool or More menu, or a big announcement card),
@@ -9365,11 +9376,12 @@ function movePlayer(dt,t){
   if (dlgState && player.target) stopMove();   // v1.34: you stand still while someone is talking to you
   const jm=Math.hypot(joy.x,joy.y), busy=dlgState||placing||layoutMode||buildMode||CatchMeter.bug||magicMode||cine||knockedDown();
   if (joy.active && jm>0.15 && !busy){ stopMove(); if(Fishing.state!=='idle') reel(); mv=new THREE.Vector3(joy.x*Math.cos(camYaw)+joy.y*Math.sin(camYaw),0,-joy.x*Math.sin(camYaw)+joy.y*Math.cos(camYaw)).normalize(); spd=clamp((jm-0.15)/0.7,0.25,1); hideHint(); }
-  else if ((kx||kz) && !busy){ stopMove(); if(Fishing.state!=='idle') reel(); mv=new THREE.Vector3(kx*Math.cos(camYaw)+kz*Math.sin(camYaw),0,-kx*Math.sin(camYaw)+kz*Math.cos(camYaw)).normalize(); if(keys['shift']) spd=0.4; hideHint(); }
+  else if ((kx||kz) && !busy){ stopMove(); if(Fishing.state!=='idle') reel(); mv=new THREE.Vector3(kx*Math.cos(camYaw)+kz*Math.sin(camYaw),0,-kx*Math.sin(camYaw)+kz*Math.cos(camYaw)).normalize(); if(sneaking()) spd=SNEAK_SPD; hideHint(); }
   else if (player.target){
     if (player.targetEnt){ if(player.targetEnt.removed) stopMove(); else player.target.copy(player.targetEnt.pos); }
     if (player.target){ const d=player.target.clone().sub(player.pos); d.y=0; const L=d.length(); const stopAt=player.targetEnt?player.targetEnt.reach:0.15;
       if (player.targetEnt instanceof Bug && L<5) spd=0.35;
+      if (sneaking()) spd=Math.min(spd, SNEAK_SPD);   // v1.72 clicking to walk sneaks too
       if (L<=stopAt){ const cb=player.cb; stopMove(); if(cb) cb(); }
       else {
         // moving targets (bugs, islanders): re-plan now and then
@@ -9520,6 +9532,7 @@ let riding=false, bikeObj=null;
 const BIKE_SVG='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><circle cx="8" cy="21" r="5.5" fill="none" stroke="#5b4336" stroke-width="2.5"/><circle cx="24" cy="21" r="5.5" fill="none" stroke="#5b4336" stroke-width="2.5"/><path d="M8 21l6-9h8l2 9M14 12l4 9h-10M20 9h4" fill="none" stroke="#d8604a" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 function bikeThumb(){ return 'data:image/svg+xml,'+encodeURIComponent(BIKE_SVG); }
 function setRiding(on){
+  if (on && sneakOn) setSneak(false);   // v1.72
   on = !!on && !!S.bike && !World.inside && !buildMode;
   if (on===riding) return; riding=on;
   if (on && !bikeObj){ bikeObj=buildBike(); }
@@ -9551,6 +9564,7 @@ function toggleSled(){
   if (!snowyEnough()){ toast('There\'s no snow to sled on.'); Snd.fail(); return; }
   setSled(true); }
 function setSled(on){
+  if (on && sneakOn) setSneak(false);   // v1.72
   if (on===sledding) return; sledding=on; const u=player.obj.userData;
   if (on){ track('sled'); if (riding) setRiding(false); stopMove(); if (Fishing.state!=='idle') reel(); if (!sledObj){ sledObj=buildItemModel('sled'); sledObj.scale.setScalar(1.15); } player.obj.add(sledObj); if (u.body) u.body.position.y=0.18; sledV.set(Math.sin(player.face)*1.5, Math.cos(player.face)*1.5); Snd.pop();
   }
@@ -9644,6 +9658,7 @@ function bumpFriends(dt){
 function updateRemotes(dt,t){
   if (started && !buildMode) bumpFriends(dt);
   jelly(player.obj, playerJelly, dt, player.speedFrac>0.05, t, player.speedFrac*(riding?1.6:1));
+  { const u=player.obj.userData; playerJelly.crouch=lerp(playerJelly.crouch||0, sneaking() && !World.inside ? 1 : 0, Math.min(1,dt*8)); if (u.body && playerJelly.crouch>0.01){ const c=playerJelly.crouch; u.body.scale.y*=1-0.12*c; u.body.scale.x*=1+0.05*c; u.body.scale.z*=1+0.05*c; u.body.rotation.x+=0.22*c; } }   // v1.72 a little crouch while sneaking
   for (const r of remotes.values()){ r.jel=r.jel||{}; jelly(r.obj, r.jel, dt, !!r.w, t); PETS.remoteUpdate(r, dt, t);
     r.pos.lerp(r.tgt, Math.min(1, dt*(r.rg?14:8))); r.obj.position.copy(r.pos);
     r.obj.visible = r.seen && (r.in||null)===(World.inside||null);

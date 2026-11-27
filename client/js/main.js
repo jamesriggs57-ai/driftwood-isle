@@ -9000,7 +9000,7 @@ function checkGrid(){ const P=placing, m=P.m, ax=m.position.x, az=m.position.z;
   const near=S.plants.filter(q=>q.x>(i0-1)*CELL && q.x<(i0+EW+1)*CELL && q.z>(j0-1)*CELL && q.z<(j0+EH+1)*CELL);
   const { out, bad }=gridFill(i0, j0, P, near); P.cells=out;
   const cx=(i0+(EW-1)/2)*CELL, cz=(j0+(EH-1)/2)*CELL; P.box=[i0*CELL, (i0+EW-1)*CELL, j0*CELL, (j0+EH-1)*CELL];
-  const d=new THREE.Object3D(); let k=0; const put=([i,j],col)=>{ const x=i*CELL, z=j*CELL; d.position.set(x-cx, groundY(x,z)+0.09, z-cz); d.updateMatrix(); P.tiles.setMatrixAt(k,d.matrix); P.tiles.setColorAt(k,col); k++; };
+  const d=new THREE.Object3D(); let k=0; const put=([i,j],col)=>{ const x=i*CELL, z=j*CELL; let y=groundY(x,z); for (const [a,b] of [[-0.36,-0.36],[0.36,-0.36],[-0.36,0.36],[0.36,0.36]]) y=Math.max(y, groundY(x+a,z+b)); d.position.set(x-cx, y+0.09, z-cz); d.updateMatrix(); P.tiles.setMatrixAt(k,d.matrix); P.tiles.setColorAt(k,col); k++; };
   out.forEach(c=>put(c,GREEN)); bad.slice(0, P.tiles.instanceMatrix.count-out.length).forEach(c=>put(c,RED)); P.tiles.count=k; P.tiles.instanceMatrix.needsUpdate=true; if (P.tiles.instanceColor) P.tiles.instanceColor.needsUpdate=true;
   m.position.set(cx, 0, cz);
   P.ok=out.length>0; $('#pOk').disabled=!P.ok; $('#pOk').textContent=out.length?`Plant ${out.length}`:'No room'; return P.ok; }

@@ -1419,20 +1419,101 @@ function rebuildGardens(){
 class Furniture extends Ent {
   constructor(rec){ const it=ITEMS[rec.id]; super('furn',rec.x,rec.z,it.r); this.rec=rec; this.solid=!it.flat; this.reach=it.r+1.1; const m=buildItemModel(rec.id); m.rotation.y=rec.rot||0; const g=new THREE.Group(); g.add(m); this.attach(g); this.model=m; if(it.flat) this.hitSphere(0.9,0.1); }
   get station(){ return (this.rec.id==='stove'||this.rec.id==='campfire') && S.cook; }
-  label(){ return BN.isBench(this.rec.id) && S.craft ? 'Craft' : this.rec.id==='sewmachine' ? 'Sew' : this.station ? 'Cook' : ITEMS[this.rec.id].store ? 'Open' : 'Arrange'; }
-  act(){ const store=ITEMS[this.rec.id].store;
+  label(){ const sk=seatKind(this.rec.id); if (sk==='sit'||sk==='lie') return player.seat && player.seat.e===this ? 'Stand up' : sk==='lie' ? 'Lie down' : 'Sit';   // v1.72
+    return BN.isBench(this.rec.id) && S.craft ? 'Craft' : this.rec.id==='sewmachine' ? 'Sew' : this.station ? 'Cook' : ITEMS[this.rec.id].store ? 'Open' : 'Arrange'; }
+  act(){ const store=ITEMS[this.rec.id].store, sk=seatKind(this.rec.id), mine=player.seat && player.seat.e===this, off=()=>{ if (player.seat && player.seat.e===this) standUp(); };
+    const seatOpt = mine ? [{ label:'Stand up', fn:()=>standUp() }] : sk==='sit' ? [{ label:'Sit', fn:()=>sitOn(this) }] : sk==='lie' ? [{ label:'Lie down', fn:()=>sitOn(this) }] : sk==='table' && seatsBy(this).length ? [{ label:'Sit at the table', fn:()=>sitOn(this) }] : [];   // v1.72
+    if (!CAN_EDIT && seatOpt.length && !(BN.isBench(this.rec.id) && S.craft) && !this.station && this.rec.id!=='sewmachine'){ seatOpt[0].fn(); return; }   // visitors can sit too
     if (!CAN_EDIT){ if (this.rec.id==='sewmachine') SX.open(); else if (BN.isBench(this.rec.id) && S.craft) openCraft(); else if (this.station) openCraft('cook'); else if (store) toast('It\'s locked. Only the islanders who live here can open it.'); else toast('Nice, isn\'t it?'); return; }
     showChoices(ITEMS[this.rec.id].name, [
+    ...seatOpt,
     ...(this.rec.id==='sewmachine' ? [{ label:'Sew', fn:()=>SX.open() }] : []),   // v1.64
     ...(this.station ? [{ label:'Cook', fn:()=>openCraft('cook') }] : []),
     ...(store ? [{ label:'Open', fn:()=>openChest(this.rec) }] : []),
     ...(BN.isBench(this.rec.id) && S.craft ? [{ label:'Woodworking', fn:()=>openCraft() }] : []),
-    { label:'Move', fn:()=>startPlacing(this.rec.id,'furn',this) },
-    { label:'Rotate', fn:()=>{ this.rec.rot=((this.rec.rot||0)+Math.PI/4)%TAU; this.model.rotation.y=this.rec.rot; Snd.click(); save(); } },
-    { label:'Pick up', fn:()=>{ if (store && this.rec.store && this.rec.store.length){ toast('Empty the chest before you pick it up.'); Snd.fail(); return; } if(!addItem(this.rec.id)){ toast('Your bag is full.'); return; } S.placed.splice(S.placed.indexOf(this.rec),1); this.remove(); Snd.pop(); save(); } },
+    { label:'Move', fn:()=>{ off(); startPlacing(this.rec.id,'furn',this); } },
+    { label:'Rotate', fn:()=>{ off(); this.rec.rot=((this.rec.rot||0)+Math.PI/4)%TAU; this.model.rotation.y=this.rec.rot; Snd.click(); save(); } },
+    { label:'Pick up', fn:()=>{ off(); if (store && this.rec.store && this.rec.store.length){ toast('Empty the chest before you pick it up.'); Snd.fail(); return; } if(!addItem(this.rec.id)){ toast('Your bag is full.'); return; } S.placed.splice(S.placed.indexOf(this.rec),1); this.remove(); Snd.pop(); save(); } },
     { label:'Leave it', alt:true, fn:()=>{} } ]); }
   update(dt,t){ runAnims(this.model, this.obj, t, dt); }
 }
+/* v1.72 sitting: chairs, stools, benches and the picnic blanket sit you down; beds and the hammock lay you down.
+   Tap a table to sit on the closest seat beside it. Walking, tapping somewhere else, Swing or the action button stands you up.
+   Where to sit is read off the model itself: a ray down finds the seat (or mattress), rays out from just above it find the back,
+   and you face away from the back (or away from where you stood, on a stool or a beanbag). */
+const SEAT_IDS=new Set(['stool','bench','armchair','ottoman','rocker','driftchair','stumpstool','stumpbench','carvebench','cloudbag','eggchair','porchswing','blanket']);
+const BED_IDS=new Set(['bed','fourposter','hammock']);
+const TABLE_IDS=new Set(['table','desk','sidetable','longtable','captaindesk','stumptable','vanity','chesstable']);
+function seatKind(id){ id=String(id||''); if (SEAT_IDS.has(id)) return 'sit'; if (BED_IDS.has(id)) return 'lie'; if (TABLE_IDS.has(id)) return 'table';
+  if (id.startsWith('cf_')) return id[3]==='c' ? 'sit' : id[3]==='b' ? 'lie' : id[3]==='t' ? 'table' : null; return null; }
+const SIT_DY=0.27, LIE_DY=0.44, LIE_LEN=2.0, BACK_GAP=0.3;   // seat top to your feet, mattress to your back, feet to the top of your head, how far your back sits from the middle
+const _sr=new THREE.Raycaster(), _so=new THREE.Vector3(), _sdir=new THREE.Vector3();
+function seatRay(m, ox,oy,oz, dx,dy,dz, far){ _sr.camera=camera; _sr.set(_so.set(ox,oy,oz), _sdir.set(dx,dy,dz)); _sr.near=0; _sr.far=far;
+  for (const h of _sr.intersectObject(m, true)){ const o=h.object, mt=o.material; if (!o.isMesh || !o.visible || (mt && !Array.isArray(mt) && mt.transparent && mt.opacity<0.5)) continue; return h; } return null; }
+// where you go and which way you face on a piece of furniture, worked out in the piece's own frame, then turned to match it
+function seatInfo(e, lookAt){
+  const kind=seatKind(e.rec.id); if (kind!=='sit' && kind!=='lie') return null;
+  const m=e.model, rot=m.rotation.y; m.rotation.y=0; m.updateWorldMatrix(true,true);
+  const sided=[]; m.traverse(o=>{ if (o.isMesh) for (const mt of [].concat(o.material||[])) if (mt.side!==THREE.DoubleSide){ sided.push([mt,mt.side]); mt.side=THREE.DoubleSide; } });   // the inside of a bowl or an egg counts as a surface too
+  try {
+    const box=new THREE.Box3().setFromObject(m), cx=e.pos.x, cz=e.pos.z, base=box.min.y, bx=(box.min.x+box.max.x)/2-cx, bz=(box.min.z+box.max.z)/2-cz;
+    const cap=kind==='lie'?1.3:1.15, down=(x,z,c=cap)=>{ const h=seatRay(m, cx+x, base+c, cz+z, 0,-1,0, c+0.05); return h ? h.point.y : null; };
+    const mid=a=>{ a=a.filter(v=>v!=null).sort((p,q)=>p-q); return a.length ? a[a.length>>1] : null; };
+    const W=(lx,lz)=>({ x:cx+lx*Math.cos(rot)+lz*Math.sin(rot), z:cz-lx*Math.sin(rot)+lz*Math.cos(rot) });
+    if (kind==='sit'){
+      const sx=0, sz=0; let top=mid([[0,0],[0.12,0],[-0.12,0],[0,0.12],[0,-0.12]].map(([ox,oz])=>down(sx+ox, sz+oz)));
+      if (top==null) top=base+0.45;
+      const r=Math.max(0.6,(ITEMS[e.rec.id].r||0.5)+0.3), dirs=[[0,1],[0,-1],[1,0],[-1,0]];
+      const dist=dirs.map(([dx,dz])=>{ const hs=[-0.1,0,0.1].map(o=>seatRay(m, cx+sx+dz*o, top+0.25, cz+sz+dx*o, dx,0,dz, r)).filter(h=>h).map(h=>h.distance); return hs.length ? Math.min(...hs) : null; });   // three rays, so slats and spindles count
+      let pick=-1, best=1e9; dirs.forEach((d,i)=>{ const op=i^1; if (dist[i]==null && dist[op]!=null && dist[op]<best){ best=dist[op]; pick=i; } });
+      let fl;   // the way you face, in the piece's frame
+      if (pick>=0) fl=Math.atan2(dirs[pick][0], dirs[pick][1]);
+      else { const L=lookAt||[player.pos.x, player.pos.z]; fl=Math.atan2(L[0]-cx, L[1]-cz)-rot; }
+      const off = pick>=0 ? clamp(BACK_GAP-best, 0, 0.35) : 0, p=W(sx+Math.sin(fl)*off, sz+Math.cos(fl)*off);
+      return { lie:false, x:p.x, z:p.z, y:top-SIT_DY, face:fl+rot, back:pick>=0 };
+    }
+    // lying down: along the long side, head at the taller end (the headboard), or away from you if both ends match
+    const lx=box.max.x-box.min.x, lz=box.max.z-box.min.z, alongZ=lz>=lx, L=Math.max(lx,lz);
+    let top=mid([[0,0],[0.2,0],[-0.2,0],[0,0.2],[0,-0.2]].map(([ox,oz])=>down(bx+ox, bz+oz)));
+    if (top==null) top=base+0.5;
+    const wall=(sg,h)=>{ const hit=seatRay(m, cx+bx, top+h, cz+bz, alongZ?0:sg, 0, alongZ?sg:0, L/2+0.1); return hit ? 1 : 0; };
+    const ends=[1,-1].map(sg=>wall(sg,0.25)*2+wall(sg,0.55));   // a headboard reaches higher than a footboard
+    let s = ends[0]>ends[1] ? 1 : ends[1]>ends[0] ? -1 : 0;
+    if (!s){ const a=W(alongZ?bx:bx+L/2, alongZ?bz+L/2:bz); s = Math.hypot(a.x-player.pos.x, a.z-player.pos.z) > Math.hypot(2*cx-a.x-player.pos.x, 2*cz-a.z-player.pos.z) ? 1 : -1; }
+    const hx=alongZ?0:s, hz=alongZ?s:0, d=Math.min(0, L/2-0.15-LIE_LEN), p=W(bx+hx*d, bz+hz*d);   // the top of your head just short of the head end
+    return { lie:true, x:p.x, z:p.z, y:top+LIE_DY, face:Math.atan2(-hx,-hz)+rot, back:true };   // face is where your feet point; your head goes the other way
+  } finally { m.rotation.y=rot; m.updateWorldMatrix(true,true); for (const [mt,sd] of sided) mt.side=sd; }
+}
+const seatsBy = t => ents.filter(e=>e instanceof Furniture && !e.removed && e!==t && seatKind(e.rec.id)==='sit' && entVisible(e) && Math.hypot(e.pos.x-t.pos.x, e.pos.z-t.pos.z) <= (ITEMS[t.rec.id].r||0.6)+(ITEMS[e.rec.id].r||0.5)+0.9)
+  .sort((a,b)=>Math.hypot(a.pos.x-player.pos.x, a.pos.z-player.pos.z)-Math.hypot(b.pos.x-player.pos.x, b.pos.z-player.pos.z));
+function sitOn(e){
+  let look=null; if (seatKind(e.rec.id)==='table'){ const s=seatsBy(e)[0]; if (!s){ toast('Put a chair or a stool by the table to sit at it.'); return false; } look=[e.pos.x, e.pos.z]; e=s; }
+  const I=seatInfo(e, look); if (!I) return false;
+  if (player.seat) standUp(true); if (riding) setRiding(false); if (sledding) setSled(false); if (sneakOn) setSneak(false); if (Fishing.state!=='idle') reel(); stopMove();
+  player.seat={ e, ...I, from:[player.pos.x, player.pos.z], inside:World.inside||null };
+  player.pos.set(I.x, World.inside?0:groundY(I.x,I.z), I.z); player.face=I.face;
+  const o=player.obj; o.position.set(I.x, I.y, I.z); o.rotation.order='YXZ'; o.rotation.set(I.lie?-Math.PI/2:0, I.face, 0);
+  const tail=o.userData.tail; if (I.lie && tail){ player.seat.tail=tail.visible; tail.visible=false; }   // tucked under the covers
+  playerJelly.v=(playerJelly.v||0)-2; Snd.pop(); hideHint();
+  if (!S.settings.sitTip){ S.settings.sitTip=1; save(); toast(isTouchDevice ? 'Move the stick or tap somewhere else to get up.' : 'Walk, click somewhere else or press '+KB().act.toUpperCase()+' to get up.'); }
+  return true; }
+function standUp(quiet){ const s=player.seat; if (!s) return; player.seat=null; const o=player.obj; o.rotation.set(0, o.rotation.y, 0); o.rotation.order='XYZ'; (o.userData.legs||[]).forEach(l=>l.rotation.x=0);
+  if (s.tail!==undefined && o.userData.tail) o.userData.tail.visible=s.tail;
+  if (quiet) return;
+  const e=s.e, r=(ITEMS[e.rec.id]||{}).r||0.5; let spot=null;
+  const tries = s.lie ? [Math.PI/2,-Math.PI/2,0,Math.PI] : [0,0.6,-0.6,1.3,-1.3,Math.PI];
+  for (const a of tries){ const ang=s.face+a, x=e.pos.x+Math.sin(ang)*(r+0.5), z=e.pos.z+Math.cos(ang)*(r+0.5); if (walkable(x,z) && !blocked(x,z,0.35)){ spot=[x,z]; break; } }
+  spot=spot||s.from; player.pos.set(spot[0], World.inside?0:groundY(spot[0],spot[1]), spot[1]); o.position.copy(player.pos); playerJelly.v=(playerJelly.v||0)+1.2;
+  if (player.target) planPath(); }
+// each frame while you sit: hold the pose, or stand up when you move or something else moves you
+function seatHold(dt){ const s=player.seat, u=player.obj.userData;
+  if (s.e.removed || !ents.includes(s.e) || (World.inside||null)!==s.inside || Math.hypot(player.pos.x-s.x, player.pos.z-s.z)>0.3 || riding || sledding || knockedDown() || buildMode){ standUp(true); return false; }
+  if (player.target && player.targetEnt===s.e){ stopMove(); }
+  const keysOn=['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright'].some(k=>keys[k]);
+  if (!dlgState && !placing && !scrim.classList.contains('show') && ((joy.active && Math.hypot(joy.x,joy.y)>0.3) || keysOn || player.target)){ standUp(); return false; }
+  const o=player.obj; o.position.set(s.x, s.y, s.z); o.rotation.y=s.face; player.face=s.face; player.speedFrac=0;
+  (u.legs||[]).forEach(l=>l.rotation.x = s.lie ? 0 : -1.45); if (u.arms){ u.arms[0].rotation.x=lerp(u.arms[0].rotation.x, s.lie?0:-0.45, Math.min(1,dt*8)); u.arms[1].rotation.x=lerp(u.arms[1].rotation.x, s.lie?0:-0.45, Math.min(1,dt*8)); }
+  if (u.body) u.body.position.y=0; player.act=0; return true; }
 /* v1.19 storage chest: tap something in your bag to put the whole stack away, tap something in the chest to take it back.
    Each chest holds CHEST_SLOTS stacks, kept on the placed chest itself (rec.store), so it saves with the house. */
 const CHEST_SLOTS=40;
@@ -1586,7 +1667,7 @@ class Peddler extends Ent {
    and bugs never notice you, even the one you clicked on. (A joystick pushed only a little sneaks the same way on a phone.) */
 const SNEAK_SPD=0.4;
 let sneakOn=false, sneakEl=null;
-const sneaking = () => !riding && !sledding && (sneakOn || !!keys['shift']);
+const sneaking = () => !riding && !sledding && !player.seat && (sneakOn || !!keys['shift']);
 function setSneak(on){ sneakOn=!!on; if (on && (riding || sledding)) sneakOn=false;
   if (!sneakEl){ sneakEl=document.createElement('div'); sneakEl.className='pill'; sneakEl.id='sneakPill'; sneakEl.style.cssText='position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 18px);transform:translateX(-50%);z-index:5;padding:6px 14px;font-weight:700;font-size:14px;pointer-events:none;display:none'; document.body.appendChild(sneakEl); }
   sneakEl.textContent=`Sneaking (${keyName(KB().sneak||'x')} to stop)`; sneakEl.style.display=sneakOn?'block':'none'; Snd.click(); }
@@ -9255,7 +9336,7 @@ function farClickHint(){}
 function interact(e, mode='tap'){ if(!ents.includes(e)) return; if (e.rag) return; player.face=Math.atan2(e.pos.x-player.pos.x, e.pos.z-player.pos.z); if(!(e instanceof Bug)) player.act=0.35; hideHint(); e.act(mode); }
 function nearestEnt(){ let best=null, bd=1e9; for(const e of ents){ if(e.removed||!e.label()||Math.abs(e.pos.y-player.pos.y)>4) continue; const d=Math.hypot(e.pos.x-player.pos.x,e.pos.z-player.pos.z); if(d<e.reach+0.3 && d<bd && entVisible(e)){ bd=d; best=e; } } return best; }
 function facingWater(){ if(World.inside) return null; for(const d of [2.5,3.5,4.5]){ const x=player.pos.x+Math.sin(player.face)*d, z=player.pos.z+Math.cos(player.face)*d; if(isFishWater(x,z)) return new THREE.Vector3(x,0,z); } return null; }
-function doAction(){ if(performance.now()<popupCool || cardsUp().length) { dismissCards(); return; } if(cine||dlgState||scrim.classList.contains('show')||placing||layoutMode||buildMode||magicMode) return; if (bayOn()){ bayAct(); return; } if (PERCH){ PERCH.act(); return; } if(riding) setRiding(false); if (sledding){ setSled(false); return; } if(CatchMeter.bug){ resolveSwing(); return; } if(Fishing.state!=='idle'){ reel(); return; } if (knockedDown()) return; const e=nearestEnt(); if(e){ stopMove(); interact(e,'manual'); return; } const w=facingWater(); if(w){ castAt(w); hideHint(); } }
+function doAction(){ if(performance.now()<popupCool || cardsUp().length) { dismissCards(); return; } if(cine||dlgState||scrim.classList.contains('show')||placing||layoutMode||buildMode||magicMode) return; if (bayOn()){ bayAct(); return; } if (PERCH){ PERCH.act(); return; } if (player.seat){ standUp(); return; } if(riding) setRiding(false); if (sledding){ setSled(false); return; } if(CatchMeter.bug){ resolveSwing(); return; } if(Fishing.state!=='idle'){ reel(); return; } if (knockedDown()) return; const e=nearestEnt(); if(e){ stopMove(); interact(e,'manual'); return; } const w=facingWater(); if(w){ castAt(w); hideHint(); } }
 $('#act').addEventListener('click', e=>{ e.stopPropagation(); if(layoutMode) return; doAction(); });
 let hintHidden=false; function hideHint(){ if(hintHidden) return; hintHidden=true; $('#hint').style.opacity=0; }
 
@@ -9371,6 +9452,7 @@ function updateHold(dt){ if(CT().move!=='tap') return; holdAcc+=dt; if(holdAcc<0
 /* ---------- Movement and camera ---------- */
 function movePlayer(dt,t){
   if (PERCH && PERCH.move(dt,t)) return;
+  if (player.seat && seatHold(dt)) return;   // v1.72 sitting or lying down
   const u=player.obj.userData; let mv=null; if(riding && (World.inside||buildMode)) setRiding(false); if (sledding && (World.inside||buildMode||!snowyEnough())) setSled(false); const speed=(riding?10.2:5.4)*(wellFed()?1.15:1); let spd=1;
   const kx=(keys['d']||keys['arrowright']?1:0)-(keys['a']||keys['arrowleft']?1:0), kz=(keys['s']||keys['arrowdown']?1:0)-(keys['w']||keys['arrowup']?1:0);
   if (dlgState && player.target) stopMove();   // v1.34: you stand still while someone is talking to you
@@ -9533,6 +9615,7 @@ const BIKE_SVG='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><cir
 function bikeThumb(){ return 'data:image/svg+xml,'+encodeURIComponent(BIKE_SVG); }
 function setRiding(on){
   if (on && sneakOn) setSneak(false);   // v1.72
+  if (on && player.seat) standUp();
   on = !!on && !!S.bike && !World.inside && !buildMode;
   if (on===riding) return; riding=on;
   if (on && !bikeObj){ bikeObj=buildBike(); }
@@ -9565,6 +9648,7 @@ function toggleSled(){
   setSled(true); }
 function setSled(on){
   if (on && sneakOn) setSneak(false);   // v1.72
+  if (on && player.seat) standUp();
   if (on===sledding) return; sledding=on; const u=player.obj.userData;
   if (on){ track('sled'); if (riding) setRiding(false); stopMove(); if (Fishing.state!=='idle') reel(); if (!sledObj){ sledObj=buildItemModel('sled'); sledObj.scale.setScalar(1.15); } player.obj.add(sledObj); if (u.body) u.body.position.y=0.18; sledV.set(Math.sin(player.face)*1.5, Math.cos(player.face)*1.5); Snd.pop();
   }
@@ -9607,7 +9691,7 @@ function remoteUpsert(id, name, st){
   if (st) remotePos(id, st);
   return r;
 }
-function remotePos(id, st){ const r=remotes.get(id); if(!r) return; if (st.lk && st.lk!==r.lk){ r.lk=st.lk; r.obj=swapLook(r.obj, buildPlayer({ look:st.lk })); r.jel={}; } r.tgt.set(st.x, st.y||0, st.z); r.f=st.f||0; r.w=st.w; r.in=st.in||null; r.rg=Array.isArray(st.rg)&&st.rg.length===4?st.rg:null; r.rs=st.rs?1:0; r.pt=Array.isArray(st.pt)?st.pt:null;
+function remotePos(id, st){ const r=remotes.get(id); if(!r) return; if (st.lk && st.lk!==r.lk){ r.lk=st.lk; r.obj=swapLook(r.obj, buildPlayer({ look:st.lk })); r.jel={}; } r.tgt.set(st.x, st.y||0, st.z); r.f=st.f||0; r.w=st.w; r.in=st.in||null; r.rg=Array.isArray(st.rg)&&st.rg.length===4?st.rg:null; r.rs=st.rs?1:0; r.st=st.st|0; r.pt=Array.isArray(st.pt)?st.pt:null;
   const wantBike=!!st.b; if(wantBike!==!!r.bike){ const u=r.obj.userData; if(wantBike){ r.bike=buildBike(0x5a9ad8); r.obj.add(r.bike); if(u.body) u.body.position.y=0.42; } else { r.obj.remove(r.bike); r.bike=null; if(u.body) u.body.position.y=0; } } if(!r.seen){ r.pos.copy(r.tgt); r.seen=true; } }
 function remoteLeave(id){ PARTY.onLeave(id); const r=remotes.get(id); if(!r) return; PETS.remoteGone(r); scene.remove(r.obj); remotes.delete(id); if (r.rl && r.rl.stars) scene.remove(r.rl.stars); }
 function remoteEmote(id, e){ const txt=EMOTE_TEXT[e]; if(!txt) return; const pos = id==='me' ? player.pos : remotes.get(id)?.pos; if(!pos) return; const v=pos.clone(); v.y+=0.6; floatText(txt, v); if(id!=='me') Snd.pop(); }
@@ -9667,6 +9751,7 @@ function updateRemotes(dt,t){
     r.obj.visible = r.seen && (r.in||null)===(World.inside||null);
     const u=r.obj.userData; if(r.bike){ if(r.w) for(const w of r.bike.userData.wheels) w.rotation.x+=dt*30; if(u.legs){ u.legs[0].rotation.x=-0.9+Math.sin(t*9)*0.5*r.w; u.legs[1].rotation.x=-0.9-Math.sin(t*9)*0.5*r.w; } if(u.arms){ u.arms[0].rotation.x=-0.9; u.arms[1].rotation.x=-0.9; } continue; }
     if(u.legs){ const ph=t*11, a=r.w?1:0; u.legs[0].rotation.x=Math.sin(ph)*0.7*a; u.legs[1].rotation.x=-Math.sin(ph)*0.7*a; if(u.arms){ u.arms[0].rotation.x=-Math.sin(ph)*0.6*a; u.arms[1].rotation.x=Math.sin(ph)*0.6*a; } }
+    if (r.st){ r.obj.rotation.order='YXZ'; r.obj.rotation.x = r.st===2 ? -Math.PI/2 : 0; if (u.legs) u.legs.forEach(l=>l.rotation.x = r.st===2 ? 0 : -1.45); } else if (r.obj.rotation.order==='YXZ'){ r.obj.rotation.x=0; r.obj.rotation.order='XYZ'; }   // v1.72
   }
 }
 /* ---------- Swing and ragdolls (v1.6) ----------
@@ -9695,6 +9780,7 @@ const TOOL_VERBS = { axe:['Chop','Hit'], shovel:['Dig','Dig up','Hit'], net:['Ca
 function swing(){
   if (PERCH) return;   // v1.39 fixes: no tools on the lighthouse stair or gallery
   if (cine||dlgState||scrim.classList.contains('show')||placing||layoutMode||buildMode||magicMode||meBody.rag||bonkCool>0) return;
+  if (player.seat){ standUp(); return; }   // v1.72
   if (bayOn()){ const F=BAYR.fish; if (F.state!=='idle') bayReel(); else bayCast(); return; }
   if (CatchMeter.bug){ resolveSwing(); return; }
   if (Fishing.state!=='idle'){ reel(); return; }
@@ -9826,8 +9912,9 @@ function remoteRag(r, dt, t){
 // v1.64: a look with sewn clothes can be long, so send it when it changes and every few seconds, not every tick
 let lkSent='', lkAt=0;
 const lkSend = () => { const lk=S.look||''; if (lk.indexOf('~')<0) return lk; const now=performance.now(); if (lk!==lkSent || now-lkAt>3000){ lkSent=lk; lkAt=now; return lk; } return ''; };
-const playerState = () => { const R=meBody.rag, P = R ? player.obj.position : player.pos;
+const playerState = () => { const R=meBody.rag, P = R||player.seat ? player.obj.position : player.pos;
   const st={ lk:lkSend(), b:riding?1:0, x:+P.x.toFixed(2), z:+P.z.toFixed(2), y:+P.y.toFixed(2), f:+player.face.toFixed(2), w:player.speedFrac>0.05?1:0, in:World.inside||null };
+  if (player.seat) st.st=player.seat.lie?2:1;   // v1.72 friends see you sitting or lying down
   if (R){ const q=player.obj.quaternion; st.rg=[+q.x.toFixed(3),+q.y.toFixed(3),+q.z.toFixed(3),+q.w.toFixed(3)]; st.rs=R.resting?1:0; }
   const pt=PETS.netState(); if (pt) st.pt=pt;   // v1.67 your pet, for friends to see
   return st; };
@@ -9898,7 +9985,7 @@ window.__game.v144 = Object.assign({ SR, shopStock:w=>shopStock(w), talkGill:()=
 window.__game.v145 = { fishPool, bugPool, isleNear, isleAt, bayMore, bayTipIds, bayPool:()=>bayPool(), waterType, isleSpot, get trees(){ return trees; }, get bugs(){ return bugs; }, newBug:(id,x,z,e)=>new Bug(id,x,z,e||{}), updateBugs:dt=>{ bugT=0; updateBugs(dt||3); }, spawnFish:()=>spawnFish(), get fishes(){ return fishes; },
   openDonate:()=>openDonate(), museumExpand:()=>museumExpand(), buildMuseumAll:()=>buildMuseumAll(), enterRoom:id=>enterRoom(id), tanks:()=>ents.filter(e=>e instanceof MuseumTank), openTankView:e=>openTankView(e), closeTankView:()=>closeTankView(), get tankView(){ return tankView; } };
 window.__game.custom = CU.dev; window.__game.sew = SX.dev; window.__game.pets = PETS;   // v1.67 pet tests
-window.__game.v172 = { countItem, removeItem, craftFits, craftMax, doCraft };   // v1.72 tests
+window.__game.v172 = { countItem, removeItem, craftFits, craftMax, doCraft, sitOn, standUp, seatInfo, seatKind, seatsBy, Furniture, doAction, get ents(){ return ents; } };   // v1.72 tests
 window.__game.gardenEdit = { GE, start:o=>startGardenEdit(o) };   // v1.71 garden editor tests
 window.__game.sewMachine = { open:()=>SX.open(), choices:()=>SX.keeperChoices({ name:'Pemberton', voice:1 }, ()=>{}).map(c=>c.label), buy:()=>SX.keeperChoices({ name:'Pemberton', voice:1 }, ()=>{})[0].fn(), place:()=>{ const P=player.pos, rec={ id:'sewmachine', x:P.x+1.6, z:P.z, rot:0 }; S.placed.push(rec); const f=new Furniture(rec); return f.label(); } };   // v1.64 tests   // v1.64 sewing tests   // v1.63 custom furniture tests
 // v1.26 test hooks

@@ -666,7 +666,7 @@ ${steps([
  'Marlo builds a nursery tank beside Sprig\'s shop: <b>20,000 clams, 10 stone, 4 iron</b>. Ready the next day.',
  'At the nursery: <b>2 fragments of one kind + 300 clams = 1 coral starter</b>, ready tomorrow. 3 a day, 4/5/7 as you invest in Sprig, +1 with a helper.',
  'Gill lends you his old rowboat at the dock. "Row out" takes you to <b>Cay Bay</b>.',
- 'Row with the joystick or WASD. Over old rubble, <b>Drop</b> a starter. Anywhere else, <b>Cast</b>. Row to the buoy to go home.'])}
+ 'Row with the joystick or WASD. Over old rubble, <b>Drop</b> a starter. Anywhere else, <b>Cast</b>. The way home is the buoy with the tall yellow flag and lamp. A <b>Home</b> tag sits over it, or points to it from the edge of the screen when it is out of sight. Tap the tag to row home from anywhere, or row up to the buoy and press <b>Row home</b>.'])}
 <h3>Reef stages</h3>
 <p>Coral grows over 2 days (sprig, small, full). Fish only arrive between visits. Score = full-grown coral + 5 for each coral kind with 5 or more grown.</p>
 <table class="t"><tr><th>Stage</th><th>Score</th><th>What changes</th></tr>

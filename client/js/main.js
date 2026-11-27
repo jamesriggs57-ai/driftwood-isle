@@ -2882,7 +2882,7 @@ function enterBay(){
   Snd.swoosh(); }
 function exitBay(){
   const R=BAYR; if (!R || !R.on) return; if (R.fish.state!=='idle') bayReel(true);
-  fade(()=>{ R.on=false; for (const o of [sky, stars, moon, hemi, sun, sun.target]) scene.add(o);
+  bayHomeHide(); fade(()=>{ R.on=false; for (const o of [sky, stars, moon, hemi, sun, sun.target]) scene.add(o);
     R.saved.parent.add(player.obj); const u=player.obj.userData; resetLimbs(u); (u.legs||[]).forEach(l=>l.rotation.x=0);
     const x=DOCK.x0+5.2, z=DOCK.z-0.4; player.pos.set(x, groundY(x,z), z); player.obj.position.copy(player.pos); player.face=Math.PI; player.obj.rotation.set(0,Math.PI,0);
     $('#hud').classList.remove('inbay'); camTarget.copy(player.pos); updateSky(); updateCamera(1); save(); });
@@ -2892,10 +2892,30 @@ function bayCam(dt){ const R=BAYR, p=R.pos; _bc.set(p.x, 0.6, p.z); camTarget.le
   const dist=19, pitch=0.62; camera.position.set(camTarget.x, camTarget.y+Math.sin(pitch)*dist, camTarget.z+Math.cos(pitch)*dist); camera.lookAt(camTarget);
   sky.position.copy(camera.position); stars.position.copy(camera.position); sun.target.position.copy(camTarget); sun.position.copy(camTarget).addScaledVector(sunDir,50);
   R.scn.fog.color.copy(scene.fog.color); }
+// v1.72 the way home from the bay: a "Home" tag over the buoy, or an arrow at the edge of the screen pointing to it when it's out of sight.
+// Tap it to row home from anywhere.
+const BAY_HOME_R=4.5;   // how close to the buoy the action button offers "Row home" (was 3.4)
+let bayHomeEl=null; const _bh=new THREE.Vector3();
+function bayHomeMark(){ const R=BAYR;
+  if (!bayHomeEl){ bayHomeEl=document.createElement('button'); bayHomeEl.id='bayHome'; bayHomeEl.setAttribute('aria-label','Row home');
+    bayHomeEl.style.cssText='position:fixed;left:0;top:0;z-index:6;display:none;align-items:center;gap:4px;padding:5px 11px 5px 7px;border-radius:999px;border:2px solid #e7d1a6;background:rgba(255,248,234,.95);color:#5b4336;font:700 14px/1 inherit;box-shadow:0 2px 8px rgba(0,0,0,.18);transform:translate(-50%,-50%);cursor:pointer;touch-action:manipulation;white-space:nowrap';
+    bayHomeEl.innerHTML='<svg viewBox="0 0 24 24" width="20" height="20" style="flex:none"><path d="M12 3l7 9h-4v9H9v-9H5z" fill="#e2483d" stroke="#8b2a22" stroke-width="1.4" stroke-linejoin="round"/></svg><span>Home</span>';
+    bayHomeEl.onclick=e=>{ e.stopPropagation(); if (!bayOn() || dlgState || scrim.classList.contains('show') || (BAYR && (BAYR.dropping || BAYR.fish.state!=='idle'))) return; exitBay(); };
+    document.body.appendChild(bayHomeEl); }
+  const el=bayHomeEl, B=R.B, near=Math.hypot(R.pos.x-B.buoy[0], R.pos.z-B.buoy[1])<BAY_HOME_R;
+  if (!bayOn() || near || dlgState || scrim.classList.contains('show')){ el.style.display='none'; return; }
+  _bh.set(B.buoy[0], 4.3, B.buoy[1]).project(camera);
+  const W=innerWidth, H=innerHeight, m=46, top=150, bot=isTouchDevice ? 175 : 60, behind=_bh.z>1;   // clear of the buttons at the top and the joystick and action button at the bottom
+  let sx=(_bh.x+1)/2*W, sy=(1-_bh.y)/2*H; if (behind){ sx=W-sx; sy=H-sy; }
+  const arrow=el.firstChild; el.style.display='flex';
+  if (!behind && sx>m && sx<W-m && sy>top && sy<H-bot){ el.style.left=sx+'px'; el.style.top=(sy-18)+'px'; arrow.style.transform='rotate(180deg)'; return; }   // in view: a tag over the lamp, arrow pointing down at it
+  const cx=W/2, cy=(top+H-bot)/2, dx=sx-cx, dy=sy-cy, hw=W/2-m, hh=(H-bot-top)/2, k=Math.min(hw/Math.max(1e-3,Math.abs(dx)), hh/Math.max(1e-3,Math.abs(dy)));
+  el.style.left=(cx+dx*k)+'px'; el.style.top=(cy+dy*k)+'px'; arrow.style.transform=`rotate(${Math.atan2(dy,dx)*180/Math.PI+90}deg)`; }
+function bayHomeHide(){ if (bayHomeEl) bayHomeEl.style.display='none'; }
 // what the action button does right now
 function bayTarget(){ const R=BAYR; if (R.dropping) return null;
   if (R.fish.state==='bite' || R.fish.state==='wait' || R.fish.state==='cast') return { lab:'Reel', fn:()=>bayReel() };
-  if (Math.hypot(R.pos.x-R.B.buoy[0], R.pos.z-R.B.buoy[1])<3.4) return { lab:'Row home', fn:()=>exitBay() };
+  if (Math.hypot(R.pos.x-R.B.buoy[0], R.pos.z-R.B.buoy[1])<BAY_HOME_R) return { lab:'Row home', fn:()=>exitBay() };
   const have=START_IDS.some(id=>countItem(id));
   let best=null, bd=2.3; for (const q of R.plots){ if (q.rec || q.locked) continue; const d=Math.hypot(q.p.x-R.pos.x, q.p.z-R.pos.z); if (d<bd){ bd=d; best=q; } }
   if (best && have) return { lab:'Drop coral', fn:()=>bayDrop(best) };
@@ -2976,7 +2996,7 @@ function bayUpdate(dt, t){
       if (F.t>F.win){ R.ex.visible=false; toast('It got away!'); Snd.fail(); const f=F.fish; if (f){ f.state='flee'; f.t=0; } F.fish=null; F.state='wait'; F.t=0; } }
     const lp=R.lg.attributes.position; lp.setXYZ(0,hand.x,hand.y+0.4,hand.z); lp.setXYZ(1,R.bob.position.x,R.bob.position.y+0.1,R.bob.position.z); lp.needsUpdate=true; }
   R.W.update(t, World.night, (1-World.night)*(World.weather==='sunny'?1:0.4));
-  bayCam(dt);
+  bayCam(dt); bayHomeMark();
   // the action button
   const tg=(dlgState||scrim.classList.contains('show')) ? null : bayTarget(), lab=tg?tg.lab:'';
   if (lab!==actLabel){ actLabel=lab; if (lab){ actBtn.textContent=lab; actBtn.classList.add('show'); } else actBtn.classList.remove('show'); }

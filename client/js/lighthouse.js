@@ -92,7 +92,7 @@ export function buildTower(seed=1){
   const gl=new THREE.Mesh(new THREE.CylinderGeometry(LT.glassR,LT.glassR,1.75,32,1,true,LT.a1+gap,TAU-gap*2), glass); gl.position.y=LT.G+0.5+0.875; gl.renderOrder=2; lamp.add(gl);
   for (let i=0;i<10;i++){ const a=LT.a1+gap+i/9*(TAU-gap*2); mk(G.box(0.07,2.25,0.07), dark, Math.sin(a)*LT.glassR,LT.G+1.12,Math.cos(a)*LT.glassR,lamp).castShadow=false; }
   { const t=mk(G.tor(LT.glassR,0.05,6,40), dark, 0,LT.G+2.25,0,lamp); t.rotation.x=Math.PI/2; }
-  const roofM=M(0xd8483a); mk(G.cone(1.9,1.15,24), roofM, 0,LT.G+2.25+0.57,0,lamp); mk(G.cyl(0.18,0.24,0.3,10), dark, 0,LT.G+3.5,0,lamp); mk(G.sph(0.2,10,8), dark, 0,LT.G+3.75,0,lamp);
+  const roofM=M(0xd8483a).clone(); mk(G.cone(1.9,1.15,24), roofM, 0,LT.G+2.25+0.57,0,lamp); mk(G.cyl(0.18,0.24,0.3,10), dark, 0,LT.G+3.5,0,lamp); mk(G.sph(0.2,10,8), dark, 0,LT.G+3.75,0,lamp);
   { const v=new THREE.Group(); v.position.y=LT.G+4.0; lamp.add(v); mk(G.cyl(0.02,0.02,0.6,4), dark, 0,0.2,0,v); const arrow=mk(G.box(0.05,0.12,0.7), dark, 0,0.42,0,v); arrow.castShadow=false; mk(G.cone(0.1,0.22,4), dark, 0,0.42,0.42,v).rotation.x=Math.PI/2; lamp.userData.vane=v; }
   // the lamp itself: a brass pedestal and a lens of glowing rings that turns
   mk(G.cyl(0.38,0.48,0.5,12), brass, 0,LT.G+0.25,0,lamp);
@@ -342,8 +342,9 @@ export function deckMove(ctx, kit, st, D, dt, t){
       if (Math.abs(along)<0.6){ mx=dx; mz=dz; const l=Math.hypot(mx,mz)||1; mx/=l; mz/=l; }
       else { const ka=along/L, kr=across/L; mx=tx*ka+rx*kr; mz=tz*ka+rz*kr; }
       m=1; } }
+  // walking in at the door takes a push mostly at the door (within about 40 degrees), so brushing past it on the way round doesn't send you in
   if (m){ const step=sp*m*dt, ta=(mx*tx+mz*tz)*step, ra=(mx*rx+mz*rz)*step;
-    if (ra<0 && st.r<=D.rMin+0.03 && D.door && Math.abs(angD(st.a, D.door.a))<D.door.half && (d || (P.target && !P.targetEnt))) return 'door';
+    if (ra<-0.75*step && st.r<=D.rMin+0.03 && D.door && Math.abs(angD(st.a, D.door.a))<D.door.half && (d || (P.target && !P.targetEnt))) return 'door';
     const na=st.a+ta/Math.max(st.r,0.5), nr=clamp(st.r+ra, D.rMin, D.rMax); let moved=true;   // at the glass or the rail you slide along it
     if (free(na,nr)){ st.a=na; st.r=nr; } else if (Math.abs(ta)>step*0.2 && free(na,st.r)){ st.a=na; } else if (Math.abs(ra)>step*0.2 && free(st.a,nr)){ st.r=nr; } else {
       // something round in the way: step round it, toward whichever side of the ring has more room

@@ -329,13 +329,17 @@ export function buildObservatory(seed){
   { const h=noShadow(mk(G.cyl(0.85,0.85,0.02,24), basic(0x1a1410), hx,0.005,hz,g)); const rail=[]; for (let k=0;k<=20;k++){ const a=k/20*TAU*0.78+holeA+Math.PI*0.35; rail.push(new THREE.Vector3(hx+Math.sin(a)*0.95, 0.9, hz+Math.cos(a)*0.95)); }
     noShadow(mk(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(rail), 30, 0.035, 6), brass, 0,0,0,g)); for (let k=0;k<rail.length;k+=4) mk(G.cyl(0.02,0.02,0.9,5), wood, rail[k].x,0.45,rail[k].z,g);
     const [sx,sz]=polar(holeA, R-1.15); for (let k=0;k<3;k++){ const s=mk(G.box(0.8,0.08,0.3), wood, sx,-0.1-k*0.25,sz,g); s.rotation.y=holeA+k*0.35; } }
+  // v1.72 a little door in the glass, out onto the balcony round the top of the tower
+  { const a=deg(338), [x,z]=polar(a, R-0.06), d=new THREE.Group(); d.position.set(x,0,z); d.rotation.y=a+Math.PI; g.add(d);
+    mk(G.box(1.1,2.3,0.12), M(0x8a7a6a), 0,1.15,0,d); mk(G.box(0.9,2.12,0.16), wood, 0,1.06,-0.02,d); mk(G.box(0.5,0.6,0.17), M(0xcfe8f8), 0,1.6,-0.02,d);
+    mk(G.sph(0.06,8,6), M(0xf3c35a,{ metalness:0.7, roughness:0.3 }), 0.3,1.05,-0.12,d); const sg=segOf(cut, a); if (sg) sg.hide.push(d); }
   const candles=floatingCandles(8, 1.8, R-1.0, seed^0x33); candles.position.y=0.4; g.add(candles);
   const light=new THREE.PointLight(0xffe0b8, 16, 14, 1.6); light.position.set(0,3.2,0.8); light.castShadow=false; g.add(light);
   g.userData.cutWalls=cut;
   const at=(a,r)=>polar(deg(a), r);
   return { shell:g, R, scope, orrery:orr, pedestal:ped, globe, candles, skyM, setSky:night=>{ skyM.map=skyTex(night); skyM.needsUpdate=true; },
-    spots:{ scope:[0,0.75], orrery:at(250,3.3), pedestal:at(180,R-1.2), globe:at(215,R-1.0), desk:at(70,R-1.3), down:at(100,R-1.6) },
-    downLand:at(92,R-2.2), hole:[hx,hz,1.05],
+    spots:{ scope:[0,0.75], orrery:at(250,3.3), pedestal:at(180,R-1.2), globe:at(215,R-1.0), desk:at(70,R-1.3), down:at(100,R-1.6), roof:at(338,R-0.9) },
+    downLand:at(92,R-2.2), roofLand:at(338,R-1.5), hole:[hx,hz,1.05],
     solids:[[0,-0.5,1.2], [...at(250,3.3),0.6], [...at(180,R-1.2),0.42], [...at(215,R-1.0),0.4], [...at(290,R-1.2),0.75], [...at(70,R-0.9),0.6], [hx,hz,1.05]] };
 }
 

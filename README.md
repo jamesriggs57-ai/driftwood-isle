@@ -527,3 +527,10 @@ Code: `fossils2.js` (the 69 new fossil builders and their rocks, `buildFossil2In
 - Test hooks: `window.__game.v169` (set while the map is open).
 - Save: no new keys.
 
+## v1.70: search in the crafting menus
+Code: `search.js` (the search box and filter), hooks in main.js, enchant.js, custom.js and textile.js (search `v1.70`), CSS in index.html (`.srch`, `.srch-off`, `#scrim.kb`).
+- **Where.** Woodworking (plans, rare plans, pieces to study), Cooking, Tools (Make a tool and Enchantments; not Your tools), Design (piece chips, requests, saved designs) and the Sewing machine (closet, rug designs, Pet Collar). Not the forge, the workshop or the wish list (the forge and workshop lists are 3 or 4 items; the wish list already had its own search).
+- **Matching.** Each row carries `data-sk`: its name plus the names of what goes in it (and, for designs and clothes, style and parts). Every typed word must appear (case and apostrophes ignored). A dish's "any fish/fruit/berries" also carries every item of that kind, so `apple` finds Fruit Tart. Only plans you know are on screen, so search never shows an unknown one.
+- **How it filters.** Typing hides rows (`.srch-off`) without re-rendering, so focus and the phone keyboard stay. `data-sgrp` sections hide when nothing in them matches; `data-shide` notes hide while searching so matches sit under the box. The words are kept while the panel is open (a Make tap or a tab switch keeps them) and `openPanel` clears them. Enter puts the keyboard away; Escape with text clears it instead of closing the panel.
+- **Phone keyboard.** On a touch screen, focusing the box sizes the panel's backdrop to `visualViewport` and pins the panel to the top, until the panel closes, so results sit above the keys and nothing moves under your finger when the keyboard drops.
+- Save: no new keys.

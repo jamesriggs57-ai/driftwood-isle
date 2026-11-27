@@ -16,6 +16,7 @@ import { BASES, BASE_IDS, STYLES, STYLE_NAME, WOODS, METALS, FABRICS, PATTERNS, 
 import { buildCustom } from './custom-models.js';
 import { BENCH_NAME } from './benches-core.js';
 import { mulberry32, hashStr } from './util.js';
+import { searchBox, sk, bindSearch } from './search.js';   // v1.70
 export * from './custom-core.js';
 
 const NEED_KINDS = 10;           // different woodworking pieces made before the Design tab shows up
@@ -89,24 +90,24 @@ export function createCustom(C){
     const c=st(); if (!c){ pB.innerHTML=tabsH; if (bind) bind(); return; }
     let h=tabsH;
     if (mode==='edit' && draft) h+=editHTML(); else h+=listHTML();
-    pB.innerHTML=h; if (bind) bind(); bindTab(pB);
+    pB.innerHTML=h; if (bind) bind(); bindTab(pB); bindSearch(pB);
     if (mode==='edit' && draft){ const cv=pB.querySelector('#cuPrev'); if (cv) preview(cv, encode(draft)); }
   }
   function listHTML(){
     const c=st(), t=tier();
-    let h = C.benchBanner ? C.benchBanner() : '';
-    h+=`<div class="notice"><b>Custom furniture</b> <span class="muted">· ${c.designs.length} saved design${c.designs.length===1?'':'s'} · ${C.fmt(c.made)} made</span><br><span class="muted">Pick a piece, choose every part and finish, and make it. Bigger crafting tables open more parts. Sketches you find open the rare ones.</span></div>`;
+    let h = searchBox('Search designs or materials')+(C.benchBanner ? C.benchBanner() : '');   // v1.70
+    h+=`<div class="notice" data-shide><b>Custom furniture</b> <span class="muted">· ${c.designs.length} saved design${c.designs.length===1?'':'s'} · ${C.fmt(c.made)} made</span><br><span class="muted">Pick a piece, choose every part and finish, and make it. Bigger crafting tables open more parts. Sketches you find open the rare ones.</span></div>`;
     if (!t) h+='<div class="notice">Stand by a Workbench to design and make furniture.</div>';
-    h+=`<div style="margin:6px 0 4px"><b>New design</b></div><div>${BASE_IDS.map(b=>chip(BASES[b].name, `data-cnew="${b}"`, false, !t)).join('')}</div>`;
+    h+=`<div data-sgrp><div style="margin:6px 0 4px"><b>New design</b></div><div>${BASE_IDS.map(b=>chip(BASES[b].name, `data-cnew="${b}"${sk(BASES[b].name)}`, false, !t)).join('')}</div></div>`;
     const reqs=Object.entries(c.req).filter(([,r])=>r && r.want && !r.done);
-    if (reqs.length){ h+='<div class="notice" style="margin-top:8px"><b>Requests</b>';
-      for (const [who,r] of reqs){ const d=decode(r.want); h+=`<div class="row" style="margin:8px 0 0"><img src="${C.thumb(r.want)}" style="width:64px;height:64px"><div class="grow"><div class="nm">${esc(r.name||who)} wants a ${BASES[d.base].name.toLowerCase()} like this</div><div class="sub">${STYLE_NAME[styleOf(d)]}. Match the shape, wood and fabric as closely as you can, then give it to them.</div></div><button class="btn alt" data-ccopy="${r.want}" ${t?'':'disabled'}>Try it</button></div>`; }
+    if (reqs.length){ h+='<div class="notice" data-sgrp style="margin-top:8px"><b>Requests</b>';
+      for (const [who,r] of reqs){ const d=decode(r.want); h+=`<div class="row"${sk(r.name||who, BASES[d.base].name, STYLE_NAME[styleOf(d)])} style="margin:8px 0 0"><img src="${C.thumb(r.want)}" style="width:64px;height:64px"><div class="grow"><div class="nm">${esc(r.name||who)} wants a ${BASES[d.base].name.toLowerCase()} like this</div><div class="sub">${STYLE_NAME[styleOf(d)]}. Match the shape, wood and fabric as closely as you can, then give it to them.</div></div><button class="btn alt" data-ccopy="${r.want}" ${t?'':'disabled'}>Try it</button></div>`; }
       h+='</div>'; }
-    if (c.designs.length){ h+='<div style="margin:10px 0 4px"><b>Your designs</b></div>';
+    if (c.designs.length){ h+='<div data-sgrp><div style="margin:10px 0 4px"><b>Your designs</b></div>';
       for (const id of c.designs){ const d=decode(id); if (!d) continue; const can=canBuildHere(d), miss=lacks(d);
-        h+=`<div class="row"><img src="${C.thumb(id)}"><div class="grow"><div class="nm">${esc(ITEMS[id].name)} <span class="muted" style="font-size:12px">${STYLE_NAME[styleOf(d)]}</span></div><div class="sub">${matsHTML(d)}${!can&&t?`<br><b>Needs a ${BENCH_NAME[needTier(d)]}</b>`:''}${!c.sold.includes(id)&&c.crafted.includes(id)?`<br>First sale: +${C.fmt(firstBonus(d))} craftsmanship`:''}</div>
-          <div style="display:flex;gap:6px;margin-top:6px"><button class="btn" data-cmake="${id}" ${!can||miss.length?'disabled':''}>Make</button><button class="btn alt" data-cedit="${id}" ${t?'':'disabled'}>Change</button><button class="btn alt" data-cdel="${id}">Forget</button></div></div></div>`; } }
-    else h+='<div class="muted" style="margin-top:8px">No designs yet. Start one above.</div>';
+        h+=`<div class="row"${sk(ITEMS[id].name, STYLE_NAME[styleOf(d)], BASES[d.base].name, Object.keys(matsOf(d)).map(matName))}><img src="${C.thumb(id)}"><div class="grow"><div class="nm">${esc(ITEMS[id].name)} <span class="muted" style="font-size:12px">${STYLE_NAME[styleOf(d)]}</span></div><div class="sub">${matsHTML(d)}${!can&&t?`<br><b>Needs a ${BENCH_NAME[needTier(d)]}</b>`:''}${!c.sold.includes(id)&&c.crafted.includes(id)?`<br>First sale: +${C.fmt(firstBonus(d))} craftsmanship`:''}</div>
+          <div style="display:flex;gap:6px;margin-top:6px"><button class="btn" data-cmake="${id}" ${!can||miss.length?'disabled':''}>Make</button><button class="btn alt" data-cedit="${id}" ${t?'':'disabled'}>Change</button><button class="btn alt" data-cdel="${id}">Forget</button></div></div></div>`; } h+='</div>'; }
+    else h+='<div class="muted" data-shide style="margin-top:8px">No designs yet. Start one above.</div>';
     return h; }
   function editHTML(){
     const d=draft, B=BASES[d.base], t=Math.max(1,tier()), id=encode(d), it=ITEMS[id], can=canBuildHere(d), miss=lacks(d), c=st();

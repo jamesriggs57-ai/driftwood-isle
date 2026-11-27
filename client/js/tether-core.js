@@ -1,5 +1,5 @@
 /* =====================================================================
-   v1.75 CHESTS THAT FEED CRAFTING, AND SORTING: the rules, with no THREE and no DOM, so node tests can import them.
+   v1.76 CHESTS THAT FEED CRAFTING, AND SORTING: the rules, with no THREE and no DOM, so node tests can import them.
 
    A storage chest set down right beside a crafting spot (any crafting table, the Wood Stove, a campfire or the
    sewing machine) is tethered to it. While you stand at that spot, what's in its tethered chests counts as yours

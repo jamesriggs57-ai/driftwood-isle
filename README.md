@@ -544,3 +544,13 @@ Code: `gardenedit.js` (Soil mode), `gardenedit-core.js` (`splitCells`, `cutSquar
 - Not done for you: fence pieces on the sides a cut opens (the garden menu's Close the gaps adds them at the usual price).
 - Test hooks: `window.__game.gardenEdit.GE._dev.setMode`.
 - Save: no new keys (new gardens use the existing garden shape).
+
+## v1.75: coral batches, crafted heirlooms, rugs under furniture, yarn and colour packs, richer quests, invite by name
+Code: hooks in main.js and story3.js (search `v1.75`), `textile.js` and `textile-core.js` (yarn, packs, undo), `enchant-core.js` (heirloom recipes), `online.js` and `server/src/index.js` (`POST /api/invites/byname`).
+- **Coral nursery.** Sprig starts at 5 coral a day and grows the batch (8, 12, 16, 20) only after a day where every spot was used. She says so the next time you open it.
+- **Heirloom tools.** Not sold. Made at a Master Workbench from heartwood, starstone, golden sap, fittings and 20 to 25 iron (net also takes glimmer moss, rod and can a moonpearl). Pemberton explains the recipe when you go to rebuy a Golden tool.
+- **Rugs under furniture.** Rugs and picnic blankets can go under furniture already placed. Overlapping rugs sit a hair higher so they don't flicker.
+- **Sewing.** Skeins of Yarn (30 clams from Pemberton) stand in for weeds and are used first. Five starter colours (Oatmeal, Ink, Brick, Navy, Pine); packs come from Apprentice and Tailor skill, Pemberton (5,000), or bottles on the beach (8% a day once you own a machine). Undo, 60 steps. The preview holds still and turns only on a drag, and only redraws when something changed.
+- **Quests.** Lighthouse lens: the old lens pieces from the lamp room, 5 sea glass and 4,000. Diving bell: 3 Saltwren portholes (one washes up a day) and 12,000. Cabin lens: the Saltwren Lantern from the hold, a moonpearl and 3,000. Mill stream: a fresh water fish, a sea fish, 3 clay and 5,000.
+- **Menu.** Start a new island is a small link under "More island options...".
+- **Friends.** Invite by exact in-game name (case-insensitive, no search or suggestions). The other player gets a Friend invite in their mailbox with Accept and No thanks. Names shared by more than one player are refused; 20 invites a day.

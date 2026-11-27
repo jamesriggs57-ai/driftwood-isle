@@ -1,5 +1,5 @@
 /* =====================================================================
-   v1.75 CHESTS THAT FEED CRAFTING: the hooks main.js calls, and the faint tether lines shown while you place a chest
+   v1.76 CHESTS THAT FEED CRAFTING: the hooks main.js calls, and the faint tether lines shown while you place a chest
    or a crafting spot. Rules and numbers are in tether-core.js.
    C: furn() -> [{ id, x, z, rec }] placed furniture you can see right now, player() -> { x, z },
       canUse() -> whether chests count here (your own island), scene, y(x,z) -> floor height for the lines

@@ -28,8 +28,9 @@ import * as XT from './extend.js';   // v1.58 the far shore: one side of the isl
 import * as RF from './reef.js';
 import * as TH from './townhall.js';   // v1.49 town hall inside
 import { createEnchant } from './enchant.js';   // v1.40 tools and enchanting
+import { craftNeed as toolCraftNeed } from './enchant-core.js';   // heirloom recipes
 import { createBenches } from './benches.js';   // v1.40 crafting tables
-import { createTether } from './tether.js';   // v1.75 chests beside a crafting spot feed it, and sorting
+import { createTether } from './tether.js';   // v1.76 chests beside a crafting spot feed it, and sorting
 import { createCustom } from './custom.js';
 import { createSewing } from './textile.js';   // v1.64 sewing
 import * as SQ from './search.js';   // v1.70 search in the crafting menus
@@ -123,7 +124,7 @@ const EN = createEnchant({ S:()=>S, toast:(...a)=>toast(...a), Snd, save:()=>sav
 // v1.40 crafting tables (benches.js): crafting tables in reach, as [id, distance, size]
 const BN = createBenches({ S:()=>S, save:()=>save(), addItem:id=>addItem(id), learnWood:id=>learnWood(id),
   tables:()=>ents.filter(e=>e instanceof Furniture && !e.removed && entVisible(e) && BN.isBench(e.rec.id)).map(e=>[e.rec.id, Math.hypot(e.pos.x-player.pos.x, e.pos.z-player.pos.z), ITEMS[e.rec.id].r]) });
-// v1.75 chests beside a crafting spot feed it (tether.js): materials count from your bag first, then those chests
+// v1.76 chests beside a crafting spot feed it (tether.js): materials count from your bag first, then those chests
 const TQ = createTether({ get scene(){ return scene; }, canUse:()=>CAN_EDIT && !TRIP, player:()=>player.pos, y:(x,z)=>World.inside?0:groundY(x,z),
   furn:()=>ents.filter(e=>e instanceof Furniture && !e.removed && entVisible(e)).map(e=>({ id:e.rec.id, x:e.pos.x, z:e.pos.z, rec:e.rec })) });
 const bagHas = id => ITEMS[id] ? countItem(id) : S.inv.filter(s=>ITEMS[s.id] && ITEMS[s.id].kind===id).reduce((a,s)=>a+s.n,0);
@@ -1422,7 +1423,7 @@ function rebuildGardens(){
 
 /* ---------- Furniture and buildings ---------- */
 class Furniture extends Ent {
-  constructor(rec){ const it=ITEMS[rec.id]; super('furn',rec.x,rec.z,it.r); this.rec=rec; this.solid=!it.flat; this.reach=it.r+1.1; const m=buildItemModel(rec.id); m.rotation.y=rec.rot||0; const g=new THREE.Group(); g.add(m); this.attach(g); this.model=m; if(it.flat) this.hitSphere(0.9,0.1); }
+  constructor(rec){ const it=ITEMS[rec.id]; super('furn',rec.x,rec.z,it.r); this.rec=rec; this.solid=!it.flat; this.reach=it.r+1.1; const m=buildItemModel(rec.id); m.rotation.y=rec.rot||0; if (it.flat && rec.ly) m.position.y=rec.ly; const g=new THREE.Group(); g.add(m); this.attach(g); this.model=m; if(it.flat) this.hitSphere(0.9,0.1); }
   get station(){ return (this.rec.id==='stove'||this.rec.id==='campfire') && S.cook; }
   label(){ return BN.isBench(this.rec.id) && S.craft ? 'Craft' : this.rec.id==='sewmachine' ? 'Sew' : this.station ? 'Cook' : ITEMS[this.rec.id].store ? 'Open' : 'Arrange'; }
   act(){ const store=ITEMS[this.rec.id].store;
@@ -1856,6 +1857,10 @@ let ignoreRects=false;
 // Room kept free for buildings that grow later (museum, town hall, shops): trees and rocks don't grow there
 const KEEPOUT=[]; const keptOut=(x,z)=>KEEPOUT.some(([a,b,r])=>Math.hypot(x-a,z-b)<r);
 function blocked(x,z,r,self){ if (!ignoreRects && inRects(x,z,r)) return true; if (FENCE_SEGS && FENCE_SEGS.length && x<500 && fenceHit(x,z,r)) return true; for(const e of ents){ if(!e.solid||e===self||e.removed) continue; if(Math.abs(x-e.pos.x)>6||Math.abs(z-e.pos.z)>6) continue; if(Math.hypot(x-e.pos.x,z-e.pos.z) < e.r+r) return true; } return false; }
+// Rugs and blankets lie flat, so they can go under furniture: only walls, buildings and fences stop them.
+function blockedFlat(x,z,r){ if (!ignoreRects && inRects(x,z,r)) return true; if (FENCE_SEGS && FENCE_SEGS.length && x<500 && fenceHit(x,z,r)) return true; return false; }
+// overlapping rugs each sit a hair higher than the ones already there, so they don't flicker through each other
+function flatLift(x,z,r,skip){ let n=0; for (const q of S.placed){ if (q===skip) continue; const i=ITEMS[q.id]; if (!i || !i.flat) continue; if (Math.hypot(q.x-x,q.z-z)<(i.r||1)+r) n=Math.max(n, Math.round((q.ly||0)/0.004)+1); } return Math.min(n,12)*0.004; }
 // v1.32: does this placed thing hold other things (a storage chest with something in it)?
 const hasStore = rec => !!(rec && Array.isArray(rec.store) && rec.store.length);
 // v1.32: nearest spot (spiralling out from x,z up to maxR) where something of radius r can stand
@@ -2772,8 +2777,16 @@ function thistleReefChoices(k, menu){
 
 /* ---------- Sprig's coral nursery ---------- */
 const NURSE_COST=300;
-const nurseCap = () => [3,4,5,7][shopTier('garden')]+(helperOf('nursery')?1:0);
-function nurseToday(){ const N=S.reef.nurse; if (N.day!==today()){ N.day=today(); N.used=0; } return N; }
+// Sprig gets better with practice: a day where she starts every coral she can lifts her to the next step.
+const NURSE_STEPS=[5,8,12,16,20];
+const nurseBase = () => NURSE_STEPS[Math.min(NURSE_STEPS.length-1, S.reef.nurse.lv|0)];
+const nurseCap = () => nurseBase()+[0,1,2,3][shopTier('garden')]+(helperOf('nursery')?1:0);
+function nurseToday(){ const N=S.reef.nurse; if (N.day!==today()){
+    if (N.maxed && N.day && (N.lv|0)<NURSE_STEPS.length-1){ N.lv=(N.lv|0)+1; N.brag=true; }
+    N.day=today(); N.used=0; N.maxed=false; } return N; }
+function nurseBrag(then){ const N=S.reef.nurse; if (!N.brag) return then(); N.brag=false; save();
+  const k=KEEPERS[SHOPS.garden.keeper], n=nurseBase(), top=(N.lv|0)>=NURSE_STEPS.length-1;
+  dialog(k.name, k.voice, [top ? `That went great! ${n} at once now. I think that's as many as this tank can hold.` : `That went great! I think I can try to do ${n} at once now!`], then); }
 const nurseReady = () => S.reef.nurse.q.filter(q=>sday()>q.d);
 function openNursery(){
   const render=()=>{ const N=nurseToday(), cap=nurseCap(), ready=nurseReady(), grow=N.q.filter(q=>sday()<=q.d), hp=helperOf('nursery');
@@ -2785,12 +2798,12 @@ function openNursery(){
       h+=`<div class="row"><img src="${thumb(id)}"><div class="grow"><div class="nm">${CORAL_NAMES[k]}</div><div class="muted">${have} fragment${have===1?'':'s'}</div></div><button class="btn" data-ns="${k}" ${ok?'':'disabled'}>Start (${NURSE_COST})</button></div>`; }
     pBody.innerHTML=h+'</div>';
     pBody.querySelectorAll('[data-ns]').forEach(b=>b.onclick=()=>{ if (noEdit()) return; const k=b.dataset.ns, N=nurseToday(); if (countItem('frag_'+k)<2 || N.used>=nurseCap() || S.clams<NURSE_COST) return;
-      removeItem('frag_'+k,2); S.clams-=NURSE_COST; N.used++; N.q.push({ k, d:sday() }); updateHUD(); save(); Snd.plip(); refreshNurseryTank(); render(); });
+      removeItem('frag_'+k,2); S.clams-=NURSE_COST; N.used++; if (N.used>=nurseCap()) N.maxed=true; N.q.push({ k, d:sday() }); updateHUD(); save(); Snd.plip(); refreshNurseryTank(); render(); });
     const tk=pBody.querySelector('#nsTake'); if (tk) tk.onclick=()=>{ let got=0; for (const q of nurseReady()){ if (!canAdd('starter_'+q.k)) break; addItem('starter_'+q.k); N_remove(q); got++; }
       if (!got) toast('Your bag is full.'); else { Snd.coin(); toast(`${got} coral starter${got>1?'s':''} ready for the reef.`, thumb('starter_'+CORAL_KINDS.find(k=>countItem('starter_'+k))||'brain')); }
       save(); refreshNurseryTank(); render(); };
   };
-  openPanel('Coral Nursery'); render(); }
+  nurseToday(); nurseBrag(()=>{ openPanel('Coral Nursery'); render(); }); }
 function N_remove(q){ const a=S.reef.nurse.q; const i=a.indexOf(q); if (i>=0) a.splice(i,1); }
 // the tank itself stands beside Sprig's shop
 let nurseryEnt=null;
@@ -3305,7 +3318,7 @@ function teaChoices(res, menu){ if (VISIT || GUEST || typeof res.teaK!=='number'
     dialog(res.spec.name, res.spec.voice, [fill(TEA_CHAT[Math.floor(Math.random()*TEA_CHAT.length)], { c:res.spec.catch })], menu); } }]; }
 
 /* ---------- the lighthouse and night voyages ---------- */
-const LENS_COST=10000, NIGHT_FEE=8000;
+const LENS_COST=4000, LENS_GLASS=5, NIGHT_FEE=8000;   // the new lens is ground from the old keepers' pieces plus sea glass
 const lightLit = () => !!(SY.light && SY.light.st==='lit');
 const nightBay = () => lightLit() && reefStage()>=3 ? NIGHT_BAY.filter(id=>ITEMS[id]) : [];
 const bluffIsle = () => ISLES.find(I=>I.kind==='bluff');
@@ -3329,6 +3342,9 @@ function lighthouseAct(lm){   // from the lamp room, at the top of the stair
   const lines=[BLUFF_TOP[Math.min(n,2)]];
   if (!L || VISIT || GUEST) return dialog(nm, 420, lines);
   const lens=L.lens===2, frame=countItem('lampframe')>0, pearls=countItem('moonpearl')>=3;
+  if (!L.lens && !countItem('oldlens')) return dialog(nm, 420, [...lines, 'Among the mess, curved pieces of the old keepers\' lens, thick as your thumb and ringed like a shell. Marlo might be able to do something with them.'], null, [
+    { label:'Gather up the pieces', fn:()=>{ if (noEdit()) return; if (!canAdd('oldlens')){ toast('Your bag is full.'); return; } addItem('oldlens'); L.oldLens=true; save(); Snd.jingle(); itemToast('oldlens', true, 'Gathered'); } },
+    { label:'Leave them', alt:true, fn:()=>{} } ]);
   if (lens && frame && pearls) return dialog(nm, 420, lines, null, [
     { label:'Fit the lamp', fn:()=>{ if (noEdit() || countItem('lampframe')<1 || countItem('moonpearl')<3) return; removeItem('lampframe',1); removeItem('moonpearl',3);
         L.st='lit'; L.litDay=sday2(); save(); if (lm.userData.setLit) lm.userData.setLit(true); const I=bluffIsle(); if (I && I.lodTower) I.lodTower.userData.setLit(true); if (BLUFF) BLUFF.refreshStage();
@@ -3359,9 +3375,15 @@ function lightChoicesMarlo(k, menu){
   if (VISIT || GUEST || !SY.light || SY.light.st==='lit') return []; const L=SY.light, v=k.voice, nm=k.name;
   if (L.lens===1) return [{ label:'About that lens...', fn:()=>dialog(nm, v, ['Grinding it now. Rings and rings of glass, like a seashell. I\'ll carry it up the bluff myself tomorrow.'], menu) }];
   if (L.lens) return [];
-  return [{ label:'A lens for the lighthouse?', fn:()=>dialog(nm, v, ['A lighthouse lens! Ground glass in rings, like the inside of a shell. Throws light for miles.',`I can make one. ${fmt(LENS_COST)} clams, and I'll carry it up the bluff myself tomorrow.`], null, [
-    { label:`Order it (${fmt(LENS_COST)})`, fn:()=>{ if (noEdit()) return; if (S.clams<LENS_COST){ dialog(nm, v, ['Bit short, mate. No rush.'], menu); return; } S.clams-=LENS_COST; L.lens=1; L.lensDay=sday2(); updateHUD(); save(); Snd.coin(); dialog(nm, v, ['Lovely. It\'ll be up there by morning.'], menu); } },
-    { label:'Not yet', alt:true, fn:menu } ]) }]; }
+  if (!countItem('oldlens')) return [{ label:'A lens for the lighthouse?', fn:()=>dialog(nm, v, ['A lighthouse lens! Ground glass in rings, like the inside of a shell. Throws light for miles.',
+      'Grinding one from nothing would take a mountain of glass, mind. But the old keepers\' lens has to be up in that lamp room somewhere, even if it\'s in bits.',
+      `Climb up and bring me the pieces, and ${LENS_GLASS} bits of sea glass to fill out the rings. I\'ll do the rest for ${fmt(LENS_COST)}.`], menu) }];
+  const sg=countItem('seaglass');
+  return [{ label:'I found the old lens', fn:()=>dialog(nm, v, ['Look at that. Cracked clean through, but the rings are still true. I can work with this.',
+      sg>=LENS_GLASS ? `And you\'ve got the sea glass. ${fmt(LENS_COST)} clams and I\'ll carry it up the bluff myself tomorrow.` : `Now I just need ${LENS_GLASS} bits of sea glass to fill the gaps. You\'ve got ${sg}. The beaches throw it up now and then.`], null, sg>=LENS_GLASS ? [
+    { label:`Grind it (${fmt(LENS_COST)})`, fn:()=>{ if (noEdit()) return; if (S.clams<LENS_COST){ dialog(nm, v, ['Bit short, mate. No rush.'], menu); return; } if (!countItem('oldlens') || countItem('seaglass')<LENS_GLASS) return;
+        removeItem('oldlens',1); removeItem('seaglass',LENS_GLASS); S.clams-=LENS_COST; L.lens=1; L.lensDay=sday2(); updateHUD(); save(); Snd.coin(); dialog(nm, v, ['Lovely. It\'ll be up there by morning.'], menu); } },
+    { label:'Not yet', alt:true, fn:menu } ] : null) }]; }
 STAKES.wick={ unit:'ticket_moonlit', place:'in the night voyages', extraWord:t=>`now and then a Moonlit ticket`,
   tiers:[{ name:'A share', cost:25000, per:800, extra:0.15 }, { name:'Partner', cost:65000, per:2000, extra:0.3 }, { name:'Co-owner', cost:145000, per:4500, extra:0.5 }],
   due:()=>!!(SY.light && (SY.light.nv||0)>=1),
@@ -3589,7 +3611,7 @@ const dunesLM = () => { const I=ISLES.find(I=>I.kind==='dunes'); return I && I.l
 /* =====================================================================
    BARLEY'S MILL
    ===================================================================== */
-const MILL_GRIND=2, millCap = () => SY.mill && SY.mill.wheel ? 20 : 10, WHEEL_COST=15000;
+const MILL_GRIND=2, millCap = () => SY.mill && SY.mill.wheel ? 20 : 10, WHEEL_COST=5000, WHEEL_CLAY=3;
 const millOpen = () => !!(SY.mill && SY.mill.st==='grain');
 const millName = () => `${npcName(SY.mill.owner||dreamHolder('mill'))}'s Mill`;
 STAKES.mill={ unit:'flour', place:'in the mill', tiers:[{ name:'A share', cost:25000, per:800, extra:2 }, { name:'Partner', cost:75000, per:2000, extra:3 }, { name:'Co-owner', cost:160000, per:4500, extra:5 }],
@@ -3638,10 +3660,19 @@ function millThistle(k, menu){
 // Wendell's stream: a short race of water off the meadow spring, and a wheel to go with it
 function millWendell(menu){
   if (VISIT || GUEST || !millOpen() || SY.mill.wheel || SY.mill.wheelDay) return []; const W=WIZARD, v=W.voice;
-  return [{ label:'A stream for the mill?', fn:()=>dialog(W.name, v, ['A stream beside the old mill? There was one, before the land slept. I can feel where it ran.',`I'll wake it. The usual rate for shaping water: ${fmt(WHEEL_COST)} clams. ${holderName('mill')} can build a wheel to sit in it.`], null, [
+  const fresh=millFishAt(['river','pond']), sea=millFishAt(['sea']), clay=countItem('clay')>=WHEEL_CLAY, all=fresh>=0 && sea>=0 && clay;
+  const want=[fresh<0?'a river or pond fish':'', sea<0?'a sea fish':'', clay?'':`${WHEEL_CLAY} clay to line the race`].filter(Boolean);
+  return [{ label:'A stream for the mill?', fn:()=>dialog(W.name, v, ['A stream beside the old mill? There was one, before the land slept. I can feel where it ran.',
+      'Water forgets its way, though. It has to be reminded. Bring me a fish from fresh water and one from the sea, so the stream remembers where it is going and where it came from.',
+      `And ${WHEEL_CLAY} clay to line the race, and ${fmt(WHEEL_COST)} clams for the rest. ${holderName('mill')} can build a wheel to sit in it.`,
+      ...(all ? [] : [`Still wanted: ${andList(want)}.`])], null, all ? [
     { label:`Wake the stream (${fmt(WHEEL_COST)})`, fn:()=>{ if (noEdit()) return; if (S.clams<WHEEL_COST){ dialog(W.name, v, ['Water is patient. So am I. Come back with the clams.'], menu); return; }
-        S.clams-=WHEEL_COST; SY.mill.wheelDay=sday2(); updateHUD(); save(); Snd.magic(); dialog(W.name, v, ['Done. By morning it will be running past the mill. Listen for it.'], menu); } },
-    { label:'Not yet', alt:true, fn:menu } ]) }]; }
+        const a=millFishAt(['river','pond']), b=millFishAt(['sea']); if (a<0 || b<0 || countItem('clay')<WHEEL_CLAY) return;
+        removeAt(Math.max(a,b)); removeAt(Math.min(a,b)); removeItem('clay', WHEEL_CLAY);
+        S.clams-=WHEEL_COST; SY.mill.wheelDay=sday2(); updateHUD(); save(); Snd.magic(); dialog(W.name, v, ['He lets the two fish go in a bowl of water, side by side, and murmurs to them.','Done. By morning it will be running past the mill. Listen for it.'], menu); } },
+    { label:'Not yet', alt:true, fn:menu } ] : null) }]; }
+// the bag slot of a fish (any species) from one of these waters, or -1
+function millFishAt(where){ return S.inv.findIndex(s=>s && ITEMS[s.id] && ITEMS[s.id].kind==='fish' && where.includes(ITEMS[s.id].where)); }
 
 /* =====================================================================
    WREN'S TRADE ROUTES (the post office)
@@ -3842,7 +3873,7 @@ function gladeThistle(k, menu){
 /* =====================================================================
    HAZEL'S WRECK: the diving bell, the four parts, the logbook, the antiques shop
    ===================================================================== */
-const BELL_GLASS=20000, LENS3=8000, CROW={ iron:3, clams:1500 }, CHARTS=4;
+const BELL_GLASS=12000, PORTHOLES=3, LENS3=3000, CROW={ iron:3, clams:1500 }, CHARTS=4;
 const wreckOpen = layer => !!(SY.wreck && (layer==='deck' ? SY.wreck.bell : (SY.wreck.layers||{})[layer]));
 COMMISSIONS.push({ id:'bellframe', need:[['plank',25]], clams:0, days:1, gate:()=>!!(SY.wreck && !SY.wreck.bell) && !countItem('bellframe') && !(SY.shop.comm && SY.shop.comm.id==='bellframe') });
 STAKES.antiq={ unit:'shiplantern', place:'in the antiques shop', extraWord:t=>'now and then a piece of salvage',
@@ -3909,19 +3940,38 @@ function makeWreckRoom(){
     const pth=new Thing('pages', ox+px, oz+pz, 0.4, pg, ()=>(SY.wreck.pages||0)>=PAGES_AT[layer] || !wreckOpen(layer)?null:(layer==='vault'?'Open the strongbox':'Pick up'), t2=>{ const W0=SY.wreck; if ((W0.pages||0)>=PAGES_AT[layer] || !wreckOpen(layer)) return;
         const from=(W0.pages||0)+1; W0.pages=PAGES_AT[layer]; save(); Snd.jingle(); pg.visible=false; toast(`Logbook pages ${from} to ${W0.pages}`, null, 'new', `Damp, but you can read them. ${holderName('wreck')} will want to see.`); }, { solid:false, reach:1.5 });
     pg.visible=(SY.wreck.pages||0)<PAGES_AT[layer]; }
+  // the Saltwren's sea lantern, hanging in the hold (Marlo fits the cabin lens into it)
+  { const lg=new THREE.Group(), brass=M(0xa88a3a,{ metalness:0.6, roughness:0.45 }), gl=M(0xcfe8e0,{ transparent:true, opacity:0.55 });
+    mk(G.cyl(0.13,0.15,0.04,10), brass, 0,0.02,0,lg); mk(G.cyl(0.11,0.11,0.26,10), gl, 0,0.17,0,lg); for (let i=0;i<4;i++){ const a=i/4*TAU; mk(G.box(0.02,0.28,0.02), brass, Math.cos(a)*0.12,0.17,Math.sin(a)*0.12,lg); }
+    mk(G.cone(0.15,0.12,10), brass, 0,0.36,0,lg); const hk=mk(G.tor(0.05,0.012,6,12), brass, 0,0.46,0,lg); hk.rotation.x=Math.PI/2; for (const c of [0x6a9a8a,0x8ab0a0]) mk(G.sph(0.03,6,4), M(c), (Math.random()-0.5)*0.2,0.06,(Math.random()-0.5)*0.2,lg);
+    const lz=-D/2+2.5*L;
+    const lt=new Thing('shiplantern', ox+W/2-1.2, oz+lz, 0.4, lg, ()=>wantLantern()?'Take the lantern':null, t2=>{ if (!wantLantern()) return; if (!canAdd('shiplantern')){ toast('Your bag is full.'); return; }
+        addItem('shiplantern'); SY.wreck.lantern=true; save(); Snd.jingle(); itemToast('shiplantern', true, 'Found'); t2.obj.visible=false; }, { solid:false, reach:1.5 });
+    ROOMS.wreck.lantern=lt; }
   wreckGates(); }
-function wreckGates(){ const R=ROOMS.wreck; if (!R) return; const u=R.shell.userData; for (const k of ['hold','cabin','vault']){ const o=wreckOpen(k); if (u.gates[k]) u.gates[k].visible=!o; if (u.veils[k]) u.veils[k].visible=!o; } }
+// the hold's lantern is there to take while you need it for Marlo's lens (and don't already have it or the lens)
+const wantLantern = () => { const W0=SY.wreck; return !!W0 && wreckOpen('hold') && !wreckOpen('cabin') && !countItem('shiplantern') && !countItem('wrecklens') && W0.lens!==1 && W0.lens!==2; };
+function wreckGates(){ const R=ROOMS.wreck; if (!R) return; const u=R.shell.userData; if (R.lantern) R.lantern.obj.visible=wantLantern(); for (const k of ['hold','cabin','vault']){ const o=wreckOpen(k); if (u.gates[k]) u.gates[k].visible=!o; if (u.veils[k]) u.veils[k].visible=!o; } }
 function wreckMarlo(k, menu){
   if (VISIT || GUEST || !SY.wreck) return []; const W0=SY.wreck, v=k.voice, nm=k.name, out=[];
-  if (!W0.bell && !W0.glass && W0.st!=='pending') out.push({ label:'Glass for a diving bell?', fn:()=>dialog(nm, v, ['A diving bell! Thick glass, round portholes, a brass skirt. I\'ve always wanted to make one.',`${fmt(BELL_GLASS)} clams for the glass and the casting. I'll have it down on the sand by the wreck by morning. It'll want iron fittings and a frame to hang from, mind.`], null, [
-    { label:`Make it (${fmt(BELL_GLASS)})`, fn:()=>{ if (noEdit()) return; if (S.clams<BELL_GLASS){ dialog(nm, v, ['Bit short, mate. No rush.'], menu); return; } S.clams-=BELL_GLASS; W0.glass=1; W0.glassDay=sday2(); updateHUD(); save(); Snd.coin(); dialog(nm, v, ['Lovely. Down on the dunes by morning.'], menu); } },
-    { label:'Not yet', alt:true, fn:menu } ]) });
+  if (!W0.bell && !W0.glass && W0.st!=='pending'){ const ph=countItem('porthole');
+    if (!W0.portAsk) out.push({ label:'Glass for a diving bell?', fn:()=>{ W0.portAsk=true; save(); dialog(nm, v, ['A diving bell! Thick glass, a brass skirt. I\'ve always wanted to make one.',
+        'The glass I can do. Portholes are another matter. You want proper ones, cast for the sea, and nobody makes those any more.',
+        `But the Saltwren had brass portholes, and the storms keep throwing bits of her up on the beach. Find me ${PORTHOLES} and I\'ll cast the rest for ${fmt(BELL_GLASS)}.`], menu); } });
+    else if (ph<PORTHOLES) out.push({ label:'About the diving bell...', fn:()=>dialog(nm, v, [ph ? `${ph} porthole${ph>1?'s':''}! ${PORTHOLES-ph} more and we\'re in business.` : `Still need those ${PORTHOLES} portholes. Walk the beaches after a blow. They wash up a lot like the sea glass does.`], menu) });
+    else out.push({ label:'I found the portholes', fn:()=>dialog(nm, v, [`All ${PORTHOLES}! Green with age, but the brass is sound. ${fmt(BELL_GLASS)} clams for the glass and the casting.`,`I'll have it down on the sand by the wreck by morning. It'll want iron fittings and a frame to hang from, mind.`], null, [
+      { label:`Make it (${fmt(BELL_GLASS)})`, fn:()=>{ if (noEdit()) return; if (S.clams<BELL_GLASS){ dialog(nm, v, ['Bit short, mate. No rush.'], menu); return; } if (countItem('porthole')<PORTHOLES) return; removeItem('porthole',PORTHOLES); S.clams-=BELL_GLASS; W0.glass=1; W0.glassDay=sday2(); updateHUD(); save(); Snd.coin(); dialog(nm, v, ['Lovely. Down on the dunes by morning.'], menu); } },
+      { label:'Not yet', alt:true, fn:menu } ]) }); }
   if (wreckOpen('hold') && !wreckOpen('cabin') && !countItem('wrecklens')){
     if (W0.lens===2) out.push({ label:'Is the lens ready?', fn:()=>{ if (!canAdd('wrecklens')){ dialog(nm, v, ['Your bag\'s full, mate.'], menu); return; } addItem('wrecklens'); W0.lens=3; save(); itemToast('wrecklens', true, 'Received'); dialog(nm, v, ['Here she is. Hold it up to a lamp and it\'ll throw light clear across a bay.'], menu); } });
     else if (W0.lens===1) out.push({ label:'About that lens...', fn:()=>dialog(nm, v, ['Still grinding. Tomorrow.'], menu) });
-    else if (!W0.lens || W0.lens===3) out.push({ label:'A lens for the wreck?', fn:()=>dialog(nm, v, ['Too dark down there? A lantern lens, thick and ground just so, throws light a long way through water.',`${fmt(LENS3)} clams. Come back tomorrow for it.`], null, [
-      { label:`Order it (${fmt(LENS3)})`, fn:()=>{ if (noEdit()) return; if (S.clams<LENS3){ dialog(nm, v, ['Bit short, mate.'], menu); return; } S.clams-=LENS3; W0.lens=1; W0.lensDay=sday2(); updateHUD(); save(); Snd.coin(); dialog(nm, v, ['Righto. Tomorrow.'], menu); } },
-      { label:'Not yet', alt:true, fn:menu } ]) }); }
+    else if (!W0.lens || W0.lens===3){ const lan=countItem('shiplantern')>0, pearl=countItem('moonpearl')>0;
+      out.push({ label:'A lens for the wreck?', fn:()=>dialog(nm, v, !lan ? ['Too dark down there? A lantern lens, thick and ground just so, throws light a long way through water.',
+          'Only a lens is no good on its own. It wants a lantern built for the sea to sit in. The Saltwren would have carried one. Have a poke round the hold.',
+          `Bring it to me with a moonpearl for the light to gather in, and ${fmt(LENS3)} clams.`]
+        : [`The Saltwren\'s own lantern! Barnacles and all. Lovely.`, pearl ? `With that moonpearl at its heart it\'ll throw light clear across a bay. ${fmt(LENS3)} clams, and come back tomorrow.` : 'Now a moonpearl, for the light to gather in. They turn up with a catch now and then, or on the beach.'], null, lan && pearl ? [
+      { label:`Fit the lens (${fmt(LENS3)})`, fn:()=>{ if (noEdit()) return; if (S.clams<LENS3){ dialog(nm, v, ['Bit short, mate.'], menu); return; } if (!countItem('shiplantern') || !countItem('moonpearl')) return; removeItem('shiplantern',1); removeItem('moonpearl',1); S.clams-=LENS3; W0.lens=1; W0.lensDay=sday2(); updateHUD(); save(); Snd.coin(); dialog(nm, v, ['Righto. Tomorrow.'], menu); } },
+      { label:'Not yet', alt:true, fn:menu } ] : null) }); } }
   return out; }
 function wreckPemberton(k, menu){
   if (VISIT || GUEST || !SY.wreck || !SY.wreck.bell || wreckOpen('hold') || countItem('crowbar') || !(SY.forge && SY.forge.st==='open')) return []; const v=k.voice, nm=k.name;
@@ -4793,7 +4843,8 @@ function rareRoll(k, id, at, potion){
   if (GUEST || Math.random()>=rareChance(k, potion)) return false;
   const p=at.clone(), g=DROP_GRP; setTimeout(()=>{ dropNear(id, p, 1.4, false, undefined, g); sparkle(p.clone().add(new THREE.Vector3(0,1.4,0))); Snd.jingle(); toast('Rare find!', thumb(id), 'new', `${ITEMS[id].name} ${rarityTag(ITEMS[id])}`); }, 450);
   return true; }
-function learnPlan(planId){ if (ITEMS[planId].ench) return EN.learnScroll(planId); const fid=ITEMS[planId].learns;
+const YARN_BOTTLE_ODDS=0.08;
+function learnPlan(planId){ if (ITEMS[planId].ench) return EN.learnScroll(planId); if (ITEMS[planId].yarn) return SX.learnPack(ITEMS[planId].yarn); const fid=ITEMS[planId].learns;
   if (ITEMS[planId].wood){ if (!learnWood(fid)) return false; Snd.fanfare(); toast(`Woodworking plan: ${ITEMS[fid].name}!`, thumb(fid), 'new', S.craft ? 'It\'s in Woodworking now.' : 'Once Bramble teaches you woodworking, you can make it.'); return true; }
   if (knowsPlan(fid)) return false; S.rare.plans.push(fid); save(); Snd.fanfare();
   toast(`Rare plan found: ${ITEMS[fid].name}!`, thumb(fid), 'new', S.craft ? 'It\'s in Woodworking now. The ingredients are the hard part.' : 'Once Bramble teaches you woodworking, you can make it.');
@@ -6167,7 +6218,13 @@ function rollDay(){
     if (S.day.peddler && plan && c<RARE_ODDS.peddlerPlan) S.day.pplan=randomPlan(rr);
     if (S.day.peddler && !TRIP && rr()<SAILCLOTH_ODDS) S.day.pstock=[...S.day.pstock, 'sailcloth'];   // v1.39 a bolt of sailcloth about 1 visit in 3
     { const sc=EN.dailyScroll(rr); if (sc){ const p=beachSpot(rr); if (p) S.ground.push({ id:sc, x:p[0], z:p[1], beach:true, bottle:true }); } }   // v1.40 a scroll in a bottle
-    if (S.day.peddler){ const ps=EN.peddlerScroll(rr); if (ps) S.day.pscroll=ps; } }   // v1.40 now and then Fennick has an enchanting scroll (rolled last, so nothing above shifts)
+    if (S.day.peddler){ const ps=EN.peddlerScroll(rr); if (ps) S.day.pscroll=ps; }
+    // once Marlo asks for the Saltwren's portholes, one washes up on the beach each day until you have three
+    { const W0=S.story && S.story.wreck; if (!VISIT && !TRIP && W0 && W0.portAsk && !W0.glass && !W0.bell){ const have=countItem('porthole')+S.ground.filter(g=>g.id==='porthole').length;
+        if (have<PORTHOLES){ const p=beachSpot(mulberry32(hashStr(key+':porthole:'+S.seed))); if (p) S.ground.push({ id:'porthole', x:p[0], z:p[1], beach:true }); } } }
+    // a yarn colour pack in a bottle, now and then, once you have a sewing machine (its own stream, so nothing else shifts)
+    if (!VISIT && !TRIP && S.craft){ const yr=mulberry32(hashStr(key+':yarn:'+S.seed)), left=SX.packsToFind(), owns=countItem('sewmachine')>0 || S.placed.some(p=>p.id==='sewmachine');
+      if (left.length && owns && !S.ground.some(g=>String(g.id).startsWith('yarnpack_')) && yr()<YARN_BOTTLE_ODDS){ const p=beachSpot(yr); if (p) S.ground.push({ id:'yarnpack_'+left[Math.floor(yr()*left.length)], x:p[0], z:p[1], beach:true, bottle:true }); } } }   // v1.40 now and then Fennick has an enchanting scroll (rolled last, so nothing above shifts)
   // v1.38 coral fragments wash up from day one, for everyone: a cheap, ordinary beach find (1 to 3 a day). What they're for only comes out
   // later, when Gill tells you about the reef. A Coral Atoll trip is littered with them; other trips get the odd one.
   if (!VISIT){ const cr=mulberry32(hashStr(key+':coral:'+S.seed)), n = TRIP ? (TRIP_THEME==='coral' ? 15+Math.floor(cr()*6) : Math.floor(cr()*2)) : 1+Math.floor(cr()*3);
@@ -6632,7 +6689,7 @@ function showInvTip(el){
 pBody.addEventListener('pointerover', e=>{ if (e.pointerType!=='mouse') return; const el=e.target.closest&&e.target.closest('.slot[data-tip]'); if (!el){ hideInvTip(); return; } showInvTip(el); });
 pBody.addEventListener('pointerout', e=>{ if (!e.relatedTarget || !e.relatedTarget.closest || !e.relatedTarget.closest('.slot[data-tip]')) hideInvTip(); });
 pBody.addEventListener('scroll', hideInvTip); pBody.addEventListener('click', hideInvTip);
-/* v1.75 touch screens: press and hold a slot (in your bag, a chest or the shop) to see its name and value. Letting go after a
+/* v1.76 touch screens: press and hold a slot (in your bag, a chest or the shop) to see its name and value. Letting go after a
    hold doesn't count as a tap, so holding something in a chest doesn't move it. The note fades a moment after you let go. */
 const LONG_PRESS=420; let lpTimer=0, lpStart=null, lpShown=0, lpHide=0;
 pBody.addEventListener('pointerdown', e=>{ if (e.pointerType==='mouse') return; const el=e.target.closest&&e.target.closest('.slot[data-tip]'); clearTimeout(lpTimer); lpShown=0; if (!el) return;
@@ -6643,7 +6700,7 @@ pBody.addEventListener('pointerup', lpEnd); pBody.addEventListener('pointercance
 pBody.addEventListener('contextmenu', e=>{ if (e.target.closest && e.target.closest('.slot[data-tip]')) e.preventDefault(); });
 pBody.addEventListener('click', e=>{ if (lpShown && performance.now()-lpShown<4000 && e.target.closest && e.target.closest('.slot[data-tip]')){ lpShown=0; e.stopPropagation(); e.preventDefault(); } }, true);
 // Sort (bag and chests): groups things by kind, then name, and tops up part stacks (tether-core.js)
-// v1.75 Sort button for the bag and chests (rules in tether-core.js)
+// v1.76 Sort button for the bag and chests (rules in tether-core.js)
 function sortList(list, what){ const before=list.map(e=>({...e})); TQ.sortInPlace(list);
   if (TQ.sameOrder(before, list)){ toast(`Your ${what} is already sorted.`); return false; } Snd.click(); save(); updateHUD(); return true; }
 const sortBtn = (id, label='Sort') => `<button class="btn alt" id="${id}" style="padding:3px 12px;font-size:13px">${label}</button>`;
@@ -6916,7 +6973,7 @@ function openBook(tab='fish'){
    and have the clams for it, Pemberton brings it out from the back himself. One pitch per visit. After that it stays on the Tools tab. */
 let storeVisit=0; const toolBoughtAt={}, PITCH_ORDER=['axe','shovel','rod','net','can'];
 function buyTool(t, k, which='stall'){
-  const tr=TOOLS[t].tiers[k]; if (S.clams<tr.cost) return false;
+  const tr=TOOLS[t].tiers[k]; if (tr.forever || S.clams<tr.cost) return false;   // heirlooms are made, never sold
   S.clams-=tr.cost; addTrade(which,tr.cost); EN.upgradeTool(t,k); /* v1.40 keeps enchantments */ S.toolEver[t]=Math.max(S.toolEver[t]??-1, k); S.toolOffer[t]=Math.max(S.toolOffer[t]??-1, k);
   toolBoughtAt[t]=storeVisit; Snd.coin(); equip(t); updateHUD(); toast(`You got the ${tr.name}! It's in your hand now.`, toolThumb(t,k)); save(); return true;
 }
@@ -6939,7 +6996,7 @@ const PITCH_PERK = {
 };
 const PITCH_DID = { axe:'You\'ve been chopping up a storm', shovel:'You\'ve dug up half the island', rod:'You\'ve been pulling fish out left and right', net:'You\'ve been catching bugs left and right', can:'You\'ve been keeping every plant on the island watered' };
 function pitchTool(k, p, after){
-  pitchedVisit=storeVisit;
+  pitchedVisit=storeVisit; if (TOOLS[p.t].tiers[p.k].forever) return heirloomTalk(p.t, p.k, after);
   const T=TOOLS[p.t], tr=T.tiers[p.k], cur=T.tiers[p.k-1], own=S.tools[p.t], perk=(PITCH_PERK[p.t]||[])[p.k-1]||'';
   const open = tr.forever ? 'Hold on, partner. Before you look around. Come with me to the back a second.'
     : tr.req&&tr.req.stat ? `Hey, you! Word gets around. ${PITCH_DID[p.t]}, I hear.`
@@ -6956,6 +7013,7 @@ function pitchTool(k, p, after){
 const PITCH_OFF=0.2;
 function pitchOnBuy(t, k){
   const T=TOOLS[t], n=k+1; if (!T || n>=T.tiers.length || n<=(S.toolOffer[t]??-1) || (S.toolEver[t]??-1)<k || !reqMet(t,n)) return false;
+  if (T.tiers[n].forever){ heirloomTalk(t, n, ()=>{ buyTool(t, k); openShop('stall'); }); return true; }
   const tr=T.tiers[n], price=Math.round(tr.cost*(1-PITCH_OFF)); if (S.clams<price) return false;
   const kp=KEEPERS[SHOPS.general.keeper], perk=(PITCH_PERK[t]||[])[n-1]||'', own=S.tools[t], broke=!own || (own.tier===k && !T.tiers[k].forever && own.uses<=0);
   S.toolOffer[t]=n; save(); panelClose=null; closePanel();
@@ -6966,6 +7024,18 @@ function pitchOnBuy(t, k){
     { label:`Buy it (${fmt(price)})`, fn:()=>{ const c=tr.cost; tr.cost=price; const ok=buyTool(t, n); tr.cost=c; dialog(kp.name, kp.voice, [ok?'Pleasure doing business! You won\'t regret it.':'Hm, looks like you\'re a little short.'], back); } },
     { label:`Just the ${T.tiers[k].name}`, alt:true, fn:()=>{ buyTool(t, k); dialog(kp.name, kp.voice, ['Suit yourself. I\'ll keep the good one on the tools shelf for you.'], back); } } ]);
   return true;
+}
+/* Heirlooms can't be bought. When you've earned one, Pemberton tells you what it takes to make it. */
+const HEIR_WORD = { iron:'iron', fitting:'iron fittings', moonpearl:'moonpearls', starstone:'starstone', heartwood:'heartwood', goldsap:'golden sap', glimmermoss:'glimmer moss' };
+const heirMat = id => HEIR_WORD[id] || (ITEMS[id] ? ITEMS[id].name.toLowerCase() : id);
+function heirloomMats(t){ const need=toolCraftNeed(t, TOOLS[t].tiers.length-1)||[]; return need.map(([m,n])=>`${n} ${heirMat(m)}`).join(', ').replace(/, ([^,]*)$/, ' and $1'); }
+const HEIRLOOM_PART = { net:'the hoop', rod:'the reel', shovel:'the blade', axe:'the head', can:'the spout' };
+function heirloomTalk(t, n, after){
+  const T=TOOLS[t], tr=T.tiers[n], kp=KEEPERS[SHOPS.general.keeper]; S.toolOffer[t]=n; save(); panelClose=null; closePanel();
+  dialog(kp.name, kp.voice, [`Another ${T.tiers[n-1].name}? Hold on, partner. Someone who goes through tools like you should have an heirloom.`,
+    `Thing is, I can't sell you one. Nobody can. An heirloom gets made, by your own hands, at a Master Workbench.`,
+    `Heartwood for the handle, starstone for ${HEIRLOOM_PART[t]||'the metal'}, and more iron than you'd think. Golden sap to seal it.`,
+    `All told: ${heirloomMats(t)}. Get those together and it'll outlast us both.`], after);
 }
 function reqMet(t, tier){ const q=TOOLS[t].tiers[tier].req; if(!q) return true; if(q.tool!==undefined && (S.toolEver[t]===undefined || S.toolEver[t]<q.tool)) return false; if(q.stat && (S.stats[TOOLS[t].stat]||0)<q.stat) return false; return true; }
 function packReq(i){ const q=BACKPACKS[i].req; if(!q) return true; if(q.caught && S.caught<q.caught) return false; if(q.discovered && discovered()<q.discovered) return false; if(q.bestFriends && bestFriends()<q.bestFriends) return false; return true; }
@@ -7076,6 +7146,7 @@ function openShop(which, startTab){
         const ever=Math.max(own?own.tier:-1, S.toolEver[t]??-1), offered=S.toolOffer[t]??-1; let hidden=0;
         T.tiers.forEach((tr,k)=>{ const ok=reqMet(t,k), keep=own&&T.tiers[own.tier].forever&&k<=own.tier;
           if (k>0 && k>ever && k>offered){ hidden++; return; }
+          if (tr.forever){ h+=`<div class="row" style="margin:8px 0 0"><img src="${toolThumb(t,k)}"><div class="grow"><div class="nm">${tr.name}</div><div class="sub"><b>Never breaks</b> · not for sale. Made at a Master Workbench from ${heirloomMats(t)}.</div></div>${keep?'<span class="muted">Owned</span>':''}</div>`; return; }
           h+=`<div class="row" style="margin:8px 0 0"><img src="${toolThumb(t,k)}"><div class="grow"><div class="nm">${tr.name}</div><div class="sub">${fmt(tr.cost)} clams · ${tr.forever?'<b>Never breaks</b>':tr.uses+' uses'}${tr.bonus&&t==='net'?` · +${Math.round(tr.bonus*100)}% catch`:''}${tr.bonus&&t==='rod'?` · longer bite window`:''}${tr.nofell?' · can\'t fell trees':''}${k>ever&&k>0?' <span style="color:#d08a10;font-weight:600">New!</span>':''}</div></div><button class="btn" data-tool="${t}:${k}" ${keep||!ok||S.clams<tr.cost?'disabled':''}>${keep?(k===own.tier?'Owned':'Kept'):'Buy'}</button></div>`; });
         if (hidden) h+=`<div class="muted" style="margin-top:6px"></div>`;
         h+='</div>'; } }
@@ -8725,7 +8796,8 @@ function openMenu(){
       <label class="f">Weather <select id="mW"><option value="">Today's weather</option><option>sunny</option><option>cloudy</option><option>rain</option><option>snow</option></select></label>
       ${DEV?`<div style="margin-top:8px"><b>Shortcuts</b> <span class="muted">(only on this device)</span><div class="muted" style="margin:6px 0 2px">Story map</div><button class="btn" id="dvMap">Story map: isles, stories, places</button><div class="muted" style="margin:6px 0 2px">Isles and stories</div><button class="btn alt" id="dvT">${S.magic.tower?'Tower is up':'Raise the wizard tower'}</button> ${!GUEST&&!VISIT&&nextIsleKind()?'<button class="btn alt" id="dvI">Raise the next isle</button>':''} ${!GUEST&&!VISIT&&!TRIP&&lowerAny()?'<button class="btn alt" id="dvLo">Lower every isle</button> ':''}<button class="btn alt" id="dvM">${S.devMagic?'Wizard needs requirements again':'Skip wizard requirements'}</button> <button class="btn alt" id="dvRl">Relics for the next isle</button> <button class="btn alt" id="dvSt">Phase 2: next story</button> <button class="btn alt" id="dvS3">Phase 3: next story</button><div class="muted" style="margin:6px 0 2px">Town and island</div><button class="btn alt" id="dvC">+50,000 clams</button> <button class="btn alt" id="dvF">New favors now</button> <button class="btn alt" id="dvD">Town: skip a day</button> <button class="btn alt" id="dvR">Rare kit</button> <button class="btn alt" id="dvRf">Reef: skip to the rowboat</button> <button class="btn alt" id="dvRg">Reef: grow 12 coral</button> <button class="btn alt" id="dvWs">Workshop: skip ahead</button><div class="muted" style="margin:6px 0 2px">Shops and fishing</div><button class="btn alt" id="dvSh3">Shops to tier 3 of 4</button> <button class="btn alt" id="dvSh4">Shops to the top tier</button> <button class="btn alt" id="dvBk">Back room: next week</button> <button class="btn alt" id="dvGb">Gill: next boat</button><div class="muted" style="margin:6px 0 2px">Lighthouse</div><button class="btn alt" id="dvLp">Go to Lighthouse Point</button> <button class="btn alt" id="dvLt">Lighthouse top, with the keeper</button><div class="muted" style="margin:6px 0 2px">Lantern Bluff lighthouse</div><button class="btn alt" id="dvBh">Go to the bluff lighthouse</button> <button class="btn alt" id="dvBh0">Inside: ruined</button> <button class="btn alt" id="dvBh1">Inside: lens up</button> <button class="btn alt" id="dvBh2">Inside: mending</button> <button class="btn alt" id="dvBh3">Inside: lit</button> <button class="btn alt" id="dvBhT">Top of the stair</button> <button class="btn alt" id="dvBhR">Back to the story's stage</button><div class="muted" style="margin:6px 0 2px">Enchanting and tables</div><button class="btn alt" id="dvEnL">Learn every enchantment</button> <button class="btn alt" id="dvEnT">${S.rare&&S.rare.ench&&S.rare.ench.twin?'Two-enchantment trick learned':'Learn the two-enchantment trick'}</button> <button class="btn alt" id="dvEnI">+20 of each ingredient</button> <button class="btn alt" id="dvEnK">A Sturdy tool of each kind</button> <button class="btn alt" id="dvBrk">Break the tool in hand</button> ${!VISIT&&!TRIP?'<button class="btn alt" id="dvB1">Workbench here</button> <button class="btn alt" id="dvB2">Carpenter\'s Bench here</button> <button class="btn alt" id="dvB3">Master Workbench here</button>':''} <button class="btn alt" id="dvBA">${BN.dev.any?'Tables work normally again':'Count as a Master Workbench anywhere'}</button> <button class="btn alt" id="dvEn">All of it at once</button>${PLACES.hall?`<div class="muted" style="margin:6px 0 2px">Town hall</div><button class="btn alt" id="dvH">Into the town hall</button> <button class="btn alt" id="dvHg">${(S.town.hall||0)>=2?'Make it the Town Hall':'Make it the Grand Town Hall'}</button>`:''}<br><button class="btn alt" id="dvOff">Hide shortcuts</button></div>`:''}
     </div>
-    <button class="btn warn" id="mReset">Start a new island</button>${saveOK?'':'<div class="muted" style="margin-top:8px">Saving isn\'t available in this browser.</div>'}`;
+    <details style="margin-top:18px;color:#9a8a7a;font-size:13px"><summary style="cursor:pointer;list-style:none;opacity:.75">More island options...</summary>
+      <div style="margin-top:10px;padding:10px;border:1px dashed #e0c8b0;border-radius:10px">Starting over replaces your whole island. <a href="#" id="mReset" style="color:#c0503a">Start a new island</a></div></details>${saveOK?'':'<div class="muted" style="margin-top:8px">Saving isn\'t available in this browser.</div>'}`;
     $('#mParty').onclick=()=>{ closePanel(); setTimeout(()=>PARTY.open(), 50); };
     $('#mLook').onclick=async()=>{ closePanel(); const L=await openCreator({ look:CH.parseLook(S.look), title:'Change your look', cancel:true, owned:wardrobeOwned() }); if (L){ const was=CH.parseLook(S.look); if (L.ct && (L.top!==was.top || L.tc!==was.tc)) delete L.ct; else if (!L.ct && was.ct && L.top===was.top && L.tc===was.tc) L.ct=was.ct;   /* v1.64 sewn clothes stay on unless you pick another outfit */ const code=CH.lookCode(L); if (code!==S.look) track('look'); setPlayerLook(code); checkAch(); } };
     $('#mAch').onclick=()=>{ closePanel(); setTimeout(()=>openAchievements(), 60); };
@@ -8782,7 +8854,7 @@ function openMenu(){
       $('#dvOff').onclick=()=>{ try{ localStorage.removeItem('dwDev'); }catch(e){} toast('Shortcuts hidden. Open the game with #dev at the end of the address to bring them back.'); render(); }; }
     if (DEV) devHall(render);   // v1.49
     const w=$('#mW'); w.value=weatherOverride||''; w.onchange=()=>{ weatherOverride=w.value||null; World.weather=weatherOverride||S.day.weather; updateSky(); updateHUD(); };
-    $('#mReset').onclick=()=>{
+    $('#mReset').onclick=e=>{ if (e) e.preventDefault();
       if (VISIT){ pBody.innerHTML=`<p>You're visiting a friend's island. Go back to your own island to start a new one.</p><button class="btn alt" id="rN">OK</button>`; $('#rN').onclick=render; return; }
       const acct=BOOT.mode==='account';
       pBody.innerHTML=`<p>${acct?'This replaces your island with a brand new one. Your house, items, clams and progress on it are erased. Friends you\'ve added stay your friends.':'This erases your island, items and friendships.'} Are you sure?</p><button class="btn warn" id="rY">Yes, start over</button> <button class="btn alt" id="rN">Keep my island</button>`;
@@ -8982,7 +9054,7 @@ function checkPlace(){
   if (placing.mode==='orchard') return checkOrchard();
   if (placing.mode==='furn' && isFence(placing.id)) snapFence();
   const p=placing.m.position, it=ITEMS[placing.id]; let ok=walkable(p.x,p.z) && Math.hypot(p.x-player.pos.x,p.z-player.pos.z)>0.6 && !onDock(p.x,p.z) && !onBridge(p.x,p.z);
-  if (placing.mode==='furn') ok = ok && (isFence(placing.id) ? !blockedFence(p.x,p.z,placing.moving) : !blocked(p.x,p.z,it.r));
+  if (placing.mode==='furn') ok = ok && (isFence(placing.id) ? !blockedFence(p.x,p.z,placing.moving) : it.flat ? !blockedFlat(p.x,p.z,it.r) : !blocked(p.x,p.z,it.r));
   else ok = ok && plantSpotOk(p.x,p.z,it);
   placing.ok=ok; placing.m.traverse(c=>{ for(const mt of (Array.isArray(c.material)?c.material:[c.material])) if(mt&&mt.emissive&&!c.userData.outline) mt.emissive.setHex(ok?0x000000:0x882020); }); if(placing.ring) placing.ring.material.color.setHex(ok?0xffffff:0xe2604d); $('#pOk').disabled=!ok;
   if (placing.mode==='furn') TQ.showLines(placing.id, p.x, p.z, placing.moving && placing.moving.rec);   // faint tether lines: chest to crafting spot
@@ -8993,8 +9065,8 @@ const turnBy = a => { if(!placing) return; if (placing.mode==='orchard'){ placin
 $('#pRotL').onclick=()=>turnBy(Math.PI/12); $('#pRotR').onclick=()=>turnBy(-Math.PI/12);
 $('#pNo').onclick=()=>{ endPlacing(); Snd.click(); };
 $('#pOk').onclick=()=>{ if (placing && placing.mode==='grid'){ plantGrid(); return; } if (placing && placing.mode==='orchard'){ plantOrchard(); return; } if(!checkPlace()) return; const p=placing.m.position, id=placing.id, it=ITEMS[id];
-  if (placing.moving){ const e=placing.moving, rec=e.rec; rec.x=p.x; rec.z=p.z; rec.rot=placing.rot; e.pos.set(p.x, World.inside?0:groundY(p.x,p.z), p.z); e.obj.position.copy(e.pos); e.model.rotation.y=rec.rot; e.obj.visible=true; e.solid=!it.flat; placing.done=true; }
-  else if (placing.mode==='furn'){ const rec={ id, x:p.x, z:p.z, rot:placing.rot }; removeItem(id,1); S.placed.push(rec); new Furniture(rec); track('place');
+  if (placing.moving){ const e=placing.moving, rec=e.rec; rec.x=p.x; rec.z=p.z; rec.rot=placing.rot; if (it.flat){ rec.ly=flatLift(p.x,p.z,it.r,rec); e.model.position.y=rec.ly; } e.pos.set(p.x, World.inside?0:groundY(p.x,p.z), p.z); e.obj.position.copy(e.pos); e.model.rotation.y=rec.rot; e.obj.visible=true; e.solid=!it.flat; placing.done=true; }
+  else if (placing.mode==='furn'){ const rec={ id, x:p.x, z:p.z, rot:placing.rot }; if (it.flat){ const ly=flatLift(p.x,p.z,it.r); if (ly) rec.ly=ly; } removeItem(id,1); S.placed.push(rec); new Furniture(rec); track('place');
     if (isFence(id) && countItem(id)>0){ const a=fenceAxis(placing.rot), nx=p.x+a[0], nz=p.z+a[1], rot=placing.rot;   // the next fence waits at the end of the line
       puff(p.clone().add(new THREE.Vector3(0,0.3,0)),0xffffff,6,0.5,1.2,0.8,0.5); Snd.pop(); save(); endPlacing();
       startPlacing(id,'furn'); if (placing){ placing.rot=rot; placing.m.rotation.y=rot; placing.m.position.set(nx, World.inside?0:groundY(nx,nz), nz); checkPlace(); $('#pNo').textContent='Done'; } return; } }
@@ -9953,4 +10025,9 @@ window.__game.v137 = { get S(){ return S; }, get SY(){ return SY; }, get BAYR(){
   goTo:(x,z)=>{ player.pos.set(x, groundY(x,z), z); player.obj.position.copy(player.pos); camTarget.copy(player.pos); }, dayKeyOf, sday, get trees(){ return trees; }, get nurseryEnt(){ return nurseryEnt; }, get rowboatEnt(){ return rowboatEnt; }, get workshopEnt(){ return workshopEnt; },
   info:()=>({ calls:renderer.info.render.calls, tris:renderer.info.render.triangles }), dialogOpen:()=>!!dlgState, closeDialog:()=>closeDialog(false), closePanel, adv:()=>{ for (let i=0;i<30 && dlgState && !dlgChoices.children.length;i++) advanceDialog(); return dlgState ? [...dlgChoices.children].map(b=>b.textContent) : null; },
   choose:txt=>{ for (let i=0;i<30 && dlgState && !dlgChoices.children.length;i++) advanceDialog(); const b=[...dlgChoices.children].find(b=>b.textContent.includes(txt)); if (b){ b.click(); return true; } return false; }, lines:()=>dlgState ? { name:dlgState.name, lines:dlgState.lines, full:dlgState.full } : null, PLACES, DOCK, groundY, Time, World, camera };
-window.__game.tether = { TQ, matCount, matTake, sortList, cookMax:r=>cookMax(r), craftMax:r=>craftMax(r) };   // v1.75 chests feeding crafting, sorting: tests
+window.__game.v172 = { nurseCap, nurseBase, nurseToday, openNursery, NURSE_STEPS, heirloomMats, heirloomTalk, pitchOnBuy, buyTool, flatLift, blockedFlat, checkPlace, startPlacing, get placing(){ return placing; },
+  lightChoicesMarlo, lighthouseAct, wreckMarlo, millWendell, millFishAt, wantLantern, SX, rollDay, spawnDaily, learnPlan,
+  // the open dialog, fast-forwarded to its choices (or closed): { name, lines, choices }
+  dlgRun(){ const d=dlgState; if (!d) return null; const lines=[d.full, ...d.lines.slice(d.i)]; for (let k=0;k<40 && dlgState===d;k++){ d.chars=d.full.length; if (dlgChoices.children.length) break; advanceDialog(); }
+    return { name:d.name, lines, choices:[...dlgChoices.children].map(b=>b.textContent) }; } };   // v1.75 tests
+window.__game.tether = { TQ, matCount, matTake, sortList, cookMax:r=>cookMax(r), craftMax:r=>craftMax(r) };   // v1.76 chests feeding crafting, sorting: tests

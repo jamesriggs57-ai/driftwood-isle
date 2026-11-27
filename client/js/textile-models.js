@@ -144,6 +144,15 @@ export function buildMachine(g){
   const cl=mesh(new THREE.BoxGeometry(0.22,0.006,0.18), plain(0x8ad0e8), -0.17,0.81,0.06,g); cl.rotation.y=0.3;
   return g; }
 
+/* a ball of yarn with a loose end, and a bundle of little skeins tied with string (a colour pack) */
+function yarnBall(g, c, x=0, z=0, r=0.16){ const m=plain(c); const b=mesh(new THREE.SphereGeometry(r,16,12), m, x,r,z,g);
+  for (let k=0;k<5;k++){ const t=mesh(new THREE.TorusGeometry(r*1.0,r*0.07,6,24), plain(shade(c,-0.06)), x,r,z,g); t.rotation.set(k*0.7, k*1.1, k*0.4); }
+  return b; }
+export function buildYarnBall(g){ yarnBall(g, 0xc8a878); const tail=mesh(new THREE.CylinderGeometry(0.012,0.012,0.22,5), plain(0xb89868), 0.18,0.03,0.04,g); tail.rotation.z=Math.PI/2.3; return g; }
+export function buildYarnPack(g, d){ const cs=(d && d.colors && d.colors.length) ? d.colors : [0xe2483d,0x5a9a4a,0x5a8ad8,0xf2d060];
+  const n=Math.min(cs.length,6); for (let i=0;i<n;i++){ const a=i/n*TAU; yarnBall(g, cs[i], Math.cos(a)*0.13, Math.sin(a)*0.13, 0.09); }
+  const tie=mesh(new THREE.TorusGeometry(0.22,0.012,6,28), plain(0xe8dcc4), 0,0.09,0,g); tie.rotation.x=Math.PI/2; return g; }
+
 /* register the rug and machine models with the item builder table (main passes it in, to avoid an import loop) */
-export function registerRug(ITEM_BUILDERS){ ITEM_BUILDERS.rug = (g, d, id) => buildRug(g, id || d.code); ITEM_BUILDERS.sewmachine = g => buildMachine(g); }
+export function registerRug(ITEM_BUILDERS){ ITEM_BUILDERS.rug = (g, d, id) => buildRug(g, id || d.code); ITEM_BUILDERS.sewmachine = g => buildMachine(g); ITEM_BUILDERS.yarnball = g => buildYarnBall(g); ITEM_BUILDERS.yarnpack = (g, d) => buildYarnPack(g, d); }
 export { isRugId };

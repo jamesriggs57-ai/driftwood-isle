@@ -10,7 +10,7 @@
      Take out: plants come out and you get their seeds, starts or saplings back (what digging up used to give).
      Ripe ones are harvested first. Taking out a whole garden also clears its soil (fences and decorations
      aren't refunded, the same as the garden menu's Take out).
-   v1.72 Soil: switch the bar to Soil, then tap soil squares to pick them (Whole garden and Empty squares pick many at once).
+   v1.73 Soil: switch the bar to Soil, then tap soil squares to pick them (Whole garden and Empty squares pick many at once).
      Move takes the squares and the plants of yours on them to a new spot; they join any garden they touch, or start one.
      Take out clears the squares back to grass, and plants of yours on them come out as above. A garden cut in two
      becomes two gardens. Picking every square of one garden moves or takes out that garden whole, fence and all.
@@ -31,7 +31,7 @@ export function createGardenEdit(C){
   const soft = rec => { const P=C.PLANTS[rec.sp]; return P && (P.ptype==='crop' || P.ptype==='flower'); };
   const solidAt = rec => { const P=C.PLANTS[rec.sp]; return P && (P.ptype==='tree' || P.ptype==='shrub') && (rec.stage|0)>=2; };
   const word = n => `${n} plant${n===1?'':'s'}`;
-  // v1.72 the highest ground under a square, so its marker shows above soil laid on a slope
+  // v1.73 the highest ground under a square, so its marker shows above soil laid on a slope
   const topY = (x, z) => { let y=C.groundY(x,z); for (const [a,b] of [[-0.36,-0.36],[0.36,-0.36],[-0.36,0.36],[0.36,0.36]]) y=Math.max(y, C.groundY(x+a,z+b)); return y+0.05; };
 
   /* ---------- start and stop ---------- */
@@ -64,7 +64,7 @@ export function createGardenEdit(C){
     const pt=p.ground || p.point; if (!pt) return;
     const rec=mineNear(pt.x, pt.z); if (rec){ toggle(rec); C.Snd.click(); return redraw(); }
     const g=C.gardenAtXZ(pt.x, pt.z); if (g){ pickWhole(g); C.Snd.click(); return redraw(); } }
-  /* ---------- v1.72 picking soil squares ---------- */
+  /* ---------- v1.73 picking soil squares ---------- */
   const cellKeyOf = rec => ckey(...C.cellOf(rec.x, rec.z));
   const mineOn = keys => { const set=keys instanceof Set ? keys : new Set(keys); return S().plants.filter(p=>isMine(p) && p.x<500 && set.has(cellKeyOf(p))); };
   const emptyOf = g => { const used=new Set(S().plants.filter(p=>p.x<500).map(cellKeyOf)); return g.cells.filter(k=>!used.has(k)); };
@@ -126,7 +126,7 @@ export function createGardenEdit(C){
   function cellOk(i, j, others){ const x=i*CELL, z=j*CELL;
     if (!C.walkable(x,z) || C.onDock(x,z) || C.onBridge(x,z) || x>500 || C.rawHeight(x,z)<=C.SAND_H+0.05) return 'water';
     if (C.visPathDist(x,z)<1.0) return 'path';
-    for (const [ox,oz] of [[-0.4,-0.4],[0.4,-0.4],[-0.4,0.4],[0.4,0.4]]) if (!C.walkable(x+ox,z+oz)) return 'water';   // v1.72 any slope will do; the soil tilts to fit
+    for (const [ox,oz] of [[-0.4,-0.4],[0.4,-0.4],[-0.4,0.4],[0.4,0.4]]) if (!C.walkable(x+ox,z+oz)) return 'water';   // v1.73 any slope will do; the soil tilts to fit
     if (C.blocked(x,z,0.3)) return 'blocked';
     for (const q of others) if (Math.abs(q.x-x)<0.55 && Math.abs(q.z-z)<0.55) return 'plants';
     for (const t of C.trees) if (!t.removed && Math.hypot(t.pos.x-x,t.pos.z-z)<1.0) return 'blocked';

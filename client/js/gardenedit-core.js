@@ -35,7 +35,7 @@ export function itemBack(rec, P, ITEMS){ if (!P) return null;
 // planted by you (wild crops and wild flower clumps carry wild:true)
 export const isMine = rec => !!rec && !rec.wild;
 
-/* v1.72 soil squares. A set of squares split into the pieces that touch side by side (biggest first). */
+/* v1.73 soil squares. A set of squares split into the pieces that touch side by side (biggest first). */
 export function splitCells(keys){ const left=new Set(keys), out=[];
   while (left.size){ const first=left.values().next().value, part=[first], q=[first]; left.delete(first);
     while (q.length){ const [i,j]=parseCell(q.pop()); for (const [a,b] of [[1,0],[-1,0],[0,1],[0,-1]]){ const k=ckey(i+a,j+b); if (left.has(k)){ left.delete(k); part.push(k); q.push(k); } } }

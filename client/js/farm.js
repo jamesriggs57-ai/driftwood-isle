@@ -16,7 +16,7 @@ export function buildSoil(cells, yAt){   // cells: [[x,z],...]
   const d=new THREE.Object3D(), c=new THREE.Color(), base=new THREE.Color(0x6e4a30), dark=new THREE.Color(0x5a3a24);
   const up=new THREE.Vector3(0,1,0), nrm=new THREE.Vector3(), tilt=new THREE.Quaternion(), turn=new THREE.Quaternion(), off=new THREE.Vector3(), h=CELL*0.4;
   cells.forEach(([x,z],k)=>{ const r=mulberry32(Math.round(x*7919+z*104729)|0), y=yAt(x,z);
-    // v1.72 each bed tilts to the slope under it, and its top rises over a bulge and its sides reach down into dips, so soil fits hills too
+    // v1.73 each bed tilts to the slope under it, and its top rises over a bulge and its sides reach down into dips, so soil fits hills too
     const sx=(yAt(x+h,z)-yAt(x-h,z))/(2*h), sz=(yAt(x,z+h)-yAt(x,z-h))/(2*h); nrm.set(-sx,1,-sz).normalize(); tilt.setFromUnitVectors(up, nrm);
     let lift=0, sink=0; for (const [ox,oz] of [[-h,-h],[h,-h],[-h,h],[h,h]]){ const e=yAt(x+ox,z+oz)-(y+sx*ox+sz*oz); lift=Math.max(lift,e); sink=Math.min(sink,e); }
     lift=Math.min(lift,0.25); const deep=1+(lift-sink)/0.1;

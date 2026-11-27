@@ -177,7 +177,7 @@ export function makeLighthouse(ctx){
     st.mode='in'; st.t=0; noteI=0; ctx.Snd.door(); startCam(); st.h0=dp.y-baseY;
     if (!ctx.TX.climbed){ ctx.TX.climbed=1; ctx.save(); }
   }
-  function onStair(s, r, dir){ st.mode='stair'; st.t=0; st.s=s; st.r=r; st.dir=dir; st.goS=null; st.stepI=undefined; hud('top'); }
+  function onStair(s, r, dir){ st.mode='stair'; st.t=0; st.s=s; st.r=r; st.dir=dir; st.goS=null; st.push=null; st.stepI=undefined; hud('top'); }
   function onDeck(a, r){ st.mode='top'; st.t=0; st.a=a; st.r=r; hud('top'); cutaway(false); }
   function jumpTop(){   // #dev shortcut: straight out onto the gallery
     if (st.mode!=='off' || ctx.busy()) return false; ctx.prep(); ctx.stopMove(); ctx.setPerch(perch); P.obj.visible=true;
@@ -344,8 +344,12 @@ export function deckMove(ctx, kit, st, D, dt, t){
       m=1; } }
   if (m){ const step=sp*m*dt, ta=(mx*tx+mz*tz)*step, ra=(mx*rx+mz*rz)*step;
     if (ra<0 && st.r<=D.rMin+0.03 && D.door && Math.abs(angD(st.a, D.door.a))<D.door.half && (d || (P.target && !P.targetEnt))) return 'door';
-    const na=st.a+ta/Math.max(st.r,0.5), nr=st.r+ra; let moved=true;
-    if (free(na,nr)){ st.a=na; st.r=nr; } else if (free(na,st.r)){ st.a=na; } else if (free(st.a, clamp(nr,D.rMin,D.rMax))){ st.r=clamp(nr,D.rMin,D.rMax); } else moved=false;
+    const na=st.a+ta/Math.max(st.r,0.5), nr=clamp(st.r+ra, D.rMin, D.rMax); let moved=true;   // at the glass or the rail you slide along it
+    if (free(na,nr)){ st.a=na; st.r=nr; } else if (Math.abs(ta)>step*0.2 && free(na,st.r)){ st.a=na; } else if (Math.abs(ra)>step*0.2 && free(st.a,nr)){ st.r=nr; } else {
+      // something round in the way: step round it, toward whichever side of the ring has more room
+      const s2=step*0.9, mid=(D.rMin+D.rMax)/2, sides = st.r>mid ? [-s2, s2] : [s2, -s2]; let done=false;
+      for (const dr of sides){ const r2=clamp(st.r+dr, D.rMin, D.rMax), a2=st.a+ta*0.5/Math.max(r2,0.5); if (Math.abs(ta)>step*0.2 && free(a2, r2)){ st.a=a2; st.r=r2; done=true; break; } if (free(st.a, r2) && Math.abs(ta)>step*0.2 && r2!==st.r){ st.r=r2; done=true; break; } }
+      if (!done) moved=false; }
     if (!moved && P.target && !d){ if ((st.stuck=(st.stuck||0)+dt)>0.6){ st.stuck=0; const E=P.targetEnt, cb=P.cb; ctx.stopMove(); if (E && Math.hypot(E.pos.x-P.pos.x,E.pos.z-P.pos.z)<=E.reach+0.4 && cb) cb(); } } else st.stuck=0;
     faceTo(P, Math.atan2(mx,mz), dt); kit.walkAnim(t, 0.9*m); }
   else kit.still();

@@ -430,11 +430,11 @@ export function makeBluffLighthouse(ctx){
   function band(s){ const n=cur(), h=BT.base+clamp(s+0.5, 0, BT.steps)*BT.rise, hi=rIn(h)-0.32; let lo=rIn(h)-BT.tread+0.3;
     if (n<=1){ let w=0; for (const i of BROKEN){ const q=1-Math.abs(s-(i+0.5))/1.1; if (q>w) w=q; } lo=lerp(lo, rIn(h)-0.6, smooth(0,1,w)); }
     return [lo, hi]; }
-  const STAIR = { cx, cz, rot, baseY, steps:BT.steps, dA:BT.dA, speed:3.2, at:s=>stairAt(s), band };
+  const STAIR = { cx, cz, rot, baseY, steps:BT.steps, dA:BT.dA, speed:4.0, at:s=>stairAt(s), band };
   // the gallery: the fallen bit of rail (until it's patched) and Wick's telescope are in the way, the lamp room door takes you back in
   const DECK = { cx, cz, rot, Gy, rMin:BT.glassR+0.35, rMax:BT.railR-0.3, door:{ a:A1, half:LR_GAP-0.08 }, speed:3.0, wedges:()=>[],
     circles:()=>{ const n=cur(), L=[]; if (n<=1) L.push([GAP_A, BT.railR-0.1, 0.75]); if (n===3) L.push([SCOPE_A, 3.98, 0.42]); return L; } };
-  function onStair(s, r, dir){ st.mode='stair'; st.t=0; st.s=s; st.r=r; st.dir=dir; st.goS=null; st.stepI=undefined; hud('top'); }
+  function onStair(s, r, dir){ st.mode='stair'; st.t=0; st.s=s; st.r=r; st.dir=dir; st.goS=null; st.push=null; st.stepI=undefined; hud('top'); }
   function onDeck(a, r){ st.mode='top'; st.t=0; st.a=a; st.r=r; st.lampLook=false; hud('top'); cutaway(false); P.obj.visible=true; }
   function goDown(){ st.mode='down'; ctx.stopMove(); ctx.Snd.door();
     ctx.fade(()=>{ cutaway(false); fadeTo(U.roofM, false, 1); toFloor(footA-0.1, footR-0.5, W(footA)+Math.PI); st.camSnap=true; }); }

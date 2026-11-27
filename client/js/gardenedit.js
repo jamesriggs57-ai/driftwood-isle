@@ -97,15 +97,15 @@ export function createGardenEdit(C){
   // Each picked plant becomes an item: garden plants by their square, the rest (trees, bushes, single plantings) by position.
   function liftGhost(){
     if (E.mode==='soil') soilPrep();
-    const recs=[...E.sel], g=E.whole, grp = g ? g.cells : E.sqOn ? [...E.squares] : null, grid=recs.filter(r=>!!C.gardenAtXZ(r.x, r.z) && soft(r)), snap=!!grp || grid.length>0;
-    const cells = grp ? grp.map(parseCell) : grid.map(r=>C.cellOf(r.x, r.z));
+    const recs=[...E.sel], g=E.whole, gc = g ? g.cells : E.sqOn ? [...E.squares] : null, grid=recs.filter(r=>!!C.gardenAtXZ(r.x, r.z) && soft(r)), snap=!!gc || grid.length>0;
+    const cells = gc ? gc.map(parseCell) : grid.map(r=>C.cellOf(r.x, r.z));
     let from; if (snap) from=centerCell(cells.length?cells:recs.map(r=>C.cellOf(r.x, r.z)));
     else { let x=0, z=0; for (const r of recs){ x+=r.x; z+=r.z; } from=[x/recs.length, z/recs.length]; }
     const fw = snap ? [from[0]*CELL, from[1]*CELL] : from;
-    E.items=recs.map(rec=>{ const e=entOf(rec), onGrid=snap && (grp ? true : grid.includes(rec)); const it={ rec, e, onGrid };
-      if (onGrid && !grp){ const [i,j]=C.cellOf(rec.x, rec.z); it.a=i-from[0]; it.b=j-from[1]; } else { it.a=rec.x-fw[0]; it.b=rec.z-fw[1]; }
+    E.items=recs.map(rec=>{ const e=entOf(rec), onGrid=snap && (gc ? true : grid.includes(rec)); const it={ rec, e, onGrid };
+      if (onGrid && !gc){ const [i,j]=C.cellOf(rec.x, rec.z); it.a=i-from[0]; it.b=j-from[1]; } else { it.a=rec.x-fw[0]; it.b=rec.z-fw[1]; }
       if (e){ it.vis=e.obj.visible; it.sol=e.solid; e.obj.visible=false; e.solid=false; } return it; });
-    E.cells = grp ? cells.map(([i,j])=>[i-from[0], j-from[1]]) : E.items.filter(it=>it.onGrid).map(it=>[it.a, it.b]);
+    E.cells = gc ? cells.map(([i,j])=>[i-from[0], j-from[1]]) : E.items.filter(it=>it.onGrid).map(it=>[it.a, it.b]);
     E.snap=snap; E.from=from; E.to=from.slice(); E.q=0;
     const grp=new THREE.Group();
     for (const it of E.items){ if (!it.e) continue; const c=ghostOf(it.e.obj); c.visible=true;

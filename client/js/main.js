@@ -7677,7 +7677,7 @@ function setupLighthouse(lh, P){
   const g=lh.g; OUT.add(LH.buildFarIsles(S.seed));
   const ctx={ tower:g, cx:lh.x, cz:lh.z, rot:g.rotation.y, player, camera, scene, get camTarget(){ return camTarget; } /* declared further down, so read it late */, groundY, Thing, Snd, toast, dialog, fade, save, stopMove, interact, nearestEnt, updateSky, updateCamera,
     get TX(){ return TX; }, keeperSpec:P||null, folkKeeper:(x,z,face)=>folkKeeper(P, x, z, roleMenu(P), face), hud:$('#hud'),
-    step:()=>Snd.click(), night:()=>World.night, dialogOpen:()=>!!dlgState, getCamYaw:()=>camYaw, setCamYaw:v=>{ camYaw=v; }, setPerch:p=>{ PERCH=p; },
+    step:()=>Snd.click(), night:()=>World.night, dialogOpen:()=>!!dlgState, getCamYaw:()=>camYaw, setCamYaw:v=>{ camYaw=v; }, setPerch:p=>{ PERCH=p; }, ray:()=>ray /* v1.72 the stair: tap a tread to walk to it */,
     busy:()=>!!(dlgState || placing || buildMode || magicMode || cine || Fishing.state!=='idle' || knockedDown()),
     prep:()=>{ if (riding) setRiding(false); if (sledding) setSled(false); },
     input:()=>{ const jm=Math.hypot(joy.x,joy.y); if (joy.active && jm>0.15) return [joy.x/jm*clamp((jm-0.15)/0.7,0.25,1), joy.y/jm*clamp((jm-0.15)/0.7,0.25,1)];
@@ -9382,7 +9382,7 @@ function movePlayer(dt,t){
 }
 const camTarget=new THREE.Vector3(), _tzl=new THREE.Vector3();
 function updateCamera(dt){
-  if (PERCH && PERCH.cam(dt)) return;
+  if (PERCH){ const turn=(keys[KB().turnR]?1:0)-(keys[KB().turnL]?1:0); if (turn && !dlgState) camYaw+=turn*dt*1.8; if (PERCH.cam(dt)) return; }   // v1.72 in a lighthouse the turn keys still turn the camera
   if (tankZoom){ tankZoom.t=Math.min(1, tankZoom.t+dt/0.42); const k=1-(1-tankZoom.t)**3; camera.position.lerpVectors(tankZoom.from, tankZoom.to, k); camera.lookAt(_tzl.lerpVectors(tankZoom.lookFrom, tankZoom.look, k)); return; }
   if (buildMode){ _bt.copy(buildMode.camT).add(buildMode.pan); camTarget.lerp(_bt, Math.min(1,dt*5)); const dist=buildMode.dist, pitch=buildMode.pitch, yaw=buildMode.yaw;
     if (World.inside){ scene.fog.near=Math.max(60,dist*1.2); scene.fog.far=Math.max(200,dist*3.5); }
